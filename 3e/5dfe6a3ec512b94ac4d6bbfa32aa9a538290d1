@@ -1,0 +1,110 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.application/v4",
+      "type": "application",
+      "id": "apply_0mu0u9bpze24509400605",
+      "reconciliationOperation": "reconcile_op_0mu0u9bj2ae54a321e77c",
+      "originCommit": "10b0f1ac2ca065fcce8ae53dacca5981358f18ed",
+      "originChangeId": "ch_0mu0u67i37d24359a78d1",
+      "appliedCommit": "3e5dfe6a3ec512b94ac4d6bbfa32aa9a538290d1",
+      "appliedChangeId": "ch_0mu0u67i37d24359a78d1",
+      "targetBefore": "e6904743624f3941e7d7db1d055cbf0e797a9bca",
+      "sourceTree": "d382e2b4a1876ce6522455d81e8ce01fad42fa5d",
+      "resultTree": "d382e2b4a1876ce6522455d81e8ce01fad42fa5d",
+      "relation": "causal-reconciliation",
+      "forecastId": "forecast_0mu0u8g8v7c1993a11c72",
+      "conflictedPaths": [],
+      "resolutions": [],
+      "semanticMerges": [],
+      "createdAt": "2026-09-14T06:05:03.767Z"
+    },
+    {
+      "schema": "vcs-lab.reconciliation/v6",
+      "type": "reconciliation",
+      "id": "reconcile_0mu0u9bq2b787146d490c",
+      "operationId": "reconcile_op_0mu0u9bj2ae54a321e77c",
+      "forecastId": "forecast_0mu0u8g8v7c1993a11c72",
+      "sourceRef": "vlab/ws/evidence-42",
+      "sourceHead": "10b0f1ac2ca065fcce8ae53dacca5981358f18ed",
+      "targetBefore": "e6904743624f3941e7d7db1d055cbf0e797a9bca",
+      "resultCommit": "3e5dfe6a3ec512b94ac4d6bbfa32aa9a538290d1",
+      "absorbedCommits": [
+        "10b0f1ac2ca065fcce8ae53dacca5981358f18ed"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0u67i37d24359a78d1"
+      ],
+      "applied": [
+        {
+          "sourceCommit": "10b0f1ac2ca065fcce8ae53dacca5981358f18ed",
+          "appliedCommit": "3e5dfe6a3ec512b94ac4d6bbfa32aa9a538290d1",
+          "changeId": "ch_0mu0u67i37d24359a78d1",
+          "relation": "causal-reconciliation",
+          "conflictedPaths": [],
+          "resolutions": [],
+          "semanticMerges": []
+        }
+      ],
+      "forkedSourceCommits": [],
+      "targetTreeBefore": "25d9f7bc049dd8a9d524b8230f92fefb70fa159f",
+      "sourceTree": "d382e2b4a1876ce6522455d81e8ce01fad42fa5d",
+      "resultTree": "d382e2b4a1876ce6522455d81e8ce01fad42fa5d",
+      "exactStateEqualityBefore": false,
+      "exactStateEqualityAfter": true,
+      "timings": {
+        "activeApplicationMs": 107.11,
+        "elapsedWallMs": 111,
+        "git": {
+          "count": 3,
+          "processes": 1,
+          "sessionQueries": 2,
+          "cacheHits": 0,
+          "totalMs": 103.5,
+          "failed": 0,
+          "byCommand": [
+            {
+              "command": "cherry-pick",
+              "count": 1,
+              "processes": 1,
+              "sessionQueries": 0,
+              "cacheHits": 0,
+              "totalMs": 100.42,
+              "maxMs": 100.42
+            },
+            {
+              "command": "cat-file-session",
+              "count": 2,
+              "processes": 0,
+              "sessionQueries": 2,
+              "cacheHits": 0,
+              "totalMs": 3.09,
+              "maxMs": 1.85
+            }
+          ]
+        }
+      },
+      "startedAt": "2026-09-14T06:05:03.659Z",
+      "createdAt": "2026-09-14T06:05:03.770Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0u9cxxb37f99446f2a",
+      "commit": "3e5dfe6a3ec512b94ac4d6bbfa32aa9a538290d1",
+      "changeId": "ch_0mu0u67i37d24359a78d1",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "10b0f1ac2ca065fcce8ae53dacca5981358f18ed"
+      ],
+      "createdAt": "2026-09-14T06:05:05.349Z"
+    }
+  ]
+}

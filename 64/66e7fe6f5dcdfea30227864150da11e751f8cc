@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mua51m1kb9b10cf1f5ad",
+      "mode": "compact",
+      "sourceRef": "accept-contracts-34-35-36",
+      "sourceHead": "2f18bca13bc53b74cf38b67898fb19324ed838b0",
+      "sourceSubject": "docs: accept ADR-0034 to ADR-0036",
+      "targetBefore": "3786b6f13f92968c8f14e05cc1db2a9ca8bf2379",
+      "landingCommit": "6466e7fe6f5dcdfea30227864150da11e751f8cc",
+      "base": "3786b6f13f92968c8f14e05cc1db2a9ca8bf2379",
+      "absorbedCommits": [
+        "2f18bca13bc53b74cf38b67898fb19324ed838b0"
+      ],
+      "absorbedChanges": [
+        "ch_0mua4vawe794df2ce40ef"
+      ],
+      "resultTree": "0cf3eceb55ab27a6a05172e630be814e9ca320d7",
+      "createdAt": "2026-09-20T18:16:55.314Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mua51mfrf845885d89ae",
+      "commit": "6466e7fe6f5dcdfea30227864150da11e751f8cc",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "2f18bca13bc53b74cf38b67898fb19324ed838b0"
+      ],
+      "createdAt": "2026-09-20T18:16:55.767Z"
+    }
+  ]
+}
