@@ -1,0 +1,17 @@
+[package]
+name = "causet-store"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# The native content store of N1 (ADR-0045, #297), built to the contract in
+# `docs/native-store/`, which stays the authority: its worked examples and
+# reference vectors are what this crate's tests check. It reads no Git
+# repository, so it depends on neither `causet-core`, `causet-engine` nor
+# gitoxide.
+
+[dev-dependencies]
+# SHA-256 and a JSON parser for the tests, which derive the gear table and read
+# the published reference vectors.
+causet-model = { path = "../model" }
