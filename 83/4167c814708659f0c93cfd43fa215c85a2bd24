@@ -1,0 +1,58 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mtuqthck759e803893f9",
+      "mode": "compact",
+      "sourceRef": "jwh3times/pompano",
+      "sourceHead": "b0db8fbce337ff75496ba9aa592297823a96cd79",
+      "sourceSubject": "fix: refuse opaque notes attachment collisions",
+      "targetBefore": "dd4f8d48f7b17340887d122d5b9014b6a3db0b8f",
+      "landingCommit": "834167c814708659f0c93cfd43fa215c85a2bd24",
+      "base": "dd4f8d48f7b17340887d122d5b9014b6a3db0b8f",
+      "absorbedCommits": [
+        "545532426c1a9643b50e46225619e298cb3114ed",
+        "93a3696c691ea5ba7059e461d72bc5898b3b3707",
+        "9bf4c57e747c849578ad06f1823ec21697b74390",
+        "29bfd5396f537628eded677a7aab234185411b80",
+        "9ec6f054f1c62374461bfad41fe4858fa906a3ec",
+        "b0db8fbce337ff75496ba9aa592297823a96cd79"
+      ],
+      "absorbedChanges": [
+        "ch_0mtui8ob9955b4b37e438",
+        "ch_0mtup3q6ia7022c4b660f",
+        "ch_0mtup4wt1a5fbaa07204a",
+        "ch_0mtupa4yb5ff0af4b61c6",
+        "ch_0mtupq9258d7acd544ab2",
+        "ch_0mtuq0hg1747b2b55fe62"
+      ],
+      "resultTree": "9e9800b4b2d6d712b0c512557d84204c2ef8cd07",
+      "createdAt": "2026-09-09T23:42:08.809Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mtuqtiaxfce230a9002f",
+      "commit": "834167c814708659f0c93cfd43fa215c85a2bd24",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "OpenAI Codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "29bfd5396f537628eded677a7aab234185411b80",
+        "545532426c1a9643b50e46225619e298cb3114ed",
+        "93a3696c691ea5ba7059e461d72bc5898b3b3707",
+        "9bf4c57e747c849578ad06f1823ec21697b74390",
+        "9ec6f054f1c62374461bfad41fe4858fa906a3ec",
+        "b0db8fbce337ff75496ba9aa592297823a96cd79"
+      ],
+      "createdAt": "2026-09-09T23:42:09.897Z"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu242fyof0bf5e184860",
+      "mode": "compact",
+      "sourceRef": "jwh3times/elephantfish",
+      "sourceHead": "85bbe43b255dc04f886c13395aa4c0e0f7177cda",
+      "sourceSubject": "fix: keep an altered lineage claim detectable when verifying a bundle (#89)",
+      "targetBefore": "9dc17b8a983d188b7b0e3285df4b34bcde7c9732",
+      "landingCommit": "7f7c6086bd244dbb87b48085009e5b386df217c5",
+      "base": "9dc17b8a983d188b7b0e3285df4b34bcde7c9732",
+      "absorbedCommits": [
+        "1805c6203f61b8505967391ed145ffb97e2d9a25",
+        "4635685e979ce14c4858c8c30b6cbc5bd3ce245b",
+        "f41c3b7dc11da2c6875d8c558643b73162157408",
+        "85bbe43b255dc04f886c13395aa4c0e0f7177cda"
+      ],
+      "absorbedChanges": [
+        "ch_0mu212bdk6ffad673d205",
+        "ch_0mu215hr295836b211a12",
+        "ch_0mu21d6b0f6a296b81b36",
+        "ch_0mu21v0d6a52b86436ed9"
+      ],
+      "resultTree": "f6bb8dca9d804e7d738e007c4bd9da90f5ae68ed",
+      "createdAt": "2026-09-15T03:27:25.112Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu242gk9b7686ec69f22",
+      "commit": "7f7c6086bd244dbb87b48085009e5b386df217c5",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-fable-5-1"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "1805c6203f61b8505967391ed145ffb97e2d9a25",
+        "4635685e979ce14c4858c8c30b6cbc5bd3ce245b",
+        "85bbe43b255dc04f886c13395aa4c0e0f7177cda",
+        "f41c3b7dc11da2c6875d8c558643b73162157408"
+      ],
+      "createdAt": "2026-09-15T03:27:25.785Z"
+    }
+  ]
+}

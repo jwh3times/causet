@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw8ay37e9588df84525d",
+      "mode": "compact",
+      "sourceRef": "feat/405-spill-import-objects",
+      "sourceHead": "0a36527a9c8aabcf8d230ee7311fde4bbc2ef47c",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "b7d622ff8f910c782148ff04ea6d0f0330cc42a3",
+      "landingCommit": "6e554587f64f57c60814101de23df839a51029c2",
+      "base": "b7d622ff8f910c782148ff04ea6d0f0330cc42a3",
+      "absorbedCommits": [
+        "2eb2f20da993ae5190115f3694517ca7844d97e9",
+        "0a36527a9c8aabcf8d230ee7311fde4bbc2ef47c"
+      ],
+      "absorbedChanges": [
+        "ch_0mw80wgw11c39d683401f",
+        "ch_0mw83c9tw9bc6eb50fd2f"
+      ],
+      "resultTree": "f2f19ff2db95e73f42fe67ef9aff9dad0edda034",
+      "createdAt": "2026-11-08T20:46:00.932Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mw8ay3i56192a3f44ef1",
+      "commit": "6e554587f64f57c60814101de23df839a51029c2",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "0a36527a9c8aabcf8d230ee7311fde4bbc2ef47c",
+        "2eb2f20da993ae5190115f3694517ca7844d97e9"
+      ],
+      "createdAt": "2026-11-08T20:46:01.277Z"
+    }
+  ]
+}

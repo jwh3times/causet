@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvv6pa1yd48e17806dee",
+      "mode": "compact",
+      "sourceRef": "chore/skills-refresh",
+      "sourceHead": "62e4400e31029d7a257a2078080eca04b8e94c3a",
+      "sourceSubject": "chore: refresh the shared skills from jwh3times/skills",
+      "targetBefore": "342440d22b92a05590675cebcbf93e2e20d21a29",
+      "landingCommit": "d17e6f8324af0cf4c13db80d12153b48f5330748",
+      "base": "342440d22b92a05590675cebcbf93e2e20d21a29",
+      "absorbedCommits": [
+        "62e4400e31029d7a257a2078080eca04b8e94c3a"
+      ],
+      "absorbedChanges": [
+        "git:62e4400e31029d7a257a2078080eca04b8e94c3a"
+      ],
+      "resultTree": "51639a319f90b0fb29df308b8c9e1004f62c5e65",
+      "createdAt": "2026-10-30T16:26:11.265Z"
+    }
+  ]
+}
