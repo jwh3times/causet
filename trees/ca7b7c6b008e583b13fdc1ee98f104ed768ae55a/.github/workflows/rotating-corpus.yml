@@ -1,0 +1,125 @@
+name: rotating corpus
+
+# The generated-history corpus (#308) on a new seed each week (#336), so it
+# keeps finding histories the fixed seed has not tried. corpora.yml checks
+# `causet-n1` on every run, release gate 11 included, and that seed stays
+# fixed: a gate fails the same way twice. This workflow gates nothing, and
+# release-gates.yml never calls it.
+#
+# The seed is the ISO week's, `weekly-<year>-W<week>`, so every run in one
+# week checks the same histories; a dispatch may name another. Each host
+# checks 1,000 histories with the build, toolchain and timeout of corpora.yml's
+# generated job. A failure turns the run red and opens one `needs-triage`
+# issue per seed, or comments on the seed's issue, reopening it if it was
+# closed (`scripts/rotating-corpus.mjs`); a pass files and comments nothing.
+
+run-name: ${{ inputs.seed && format('rotating corpus, seed {0}', inputs.seed) || 'rotating corpus, the week''s seed' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: The corpus seed (empty for the current ISO week's, weekly-<year>-W<week>)
+        default: ""
+      histories:
+        description: Histories to generate and check
+        default: "1000"
+  schedule:
+    # Thursdays, clear of perf.yml's and corpora.yml's Monday runs.
+    - cron: "23 7 * * 4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rotating-corpus-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  seed:
+    name: seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      seed: ${{ steps.seed.outputs.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: seed
+        name: Choose the seed
+        env:
+          SEED_INPUT: ${{ inputs.seed }}
+        run: node scripts/rotating-corpus.mjs seed
+
+  generated:
+    name: seed ${{ needs.seed.outputs.seed }} / ${{ matrix.os }}
+    needs: seed
+    runs-on: ${{ matrix.os }}
+    # As corpora.yml's generated job: about twice the slowest run measured.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CAUSET_GENERATED_HISTORIES: ${{ inputs.histories || '1000' }}
+      CAUSET_GENERATED_SEED: ${{ needs.seed.outputs.seed }}
+      CAUSET_GENERATED_REPORT: outcome/report.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: |
+          git --version
+          node --version
+      - name: Build the cst under test
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          node scripts/build-native.mjs
+      - name: Generate and check the corpus
+        run: |
+          mkdir -p outcome
+          echo "Seed \`$CAUSET_GENERATED_SEED\`, $CAUSET_GENERATED_HISTORIES histories." >> "$GITHUB_STEP_SUMMARY"
+          node --test test/generated-histories.test.js
+      - name: Record the outcome
+        if: always()
+        env:
+          OS: ${{ matrix.os }}
+          STATUS: ${{ job.status }}
+        run: |
+          mkdir -p outcome
+          printf '{"os":"%s","status":"%s"}\n' "$OS" "$STATUS" > outcome/outcome.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: outcome-${{ matrix.os }}
+          path: outcome/
+          retention-days: 30
+
+  file:
+    name: file the failure
+    needs: [seed, generated]
+    if: failure() && needs.generated.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The only job that may write issues, with the run's own token.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: outcome-*
+          path: outcomes
+      - name: Open or update the seed's issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEED: ${{ needs.seed.outputs.seed }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/rotating-corpus.mjs file outcomes
