@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvagez8caecc6d486b9a",
+      "mode": "compact",
+      "sourceRef": "feat/255-carry-records",
+      "sourceHead": "a5318d67324b79695b5c61a252bf9159f0516d88",
+      "sourceSubject": "feat: carry the causal records in cst fetch, pull, push and clone",
+      "targetBefore": "4a64201b674346d81948b1607a36ae8e849bfea0",
+      "landingCommit": "0eceb1b4b90d963cb57e0c6e7ce39083d228532d",
+      "base": "4a64201b674346d81948b1607a36ae8e849bfea0",
+      "absorbedCommits": [
+        "a5318d67324b79695b5c61a252bf9159f0516d88"
+      ],
+      "absorbedChanges": [
+        "ch_0mvaesczfc2bae6b37d1e"
+      ],
+      "resultTree": "cf9ed475d964ae2cfae5e96d05891b6f30f46945",
+      "createdAt": "2026-10-16T04:14:56.991Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvagez9312aae8e56289",
+      "commit": "0eceb1b4b90d963cb57e0c6e7ce39083d228532d",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "a5318d67324b79695b5c61a252bf9159f0516d88"
+      ],
+      "createdAt": "2026-10-16T04:14:57.015Z"
+    }
+  ]
+}

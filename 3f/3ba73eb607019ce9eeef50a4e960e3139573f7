@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw5enwgfa98aedfcc2c9",
+      "mode": "compact",
+      "sourceRef": "docs/retire-42-19-references",
+      "sourceHead": "cb63eb702609292644cb9f58edc06b02283dbdaf",
+      "sourceSubject": "docs: stop naming the closed #42 and #19 as the home of open work",
+      "targetBefore": "d4dbd5de3688973b2f9fec0b3cac5560797ad288",
+      "landingCommit": "3f3ba73eb607019ce9eeef50a4e960e3139573f7",
+      "base": "549104ddd5c34be557db447ff0c75790e2f427af",
+      "absorbedCommits": [
+        "cb63eb702609292644cb9f58edc06b02283dbdaf"
+      ],
+      "absorbedChanges": [
+        "ch_0mw5dl19kcc08a0d0058e"
+      ],
+      "resultTree": "43617ee348376d0fba191087f8bdee382353774d",
+      "createdAt": "2026-11-06T20:06:45.564Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mw5enwsvea7f27ab7ae5",
+      "commit": "3f3ba73eb607019ce9eeef50a4e960e3139573f7",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "cb63eb702609292644cb9f58edc06b02283dbdaf"
+      ],
+      "createdAt": "2026-11-06T20:06:45.967Z"
+    }
+  ]
+}

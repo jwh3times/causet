@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvf623h3318f918aba88",
+      "mode": "compact",
+      "sourceRef": "feat/native-store-chunker",
+      "sourceHead": "05a054678df58bae2d9c8bdc012d42afcd8cd005",
+      "sourceSubject": "feat: implement the native store's chunker to the contract",
+      "targetBefore": "dab02841645449e5c82cb8ea2d9afaad8256f02d",
+      "landingCommit": "4b4c956b68739108492de3f377ddae79a4ca2600",
+      "base": "dab02841645449e5c82cb8ea2d9afaad8256f02d",
+      "absorbedCommits": [
+        "05a054678df58bae2d9c8bdc012d42afcd8cd005"
+      ],
+      "absorbedChanges": [
+        "git:05a054678df58bae2d9c8bdc012d42afcd8cd005"
+      ],
+      "resultTree": "e7836c7a89b064f71e01e4053075206321f30181",
+      "createdAt": "2026-10-19T11:23:50.682Z"
+    }
+  ]
+}

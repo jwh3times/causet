@@ -1,0 +1,33 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvroly1pfccca82bad7b",
+      "mode": "compact",
+      "sourceRef": "feat/309-real-repository-corpora",
+      "sourceHead": "81325104bb0bcd7dd11f75fe5bd1ece842f45519",
+      "sourceSubject": "Merge origin/main into feat/309-real-repository-corpora",
+      "targetBefore": "e878b0da9968153907c107f5ede30b1b390e3e24",
+      "landingCommit": "34b20e4bc8a03354869131451962b3a90318ea22",
+      "base": "e878b0da9968153907c107f5ede30b1b390e3e24",
+      "absorbedCommits": [
+        "5c1159cf5d6808543ad167c19d9f33c534885f9c",
+        "f221c92731d8de430846d392cc82091adc02125d",
+        "aecd9c8852f8381d37fe1b46b3b5a27686dc4f71",
+        "fc8ba9d1ced37ff7c5f88e69cc71f35778d3cc2f",
+        "81325104bb0bcd7dd11f75fe5bd1ece842f45519"
+      ],
+      "absorbedChanges": [
+        "git:5c1159cf5d6808543ad167c19d9f33c534885f9c",
+        "git:f221c92731d8de430846d392cc82091adc02125d",
+        "git:aecd9c8852f8381d37fe1b46b3b5a27686dc4f71",
+        "git:fc8ba9d1ced37ff7c5f88e69cc71f35778d3cc2f",
+        "git:81325104bb0bcd7dd11f75fe5bd1ece842f45519"
+      ],
+      "resultTree": "f9822950004f304ec024b13b8afad75261d5698f",
+      "createdAt": "2026-10-28T05:36:23.969Z"
+    }
+  ]
+}

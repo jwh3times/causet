@@ -1,0 +1,152 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.rebase-application/v1",
+      "type": "rebase-application",
+      "id": "rebase_apply_0mwyaub2a8f55ae216c9a",
+      "rebaseOperation": "rebase_op_0mwyauaso8e2c02594ef2",
+      "forecastId": null,
+      "originCommit": "e743c7a1b5a40d54f04fa91d0a45825f5536efe3",
+      "originChangeId": "ch_0mwyapd5ccb48fe3552c6",
+      "appliedCommit": "7deedc6a086c64958265c0c5600a860d9e04b684",
+      "appliedChangeId": "ch_0mwyapd5ccb48fe3552c6",
+      "targetBefore": "74d5818b062e7e7ca6c8680d9eed46eef61f0bfe",
+      "targetBeforeTree": "a8ee046f6fdc3ba5fe10395dde3f9b9ccec375a1",
+      "sourceTree": "68d2167dee494033afad47784993d9dccfb32fb4",
+      "resultTree": "389cfd56c56a11f34f31a58f70c3bc9f2e7467f9",
+      "relation": "causal-rebase",
+      "conflictedPaths": [],
+      "resolutions": [],
+      "semanticMerges": [],
+      "createdAt": "2026-11-27T01:25:05.026Z"
+    },
+    {
+      "schema": "causet.rebase/v3",
+      "type": "rebase",
+      "id": "rebase_0mwyaub2f785043cfa1ec",
+      "operationId": "rebase_op_0mwyauaso8e2c02594ef2",
+      "forecastId": null,
+      "sourceRef": "chore/guard-git-wrappers",
+      "sourceHead": "e743c7a1b5a40d54f04fa91d0a45825f5536efe3",
+      "ontoRef": "origin/main",
+      "ontoHead": "5bc3152ff56f656e218aac5aa140fa9c1c41b276",
+      "physicalBase": "6bfbcd8fed2f0c4ea6dbf0092b12a186505de9f7",
+      "effectiveBase": {
+        "commit": "6bfbcd8fed2f0c4ea6dbf0092b12a186505de9f7",
+        "reason": "physical-ancestry"
+      },
+      "planFingerprint": "77d1ee588e64c807917c89267fd54af6801f83fc117f642f79512d1ccde0ee95",
+      "quarantinedFacts": [],
+      "range": {
+        "baseRef": null,
+        "base": "6bfbcd8fed2f0c4ea6dbf0092b12a186505de9f7",
+        "tip": "e743c7a1b5a40d54f04fa91d0a45825f5536efe3",
+        "explicit": false
+      },
+      "excludedByRange": [],
+      "acceptCandidates": false,
+      "candidatePolicy": "none",
+      "omitted": [],
+      "acceptedCandidates": [],
+      "applications": [
+        {
+          "id": "rebase_apply_0mwyauazae6c1ae17d6d7",
+          "sourceCommit": "f73582837aba146619c5bdf69a85ff4229bbaff7",
+          "sourceChangeId": "ch_0mwyahvi0e4779cc85eeb",
+          "appliedCommit": "74d5818b062e7e7ca6c8680d9eed46eef61f0bfe",
+          "appliedChangeId": "ch_0mwyahvi0e4779cc85eeb",
+          "targetBeforeTree": "d43239762facd0260360422865cf68d77e739797",
+          "resultTree": "a8ee046f6fdc3ba5fe10395dde3f9b9ccec375a1",
+          "relation": "causal-rebase",
+          "conflictedPaths": [],
+          "resolutions": [],
+          "semanticMerges": []
+        },
+        {
+          "id": "rebase_apply_0mwyaub2a8f55ae216c9a",
+          "sourceCommit": "e743c7a1b5a40d54f04fa91d0a45825f5536efe3",
+          "sourceChangeId": "ch_0mwyapd5ccb48fe3552c6",
+          "appliedCommit": "7deedc6a086c64958265c0c5600a860d9e04b684",
+          "appliedChangeId": "ch_0mwyapd5ccb48fe3552c6",
+          "targetBeforeTree": "a8ee046f6fdc3ba5fe10395dde3f9b9ccec375a1",
+          "resultTree": "389cfd56c56a11f34f31a58f70c3bc9f2e7467f9",
+          "relation": "causal-rebase",
+          "conflictedPaths": [],
+          "resolutions": [],
+          "semanticMerges": []
+        }
+      ],
+      "recreatedMerges": [],
+      "interactive": [],
+      "amendments": [],
+      "absorptions": [],
+      "forkedSourceCommits": [],
+      "absorbedCommits": [
+        "f73582837aba146619c5bdf69a85ff4229bbaff7",
+        "e743c7a1b5a40d54f04fa91d0a45825f5536efe3"
+      ],
+      "absorbedChanges": [
+        "ch_0mwyahvi0e4779cc85eeb",
+        "ch_0mwyapd5ccb48fe3552c6"
+      ],
+      "resultCommit": "7deedc6a086c64958265c0c5600a860d9e04b684",
+      "sourceTree": "68d2167dee494033afad47784993d9dccfb32fb4",
+      "ontoTree": "d43239762facd0260360422865cf68d77e739797",
+      "resultTree": "389cfd56c56a11f34f31a58f70c3bc9f2e7467f9",
+      "exactStateEqualityAfter": false,
+      "timings": {
+        "activeApplicationMs": 209.62,
+        "elapsedWallMs": 350,
+        "git": {
+          "count": 14,
+          "processes": 2,
+          "sessionQueries": 12,
+          "cacheHits": 0,
+          "totalMs": 199.14,
+          "failed": 0,
+          "byCommand": [
+            {
+              "command": "cherry-pick",
+              "count": 2,
+              "processes": 2,
+              "sessionQueries": 0,
+              "cacheHits": 0,
+              "totalMs": 187.3,
+              "maxMs": 98.04
+            },
+            {
+              "command": "cat-file-session",
+              "count": 12,
+              "processes": 0,
+              "sessionQueries": 12,
+              "cacheHits": 0,
+              "totalMs": 11.84,
+              "maxMs": 1.9
+            }
+          ]
+        }
+      },
+      "startedAt": "2026-11-27T01:25:04.681Z",
+      "createdAt": "2026-11-27T01:25:05.031Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwyaubvze0e1b48cf4b9",
+      "commit": "7deedc6a086c64958265c0c5600a860d9e04b684",
+      "changeId": "ch_0mwyapd5ccb48fe3552c6",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "e743c7a1b5a40d54f04fa91d0a45825f5536efe3"
+      ],
+      "createdAt": "2026-11-27T01:25:06.095Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu0ikqetc02dc1b4d5b2",
+      "mode": "compact",
+      "sourceRef": "delivery/51-fence-boundaries",
+      "sourceHead": "eadc727d977261b238a195d429ddb17327768be8",
+      "sourceSubject": "fix: version fence-aware Markdown boundaries (#51)",
+      "targetBefore": "b9f17407a0fc04f10c37b2739215780e2b845316",
+      "landingCommit": "a3a5ff0bfa2d9b796df2525a1a6b81e59e8ebe9f",
+      "base": "b9f17407a0fc04f10c37b2739215780e2b845316",
+      "absorbedCommits": [
+        "eadc727d977261b238a195d429ddb17327768be8"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0i5yfkb9546dd0f32d"
+      ],
+      "resultTree": "97807ffb0d00e6568450e4125e01e9b9dcca9475",
+      "createdAt": "2026-09-14T00:38:00.800Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0ikrai4c795da82d3a",
+      "commit": "a3a5ff0bfa2d9b796df2525a1a6b81e59e8ebe9f",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "eadc727d977261b238a195d429ddb17327768be8"
+      ],
+      "createdAt": "2026-09-14T00:38:01.770Z"
+    }
+  ]
+}

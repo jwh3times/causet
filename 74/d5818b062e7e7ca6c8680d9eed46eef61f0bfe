@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.rebase-application/v1",
+      "type": "rebase-application",
+      "id": "rebase_apply_0mwyauazae6c1ae17d6d7",
+      "rebaseOperation": "rebase_op_0mwyauaso8e2c02594ef2",
+      "forecastId": null,
+      "originCommit": "f73582837aba146619c5bdf69a85ff4229bbaff7",
+      "originChangeId": "ch_0mwyahvi0e4779cc85eeb",
+      "appliedCommit": "74d5818b062e7e7ca6c8680d9eed46eef61f0bfe",
+      "appliedChangeId": "ch_0mwyahvi0e4779cc85eeb",
+      "targetBefore": "5bc3152ff56f656e218aac5aa140fa9c1c41b276",
+      "targetBeforeTree": "d43239762facd0260360422865cf68d77e739797",
+      "sourceTree": "7c96e4945fe113c31cd5634ccd90cbb9176c9c0f",
+      "resultTree": "a8ee046f6fdc3ba5fe10395dde3f9b9ccec375a1",
+      "relation": "causal-rebase",
+      "conflictedPaths": [],
+      "resolutions": [],
+      "semanticMerges": [],
+      "createdAt": "2026-11-27T01:25:04.918Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwyaubmw8715dbec4981",
+      "commit": "74d5818b062e7e7ca6c8680d9eed46eef61f0bfe",
+      "changeId": "ch_0mwyahvi0e4779cc85eeb",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "f73582837aba146619c5bdf69a85ff4229bbaff7"
+      ],
+      "createdAt": "2026-11-27T01:25:05.768Z"
+    }
+  ]
+}

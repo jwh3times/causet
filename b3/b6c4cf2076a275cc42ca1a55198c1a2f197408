@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwdk4ysdb8da28dec255",
+      "mode": "compact",
+      "sourceRef": "fix/437-scope-storage-gate",
+      "sourceHead": "bec8125ba21fb7dfba84d1a3b05444708878e655",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "e5e8276d494b3467994314b7fd3685ef1bda30f4",
+      "landingCommit": "b3b6c4cf2076a275cc42ca1a55198c1a2f197408",
+      "base": "e5e8276d494b3467994314b7fd3685ef1bda30f4",
+      "absorbedCommits": [
+        "ca15f1f52fbf548caa1d34e36897d9df94379725",
+        "bec8125ba21fb7dfba84d1a3b05444708878e655"
+      ],
+      "absorbedChanges": [
+        "ch_0mwd0vnit429e0943c14e",
+        "ch_0mwd1iwjx2f61ceb2d79e"
+      ],
+      "resultTree": "01b4cf791d45a9772b58851032c002c94445ea09",
+      "createdAt": "2026-11-12T13:02:09.225Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwdk4z734b645bd22e12",
+      "commit": "b3b6c4cf2076a275cc42ca1a55198c1a2f197408",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "bec8125ba21fb7dfba84d1a3b05444708878e655",
+        "ca15f1f52fbf548caa1d34e36897d9df94379725"
+      ],
+      "createdAt": "2026-11-12T13:02:09.711Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mttgr7uzd1a8af34f422",
+      "mode": "compact",
+      "sourceRef": "jwh3times/tellin",
+      "sourceHead": "50fc9e3f5db0578f211cfa9f5907ed36c8ff0c0f",
+      "sourceSubject": "perf: serve the resolution catalog from one object session",
+      "targetBefore": "80ff0bc0d6a841166af54a4a407665df0189b7de",
+      "landingCommit": "1841133bff30880c975ce8ab20caa6777d522b1a",
+      "base": "80ff0bc0d6a841166af54a4a407665df0189b7de",
+      "absorbedCommits": [
+        "50fc9e3f5db0578f211cfa9f5907ed36c8ff0c0f"
+      ],
+      "absorbedChanges": [
+        "ch_0mttgfgan594324a56c8b"
+      ],
+      "resultTree": "9bd49426fd8e03f4b1fa7abecb1064e96715bb30",
+      "createdAt": "2026-09-09T02:12:40.793Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mttgr82uf2049ebb4c66",
+      "commit": "1841133bff30880c975ce8ab20caa6777d522b1a",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "50fc9e3f5db0578f211cfa9f5907ed36c8ff0c0f"
+      ],
+      "createdAt": "2026-09-09T02:12:40.998Z"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw43scev60fbf79ef080",
+      "mode": "compact",
+      "sourceRef": "feat/346-native-cat-file-batch",
+      "sourceHead": "02d9e28e4f67aee049fbc6417036566ea9831d55",
+      "sourceSubject": "fix: read the store whole before a cat-file batch answers (#346)",
+      "targetBefore": "e82fdeacfc78d87f970c2ff16c660b315691d88e",
+      "landingCommit": "4f7b16a8bc6676a0c04cbc030d9a8b432ee99e87",
+      "base": "e82fdeacfc78d87f970c2ff16c660b315691d88e",
+      "absorbedCommits": [
+        "743ba887df1bf0695b4e60748f211689f1881185",
+        "d572c27d5b45695e7c0196b6bd4ad59fefd5ee94",
+        "2c31ed8245b513203eb70d96385a9440cc2cd549",
+        "155ed26916ab93d1fce032d6c02c157e3800f0bc",
+        "02d9e28e4f67aee049fbc6417036566ea9831d55"
+      ],
+      "absorbedChanges": [
+        "ch_0mw2x75ycc3ca2b5f9a48",
+        "ch_0mw2xo9s99860cea99066",
+        "ch_0mw2xoadydd6977d880e2",
+        "git:155ed26916ab93d1fce032d6c02c157e3800f0bc",
+        "ch_0mw401bei38375c5a3aae"
+      ],
+      "resultTree": "37d904eb065ce1c1fb3e01cd3a8f6b3edd3b585a",
+      "createdAt": "2026-11-05T22:14:30.912Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mw43scom8f3ae6c6663b",
+      "commit": "4f7b16a8bc6676a0c04cbc030d9a8b432ee99e87",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "02d9e28e4f67aee049fbc6417036566ea9831d55",
+        "2c31ed8245b513203eb70d96385a9440cc2cd549",
+        "743ba887df1bf0695b4e60748f211689f1881185",
+        "d572c27d5b45695e7c0196b6bd4ad59fefd5ee94"
+      ],
+      "createdAt": "2026-11-05T22:14:31.222Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9flzyx8ab411fa8f32",
+      "mode": "compact",
+      "sourceRef": "chore/retire-javascript-cli",
+      "sourceHead": "084ddee2bb1348adea975170cde04159e0e6c652",
+      "sourceSubject": "chore: remove the JavaScript CLI, the N-API binding and the npm fallback",
+      "targetBefore": "d41bc8b704b7eb8a332a589bb69da79de39ad161",
+      "landingCommit": "74e8f82f3b6a4a6d8c902b5417751b95907190b4",
+      "base": "d78c9d996bb6357f0aa767ffa42eb0df4d3bd8c5",
+      "absorbedCommits": [
+        "084ddee2bb1348adea975170cde04159e0e6c652"
+      ],
+      "absorbedChanges": [
+        "ch_0mv8yptfz9efad6b74aea"
+      ],
+      "resultTree": "6d0dda03a9cabdcbdf85438ed38ddf3d6c1e044b",
+      "createdAt": "2026-10-15T11:04:38.751Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mv9flzzrf437a1e9c30c",
+      "commit": "74e8f82f3b6a4a6d8c902b5417751b95907190b4",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "084ddee2bb1348adea975170cde04159e0e6c652"
+      ],
+      "createdAt": "2026-10-15T11:04:38.775Z"
+    }
+  ]
+}

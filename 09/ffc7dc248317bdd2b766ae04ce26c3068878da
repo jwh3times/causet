@@ -1,0 +1,21 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mttay9hkb91ef2c90c81",
+      "commit": "09ffc7dc248317bdd2b766ae04ce26c3068878da",
+      "changeId": "ch_0mttay9dc5d29280514ed",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "declared",
+      "carriedFrom": [],
+      "createdAt": "2026-09-08T23:30:11.720Z"
+    }
+  ]
+}

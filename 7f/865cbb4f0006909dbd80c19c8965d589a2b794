@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwapdhvk70f851c654b8",
+      "mode": "compact",
+      "sourceRef": "docs/412-native-history-contract",
+      "sourceHead": "91b66e21bfbf711ba9a44bbb3d1d4f6f2397b254",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "6c442edd886f666a2a1f733e67548ebc4defe350",
+      "landingCommit": "7f865cbb4f0006909dbd80c19c8965d589a2b794",
+      "base": "6c442edd886f666a2a1f733e67548ebc4defe350",
+      "absorbedCommits": [
+        "6d2dbad1b89a223632192902c663444b1a6b9b9b",
+        "91b66e21bfbf711ba9a44bbb3d1d4f6f2397b254"
+      ],
+      "absorbedChanges": [
+        "ch_0mwac7649ce1c3bb55a4c",
+        "ch_0mwaodrvjbe7a0b1ef022"
+      ],
+      "resultTree": "895b94b8760c4407c016debe174861f3812b7767",
+      "createdAt": "2026-11-10T13:05:26.762Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwapdi6b59a82b0a7d21",
+      "commit": "7f865cbb4f0006909dbd80c19c8965d589a2b794",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "6d2dbad1b89a223632192902c663444b1a6b9b9b",
+        "91b66e21bfbf711ba9a44bbb3d1d4f6f2397b254"
+      ],
+      "createdAt": "2026-11-10T13:05:27.107Z"
+    }
+  ]
+}

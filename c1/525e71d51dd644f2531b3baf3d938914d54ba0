@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu30f29h13d2550f83d5",
+      "mode": "compact",
+      "sourceRef": "jwh3times/handoff-proton",
+      "sourceHead": "052f20e0834e25e03a327bfa2d7cef41181471c4",
+      "sourceSubject": "feat: hand sessions off between machines through Proton Drive",
+      "targetBefore": "23da85d915629b929b206d10daa7046b80d0f5d6",
+      "landingCommit": "c1525e71d51dd644f2531b3baf3d938914d54ba0",
+      "base": "23da85d915629b929b206d10daa7046b80d0f5d6",
+      "absorbedCommits": [
+        "052f20e0834e25e03a327bfa2d7cef41181471c4"
+      ],
+      "absorbedChanges": [
+        "ch_0mu2zxyca5bf4c22b8947"
+      ],
+      "resultTree": "7f660e433bce6c190a88d763a69b73051b69253e",
+      "createdAt": "2026-09-15T18:33:01.591Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu30f2ul527e0d8baf7d",
+      "commit": "c1525e71d51dd644f2531b3baf3d938914d54ba0",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "052f20e0834e25e03a327bfa2d7cef41181471c4"
+      ],
+      "createdAt": "2026-09-15T18:33:02.253Z"
+    }
+  ]
+}

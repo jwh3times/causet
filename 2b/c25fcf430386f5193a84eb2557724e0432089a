@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvhfvkba59b8fd02ea5b",
+      "mode": "compact",
+      "sourceRef": "feat/native-reconstruction-check",
+      "sourceHead": "a35f4776d5fe67422da43341c8a48c54b3196ae8",
+      "sourceSubject": "fix: follow a commit's or tag's header as Git's parser does, everywhere",
+      "targetBefore": "80641560f03eee64cfc8ff7bb942d56089215467",
+      "landingCommit": "2bc25fcf430386f5193a84eb2557724e0432089a",
+      "base": "80641560f03eee64cfc8ff7bb942d56089215467",
+      "absorbedCommits": [
+        "40c692fed8d4e9973457a7491166b830d50cd5f5",
+        "a35f4776d5fe67422da43341c8a48c54b3196ae8"
+      ],
+      "absorbedChanges": [
+        "git:40c692fed8d4e9973457a7491166b830d50cd5f5",
+        "git:a35f4776d5fe67422da43341c8a48c54b3196ae8"
+      ],
+      "resultTree": "c2a7c6aa3b1ba8fe769d2aa094b92a9b0c29b27b",
+      "createdAt": "2026-10-21T01:34:14.426Z"
+    }
+  ]
+}
