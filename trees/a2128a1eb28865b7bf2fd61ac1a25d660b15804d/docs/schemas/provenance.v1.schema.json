@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.provenance/v1",
+  "title": "Authorship provenance record",
+  "description": "Declared claim about which actors produced a commit's content and in what role, attached to that commit (shared-portable note record; src/provenance.js). The record is an UNAUTHENTICATED CLAIM by whoever ran the command that wrote it, never detection of how content was produced (FR-TRUST-04): vcs-lab records only what an actor declared and never infers a role from content, from a Git author, or from any existing commit trailer such as Co-Authored-By. Signing such a claim is FR-TRUST-02 and does not exist; the canonical-JSON profile reserves the integrity and signatures members for it. The runtime validator in src/schemas.js remains the authority for the cross-member rules this document states in prose: actors is never empty, a declared record has an empty carriedFrom, and a carried record names at least one source.",
+  "x-vcs-lab-scope": "note-record",
+  "type": "object",
+  "required": [
+    "schema", "type", "id", "commit", "changeId", "actors", "origin",
+    "carriedFrom", "createdAt"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.provenance/v1" },
+    "type": { "const": "provenance" },
+    "id": { "type": "string", "minLength": 4 },
+    "commit": {
+      "$ref": "#/$defs/oid",
+      "description": "The commit this record describes and is attached to; when the record carries attachedTo, both must be equal."
+    },
+    "changeId": {
+      "type": ["string", "null"],
+      "description": "The logical change the commit carries, or null when the commit has none or the record describes a landing that absorbed several. A string value is non-empty."
+    },
+    "actors": {
+      "type": "array",
+      "description": "Declared actors, at least one, at most the provenanceActors bound of 64. Deduplicated on the (role, actor) pair and ordered by role then actor so the same declaration always produces the same bytes. Never empty: a record exists only because something was declared, and an empty one would turn silence into a claim.",
+      "items": {
+        "type": "object",
+        "required": ["role", "actor"],
+        "properties": {
+          "role": {
+            "enum": ["authored", "generated", "reviewed"],
+            "description": "Closed vocabulary. 'authored': a person wrote this content. 'generated': a machine produced it. 'reviewed': an actor examined and accepted it. The role carries the human/machine distinction, so no separate kind field has to be inferred from an actor's name."
+          },
+          "actor": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "origin": {
+      "enum": ["declared", "carried"],
+      "description": "'declared': stated when the commit was created. 'carried': propagated onto a commit produced by a rewrite, from the provenance of the commits that rewrite consumed. A carried record is never presented as a fresh declaration."
+    },
+    "carriedFrom": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/oid" },
+      "description": "For a carried record, the immediate source commits whose provenance was united into this one, sorted, at least one. Immediate rather than transitive, so a long rewrite chain stays bounded and each hop remains individually inspectable. Empty for a declared record."
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "attachedTo": {
+      "$ref": "#/$defs/oid",
+      "description": "Added by catalog listings: the commit the note is attached to. Not stored in the note itself."
+    }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" }
+  }
+}
