@@ -1,0 +1,14 @@
+[package]
+name = "causet-import"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# Import of a Git repository into a native one (ADR-0045 decisions 1–3, #301).
+# It reads Git only through the `git` executable, by the engine's process
+# module, and writes only through the store.
+
+[dependencies]
+causet-engine = { path = "../engine" }
+causet-store = { path = "../store" }
