@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu8g2epge229a00a8812",
+      "mode": "compact",
+      "sourceRef": "target-overlay-26",
+      "sourceHead": "8676f19e652b9798f12755d10dbf9df2782e369b",
+      "sourceSubject": "feat: carry a target workspace's captured draft through an application",
+      "targetBefore": "cccbf000ac04181664422b57a7a1c0a859b02cd0",
+      "landingCommit": "cbddd464a791989dc91ba0319059df8a24c9ba4b",
+      "base": "cccbf000ac04181664422b57a7a1c0a859b02cd0",
+      "absorbedCommits": [
+        "8676f19e652b9798f12755d10dbf9df2782e369b"
+      ],
+      "absorbedChanges": [
+        "ch_0mu8fkdfk542cbd7441a5"
+      ],
+      "resultTree": "5ec7552d66def5718578df65ea9c40715d86cada",
+      "createdAt": "2026-09-19T13:49:55.889Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu8g2f4y57c86f4e376b",
+      "commit": "cbddd464a791989dc91ba0319059df8a24c9ba4b",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "8676f19e652b9798f12755d10dbf9df2782e369b"
+      ],
+      "createdAt": "2026-09-19T13:49:56.387Z"
+    }
+  ]
+}

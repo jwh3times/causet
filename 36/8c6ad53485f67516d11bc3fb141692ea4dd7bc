@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvvoiq7l5bd8144e592a",
+      "mode": "compact",
+      "sourceRef": "chore/agent-settings-wave-2",
+      "sourceHead": "e54b7ab09316135bb3c9b2b2b14bfe8093bf2eae",
+      "sourceSubject": "chore: align the agent settings with Wave 2 of the convergence",
+      "targetBefore": "407d4c90a5efa9bccb32e2c724225d57b6c8e21c",
+      "landingCommit": "368c6ad53485f67516d11bc3fb141692ea4dd7bc",
+      "base": "407d4c90a5efa9bccb32e2c724225d57b6c8e21c",
+      "absorbedCommits": [
+        "e54b7ab09316135bb3c9b2b2b14bfe8093bf2eae"
+      ],
+      "absorbedChanges": [
+        "ch_0mvvo0nxx79f38f9ac29c"
+      ],
+      "resultTree": "733dec24233691fa2e4af5344ab03b6fbe69e74e",
+      "createdAt": "2026-10-31T00:44:58.604Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvvoiqll57b297f36197",
+      "commit": "368c6ad53485f67516d11bc3fb141692ea4dd7bc",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "e54b7ab09316135bb3c9b2b2b14bfe8093bf2eae"
+      ],
+      "createdAt": "2026-10-31T00:44:59.049Z"
+    }
+  ]
+}
