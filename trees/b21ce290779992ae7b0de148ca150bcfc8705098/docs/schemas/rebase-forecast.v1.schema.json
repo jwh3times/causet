@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.rebase-forecast/v1",
+  "title": "Causal rebase forecast",
+  "description": "Pinned causal-rebase simulation with caller invariants, stored worktree-private under .git/vcs-lab/forecasts/ and returned by vlab rebase-forecast --json (src/rebase-forecast.js).",
+  "x-vcs-lab-scope": "worktree-private",
+  "type": "object",
+  "required": [
+    "schema", "id", "mode", "sourceRef", "sourceHead", "sourceTree",
+    "ontoRef", "ontoHead", "ontoTree", "targetWorktree", "scope",
+    "ignoredCallerDirtyFiles", "acceptCandidates", "candidateDecisionRequired",
+    "candidatePolicy", "acceptedCandidates", "planFingerprint", "plan",
+    "status", "blockedReason", "steps", "approvedResolutions",
+    "approvedSpecMerges", "counts", "simulatedChanges", "remainingChanges",
+    "partialResultTree", "predictedResultTree", "exactStateEqualityAfter",
+    "engine", "fallbacks", "callerInvariants", "timings", "startedAt",
+    "createdAt"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.rebase-forecast/v1" },
+    "id": { "type": "string", "pattern": "^rebase_forecast_[a-z0-9]+$" },
+    "mode": { "const": "linear" },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "sourceHead": { "$ref": "#/$defs/oid" },
+    "sourceTree": { "$ref": "#/$defs/oid" },
+    "ontoRef": { "type": "string", "minLength": 1 },
+    "ontoHead": { "$ref": "#/$defs/oid" },
+    "ontoTree": { "$ref": "#/$defs/oid" },
+    "targetWorktree": { "type": "string", "minLength": 1 },
+    "scope": { "const": "committed-heads" },
+    "ignoredCallerDirtyFiles": { "type": "integer", "minimum": 0 },
+    "acceptCandidates": { "type": "boolean" },
+    "candidateDecisionRequired": { "type": "boolean" },
+    "candidatePolicy": { "enum": ["none", "accepted", "review-required"] },
+    "acceptedCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["commit", "changeId", "proof", "decision"],
+        "properties": {
+          "commit": { "$ref": "#/$defs/oid" },
+          "changeId": { "type": "string", "minLength": 1 },
+          "proof": { "type": ["string", "null"] },
+          "subject": { "type": "string" },
+          "decision": { "const": "omit" }
+        }
+      }
+    },
+    "planFingerprint": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "plan": { "$ref": "vcs-lab.rebase-plan/v1" },
+    "status": {
+      "type": "string",
+      "description": "'complete', 'blocked', 'review-required', or 'unsupported'."
+    },
+    "blockedReason": { "type": ["string", "null"] },
+    "steps": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.forecast/v2#/$defs/simulationStep" }
+    },
+    "approvedResolutions": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.forecast/v2#/$defs/approvedResolution" }
+    },
+    "approvedSpecMerges": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.forecast/v2#/$defs/approvedSpecMerge" }
+    },
+    "counts": { "$ref": "vcs-lab.forecast/v2#/$defs/simulationCounts" },
+    "simulatedChanges": { "type": "integer", "minimum": 0 },
+    "remainingChanges": { "type": "integer", "minimum": 0 },
+    "partialResultTree": { "$ref": "#/$defs/oidOrNull" },
+    "predictedResultTree": { "$ref": "#/$defs/oidOrNull" },
+    "exactStateEqualityAfter": { "type": ["boolean", "null"] },
+    "engine": {
+      "type": ["string", "null"],
+      "description": "'worktree' or 'merge-tree'; null when the plan topology is unsupported and no simulation ran."
+    },
+    "fallbacks": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.forecast/v2#/$defs/engineFallback" }
+    },
+    "callerInvariants": {
+      "type": "object",
+      "required": [
+        "preserved", "head", "tree", "branch", "indexDigest", "statusDigest",
+        "worktreeListDigest"
+      ],
+      "properties": {
+        "preserved": { "const": true },
+        "head": { "$ref": "#/$defs/oid" },
+        "tree": { "$ref": "#/$defs/oid" },
+        "branch": { "type": ["string", "null"] },
+        "indexDigest": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "statusDigest": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "worktreeListDigest": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+      }
+    },
+    "timings": {
+      "type": "object",
+      "required": ["forecastMs", "phases", "worktree", "mergeTree", "git"],
+      "properties": {
+        "forecastMs": { "type": "number" },
+        "phases": { "type": "object" },
+        "worktree": { "$ref": "vcs-lab.forecast/v2#/$defs/phaseTimings" },
+        "mergeTree": { "$ref": "vcs-lab.forecast/v2#/$defs/phaseTimings" },
+        "git": { "$ref": "vcs-lab.forecast/v2#/$defs/gitMetrics" }
+      }
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" },
+    "oidOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    }
+  }
+}
