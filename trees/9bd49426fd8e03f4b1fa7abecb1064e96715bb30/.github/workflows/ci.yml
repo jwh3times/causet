@@ -1,0 +1,108 @@
+# Routine runs are bounded; manually dispatch this workflow for the full
+# release/platform qualification matrix. See docs/testing.md.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  static:
+    name: static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run-suite: ${{ steps.plan.outputs.run-suite }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: CI policy and benchmark analysis regressions
+        run: node --test test/ci-plan.test.js test/scale-benchmark-analysis.test.js
+      - name: Select suite matrix
+        id: plan
+        run: node scripts/ci-plan.mjs
+      - name: Syntax
+        run: |
+          for file in bin/*.js src/*.js scripts/*.mjs test/*.js test-support/*.js; do
+            node --check "$file"
+          done
+      - name: Documentation links
+        run: npm run test:docs
+      - name: Agent skill mirrors
+        run: npm run sync:agents -- --check
+      - name: Whitespace
+        # Against the empty tree, so the whole checkout is checked rather than
+        # one commit's delta.
+        run: git diff --check "$(git mktree </dev/null)" HEAD
+
+  suite:
+    needs: static
+    if: needs.static.outputs.run-suite == 'true'
+    name: ${{ matrix.mode }} / ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.static.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Toolchain
+        run: |
+          git --version
+          node --version
+      - name: Select the mode
+        run: |
+          case "${{ matrix.mode }}" in
+            default) ;;
+            session-on) echo "VLAB_GIT_SESSION=1" >> "$GITHUB_ENV" ;;
+            session-off) echo "VLAB_GIT_SESSION=0" >> "$GITHUB_ENV" ;;
+            forecast-worktree) echo "VLAB_FORECAST_ENGINE=worktree" >> "$GITHUB_ENV" ;;
+            forecast-merge-tree) echo "VLAB_FORECAST_ENGINE=merge-tree" >> "$GITHUB_ENV" ;;
+            engine-native) echo "VLAB_ENGINE=native" >> "$GITHUB_ENV" ;;
+            *) echo "unknown mode ${{ matrix.mode }}" >&2; exit 1 ;;
+          esac
+      - name: Suite
+        run: npm test 2>&1 | tee suite.log
+      - name: Nothing self-skipped unexpectedly
+        # A test that skips itself when the host cannot run it (a Git older
+        # than the merge-tree engine needs, no SHA-256 support) reports green
+        # while proving nothing. Exactly one skip is expected on a current
+        # toolchain: the too-old-Git case, which is covered with a spoofed
+        # version instead. Any other count means the runner's toolchain is not
+        # exercising what this job exists to exercise.
+        run: |
+          skipped="$(grep -E '^(ℹ|#) skipped' suite.log | tail -1 | awk '{print $NF}')"
+          echo "skipped: ${skipped:-none reported}"
+          test "$skipped" = "1"
+      - name: No lingering vlab processes
+        # Release-gate item 7. The suite's fixtures start Git object-session
+        # workers and Git processes; every one must be gone when the suite is.
+        # Linux only: the Windows runner's Git Bash has no pgrep.
+        if: runner.os == 'Linux'
+        run: |
+          if pgrep -f "git-session-worker|merge-tree-session-worker|cat-file --batch" >/dev/null 2>&1; then
+            pgrep -af "git-session-worker|merge-tree-session-worker|cat-file --batch"
+            echo "processes survived the suite" >&2
+            exit 1
+          fi
