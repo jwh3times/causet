@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.rebase/v1",
+  "title": "Causal rebase receipt",
+  "description": "Completed causal rebase summary with plan identity, omissions, applications, trees, and timing, attached to the rebased tip (shared-portable note record; src/rebase-operations.js finalizeRebase).",
+  "x-vcs-lab-scope": "note-record",
+  "type": "object",
+  "required": [
+    "schema",
+    "type",
+    "id",
+    "operationId",
+    "forecastId",
+    "sourceRef",
+    "sourceHead",
+    "ontoRef",
+    "ontoHead",
+    "physicalBase",
+    "effectiveBase",
+    "planFingerprint",
+    "acceptCandidates",
+    "candidatePolicy",
+    "omitted",
+    "acceptedCandidates",
+    "applications",
+    "forkedSourceCommits",
+    "absorbedCommits",
+    "absorbedChanges",
+    "resultCommit",
+    "sourceTree",
+    "ontoTree",
+    "resultTree",
+    "exactStateEqualityAfter",
+    "timings",
+    "startedAt",
+    "createdAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.rebase/v1"
+    },
+    "type": {
+      "const": "rebase"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 4
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "forecastId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sourceRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ontoHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "physicalBase": {
+      "$ref": "#/$defs/oid"
+    },
+    "effectiveBase": {
+      "type": "object",
+      "required": [
+        "commit"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/oid"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "planFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "acceptCandidates": {
+      "type": "boolean"
+    },
+    "candidatePolicy": {
+      "enum": [
+        "none",
+        "accepted",
+        "review-required"
+      ]
+    },
+    "omitted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Coverage proof, or null for new work: commit-ancestry, receipt-commit, stable-change-id, receipt-change-id, git-patch-id-heuristic. Records written before v0.12.0 may carry signed-shaped-landing-receipt where receipt-commit now appears; nothing branches on the value, so readers pass it through unchanged (docs/schemas/compatibility.md)."
+          }
+        }
+      }
+    },
+    "acceptedCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof",
+          "decision"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Coverage proof, or null for new work: commit-ancestry, receipt-commit, stable-change-id, receipt-change-id, git-patch-id-heuristic. Records written before v0.12.0 may carry signed-shaped-landing-receipt where receipt-commit now appears; nothing branches on the value, so readers pass it through unchanged (docs/schemas/compatibility.md)."
+          },
+          "subject": {
+            "type": "string"
+          },
+          "decision": {
+            "const": "omit"
+          }
+        }
+      }
+    },
+    "applications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourceCommit",
+          "sourceChangeId",
+          "appliedCommit",
+          "appliedChangeId",
+          "targetBeforeTree",
+          "resultTree",
+          "relation",
+          "conflictedPaths",
+          "resolutions",
+          "semanticMerges"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceCommit": {
+            "$ref": "#/$defs/oid"
+          },
+          "sourceChangeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "appliedCommit": {
+            "$ref": "#/$defs/oid"
+          },
+          "appliedChangeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetBeforeTree": {
+            "$ref": "#/$defs/oid"
+          },
+          "resultTree": {
+            "$ref": "#/$defs/oid"
+          },
+          "relation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conflictedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resolutions": {
+            "type": "array"
+          },
+          "semanticMerges": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "forkedSourceCommits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/oid"
+      }
+    },
+    "absorbedCommits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/oid"
+      }
+    },
+    "absorbedChanges": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "resultCommit": {
+      "$ref": "#/$defs/oid",
+      "description": "The commit this record is attached to; when the record carries attachedTo, both must be equal."
+    },
+    "sourceTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "resultTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "exactStateEqualityAfter": {
+      "type": "boolean"
+    },
+    "timings": {
+      "type": "object",
+      "required": [
+        "activeApplicationMs",
+        "elapsedWallMs",
+        "git"
+      ],
+      "properties": {
+        "activeApplicationMs": {
+          "type": "number"
+        },
+        "elapsedWallMs": {
+          "type": "number"
+        },
+        "git": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "attachedTo": {
+      "$ref": "#/$defs/oid"
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    }
+  }
+}
