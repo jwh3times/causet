@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.rebase-application/v1",
+  "title": "Causal rebase application receipt",
+  "description": "Exact origin-to-rewritten-commit mapping with contextual decisions, attached to the rewritten commit (shared-portable note record; src/rebase-operations.js).",
+  "x-vcs-lab-scope": "note-record",
+  "type": "object",
+  "required": [
+    "schema", "type", "id", "rebaseOperation", "forecastId", "originCommit",
+    "originChangeId", "appliedCommit", "appliedChangeId", "targetBefore",
+    "targetBeforeTree", "sourceTree", "resultTree", "relation",
+    "conflictedPaths", "resolutions", "semanticMerges", "createdAt"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.rebase-application/v1" },
+    "type": { "const": "rebase-application" },
+    "id": { "type": "string", "minLength": 4 },
+    "rebaseOperation": {
+      "type": "string",
+      "minLength": 4,
+      "description": "ID of the private vcs-lab.rebase-operation/v1 journal that produced this application."
+    },
+    "forecastId": { "type": ["string", "null"] },
+    "originCommit": { "$ref": "#/$defs/oid" },
+    "originChangeId": { "type": "string", "minLength": 1 },
+    "appliedCommit": {
+      "$ref": "#/$defs/oid",
+      "description": "The commit this record is attached to; when the record carries attachedTo, both must be equal."
+    },
+    "appliedChangeId": { "type": "string", "minLength": 1 },
+    "targetBefore": { "$ref": "#/$defs/oid" },
+    "targetBeforeTree": { "$ref": "#/$defs/oid" },
+    "sourceTree": { "$ref": "#/$defs/oid" },
+    "resultTree": { "$ref": "#/$defs/oid" },
+    "relation": { "enum": ["causal-rebase", "contextual-rebase", "contextual-fork"] },
+    "conflictedPaths": { "type": "array", "items": { "type": "string" } },
+    "resolutions": { "type": "array" },
+    "semanticMerges": { "type": "array" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "attachedTo": { "$ref": "#/$defs/oid" }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" }
+  }
+}
