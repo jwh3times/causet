@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mtt3eb7757c3599f217a",
+      "mode": "compact",
+      "sourceRef": "jwh3times/tellin",
+      "sourceHead": "392060d81eb9419d6dc1b27b9b0bcde69942de5a",
+      "sourceSubject": "docs: assemble the Gate B evidence table for the nine ADR-0014 conditions",
+      "targetBefore": "2bf86a30e68dccd8c34df120b77b166e2dd50fc8",
+      "landingCommit": "c66e52ef8474aa2f4881fc50dabfe7b2df83819d",
+      "base": "2bf86a30e68dccd8c34df120b77b166e2dd50fc8",
+      "absorbedCommits": [
+        "392060d81eb9419d6dc1b27b9b0bcde69942de5a"
+      ],
+      "absorbedChanges": [
+        "ch_0mtt3ar2v22d3e8986b7a"
+      ],
+      "resultTree": "a06d5483f67c259ea8ad71c29657690606acf8da",
+      "createdAt": "2026-09-08T19:58:43.580Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mtt3ebgz5a4ad6006dfc",
+      "commit": "c66e52ef8474aa2f4881fc50dabfe7b2df83819d",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "392060d81eb9419d6dc1b27b9b0bcde69942de5a"
+      ],
+      "createdAt": "2026-09-08T19:58:43.859Z"
+    }
+  ]
+}

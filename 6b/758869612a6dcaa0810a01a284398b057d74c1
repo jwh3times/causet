@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu713i0ca57cda07dd14",
+      "mode": "compact",
+      "sourceRef": "conflict-policy-102",
+      "sourceHead": "0b1994b407907ed61de51b870162ee0a771a7f00",
+      "sourceSubject": "feat: implement the ADR-0030 conflict policy",
+      "targetBefore": "ff28547a363eae5c7ac7196b9d58a4776cc59f04",
+      "landingCommit": "6b758869612a6dcaa0810a01a284398b057d74c1",
+      "base": "ff28547a363eae5c7ac7196b9d58a4776cc59f04",
+      "absorbedCommits": [
+        "0b1994b407907ed61de51b870162ee0a771a7f00"
+      ],
+      "absorbedChanges": [
+        "ch_0mu70mzzc1a42ac006b47"
+      ],
+      "resultTree": "863dfcf45252064927bc7e1ddc672bef57904cd7",
+      "createdAt": "2026-09-18T14:03:06.434Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu713ihxb98fb86339ad",
+      "commit": "6b758869612a6dcaa0810a01a284398b057d74c1",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "0b1994b407907ed61de51b870162ee0a771a7f00"
+      ],
+      "createdAt": "2026-09-18T14:03:06.981Z"
+    }
+  ]
+}
