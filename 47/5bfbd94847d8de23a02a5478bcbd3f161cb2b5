@@ -1,0 +1,49 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu511mjnf1c8879c18c2",
+      "mode": "compact",
+      "sourceRef": "jwh3times/graysby",
+      "sourceHead": "3bf0b2d93d616beddf42065db9a2cf8edcebb0af",
+      "sourceSubject": "docs: propose ADR-0033 capability negotiation for #37",
+      "targetBefore": "dbaf132749a59c88ba048cd88ce7a4d3a225a682",
+      "landingCommit": "475bfbd94847d8de23a02a5478bcbd3f161cb2b5",
+      "base": "dbaf132749a59c88ba048cd88ce7a4d3a225a682",
+      "absorbedCommits": [
+        "e5eabba43df182ff522b8e9434f10569284bd96d",
+        "22b2e5dcb36d2773d8e8410713c2b332a55194ce",
+        "3bf0b2d93d616beddf42065db9a2cf8edcebb0af"
+      ],
+      "absorbedChanges": [
+        "ch_0mu50kfpucd0d3ee4e454",
+        "ch_0mu50ktft75ede8345e80",
+        "ch_0mu50ku67dcf57adacbba"
+      ],
+      "resultTree": "5f5bc3b5503d241e3616369af769611cb22d01fb",
+      "createdAt": "2026-09-17T04:26:06.635Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu511mxub830a2682b30",
+      "commit": "475bfbd94847d8de23a02a5478bcbd3f161cb2b5",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "22b2e5dcb36d2773d8e8410713c2b332a55194ce",
+        "3bf0b2d93d616beddf42065db9a2cf8edcebb0af",
+        "e5eabba43df182ff522b8e9434f10569284bd96d"
+      ],
+      "createdAt": "2026-09-17T04:26:07.074Z"
+    }
+  ]
+}

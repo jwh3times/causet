@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu0ux05y3a6bc586f9d8",
+      "mode": "compact",
+      "sourceRef": "vlab/ws/evidence-42",
+      "sourceHead": "7d41b37393f00b26ed151b577ff15b5271fa579c",
+      "sourceSubject": "docs: include observed pinned replay in the evidence table (#41)",
+      "targetBefore": "e6904743624f3941e7d7db1d055cbf0e797a9bca",
+      "landingCommit": "b4200f879c6cf109e09ae36abd54e156dec1f0ec",
+      "base": "e6904743624f3941e7d7db1d055cbf0e797a9bca",
+      "absorbedCommits": [
+        "10b0f1ac2ca065fcce8ae53dacca5981358f18ed",
+        "7d41b37393f00b26ed151b577ff15b5271fa579c"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0u67i37d24359a78d1",
+        "ch_0mu0ug7ifabef36d76080"
+      ],
+      "resultTree": "4bdad1c6ee3cc473ee86fd0f41edd709c9118128",
+      "createdAt": "2026-09-14T06:23:28.614Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0ux0uu77078e87a049",
+      "commit": "b4200f879c6cf109e09ae36abd54e156dec1f0ec",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "10b0f1ac2ca065fcce8ae53dacca5981358f18ed",
+        "7d41b37393f00b26ed151b577ff15b5271fa579c"
+      ],
+      "createdAt": "2026-09-14T06:23:29.430Z"
+    }
+  ]
+}

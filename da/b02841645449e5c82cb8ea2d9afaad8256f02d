@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvebwtfr537685e4313c",
+      "mode": "compact",
+      "sourceRef": "docs/native-store-objects",
+      "sourceHead": "d37a881f4af65f16e656749b7ef29e05dda6431a",
+      "sourceSubject": "docs: publish the native store's chunking and container contract",
+      "targetBefore": "1680ea7ae841eb1d8363689918dfe18fee378f86",
+      "landingCommit": "dab02841645449e5c82cb8ea2d9afaad8256f02d",
+      "base": "1680ea7ae841eb1d8363689918dfe18fee378f86",
+      "absorbedCommits": [
+        "dc1956f66909da0f792dc3e9e4e3459ea3133c0b",
+        "d37a881f4af65f16e656749b7ef29e05dda6431a"
+      ],
+      "absorbedChanges": [
+        "git:dc1956f66909da0f792dc3e9e4e3459ea3133c0b",
+        "git:d37a881f4af65f16e656749b7ef29e05dda6431a"
+      ],
+      "resultTree": "c95009da4ae1973e46ae2c18703352518850be74",
+      "createdAt": "2026-10-18T21:19:55.915Z"
+    }
+  ]
+}
