@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "causet.names/v1",
+  "title": "Native names",
+  "description": "What cst branch --json and cst tag --json print in a native repository (CLI output; native/cli/src/native_names.rs, ADR-0047 decisions 9 and 12): the names listed, branches, tags and remote-tracking names (docs/native-history/operations.md §2), in order of kind, then of name in byte order. Every name a listing shows is listed, a symbolic one whose target names nothing included. A name's bytes need not be UTF-8: name holds them decoded with replacement, and nameHex holds them, in lowercase hex, exactly when they are not UTF-8.",
+  "x-causet-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "names"],
+  "properties": {
+    "schema": { "enum": ["causet.names/v1", "vcs-lab.names/v1"] },
+    "names": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/name" }
+    }
+  },
+  "$defs": {
+    "kind": {
+      "enum": ["branch", "tag", "remote-tracking"],
+      "description": "A name's kind (operations.md §2.1): a branch comes from refs/heads/, a tag from refs/tags/ and a remote-tracking name, read-only until N5 defines remotes, from refs/remotes/."
+    },
+    "name": {
+      "type": "object",
+      "required": ["kind", "name", "local", "target"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/kind" },
+        "name": { "type": "string", "minLength": 1, "description": "The name, without its kind's namespace, such as main or origin/main." },
+        "nameHex": { "type": "string", "pattern": "^([0-9a-f]{2})+$", "description": "The name as stored, present only when it is not UTF-8." },
+        "local": { "type": "boolean", "description": "Whether a branch is local, which N5 never sends unless asked; false for every other kind." },
+        "target": { "$ref": "#/$defs/target" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "description": "What a name names: an object, by object and type, or another name, by kind and name, which makes the name symbolic; a target holds exactly one of the two pairs. A symbolic name's target need not exist.",
+      "properties": {
+        "object": { "$ref": "causet.log/v1#/$defs/nativeId", "description": "The object, by the ID a command names it by: a native commit or a native tag where import derived one." },
+        "type": { "enum": ["commit", "tag", "tree", "blob"], "description": "The object's Git type." },
+        "kind": { "$ref": "#/$defs/kind" },
+        "name": { "type": "string", "minLength": 1 },
+        "nameHex": { "type": "string", "pattern": "^([0-9a-f]{2})+$", "description": "The target name as stored, present only when it is not UTF-8." }
+      }
+    }
+  }
+}
