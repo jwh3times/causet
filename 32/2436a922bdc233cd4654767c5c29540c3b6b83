@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw9n5jk62e95867cb52a",
+      "mode": "compact",
+      "sourceRef": "ci/336-rotating-seed-corpus",
+      "sourceHead": "c45da65a724e586e7477103face85c3b427b48a7",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "72c29b99a0a47f14d34d0f5521293fbb273102e7",
+      "landingCommit": "322436a922bdc233cd4654767c5c29540c3b6b83",
+      "base": "72c29b99a0a47f14d34d0f5521293fbb273102e7",
+      "absorbedCommits": [
+        "0995c835ba67139835eb2232e41b38562f1f72d4",
+        "c45da65a724e586e7477103face85c3b427b48a7"
+      ],
+      "absorbedChanges": [
+        "ch_0mw9fxn9s1e96bb05a1dc",
+        "ch_0mw9g1fkv20e1e1896b6c"
+      ],
+      "resultTree": "85d67cc5cdbd6d31a2ffd4b3b267c45415a988eb",
+      "createdAt": "2026-11-09T19:15:30.293Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mw9n5jwa0694cba1086c",
+      "commit": "322436a922bdc233cd4654767c5c29540c3b6b83",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "0995c835ba67139835eb2232e41b38562f1f72d4",
+        "c45da65a724e586e7477103face85c3b427b48a7"
+      ],
+      "createdAt": "2026-11-09T19:15:30.682Z"
+    }
+  ]
+}

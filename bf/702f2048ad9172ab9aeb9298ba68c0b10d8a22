@@ -1,0 +1,52 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mtupdsbo63278fcf6835",
+      "mode": "compact",
+      "sourceRef": "jwh3times/pompano",
+      "sourceHead": "29bfd5396f537628eded677a7aab234185411b80",
+      "sourceSubject": "test: verify notes preservation and publication read costs",
+      "targetBefore": "dd4f8d48f7b17340887d122d5b9014b6a3db0b8f",
+      "landingCommit": "bf702f2048ad9172ab9aeb9298ba68c0b10d8a22",
+      "base": "dd4f8d48f7b17340887d122d5b9014b6a3db0b8f",
+      "absorbedCommits": [
+        "545532426c1a9643b50e46225619e298cb3114ed",
+        "93a3696c691ea5ba7059e461d72bc5898b3b3707",
+        "9bf4c57e747c849578ad06f1823ec21697b74390",
+        "29bfd5396f537628eded677a7aab234185411b80"
+      ],
+      "absorbedChanges": [
+        "ch_0mtui8ob9955b4b37e438",
+        "ch_0mtup3q6ia7022c4b660f",
+        "ch_0mtup4wt1a5fbaa07204a",
+        "ch_0mtupa4yb5ff0af4b61c6"
+      ],
+      "resultTree": "6896aa50115ff3e41b79be20021c931608a00af6",
+      "createdAt": "2026-09-09T23:01:57.360Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mtupdvt9e7612431140b",
+      "commit": "bf702f2048ad9172ab9aeb9298ba68c0b10d8a22",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "OpenAI Codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "29bfd5396f537628eded677a7aab234185411b80",
+        "545532426c1a9643b50e46225619e298cb3114ed",
+        "93a3696c691ea5ba7059e461d72bc5898b3b3707",
+        "9bf4c57e747c849578ad06f1823ec21697b74390"
+      ],
+      "createdAt": "2026-09-09T23:02:01.293Z"
+    }
+  ]
+}

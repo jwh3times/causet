@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvdawpspb9153ed5a360",
+      "mode": "compact",
+      "sourceRef": "docs/native-command-surface",
+      "sourceHead": "305c0d4d14919d7f4c793bab5e1439a26ba7728b",
+      "sourceSubject": "docs: accept ADR-0046, the command surface of a native repository",
+      "targetBefore": "5d3606b130fe8228b9b31a48439fd8905e9f8142",
+      "landingCommit": "1680ea7ae841eb1d8363689918dfe18fee378f86",
+      "base": "5d3606b130fe8228b9b31a48439fd8905e9f8142",
+      "absorbedCommits": [
+        "305c0d4d14919d7f4c793bab5e1439a26ba7728b"
+      ],
+      "absorbedChanges": [
+        "git:305c0d4d14919d7f4c793bab5e1439a26ba7728b"
+      ],
+      "resultTree": "a3bc8eeb61b206f4d4159b35da709264f566ac93",
+      "createdAt": "2026-10-18T04:04:05.405Z"
+    }
+  ]
+}

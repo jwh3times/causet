@@ -1,0 +1,21 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu1vx7552e391c47193f",
+      "commit": "9ed5e6f93b45af1fb9c16832a013874a652d2656",
+      "changeId": "ch_0mu1vx71n86602d9c3dce",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-fable-5-1"
+        }
+      ],
+      "origin": "declared",
+      "carriedFrom": [],
+      "createdAt": "2026-09-14T23:39:23.369Z"
+    }
+  ]
+}

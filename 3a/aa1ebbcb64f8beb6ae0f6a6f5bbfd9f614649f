@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvjv1t8l49806d9e1e44",
+      "mode": "compact",
+      "sourceRef": "feat/incremental-import",
+      "sourceHead": "4d6f76f6303bb823b70b56a4f1e86f0315ab14cd",
+      "sourceSubject": "fix: read a header's Git IDs in either case of hex, as Git does",
+      "targetBefore": "55c31fced8de826c6bf868631bf385d543700cca",
+      "landingCommit": "3aaa1ebbcb64f8beb6ae0f6a6f5bbfd9f614649f",
+      "base": "55c31fced8de826c6bf868631bf385d543700cca",
+      "absorbedCommits": [
+        "b1a65fa6d54353f8acd8aba3e1ddc66e3bda0852",
+        "4d6f76f6303bb823b70b56a4f1e86f0315ab14cd"
+      ],
+      "absorbedChanges": [
+        "git:b1a65fa6d54353f8acd8aba3e1ddc66e3bda0852",
+        "git:4d6f76f6303bb823b70b56a4f1e86f0315ab14cd"
+      ],
+      "resultTree": "3be0d8343fdae7a4c73c80413a41c8d2cdc27325",
+      "createdAt": "2026-10-22T18:14:32.520Z"
+    }
+  ]
+}

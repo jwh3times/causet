@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwih6t9p6efe1952b4f4",
+      "mode": "compact",
+      "sourceRef": "feat/418-native-names",
+      "sourceHead": "3dbf316f2a01e524455a8ac79c55b80b1f18abbd",
+      "sourceSubject": "docs: update docs and changelog for v0.30.0",
+      "targetBefore": "adedef11b539d857ee2594f7f6ec8a2182b5eb12",
+      "landingCommit": "7f0872690bd649f400bcfd07f633cfe35eb40685",
+      "base": "adedef11b539d857ee2594f7f6ec8a2182b5eb12",
+      "absorbedCommits": [
+        "14a1b4e903dad06571c0807436402a90644c286e",
+        "3dbf316f2a01e524455a8ac79c55b80b1f18abbd"
+      ],
+      "absorbedChanges": [
+        "ch_0mwi40ev15f569f22845d",
+        "ch_0mwi6nwju461725369f60"
+      ],
+      "resultTree": "20b7ddca71cff81e7749612300d5ce9abc194518",
+      "createdAt": "2026-11-15T23:38:27.430Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwih6tq259c22a800391",
+      "commit": "7f0872690bd649f400bcfd07f633cfe35eb40685",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "14a1b4e903dad06571c0807436402a90644c286e",
+        "3dbf316f2a01e524455a8ac79c55b80b1f18abbd"
+      ],
+      "createdAt": "2026-11-15T23:38:27.962Z"
+    }
+  ]
+}

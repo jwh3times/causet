@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvcgsxat9d3e00f1ad58",
+      "mode": "compact",
+      "sourceRef": "docs/accept-adr-0041",
+      "sourceHead": "9085da421b0ea539f730e3e9b5cf08cfd1a8e7cf",
+      "sourceSubject": "docs: accept ADR-0041, cst as a standalone distributed version control system",
+      "targetBefore": "fe70f147c7eef7b1b0583499f0be62a9eec67d1e",
+      "landingCommit": "25d6dd07c3d0b939e6ab6ee34ffdcafe0010fe40",
+      "base": "fe70f147c7eef7b1b0583499f0be62a9eec67d1e",
+      "absorbedCommits": [
+        "9085da421b0ea539f730e3e9b5cf08cfd1a8e7cf"
+      ],
+      "absorbedChanges": [
+        "git:9085da421b0ea539f730e3e9b5cf08cfd1a8e7cf"
+      ],
+      "resultTree": "30f5f9cb48769d3d41e5ac5d7a115c1577905a28",
+      "createdAt": "2026-10-17T14:01:20.025Z"
+    }
+  ]
+}

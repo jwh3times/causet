@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvnsorha963425e894b9",
+      "mode": "compact",
+      "sourceRef": "feat/large-file-deltas",
+      "sourceHead": "5b9579f095dc35905d47a9172737e33e92a93d1d",
+      "sourceSubject": "feat: write deltas at zstd level 15, which keeps a large file's base in reach",
+      "targetBefore": "3aaa1ebbcb64f8beb6ae0f6a6f5bbfd9f614649f",
+      "landingCommit": "e5c81985bff43e977b71f1706000af6c52a68d77",
+      "base": "3aaa1ebbcb64f8beb6ae0f6a6f5bbfd9f614649f",
+      "absorbedCommits": [
+        "0648c3de9ab631ce86b821df860473604d60878f",
+        "5b9579f095dc35905d47a9172737e33e92a93d1d"
+      ],
+      "absorbedChanges": [
+        "git:0648c3de9ab631ce86b821df860473604d60878f",
+        "git:5b9579f095dc35905d47a9172737e33e92a93d1d"
+      ],
+      "resultTree": "03fb3fd9dd261e317c78a59cd38a726260449114",
+      "createdAt": "2026-10-25T12:19:29.185Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwbea8yj8dcb3d4ab16c",
+      "mode": "compact",
+      "sourceRef": "chore/432-skills-cli-1-8",
+      "sourceHead": "c2d8989286ae7fe09345787fcd344d89f1a711af",
+      "sourceSubject": "chore: take the check-skills.mjs that reads skills CLI 1.8.0 locks",
+      "targetBefore": "7f865cbb4f0006909dbd80c19c8965d589a2b794",
+      "landingCommit": "83743dea9f97ee24ac5b0069a705236af373f7ff",
+      "base": "7f865cbb4f0006909dbd80c19c8965d589a2b794",
+      "absorbedCommits": [
+        "c2d8989286ae7fe09345787fcd344d89f1a711af"
+      ],
+      "absorbedChanges": [
+        "ch_0mwbdn69j56a84a4ed670"
+      ],
+      "resultTree": "76eff6d7d62b1b34ea3d76837604e24ec49b508a",
+      "createdAt": "2026-11-11T00:42:45.642Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwbea9au509229dd742d",
+      "commit": "83743dea9f97ee24ac5b0069a705236af373f7ff",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "c2d8989286ae7fe09345787fcd344d89f1a711af"
+      ],
+      "createdAt": "2026-11-11T00:42:46.038Z"
+    }
+  ]
+}

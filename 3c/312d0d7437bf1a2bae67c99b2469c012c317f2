@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu0in1x5ed0d8a27b243",
+      "mode": "compact",
+      "sourceRef": "delivery/68-windows-latency",
+      "sourceHead": "764571ef96ffd9028a82148a737ad1e6a6d67ad0",
+      "sourceSubject": "docs: qualify current release latency on Windows only (#68)",
+      "targetBefore": "b657c62e347f9eecb1dca3ca7baae1341d9d7257",
+      "landingCommit": "3c312d0d7437bf1a2bae67c99b2469c012c317f2",
+      "base": "7bfe84e8ba7287cd37e407b9b7b40b9ceca5aee3",
+      "absorbedCommits": [
+        "764571ef96ffd9028a82148a737ad1e6a6d67ad0"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0i7mbq5d4706630036"
+      ],
+      "resultTree": "4cec64a794dc8c34106900e2b1a35e059468b065",
+      "createdAt": "2026-09-14T00:39:49.117Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0in2lb993d35849f2c",
+      "commit": "3c312d0d7437bf1a2bae67c99b2469c012c317f2",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "764571ef96ffd9028a82148a737ad1e6a6d67ad0"
+      ],
+      "createdAt": "2026-09-14T00:39:49.727Z"
+    }
+  ]
+}
