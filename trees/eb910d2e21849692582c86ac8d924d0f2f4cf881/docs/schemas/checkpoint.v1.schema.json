@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.checkpoint/v1",
+  "title": "Workspace checkpoint result",
+  "description": "Result of vlab workspace checkpoint (CLI output; src/workspaces.js checkpointWorkspace). The checkpoint itself persists as a commit under refs/vcs-lab/checkpoints/<workspace id> with identity trailers; this record is the command's JSON projection of it.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema", "id", "shortId", "workspaceId", "workspaceName", "tree",
+    "parent", "baseHead", "previousCheckpoint", "historyRef", "draftChangeId",
+    "ref", "label", "createdAt"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.checkpoint/v1" },
+    "id": {
+      "$ref": "#/$defs/oid",
+      "description": "The checkpoint commit OID."
+    },
+    "shortId": { "type": "string", "minLength": 1 },
+    "workspaceId": { "type": "string", "minLength": 1 },
+    "workspaceName": { "type": "string", "minLength": 1 },
+    "tree": { "$ref": "#/$defs/oid" },
+    "parent": { "$ref": "#/$defs/oid" },
+    "baseHead": { "$ref": "#/$defs/oid" },
+    "previousCheckpoint": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    },
+    "historyRef": {
+      "type": ["string", "null"],
+      "pattern": "^refs/vcs-lab/checkpoint-history/"
+    },
+    "draftChangeId": { "type": "string", "pattern": "^draft_[0-9a-f]{64}$" },
+    "ref": { "type": "string", "pattern": "^refs/vcs-lab/checkpoints/" },
+    "label": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" }
+  }
+}
