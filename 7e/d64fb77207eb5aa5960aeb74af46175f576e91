@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvd6et3rd4b4880f621a",
+      "mode": "compact",
+      "sourceRef": "docs/native-phase-order",
+      "sourceHead": "1fc4cb1233b2ec49cf14269f00191d5f03e92425",
+      "sourceSubject": "docs: accept ADR-0043, order the native transition by dependency",
+      "targetBefore": "de5c776858433bae6736939639881af06a24deb7",
+      "landingCommit": "7ed64fb77207eb5aa5960aeb74af46175f576e91",
+      "base": "de5c776858433bae6736939639881af06a24deb7",
+      "absorbedCommits": [
+        "1fc4cb1233b2ec49cf14269f00191d5f03e92425"
+      ],
+      "absorbedChanges": [
+        "git:1fc4cb1233b2ec49cf14269f00191d5f03e92425"
+      ],
+      "resultTree": "2eb612659d0f026aaef952b83ad4c47aad93fee3",
+      "createdAt": "2026-10-18T01:58:11.419Z"
+    }
+  ]
+}

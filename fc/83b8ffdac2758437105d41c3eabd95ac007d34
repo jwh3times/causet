@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu0mjj0veed6350dac34",
+      "mode": "compact",
+      "sourceRef": "decision/18-bounded-native-reads",
+      "sourceHead": "0470c6316d13e286a8e302fd4b53ed25ec425d82",
+      "sourceSubject": "docs: accept bounded native read-engine entry (#18)",
+      "targetBefore": "3c312d0d7437bf1a2bae67c99b2469c012c317f2",
+      "landingCommit": "fc83b8ffdac2758437105d41c3eabd95ac007d34",
+      "base": "3c312d0d7437bf1a2bae67c99b2469c012c317f2",
+      "absorbedCommits": [
+        "0470c6316d13e286a8e302fd4b53ed25ec425d82"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0mhje69ac72b13bdba"
+      ],
+      "resultTree": "7067ba6348db8c0f5e7bd3d47fbe6468859dd847",
+      "createdAt": "2026-09-14T02:29:02.948Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0mjjnf200fbf626dfe",
+      "commit": "fc83b8ffdac2758437105d41c3eabd95ac007d34",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "0470c6316d13e286a8e302fd4b53ed25ec425d82"
+      ],
+      "createdAt": "2026-09-14T02:29:03.675Z"
+    }
+  ]
+}
