@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mttb9tx80095aa88c466",
+      "mode": "compact",
+      "sourceRef": "jwh3times/tellin",
+      "sourceHead": "09ffc7dc248317bdd2b766ae04ce26c3068878da",
+      "sourceSubject": "feat: measure a raw-Git floor for every scale benchmark phase",
+      "targetBefore": "c66e52ef8474aa2f4881fc50dabfe7b2df83819d",
+      "landingCommit": "80ff0bc0d6a841166af54a4a407665df0189b7de",
+      "base": "c66e52ef8474aa2f4881fc50dabfe7b2df83819d",
+      "absorbedCommits": [
+        "09ffc7dc248317bdd2b766ae04ce26c3068878da"
+      ],
+      "absorbedChanges": [
+        "ch_0mttay9dc5d29280514ed"
+      ],
+      "resultTree": "2fc8e7886dfc940eb2d75a12842498b7b4a287c9",
+      "createdAt": "2026-09-08T23:39:11.500Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mttb9u57e5c8118d05cd",
+      "commit": "80ff0bc0d6a841166af54a4a407665df0189b7de",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "09ffc7dc248317bdd2b766ae04ce26c3068878da"
+      ],
+      "createdAt": "2026-09-08T23:39:11.707Z"
+    }
+  ]
+}

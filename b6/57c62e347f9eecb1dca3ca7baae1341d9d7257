@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu0imacbf5fc7d75ead6",
+      "mode": "compact",
+      "sourceRef": "delivery/73-session-notes",
+      "sourceHead": "7bfe84e8ba7287cd37e407b9b7b40b9ceca5aee3",
+      "sourceSubject": "perf: read bounded notes trees through the object session (#73)",
+      "targetBefore": "a3a5ff0bfa2d9b796df2525a1a6b81e59e8ebe9f",
+      "landingCommit": "b657c62e347f9eecb1dca3ca7baae1341d9d7257",
+      "base": "eadc727d977261b238a195d429ddb17327768be8",
+      "absorbedCommits": [
+        "7bfe84e8ba7287cd37e407b9b7b40b9ceca5aee3"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0i6u2q6e103831e52c"
+      ],
+      "resultTree": "bbbbd5577c8411438195bb16c0b1ac48dfc19583",
+      "createdAt": "2026-09-14T00:39:13.206Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0imb0j3e97ad8b278b",
+      "commit": "b657c62e347f9eecb1dca3ca7baae1341d9d7257",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "7bfe84e8ba7287cd37e407b9b7b40b9ceca5aee3"
+      ],
+      "createdAt": "2026-09-14T00:39:13.987Z"
+    }
+  ]
+}

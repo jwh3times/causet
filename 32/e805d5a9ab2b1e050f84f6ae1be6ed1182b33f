@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu9yhepl59398a81020e",
+      "mode": "compact",
+      "sourceRef": "fix-benchmark-reference-and-fixture-race",
+      "sourceHead": "8e73fd27f13932b6cc4790f06d06527cf753e4bb",
+      "sourceSubject": "fix: prefer a maintained baseline entry, and stop a fixture assertion racing",
+      "targetBefore": "a2fb16f4e703e4f52cbd673f1937fe5a5cd51e67",
+      "landingCommit": "32e805d5a9ab2b1e050f84f6ae1be6ed1182b33f",
+      "base": "a2fb16f4e703e4f52cbd673f1937fe5a5cd51e67",
+      "absorbedCommits": [
+        "8e73fd27f13932b6cc4790f06d06527cf753e4bb"
+      ],
+      "absorbedChanges": [
+        "ch_0mu9xedcnc68058c0cf22"
+      ],
+      "resultTree": "988e02e9f7c942e9fdca7132547d08e5b4151833",
+      "createdAt": "2026-09-20T15:13:14.997Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu9yhf4c6dd1820db836",
+      "commit": "32e805d5a9ab2b1e050f84f6ae1be6ed1182b33f",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "8e73fd27f13932b6cc4790f06d06527cf753e4bb"
+      ],
+      "createdAt": "2026-09-20T15:13:15.468Z"
+    }
+  ]
+}

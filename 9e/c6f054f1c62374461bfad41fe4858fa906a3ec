@@ -1,0 +1,21 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mtupq97ob22f741899eb",
+      "commit": "9ec6f054f1c62374461bfad41fe4858fa906a3ec",
+      "changeId": "ch_0mtupq9258d7acd544ab2",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "OpenAI Codex"
+        }
+      ],
+      "origin": "declared",
+      "carriedFrom": [],
+      "createdAt": "2026-09-09T23:11:38.532Z"
+    }
+  ]
+}

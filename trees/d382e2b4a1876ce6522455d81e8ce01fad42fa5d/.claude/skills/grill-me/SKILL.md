@@ -1,8 +1,0 @@
----
-# GENERATED — do not edit. Source: .agents/skills/grill-me/SKILL.md — regenerate with 'npm run sync:agents'.
-name: grill-me
-description: A relentless interview to sharpen a plan or design.
-disable-model-invocation: true
----
-
-Call the Skill tool with "grilling".

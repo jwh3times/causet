@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvoqorxsabc00c8ec72c",
+      "mode": "compact",
+      "sourceRef": "feat/native-kind-suite-mode",
+      "sourceHead": "597d7d998a978e00850f45a13bd45d7a96c7970d",
+      "sourceSubject": "fix: keep the native-kind mode's temporary directories short enough for Windows",
+      "targetBefore": "e5c81985bff43e977b71f1706000af6c52a68d77",
+      "landingCommit": "d6adf99f4e405cfb38931e22bef17e6917a67da2",
+      "base": "e5c81985bff43e977b71f1706000af6c52a68d77",
+      "absorbedCommits": [
+        "c7e33e38bedc00ef8bc7228746e010a383e2f457",
+        "597d7d998a978e00850f45a13bd45d7a96c7970d"
+      ],
+      "absorbedChanges": [
+        "git:c7e33e38bedc00ef8bc7228746e010a383e2f457",
+        "git:597d7d998a978e00850f45a13bd45d7a96c7970d"
+      ],
+      "resultTree": "620baa628257f233e49c233b1f6997e9488996ce",
+      "createdAt": "2026-10-26T04:11:16.724Z"
+    }
+  ]
+}
