@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0muc7do5k4f95acfebda7",
+      "mode": "compact",
+      "sourceRef": "jwh3times/merge-preserving-causal-rebase",
+      "sourceHead": "53c9cbe3563f6d95331d1288caef1de76aadfcdf",
+      "sourceSubject": "feat: preserve merges through a causal rebase as joins that claim nothing",
+      "targetBefore": "6466e7fe6f5dcdfea30227864150da11e751f8cc",
+      "landingCommit": "f9655c77c9f96c878e895e42b3f787d741ff8e00",
+      "base": "6466e7fe6f5dcdfea30227864150da11e751f8cc",
+      "absorbedCommits": [
+        "53c9cbe3563f6d95331d1288caef1de76aadfcdf"
+      ],
+      "absorbedChanges": [
+        "ch_0muc6ys6cffe8e8b0523c"
+      ],
+      "resultTree": "dd74ec3cd9cce491c1afd28498bc2abaad77aa96",
+      "createdAt": "2026-09-22T04:57:49.455Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0muc7do6w872b6ecbd7e0",
+      "commit": "f9655c77c9f96c878e895e42b3f787d741ff8e00",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "53c9cbe3563f6d95331d1288caef1de76aadfcdf"
+      ],
+      "createdAt": "2026-09-22T04:57:49.496Z"
+    }
+  ]
+}
