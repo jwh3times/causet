@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mttl7ivh003c3872989f",
+      "mode": "compact",
+      "sourceRef": "jwh3times/tellin",
+      "sourceHead": "6eeb1c48043b57f03bdc0e68fa022650b83289b6",
+      "sourceSubject": "perf: take the metadata inventory under one object session",
+      "targetBefore": "1841133bff30880c975ce8ab20caa6777d522b1a",
+      "landingCommit": "0106abc618f1c02e7ac5b955340404e4d5a42009",
+      "base": "1841133bff30880c975ce8ab20caa6777d522b1a",
+      "absorbedCommits": [
+        "6eeb1c48043b57f03bdc0e68fa022650b83289b6"
+      ],
+      "absorbedChanges": [
+        "ch_0mttkuyfw8d0081fbe91d"
+      ],
+      "resultTree": "b806410da2147547e43c8a937e8d5c05f0fd965c",
+      "createdAt": "2026-09-09T04:17:20.041Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mttl7j4lda2e26a79abc",
+      "commit": "0106abc618f1c02e7ac5b955340404e4d5a42009",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "6eeb1c48043b57f03bdc0e68fa022650b83289b6"
+      ],
+      "createdAt": "2026-09-09T04:17:20.277Z"
+    }
+  ]
+}
