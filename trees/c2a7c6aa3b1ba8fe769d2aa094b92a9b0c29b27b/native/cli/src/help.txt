@@ -1,0 +1,97 @@
+causet — Git-backed causal source control
+
+Usage:
+  cst init
+  cst commit -m <message> [--all] [--allow-empty]
+  cst branch <name> [from]
+  cst merge <source> [--compact | --hard-squash] [-m <message>]
+  cst compact-merge <source> [-m <message>]
+  cst hard-squash <source> [-m <message>]
+  cst merge-plan <source> [--json]
+  cst proof-bundle <source>
+  cst verify-proof <file> [--offline] [--anchors-from <remote>] [--json]
+  cst rebase-plan <onto> [<source>] [--from <base>] [--json]
+  cst rebase-forecast <onto> [<source>] [--from <base>] [--target-checkpoint] [--accept-candidates] [--json]
+  cst rebase <onto> [--from <base>] [--accept-candidates] [--use-forecast <id>] [--json]
+  cst rebase --status [--json]
+  cst rebase --continue [--fork] [--json]
+  cst rebase --abort [--json]
+  cst forecast <source> [--target-checkpoint] [--accept-candidates] [--json]
+  cst reconcile <source> [--accept-candidates] [--use-forecast <id>] [--json]
+  cst reconcile --status [--json]
+  cst reconcile --continue [--fork] [--json]
+  cst reconcile --abort [--json]
+  cst resolve status [--json]
+  cst resolve apply [path] [--all] [--resolution <id>] [--json]
+  cst resolve reject [path] [--all] [--resolution <id>] [--json]
+  cst resolve list [--json]
+  cst cherry-pick <commit-or-change-id> [--fork] [--repeat] [--json]
+  cst graph
+  cst commit ... [--authored-by <actor>] [--generated-by <actor>]
+                 [--reviewed-by <actor>]     declare provenance (repeatable)
+  cst provenance [<rev>] [--all] [--json]
+  cst provenance declare <commit> [--authored-by <actor>]
+                 [--generated-by <actor>] [--reviewed-by <actor>]
+  cst receipts [--json]
+  cst audit identity [--json]
+  cst metadata status [--json]
+  cst metadata validate [--strict] [--json]
+  cst metadata retain --dry-run|--apply [--json]
+  cst metadata export <directory> [--json]
+  cst metadata import <directory> --dry-run [--park-conflicts] [--json]
+  cst metadata import <directory> --apply [--park-conflicts] [--json]
+  cst metadata dispose <record-id> --keep-local|--replace-local [--reason <text>] [--json]
+  cst capabilities [--json]                     what this build reads and writes
+  cst capabilities --against <document|envelope-directory> [--json]
+  cst metadata benchmark [--history <n>] [--workspaces <n>] [--notes <n>] [--resolutions <n>] [--areas <n>] [--files-per-area <n>] [--samples <n>] [--budget-ms <n>] [--json]
+  cst workspace create <name> [--from <ref>] [--path <directory>] [--owner <name>] [--focus <text>] [--cone <dir,dir>] [--json]
+  cst workspace list
+  cst workspace checkpoint [--label <text>] [--json]
+  cst workspace move <name> <directory> [--json]
+  cst workspace archive <name> [--json]
+  cst workspace restore <name> [--path <directory>] [--json]
+  cst workspace repair <name> --path <directory> [--json]
+  cst workspace prune [--dry-run|--apply] [--json]
+  cst workspace forecast <target> <source> [--source-checkpoint] [--target-checkpoint] [--accept-candidates] [--json]
+  cst spec index <markdown-file> [--force] [--json]
+  cst spec index --all [--force] [--json]
+  cst spec show <markdown-file>
+  cst spec merge-plan <markdown-file> <base> <ours> <theirs> [--json]
+  cst spec status [--json]
+  cst spec resolve [markdown-file] [--all] [--json]
+  cst spec benchmark [--documents <n>] [--blocks <n>]
+  cst migrate [--dry-run] [--json]              move vcs-lab metadata to the causet names
+  cst doctor [--benchmark] [--samples <n>] [--warmup <n>] [--differential]
+  cst version
+  cst fetch|pull|push|clone [<git arguments>] [--no-records] [--json]
+                     Git's command, carrying the causal records with it;
+                     --json (not for pull) reports the records moved
+  cst git <arguments>                           run Git, whatever the command
+
+Every other command is Git's: cst status, cst log, cst add and the rest run
+git with the same arguments.
+
+Experimental, and not contracts: they need CAUSET_EXPERIMENTAL=native, and
+their format and output may change without notice (ADR-0042, ADR-0045):
+  cst import <git-repo> <dest>                  copy a Git repository's objects and
+                                                refs into a new native repository
+  cst import --verify [<native-repo>]           check that every imported object
+                                                rebuilds to its Git ID
+  cst cat-file (-p | -t | -s) <object>          in a native repository, print an
+                                                object; cst --help there lists the rest
+
+Plan legend: '=' proven covered/omit, '?' heuristic review, '+' new/replay.
+
+Global diagnostics:
+  --trace-git        print per-command process/session timings to stderr
+  --git-session      force persistent Git object plumbing for this command
+  --no-git-session  use ordinary one-process-per-command Git plumbing
+  --forecast-engine <worktree|merge-tree>
+                     simulate clean forecast steps in a temporary worktree
+                     (the oracle; default on POSIX) or with one git merge-tree
+                     process (default on Windows; needs Git 2.49, else falls back)
+  --engine <git|native>
+                     answer repository reads with Git processes (the default and
+                     the oracle) or with the native core, which answers the
+                     reads it is qualified for and passes the rest to Git; each
+                     fallback is recorded in the Git metrics of the result
