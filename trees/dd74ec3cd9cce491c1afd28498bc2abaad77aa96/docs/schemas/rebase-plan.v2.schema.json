@@ -1,0 +1,541 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.rebase-plan/v2",
+  "title": "Causal rebase plan",
+  "description": "Read-only causal rebase selection, preserved topology, and constraints (CLI output of vlab rebase-plan --json; embedded as the plan of rebase forecasts and journals; src/rebase-plan.js). A strict superset of v1: v2 adds `topology` and `recreatedMerges`, admits `merge-preserving` as a mode, and redefines `constraints.supported` to mean \"every merge in range is a supported shape\" rather than \"the range is linear\" (ADR-0034).",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema",
+    "mode",
+    "ontoRef",
+    "ontoHead",
+    "sourceRef",
+    "sourceHead",
+    "ontoTree",
+    "sourceTree",
+    "exactStateEquality",
+    "physicalBase",
+    "effectiveBase",
+    "reachableReceipts",
+    "constraints",
+    "counts",
+    "changes",
+    "replayQueue",
+    "omitted",
+    "candidates",
+    "candidateDecisionRequired",
+    "executableWithoutReview",
+    "fingerprint",
+    "topology",
+    "recreatedMerges"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.rebase-plan/v2"
+    },
+    "mode": {
+      "enum": [
+        "linear",
+        "merge-preserving"
+      ],
+      "description": "A fact about the range, not a caller choice: `merge-preserving` exactly when the range contains a merge. A range without one rewrites exactly as it always did."
+    },
+    "ontoRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ontoHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "sourceRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "sourceTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "exactStateEquality": {
+      "type": "boolean"
+    },
+    "physicalBase": {
+      "$ref": "#/$defs/oid"
+    },
+    "effectiveBase": {
+      "type": "object",
+      "required": [
+        "commit"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/oid"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "reachableReceipts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "required": [
+        "supported",
+        "linearHistory",
+        "mergeCommits",
+        "unsupportedMerges"
+      ],
+      "properties": {
+        "supported": {
+          "type": "boolean",
+          "description": "True when every merge in range is a shape this version recreates. In v1 this meant \"the range is linear\"; from v2 a range with recreatable merges is supported (ADR-0034)."
+        },
+        "linearHistory": {
+          "type": "boolean",
+          "description": "True when the range contains no merge at all. Reported separately from `supported` because a caller may still want to know."
+        },
+        "mergeCommits": {
+          "type": "array",
+          "description": "Every merge in range, in the order the range reaches them. In v1 this listed the merges that made the plan unexecutable; from v2 it lists the merges the plan recreates, and `unsupportedMerges` carries the ones it will not.",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        },
+        "unsupportedMerges": {
+          "type": "array",
+          "description": "Merges outside ADR-0034's v1 topology scope. Non-empty exactly when `supported` is false; each names its own refusal so a person can act on it, and the operation refuses before any mutation.",
+          "items": {
+            "type": "object",
+            "required": [
+              "commit",
+              "parents",
+              "reason",
+              "code",
+              "details"
+            ],
+            "properties": {
+              "commit": {
+                "$ref": "#/$defs/oid"
+              },
+              "parents": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/oid"
+                }
+              },
+              "reason": {
+                "enum": [
+                  "octopus-merge",
+                  "parent-outside-range"
+                ],
+                "description": "`octopus-merge`: more than two parents, whose resolution order is not recoverable from the result. `parent-outside-range`: a parent neither in the range nor an ancestor of the new base, so the join would reference a line this rebase cannot map."
+              },
+              "code": {
+                "enum": [
+                  "unsupported-repository-shape",
+                  "unsupported-range"
+                ]
+              },
+              "details": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "covered",
+        "candidate-equivalent",
+        "new"
+      ],
+      "properties": {
+        "covered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate-equivalent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "shortCommit",
+          "changeId",
+          "subject",
+          "status",
+          "proof",
+          "action",
+          "changedPaths"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "shortCommit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "covered",
+              "candidate-equivalent",
+              "new"
+            ]
+          },
+          "changedPaths": {
+            "type": "array",
+            "description": "Paths this commit touched, read from the same git log process that builds the queue. The merge-tree forecast engine uses them to detect a nested .gitattributes edit it would otherwise simulate under the wrong attributes (ADR-0016).",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "action": {
+            "enum": [
+              "omit",
+              "review",
+              "replay"
+            ]
+          }
+        }
+      }
+    },
+    "replayQueue": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "shortCommit",
+          "changeId",
+          "subject"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "shortCommit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "omitted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof",
+          "subject"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "candidateDecisionRequired": {
+      "type": "boolean"
+    },
+    "executableWithoutReview": {
+      "type": "boolean"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "quarantinedFacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Identifiers reachable from the target that the conflict rule excluded, so a reviewer can see that coverage was computed on reduced evidence (ADR-0030). Absent in records written before v0.15.0; an empty array means nothing was excluded. Deliberately outside every plan fingerprint."
+    },
+    "range": {
+      "type": "object",
+      "required": [
+        "base",
+        "tip",
+        "explicit"
+      ],
+      "description": "The source set this plan describes. Without --from, `base` is the physical merge base and `explicit` is false, so a v1 plan is unchanged. The plan fingerprint covers `base`, because it decides what would be replayed; it does not cover `explicit`, because naming the same base is the same range (ADR-0032). Absent in records written before v0.15.0.",
+      "properties": {
+        "baseRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The revision the caller named, as typed, or null when the base was implicit."
+        },
+        "base": {
+          "$ref": "#/$defs/oid"
+        },
+        "tip": {
+          "$ref": "#/$defs/oid"
+        },
+        "explicit": {
+          "type": "boolean"
+        }
+      }
+    },
+    "excludedByRange": {
+      "type": "array",
+      "description": "Commits between the physical merge base and the range base: work the caller declared out of the source set. They are listed and nothing else \u2014 never replayed, classified, absorbed, or covered, and no receipt claims them. The omission is declared, not proven (ADR-0032).",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "subject"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "topology": {
+      "type": "object",
+      "description": "The rewrite program: which commits are recreated as merges, in what order they run, and where each step's new parents come from. The plan fingerprint covers the merge steps and their parent mapping, so an approval for one topology cannot authorize another (ADR-0034).",
+      "required": [
+        "steps",
+        "mergeCommits",
+        "unsupportedMerges",
+        "linearHistory",
+        "supported"
+      ],
+      "properties": {
+        "rangeBase": {
+          "$ref": "#/$defs/oid"
+        },
+        "sourceHead": {
+          "$ref": "#/$defs/oid"
+        },
+        "ontoHead": {
+          "$ref": "#/$defs/oid"
+        },
+        "mergeCommits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        },
+        "unsupportedMerges": {
+          "type": "array"
+        },
+        "linearHistory": {
+          "type": "boolean"
+        },
+        "supported": {
+          "type": "boolean"
+        },
+        "steps": {
+          "type": "array",
+          "description": "Topological order, oldest first, so every parent inside the range is rewritten before the commit naming it.",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "commit",
+              "parents"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "pick",
+                  "recreate-merge"
+                ]
+              },
+              "commit": {
+                "$ref": "#/$defs/oid"
+              },
+              "parents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "origin"
+                  ],
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "rewritten",
+                        "new-base"
+                      ],
+                      "description": "`rewritten` when the parent is inside the range and this operation replaces it; `new-base` when it is outside and the new base stands in for it."
+                    },
+                    "origin": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "The original parent commit, or null for a root commit's absent parent."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "recreatedMerges": {
+      "type": "array",
+      "description": "The merges this plan would recreate. A merge is a join, not a contribution: it never appears in `changes`, `replayQueue`, `omitted`, `candidates`, or `counts`, because it applies no change and there is nothing to classify (ADR-0034). Empty for a linear plan.",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "shortCommit",
+          "originChangeId",
+          "subject",
+          "parents"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "shortCommit": {
+            "type": "string"
+          },
+          "originChangeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The original merge's identity, or `git:<commit>` when it carried none. The recreated merge takes a new one, which only the receipt can report."
+          },
+          "subject": {
+            "type": "string"
+          },
+          "parents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "origin"
+              ],
+              "properties": {
+                "source": {
+                  "enum": [
+                    "rewritten",
+                    "new-base"
+                  ],
+                  "description": "`rewritten` when the parent is inside the range and this operation replaces it; `new-base` when it is outside and the new base stands in for it."
+                },
+                "origin": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The original parent commit, or null for a root commit's absent parent."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    }
+  }
+}
