@@ -1,0 +1,98 @@
+name: version
+
+# Versions every landing (`Scheme: stamp-on-tag`, ADR-0049). On each push to
+# main it runs `scripts/stamp-changelog.mjs`, which walks main's first-parent
+# history back to the newest `v<major>.<minor>.<build>` tag and, for each
+# untagged landing, oldest first:
+#   - builds its dated CHANGELOG.md section from the `changelog.d/` fragments
+#     that landing added, or from its title when it added none (a Dependabot
+#     pull request, a docs-only change);
+#   - computes its version the way `scripts/next-version.mjs` does, from
+#     package.json at that landing and the tags so far;
+#   - tags the landing commit itself, so a tag is exactly the code that
+#     landing built.
+# It makes one stamp commit, `chore(release): v<x.y.z>[, ...] [skip ci]`, that
+# adds the sections and deletes the used fragments, and this job pushes it and
+# the tags in one atomic push. It publishes nothing: release.yml builds,
+# installs and publishes the landing's GitHub prerelease once ci.yml passes on
+# it, reading the version from this tag (ADR-0048, amended by ADR-0049).
+#
+# The push uses a token from the release GitHub App, the main ruleset's bypass
+# actor for it: `GITHUB_TOKEN` cannot bypass a ruleset. The App's client ID is
+# the RELEASE_APP_CLIENT_ID variable and its private key the
+# RELEASE_APP_PRIVATE_KEY secret. `[skip ci]` keeps the stamp commit from
+# starting ci.yml, and so release.yml, or this workflow again. The stamp
+# commit is Git's own commit, with no cst provenance: it only writes the
+# changelog (ADR-0049).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Stamps take turns and never cancel a running one. GitHub still replaces a
+# waiting run when a newer one queues; that is harmless, because a stamp
+# starts from main's tip and versions every untagged landing.
+concurrency:
+  group: version-main
+  cancel-in-progress: false
+
+jobs:
+  stamp:
+    name: stamp the changelog and tag the landing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Create the release App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main # main's tip, not the pushed commit: a later landing may already be on it
+          fetch-depth: 0 # full history and tags, needed to find the untagged landings
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: Stamp the changelog and push the tags
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          bot="${APP_SLUG}[bot]"
+          bot_id=$(gh api "/users/${bot}" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
+
+          node scripts/stamp-changelog.mjs > "$RUNNER_TEMP/tags.txt"
+          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
+            echo "Every landing on main is tagged; nothing to version." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          tags=$(cut -d' ' -f1 "$RUNNER_TEMP/tags.txt")
+
+          refs=()
+          for tag in $tags; do refs+=("refs/tags/${tag}"); done
+          if ! git push --atomic origin HEAD:main "${refs[@]}" 2> "$RUNNER_TEMP/push.log"; then
+            cat "$RUNNER_TEMP/push.log" >&2
+            # Only main moving is benign: the run waiting behind this one versions both landings.
+            if grep -Eq 'HEAD -> main \((fetch first|non-fast-forward)\)' "$RUNNER_TEMP/push.log"; then
+              echo "::notice::main moved during this run; the next run versions these landings."
+              exit 0
+            fi
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/push.log" >&2
+          echo "### Versioned" >> "$GITHUB_STEP_SUMMARY"
+          while read -r tag sha; do
+            echo "- \`${tag}\` on \`${sha}\`" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RUNNER_TEMP/tags.txt"
