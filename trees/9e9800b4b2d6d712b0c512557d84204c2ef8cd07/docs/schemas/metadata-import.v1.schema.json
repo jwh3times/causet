@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.metadata-import/v1",
+  "title": "Metadata import result",
+  "description": "Applied or idempotent import result of vlab metadata import --apply --json (CLI output; src/metadata-transfer.js applyImport). The preview shape of vcs-lab.metadata-import-preview/v1 plus applied and changed.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema", "path", "repository", "records", "refs", "objectProblems",
+    "summary", "exclusions", "trust", "applied", "changed"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.metadata-import/v1" },
+    "path": { "type": "string", "minLength": 1 },
+    "repository": { "$ref": "vcs-lab.metadata-import-preview/v1#/$defs/repository" },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.metadata-import-preview/v1#/$defs/recordAction" }
+    },
+    "refs": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.metadata-import-preview/v1#/$defs/refAction" }
+    },
+    "objectProblems": { "type": "array" },
+    "summary": { "$ref": "vcs-lab.metadata-import-preview/v1#/$defs/summary" },
+    "exclusions": { "type": "array", "items": { "type": "string" } },
+    "trust": {
+      "type": "object",
+      "required": ["cryptographicallySigned", "authorized", "statement"],
+      "properties": {
+        "cryptographicallySigned": { "const": false },
+        "authorized": { "const": false },
+        "statement": { "type": "string" }
+      }
+    },
+    "applied": { "const": true },
+    "changed": { "type": "boolean" }
+  }
+}
