@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.identity-audit/v1",
+  "title": "Repository-wide logical identity audit",
+  "description": "The result of 'vlab audit identity' (FR-ID-06). Answers three questions no single plan can, because each plan sees one reachable set: does any commit message claim more than one identity, do commits share a Change-Id without a recorded derivation between them, and does any applied commit have more than one claimed origin. Exits non-zero when errors are found.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "repository", "scanned", "findings", "summary"],
+  "properties": {
+    "schema": { "const": "vcs-lab.identity-audit/v1" },
+    "repository": {
+      "type": "object",
+      "required": ["root", "objectFormat"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1 },
+        "objectFormat": { "enum": ["sha1", "sha256"] }
+      }
+    },
+    "scanned": {
+      "type": "object",
+      "description": "The audit's scope: every commit reachable from any ref and every causal record in the notes ref, not one plan's reachable set. A collision a given plan cannot see is still a collision.",
+      "required": ["commits", "changeIds", "applicationRecords", "causalRecords"],
+      "properties": {
+        "commits": { "type": "integer", "minimum": 0 },
+        "changeIds": { "type": "integer", "minimum": 0 },
+        "applicationRecords": { "type": "integer", "minimum": 0 },
+        "causalRecords": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "message"],
+        "properties": {
+          "code": {
+            "enum": [
+              "conflicting-change-id-trailer",
+              "change-id-collision",
+              "ambiguous-origin",
+              "fork-without-new-identity",
+              "identity-not-preserved"
+            ],
+            "description": "conflicting-change-id-trailer: one commit message carries several different Change-Id trailers, and planning reads only the first. change-id-collision: commits share a Change-Id across groups with no identity-preserving application record linking them, so the sharing is not the preserved identity of FR-ID-02. ambiguous-origin: one applied commit is claimed by application records naming different origins. fork-without-new-identity: a contextual-fork kept the origin Change-Id, which FR-ID-03 forbids. identity-not-preserved: a non-fork application changed the Change-Id, which FR-ID-02 forbids."
+          },
+          "severity": { "enum": ["error", "warning"] },
+          "message": { "type": "string", "minLength": 1 },
+          "commit": { "type": "string" },
+          "changeId": { "type": "string" },
+          "changeIds": { "type": "array", "items": { "type": "string" } },
+          "commits": { "type": "array", "items": { "type": "string" } },
+          "unlinkedGroups": {
+            "type": "array",
+            "description": "The commit groups that carry the colliding Change-Id, partitioned by identity-preserving derivation. More than one group is what makes it a collision rather than a legitimately shared identity.",
+            "items": { "type": "array", "items": { "type": "string" } }
+          },
+          "origins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["originCommit", "recordId"],
+              "properties": {
+                "originCommit": { "type": "string" },
+                "recordId": { "type": "string" }
+              }
+            }
+          },
+          "recordId": { "type": "string" },
+          "originChangeId": { "type": "string" },
+          "appliedChangeId": { "type": "string" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["errors", "warnings", "collisions", "conflictingTrailers", "ambiguousOrigins", "clean"],
+      "properties": {
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "collisions": { "type": "integer", "minimum": 0 },
+        "conflictingTrailers": { "type": "integer", "minimum": 0 },
+        "ambiguousOrigins": { "type": "integer", "minimum": 0 },
+        "clean": { "type": "boolean" }
+      }
+    }
+  }
+}
