@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.proof-bundle/v2",
+  "title": "Portable proof bundle, bound to Git objects",
+  "description": "A proof bundle that carries Git's own bindings for what it claims: the raw commit objects of the source range, reachability paths for every positive coverage claim, receipt inclusion proofs against the notes tip, and the anchors those proofs terminate at. A strict superset of v1, whose members and repository-backed comparison are unchanged (src/proof-bundle.js, src/proof-binding.js; ADR-0031).",
+  "x-vcs-lab-scope": "envelope",
+  "type": "object",
+  "required": [
+    "schema",
+    "repository",
+    "target",
+    "source",
+    "physicalBase",
+    "effectiveBase",
+    "evidence",
+    "changes",
+    "counts",
+    "integrity",
+    "objects",
+    "sourceInventory",
+    "reachability",
+    "receiptInclusion",
+    "anchors"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.proof-bundle/v2"
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "lineage"
+      ],
+      "description": "Which repository the evidence came from. The lineage identity is the cross-repository identity of the canonical JSON profile, so a verifier can tell whether a bundle is even about the repository it holds.",
+      "properties": {
+        "lineage": {
+          "type": "object",
+          "required": [
+            "algorithm",
+            "objectFormat",
+            "rootCommits",
+            "id"
+          ],
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "minLength": 1
+            },
+            "objectFormat": {
+              "enum": [
+                "sha1",
+                "sha256"
+              ]
+            },
+            "rootCommits": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/oid"
+              }
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^lineage_[0-9a-fA-F]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "head"
+      ],
+      "properties": {
+        "head": {
+          "$ref": "#/$defs/oid"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "ref",
+        "head"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "head": {
+          "$ref": "#/$defs/oid"
+        }
+      }
+    },
+    "physicalBase": {
+      "$ref": "#/$defs/oid"
+    },
+    "effectiveBase": {
+      "type": "object",
+      "required": [
+        "commit",
+        "reason"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/oid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "description": "The sets the coverage proof lattice is evaluated against. A verifier applies the lattice to these rather than trusting the status and proof members of each change.",
+      "required": [
+        "targetCommits",
+        "targetChangeIds",
+        "receipts",
+        "patchEquivalentCommits"
+      ],
+      "properties": {
+        "targetCommits": {
+          "type": "array",
+          "description": "Commits reachable from the target head, sorted. Backs the commit-ancestry proof.",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        },
+        "targetChangeIds": {
+          "type": "array",
+          "description": "Logical IDs present in target history, sorted. Backs the stable-change-id proof.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "receipts": {
+          "type": "array",
+          "description": "Reachable, accepted landing, reconciliation, and rebase receipts, with the claims that matter. Backs the receipt-commit and receipt-change-id proofs, and makes a covered change traceable to the receipt that covered it.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "schema",
+              "type",
+              "attachedTo",
+              "absorbedCommits",
+              "absorbedChanges"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "schema": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attachedTo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "absorbedCommits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/oid"
+                }
+              },
+              "absorbedChanges": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "patchEquivalentCommits": {
+          "type": "array",
+          "description": "Advisory patch-equivalent commits. Backs the git-patch-id-heuristic classification, which is a candidate rather than a proof.",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        },
+        "quarantinedFacts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Identifiers reachable from the target that the conflict rule excluded from the sets above (ADR-0030). A verifier re-deriving the classification needs this to get the same answer: the evidence it is handed is deliberately reduced, and without the list it cannot tell a change that was never landed from one whose receipt is disputed. Absent in bundles written before v0.15.0."
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "description": "The complete ordered source commit range outside the physical base, with one entry per commit. Repository verification binds commit, changeId, and subject to Git history. status and proof are independently recomputed. Offline verification cannot establish that this inventory is complete.",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "subject",
+          "status",
+          "proof"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "covered",
+              "candidate-equivalent",
+              "new"
+            ]
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Coverage proof, or null for new work: commit-ancestry, receipt-commit, stable-change-id, receipt-change-id, git-patch-id-heuristic. Bundles produced before v0.12.0 may carry signed-shaped-landing-receipt where receipt-commit now appears."
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "covered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate-equivalent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "description": "Hash over the bundle without its own integrity and signatures members, under the canonical JSON profile. Detects editing, not fabrication: a party that can recompute the hash can also restate it, which is why verification recomputes the classification and, given a repository, the evidence.",
+      "required": [
+        "algorithm",
+        "bundleHash"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "bundleHash": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "description": "Reserved by the canonical JSON profile for future detached signatures; excluded from the hash alongside integrity. No signature scheme exists yet.",
+      "items": {
+        "type": "object"
+      }
+    },
+    "objects": {
+      "type": "object",
+      "description": "Raw Git objects by id, carried once and referenced by the members below. A verifier recomputes each id from the bytes under the lineage's object format; that recomputation is the binding, because a sender cannot choose the id of a commit whose message it altered. One map rather than three keeps a bundle proportional to history depth rather than to the number of claims."
+    },
+    "sourceInventory": {
+      "type": "object",
+      "required": [
+        "commits"
+      ],
+      "description": "The commits of physicalBase..sourceHead. The verifier walks parents from the stated source head, requires the walk to reach the stated physical base, and requires the list to enumerate exactly the change list in its order.",
+      "properties": {
+        "commits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        }
+      }
+    },
+    "reachability": {
+      "type": "object",
+      "required": [
+        "paths"
+      ],
+      "description": "A commit path for every positive claim and for the bases. Coverage is a positive claim with a compact proof; newness is an absence claim with none, which is why there is nothing here for a change classified new.",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "claim",
+              "subject",
+              "from",
+              "to",
+              "commits"
+            ],
+            "properties": {
+              "claim": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The proof this path supports, or physical-base-ancestry or effective-base."
+              },
+              "subject": {
+                "$ref": "#/$defs/oid"
+              },
+              "from": {
+                "$ref": "#/$defs/oid"
+              },
+              "to": {
+                "$ref": "#/$defs/oid"
+              },
+              "commits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/oid"
+                },
+                "description": "The chain from `from` to `to`; each entry must be a real parent of the one before it."
+              }
+            }
+          }
+        }
+      }
+    },
+    "receiptInclusion": {
+      "type": "object",
+      "required": [
+        "notesTip",
+        "receipts"
+      ],
+      "description": "Proof that each receipt the classification relies on is what the stated notes tip holds. Anchored to the notes tip only: every receipt in an ordinary history is reachable without the ADR-0025 retention ref, which matters on the source side of a hard squash rather than as a target-side anchor.",
+      "properties": {
+        "notesTip": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$"
+        },
+        "receipts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "attachment",
+              "path",
+              "blob"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attachment": {
+                "$ref": "#/$defs/oid"
+              },
+              "path": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/oid"
+                },
+                "description": "Tree ids from the notes tip's root tree down to the note blob."
+              },
+              "blob": {
+                "$ref": "#/$defs/oid"
+              }
+            }
+          }
+        }
+      }
+    },
+    "anchors": {
+      "type": "object",
+      "required": [
+        "targetHead",
+        "sourceHead",
+        "notesTip",
+        "lineageRoots"
+      ],
+      "description": "The identities the carried proofs terminate at. The bundle states them and cannot prove them; a verifier that obtains the same values from a channel it chose promotes every bound conclusion to the anchored tier.",
+      "properties": {
+        "targetHead": {
+          "$ref": "#/$defs/oid"
+        },
+        "sourceHead": {
+          "$ref": "#/$defs/oid"
+        },
+        "notesTip": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$"
+        },
+        "lineageRoots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/oid"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$"
+    }
+  }
+}

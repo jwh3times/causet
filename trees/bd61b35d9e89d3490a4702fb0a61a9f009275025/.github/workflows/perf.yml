@@ -1,0 +1,120 @@
+# Performance checkpoint harness on GitHub-hosted runners (issue #151,
+# ADR-0037 decision 7). Hosted runners are shared, so absolute milliseconds are
+# not comparable between runs; what this job contributes is load-independent:
+# byte equality, exit status, Git process counts, and comparisons made within
+# one run (native against Git engine, each command against its Git floor, and
+# the Rust CLI against the JavaScript CLI once one is built). Absolute figures
+# come from the reference host; see the wiki's Performance testing page.
+#
+# Timings never fail this job. It fails only when the harness cannot measure:
+# a command that fails, or a deterministic read that prints different bytes.
+name: perf
+
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: Timed samples per measurement (at least 5)
+        default: "11"
+      suites:
+        description: Suites to run (startup,reads,writes)
+        default: startup,reads,writes
+  pull_request:
+    paths:
+      - "native/**"
+      - "scripts/perf-checkpoint.mjs"
+      - ".github/workflows/perf.yml"
+  schedule:
+    # Weekly on main, so drift between checkpoints is visible.
+    - cron: "17 6 * * 1"
+
+concurrency:
+  group: perf-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checkpoint:
+    name: perf / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch the causal refs the real-clone fixture needs
+        # A checkout brings branches and tags but not notes or refs/vcs-lab/*;
+        # the harness pins the real clone to v0.18.0 and notes 4089785.
+        run: git fetch --no-tags origin '+refs/notes/vcs-lab:refs/notes/vcs-lab' '+refs/vcs-lab/*:refs/vcs-lab/*'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Toolchain
+        run: |
+          git --version
+          node --version
+      - name: Build the optional native backend
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          node scripts/build-native.mjs
+      - name: Select implementations
+        id: impls
+        # The workspace builds the Rust CLI, `cst` (#141), which answers what it
+        # has ported and delegates every other command to the JavaScript CLI.
+        run: |
+          for candidate in native/target/release/cst.exe native/target/release/cst; do
+            if [ -f "$candidate" ]; then
+              echo "args=--impl rust=$candidate" >> "$GITHUB_OUTPUT"
+              echo "Rust CLI found: $candidate"
+              exit 0
+            fi
+          done
+          echo "args=" >> "$GITHUB_OUTPUT"
+          echo "No Rust CLI binary yet; measuring the JavaScript CLI only."
+      - name: Run the performance checkpoint harness
+        env:
+          SAMPLES: ${{ inputs.samples || '11' }}
+          SUITES: ${{ inputs.suites || 'startup,reads,writes' }}
+          IMPL_ARGS: ${{ steps.impls.outputs.args }}
+        run: |
+          # IMPL_ARGS is deliberately unquoted so it splits into flag and value.
+          # shellcheck disable=SC2086
+          node scripts/perf-checkpoint.mjs \
+            --host "ci-${{ runner.os }}" \
+            --checkpoint "ci-${{ github.run_id }}" \
+            --output "$RUNNER_TEMP/perf-checkpoint.json" \
+            --markdown "$RUNNER_TEMP/perf-checkpoint.md" \
+            --samples "$SAMPLES" --warmup 2 --suites "$SUITES" \
+            --allow-noisy \
+            --note "GitHub-hosted runner: compare within this run only; absolute times are not comparable across runs" \
+            $IMPL_ARGS
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "> Hosted runner: read ratios, process counts, equality and implementation"
+            echo "> comparisons from this run. Absolute times are not comparable across runs; the"
+            echo "> reference figures are on the [Performance testing](https://github.com/jwh3times/causet/wiki/Performance-testing) wiki page."
+            echo
+            if [ -f "$RUNNER_TEMP/perf-checkpoint.md" ]; then cat "$RUNNER_TEMP/perf-checkpoint.md"; else echo "The harness did not produce a summary."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-${{ runner.os }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/perf-checkpoint.json
+            ${{ runner.temp }}/perf-checkpoint.md
+          if-no-files-found: warn
+          retention-days: 90
