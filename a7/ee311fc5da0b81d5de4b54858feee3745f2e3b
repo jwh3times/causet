@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvpzp2t4843a194fb05b",
+      "mode": "compact",
+      "sourceRef": "docs/dev-flow",
+      "sourceHead": "def2e918a004ab354c15db2bc09c3008bda26914",
+      "sourceSubject": "docs: make the engineering skills' flow the binding development process",
+      "targetBefore": "dae28b5b41274127e1d05925e8f497e1539f6c11",
+      "landingCommit": "a7ee311fc5da0b81d5de4b54858feee3745f2e3b",
+      "base": "dae28b5b41274127e1d05925e8f497e1539f6c11",
+      "absorbedCommits": [
+        "def2e918a004ab354c15db2bc09c3008bda26914"
+      ],
+      "absorbedChanges": [
+        "git:def2e918a004ab354c15db2bc09c3008bda26914"
+      ],
+      "resultTree": "1d2e83e325f42a0114602044c086877cbfe15899",
+      "createdAt": "2026-10-27T01:11:13.531Z"
+    }
+  ]
+}

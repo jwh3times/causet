@@ -1,5 +1,0 @@
-interface:
-  display_name: "Let's Go"
-  short_description: "Resume from the active handoff"
-policy:
-  allow_implicit_invocation: false

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvvd48r1c84d1f4586c5",
+      "mode": "compact",
+      "sourceRef": "chore/skills-refresh-wave-1",
+      "sourceHead": "730e2a6d50668d38112d3888ee7f37d3799c9c01",
+      "sourceSubject": "chore: refresh the shared skills from jwh3times/skills",
+      "targetBefore": "adda916d66d954dfdf4ce984917cb6057ca6f884",
+      "landingCommit": "c26b84dce6efea1552c9a51fac5e57ebe2241aa9",
+      "base": "adda916d66d954dfdf4ce984917cb6057ca6f884",
+      "absorbedCommits": [
+        "730e2a6d50668d38112d3888ee7f37d3799c9c01"
+      ],
+      "absorbedChanges": [
+        "ch_0mvvcjty8f99aaebc99fa"
+      ],
+      "resultTree": "9e63bbc663f6c06d9049da00310b2f48fd3b55f9",
+      "createdAt": "2026-10-30T19:25:47.000Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvvd491x88e891d6bf75",
+      "commit": "c26b84dce6efea1552c9a51fac5e57ebe2241aa9",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "730e2a6d50668d38112d3888ee7f37d3799c9c01"
+      ],
+      "createdAt": "2026-10-30T19:25:47.349Z"
+    }
+  ]
+}

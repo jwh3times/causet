@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvsj2f2n3ee4a50629bb",
+      "mode": "compact",
+      "sourceRef": "docs/351-native-store-contract-v1",
+      "sourceHead": "256f8cfaba04f5fce190d057a50bd225c38efe3d",
+      "sourceSubject": "docs: settle the contract's review findings (#351)",
+      "targetBefore": "7c3961c3d9e1ec683fcbf03cdca3eaf4935b152b",
+      "landingCommit": "9e5345b977b94cea588ab8d839d04761cf397857",
+      "base": "7c3961c3d9e1ec683fcbf03cdca3eaf4935b152b",
+      "absorbedCommits": [
+        "cda82542079438f459578d82f5e7506057c0e6ca",
+        "256f8cfaba04f5fce190d057a50bd225c38efe3d"
+      ],
+      "absorbedChanges": [
+        "git:cda82542079438f459578d82f5e7506057c0e6ca",
+        "git:256f8cfaba04f5fce190d057a50bd225c38efe3d"
+      ],
+      "resultTree": "391c8a872d68b74b35ec0073e4b984a56f7f7f81",
+      "createdAt": "2026-10-28T19:49:01.010Z"
+    }
+  ]
+}

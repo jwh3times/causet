@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu26zjm64e0cce515aad",
+      "mode": "compact",
+      "sourceRef": "jwh3times/elephantfish",
+      "sourceHead": "eabec28e37a8b4f00833c77733e7f3fbe6442ea2",
+      "sourceSubject": "chore: release v0.14.0",
+      "targetBefore": "7f7c6086bd244dbb87b48085009e5b386df217c5",
+      "landingCommit": "468cd06cfb85d929c31547e35709c32c5b9a5147",
+      "base": "7f7c6086bd244dbb87b48085009e5b386df217c5",
+      "absorbedCommits": [
+        "eabec28e37a8b4f00833c77733e7f3fbe6442ea2"
+      ],
+      "absorbedChanges": [
+        "ch_0mu26djmj4721e52e4b80"
+      ],
+      "resultTree": "556cc7f5dec00ea35da10e772fa3852b5c3286c5",
+      "createdAt": "2026-09-15T04:49:08.684Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu26zk0x44c2e406613e",
+      "commit": "468cd06cfb85d929c31547e35709c32c5b9a5147",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-fable-5-1"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "eabec28e37a8b4f00833c77733e7f3fbe6442ea2"
+      ],
+      "createdAt": "2026-09-15T04:49:09.153Z"
+    }
+  ]
+}
