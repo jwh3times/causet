@@ -1,0 +1,16 @@
+[package]
+name = "causet-history"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# Native history (N2, ADR-0047, #311), built to the contract in
+# `docs/native-history/`, which stays the authority: its worked examples and
+# reference vectors are what this crate's tests check. It reads no Git
+# repository: it depends on the store and the record model only, never on
+# `causet-core`, `causet-engine` or gitoxide (ADR-0047, decision 15).
+
+[dependencies]
+causet-model = { path = "../model" }
+causet-store = { path = "../store" }
