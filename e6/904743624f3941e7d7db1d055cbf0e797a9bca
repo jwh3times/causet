@@ -1,0 +1,52 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu0pbbdx77fcb32b5fb9",
+      "mode": "compact",
+      "sourceRef": "native/83-resolution-reads",
+      "sourceHead": "4c24ea9f5fbc4decb04ed09876bf533c040e4e13",
+      "sourceSubject": "test: normalize native fixture paths on Windows",
+      "targetBefore": "fc83b8ffdac2758437105d41c3eabd95ac007d34",
+      "landingCommit": "e6904743624f3941e7d7db1d055cbf0e797a9bca",
+      "base": "fc83b8ffdac2758437105d41c3eabd95ac007d34",
+      "absorbedCommits": [
+        "6dc42e0465df8221c863626e6bc38f967022a0c1",
+        "77c89ef5a1cbc4132790e21f489e7b67ead39866",
+        "354aed77c2005b77bc15283939831f3359710ad0",
+        "4c24ea9f5fbc4decb04ed09876bf533c040e4e13"
+      ],
+      "absorbedChanges": [
+        "ch_0mu0nu2v697626ff29cd6",
+        "ch_0mu0o4efk22936c275be5",
+        "ch_0mu0ohh7628b7302eeaf8",
+        "ch_0mu0opl3p79c488a28ae7"
+      ],
+      "resultTree": "25d9f7bc049dd8a9d524b8230f92fefb70fa159f",
+      "createdAt": "2026-09-14T03:46:38.644Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0pbbzz50a351e107db",
+      "commit": "e6904743624f3941e7d7db1d055cbf0e797a9bca",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "354aed77c2005b77bc15283939831f3359710ad0",
+        "4c24ea9f5fbc4decb04ed09876bf533c040e4e13",
+        "6dc42e0465df8221c863626e6bc38f967022a0c1",
+        "77c89ef5a1cbc4132790e21f489e7b67ead39866"
+      ],
+      "createdAt": "2026-09-14T03:46:39.359Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu52nh8r5e60c27405c0",
+      "mode": "compact",
+      "sourceRef": "jwh3times/graysby",
+      "sourceHead": "a8a1e040d57ab3e20bb57ce02c2b30c5306a7c80",
+      "sourceSubject": "fix: refuse a newer proof-bundle version as unknown-schema-version",
+      "targetBefore": "475bfbd94847d8de23a02a5478bcbd3f161cb2b5",
+      "landingCommit": "bd92f0b3898a22a510094271c18767a4fb5640c6",
+      "base": "475bfbd94847d8de23a02a5478bcbd3f161cb2b5",
+      "absorbedCommits": [
+        "a8a1e040d57ab3e20bb57ce02c2b30c5306a7c80"
+      ],
+      "absorbedChanges": [
+        "ch_0mu52892z23496f3e2587"
+      ],
+      "resultTree": "4e7a9c263758a9b52d7c449f098e8033ed31bc5e",
+      "createdAt": "2026-09-17T05:11:05.799Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu52nhn08824f39229b0",
+      "commit": "bd92f0b3898a22a510094271c18767a4fb5640c6",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "a8a1e040d57ab3e20bb57ce02c2b30c5306a7c80"
+      ],
+      "createdAt": "2026-09-17T05:11:06.252Z"
+    }
+  ]
+}

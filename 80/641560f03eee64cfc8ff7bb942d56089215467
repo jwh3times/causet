@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvgyy3s6f20335a23ad7",
+      "mode": "compact",
+      "sourceRef": "feat/native-import-history",
+      "sourceHead": "9309c8add813a33eef14c213bc58e1b3baa1d62d",
+      "sourceSubject": "docs: an aliased object is present whether or not the snapshot reaches it",
+      "targetBefore": "86eac7e664d2984c2209d9fe92de97b30649fb5d",
+      "landingCommit": "80641560f03eee64cfc8ff7bb942d56089215467",
+      "base": "86eac7e664d2984c2209d9fe92de97b30649fb5d",
+      "absorbedCommits": [
+        "8547fe62b5035256ea749a8f560d92b9b7588a7d",
+        "9309c8add813a33eef14c213bc58e1b3baa1d62d"
+      ],
+      "absorbedChanges": [
+        "git:8547fe62b5035256ea749a8f560d92b9b7588a7d",
+        "git:9309c8add813a33eef14c213bc58e1b3baa1d62d"
+      ],
+      "resultTree": "3553bbf0bcfe16737dbc5cb67eb78bf2f3dce4fe",
+      "createdAt": "2026-10-20T17:40:19.497Z"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvbmw23g2c2f7411fe31",
+      "mode": "compact",
+      "sourceRef": "chore/prepare-v0.25.1",
+      "sourceHead": "bf710e8c854c71a0a7e40838f5eefefd144f7d0b",
+      "sourceSubject": "Merge branch 'main' into chore/prepare-v0.25.1",
+      "targetBefore": "95d46ed8592bef176b4546d45ad505fcf75255b3",
+      "landingCommit": "658c2000b7e388a6967a576fe3424dbbcc2eba6d",
+      "base": "95d46ed8592bef176b4546d45ad505fcf75255b3",
+      "absorbedCommits": [
+        "ef2af0a3ff928d32b35b8b4501609a1e3e47756f",
+        "bf710e8c854c71a0a7e40838f5eefefd144f7d0b"
+      ],
+      "absorbedChanges": [
+        "ch_0mvbl9adma20d614bc32d",
+        "git:bf710e8c854c71a0a7e40838f5eefefd144f7d0b"
+      ],
+      "resultTree": "1f56d6645daa39ea7f318fe77cb37554655f9c3e",
+      "createdAt": "2026-10-17T00:03:57.727Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvbmw24992214d779d2e",
+      "commit": "658c2000b7e388a6967a576fe3424dbbcc2eba6d",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "ef2af0a3ff928d32b35b8b4501609a1e3e47756f"
+      ],
+      "createdAt": "2026-10-17T00:03:57.753Z"
+    }
+  ]
+}
