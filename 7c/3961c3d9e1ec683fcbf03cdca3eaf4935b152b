@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvsbjmx40b32f2b68e74",
+      "mode": "compact",
+      "sourceRef": "docs/345-n1-storage-amendment",
+      "sourceHead": "e9c93a043bd991f09f110efda980f69cbbb1dc6d",
+      "sourceSubject": "docs: amend ADR-0045 for N1 storage against git/git",
+      "targetBefore": "34b20e4bc8a03354869131451962b3a90318ea22",
+      "landingCommit": "7c3961c3d9e1ec683fcbf03cdca3eaf4935b152b",
+      "base": "34b20e4bc8a03354869131451962b3a90318ea22",
+      "absorbedCommits": [
+        "e9c93a043bd991f09f110efda980f69cbbb1dc6d"
+      ],
+      "absorbedChanges": [
+        "git:e9c93a043bd991f09f110efda980f69cbbb1dc6d"
+      ],
+      "resultTree": "02aab44951624901613bea275b7c468b1e8df255",
+      "createdAt": "2026-10-28T16:18:27.404Z"
+    }
+  ]
+}

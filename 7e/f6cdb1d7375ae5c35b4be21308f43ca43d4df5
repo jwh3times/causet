@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mva4rjghcda5a80ad195",
+      "mode": "compact",
+      "sourceRef": "docs/adr-0040-one-command",
+      "sourceHead": "b6624c2863427abd834a230a68f73fa801cd3f62",
+      "sourceSubject": "docs: propose ADR-0040, making cst the one command",
+      "targetBefore": "6da365dfb667a645c675cbffd03069d920c2730e",
+      "landingCommit": "7ef6cdb1d7375ae5c35b4be21308f43ca43d4df5",
+      "base": "6da365dfb667a645c675cbffd03069d920c2730e",
+      "absorbedCommits": [
+        "b6624c2863427abd834a230a68f73fa801cd3f62"
+      ],
+      "absorbedChanges": [
+        "ch_0mva3vl5w8d59c224adfa"
+      ],
+      "resultTree": "b76476b53a89d93344dde32e4d67324ee963337d",
+      "createdAt": "2026-10-15T22:48:47.684Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mva4rjh826b8d2066224",
+      "commit": "7ef6cdb1d7375ae5c35b4be21308f43ca43d4df5",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "b6624c2863427abd834a230a68f73fa801cd3f62"
+      ],
+      "createdAt": "2026-10-15T22:48:47.708Z"
+    }
+  ]
+}

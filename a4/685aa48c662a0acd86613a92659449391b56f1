@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mucrg7zb2b0c039145db",
+      "mode": "compact",
+      "sourceRef": "jwh3times/prepare-v0-17-0",
+      "sourceHead": "581871a8f089792c3a87f85fb747b85dde54dcba",
+      "sourceSubject": "chore: prepare the v0.17.0 release",
+      "targetBefore": "ed11a84333505c9c8f8c9b33f0d13e99a1081e57",
+      "landingCommit": "a4685aa48c662a0acd86613a92659449391b56f1",
+      "base": "ed11a84333505c9c8f8c9b33f0d13e99a1081e57",
+      "absorbedCommits": [
+        "581871a8f089792c3a87f85fb747b85dde54dcba"
+      ],
+      "absorbedChanges": [
+        "ch_0mucqwrlm5500339657a8"
+      ],
+      "resultTree": "25fc58fa0bdc776a133a2bac708c957e9fb3e18e",
+      "createdAt": "2026-09-22T14:19:40.781Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mucrg80o9bcf38cc573a",
+      "commit": "a4685aa48c662a0acd86613a92659449391b56f1",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "581871a8f089792c3a87f85fb747b85dde54dcba"
+      ],
+      "createdAt": "2026-09-22T14:19:40.824Z"
+    }
+  ]
+}
