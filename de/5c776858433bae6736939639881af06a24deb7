@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvcj2gw490ca168f2727",
+      "mode": "compact",
+      "sourceRef": "docs/native-coexistence",
+      "sourceHead": "1dc3546726342dc6fcec981654263c97163c8495",
+      "sourceSubject": "docs: accept ADR-0042, grow the native system as a shadow",
+      "targetBefore": "25d6dd07c3d0b939e6ab6ee34ffdcafe0010fe40",
+      "landingCommit": "de5c776858433bae6736939639881af06a24deb7",
+      "base": "25d6dd07c3d0b939e6ab6ee34ffdcafe0010fe40",
+      "absorbedCommits": [
+        "1dc3546726342dc6fcec981654263c97163c8495"
+      ],
+      "absorbedChanges": [
+        "git:1dc3546726342dc6fcec981654263c97163c8495"
+      ],
+      "resultTree": "9bfea78843b722729968dc93ca14d48866d80a24",
+      "createdAt": "2026-10-17T15:04:44.552Z"
+    }
+  ]
+}

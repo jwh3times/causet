@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mva5qd8k9b9428f46e4d",
+      "mode": "compact",
+      "sourceRef": "docs/258-exact-causal-refspecs",
+      "sourceHead": "fc91b925bf58c288cd7d9a0cd3f0247c4fffb12f",
+      "sourceSubject": "docs: name each causal ref in the documented low-level fetch",
+      "targetBefore": "7ef6cdb1d7375ae5c35b4be21308f43ca43d4df5",
+      "landingCommit": "8683364a5ba73c3ccc0eedd45aeae03ab7b36614",
+      "base": "7ef6cdb1d7375ae5c35b4be21308f43ca43d4df5",
+      "absorbedCommits": [
+        "fc91b925bf58c288cd7d9a0cd3f0247c4fffb12f"
+      ],
+      "absorbedChanges": [
+        "ch_0mva4tbwb89edc0f9216d"
+      ],
+      "resultTree": "44b1e189720c48e422a1af61a0896f14b4e2ab95",
+      "createdAt": "2026-10-15T23:15:52.583Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mva5qd9f39b665831a0e",
+      "commit": "8683364a5ba73c3ccc0eedd45aeae03ab7b36614",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "fc91b925bf58c288cd7d9a0cd3f0247c4fffb12f"
+      ],
+      "createdAt": "2026-10-15T23:15:52.611Z"
+    }
+  ]
+}

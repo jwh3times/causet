@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu8j2but7f4c2488081b",
+      "mode": "compact",
+      "sourceRef": "release-v0.15.0",
+      "sourceHead": "f169953f89f57142a4e9110c3f3b927248e0c3ce",
+      "sourceSubject": "chore: refresh the lab-windows-a benchmark baseline",
+      "targetBefore": "cbddd464a791989dc91ba0319059df8a24c9ba4b",
+      "landingCommit": "88b00fb443468bc6e37cab9315a546ef3a7993b7",
+      "base": "cbddd464a791989dc91ba0319059df8a24c9ba4b",
+      "absorbedCommits": [
+        "a84bf5d7ada74e280247f53a20fa8a7ed9c7c7de",
+        "f169953f89f57142a4e9110c3f3b927248e0c3ce"
+      ],
+      "absorbedChanges": [
+        "ch_0mu8i3kpacdf0404e0b87",
+        "ch_0mu8ig63r7a23988e2df3"
+      ],
+      "resultTree": "d4e41e7941aac17f27ea33d82a622f3ac31cf27b",
+      "createdAt": "2026-09-19T15:13:51.044Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu8j2c9r43c0e35d1547",
+      "commit": "88b00fb443468bc6e37cab9315a546ef3a7993b7",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "a84bf5d7ada74e280247f53a20fa8a7ed9c7c7de",
+        "f169953f89f57142a4e9110c3f3b927248e0c3ce"
+      ],
+      "createdAt": "2026-09-19T15:13:51.519Z"
+    }
+  ]
+}
