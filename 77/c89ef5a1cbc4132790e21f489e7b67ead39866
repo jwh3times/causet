@@ -1,0 +1,21 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0o4ejzaf7e362ae1b8",
+      "commit": "77c89ef5a1cbc4132790e21f489e7b67ead39866",
+      "changeId": "ch_0mu0o4efk22936c275be5",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "declared",
+      "carriedFrom": [],
+      "createdAt": "2026-09-14T03:13:16.463Z"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw4jglrh14ec4e98afb3",
+      "mode": "compact",
+      "sourceRef": "fix/330-ref-naming-missing-object",
+      "sourceHead": "1ad92d699aae756b64c5d40c49e4a0622b9d0d33",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "4f7b16a8bc6676a0c04cbc030d9a8b432ee99e87",
+      "landingCommit": "a68ad88a66ccbe6dd1fff9b910e69f9b49f110c5",
+      "base": "4f7b16a8bc6676a0c04cbc030d9a8b432ee99e87",
+      "absorbedCommits": [
+        "1c5b93261a6e950be7c92c6db309005ad13d90ba",
+        "1ad92d699aae756b64c5d40c49e4a0622b9d0d33"
+      ],
+      "absorbedChanges": [
+        "ch_0mw4fg8218535b289b963",
+        "ch_0mw4i72934ed53efa3ea9"
+      ],
+      "resultTree": "943488d1fab6d1b02326963efd90e607238b7c19",
+      "createdAt": "2026-11-06T05:33:17.059Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mw4jgm91a18d7ceb3ee2",
+      "commit": "a68ad88a66ccbe6dd1fff9b910e69f9b49f110c5",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "1ad92d699aae756b64c5d40c49e4a0622b9d0d33",
+        "1c5b93261a6e950be7c92c6db309005ad13d90ba"
+      ],
+      "createdAt": "2026-11-06T05:33:17.605Z"
+    }
+  ]
+}

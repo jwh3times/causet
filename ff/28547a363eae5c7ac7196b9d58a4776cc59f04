@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu5obdld9db9d76fc59f",
+      "mode": "compact",
+      "sourceRef": "jwh3times/graysby",
+      "sourceHead": "fbd7d15819a480988697da76e12c8f6d56bb4c80",
+      "sourceSubject": "docs: accept ADR-0028 through ADR-0033 on the owner's decisions",
+      "targetBefore": "bd92f0b3898a22a510094271c18767a4fb5640c6",
+      "landingCommit": "ff28547a363eae5c7ac7196b9d58a4776cc59f04",
+      "base": "bd92f0b3898a22a510094271c18767a4fb5640c6",
+      "absorbedCommits": [
+        "fbd7d15819a480988697da76e12c8f6d56bb4c80"
+      ],
+      "absorbedChanges": [
+        "ch_0mu5oa7rrdfeb9a2458c9"
+      ],
+      "resultTree": "781cc5a8bdcdf4b2a8801c1775d523ce5eedb430",
+      "createdAt": "2026-09-17T15:17:32.778Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu5obe7f66602bf0bd4f",
+      "commit": "ff28547a363eae5c7ac7196b9d58a4776cc59f04",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "fbd7d15819a480988697da76e12c8f6d56bb4c80"
+      ],
+      "createdAt": "2026-09-17T15:17:33.483Z"
+    }
+  ]
+}
