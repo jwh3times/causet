@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvq1htxocf8ef55e76ec",
+      "mode": "compact",
+      "sourceRef": "fix/340-migrate-contained-legacy-refs",
+      "sourceHead": "40435903130036d6542fdaa14dae7a2769b348bc",
+      "sourceSubject": "fix: treat a former ref the new ref already contains as migrated",
+      "targetBefore": "a7ee311fc5da0b81d5de4b54858feee3745f2e3b",
+      "landingCommit": "c69bffd90785abfd6b78bdb3a10197b6185dcabf",
+      "base": "a7ee311fc5da0b81d5de4b54858feee3745f2e3b",
+      "absorbedCommits": [
+        "40435903130036d6542fdaa14dae7a2769b348bc"
+      ],
+      "absorbedChanges": [
+        "git:40435903130036d6542fdaa14dae7a2769b348bc"
+      ],
+      "resultTree": "8b52b66b8f61bf55b53a30b0c893f44ba8bc47da",
+      "createdAt": "2026-10-27T02:01:34.672Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mtubywaoed7f7b46ca12",
+      "mode": "compact",
+      "sourceRef": "jwh3times/tellin",
+      "sourceHead": "a2a917d0412eefeffbbf36ea2c90d45d3a9f396b",
+      "sourceSubject": "chore: record the identified Windows baseline lab-windows-a",
+      "targetBefore": "0106abc618f1c02e7ac5b955340404e4d5a42009",
+      "landingCommit": "7885f30f6cabb0319429f1dbb9716f7f25703197",
+      "base": "6eeb1c48043b57f03bdc0e68fa022650b83289b6",
+      "absorbedCommits": [
+        "a2a917d0412eefeffbbf36ea2c90d45d3a9f396b"
+      ],
+      "absorbedChanges": [
+        "ch_0mtubng84fce9b6ded284"
+      ],
+      "resultTree": "2ad7e2a885aaa2e5f814b89b16e6aa1af68837b8",
+      "createdAt": "2026-09-09T16:46:27.148Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mtubywi9cd2bcc4fe697",
+      "commit": "7885f30f6cabb0319429f1dbb9716f7f25703197",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "a2a917d0412eefeffbbf36ea2c90d45d3a9f396b"
+      ],
+      "createdAt": "2026-09-09T16:46:27.345Z"
+    }
+  ]
+}

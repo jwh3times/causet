@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv7fjj3d897a3e9c891f",
+      "mode": "compact",
+      "sourceRef": "feat/workspace-forecast-target-checkpoint",
+      "sourceHead": "cee1eeb31247bbc8d2ab8cc5c7670e1f737983ec",
+      "sourceSubject": "chore: merge main into the workspace forecast branch",
+      "targetBefore": "3a18170bb325add3740e9dcd530f30bde413f1d0",
+      "landingCommit": "d2689d7dcab68dc6153f217e0b9ccc96de80d970",
+      "base": "3a18170bb325add3740e9dcd530f30bde413f1d0",
+      "absorbedCommits": [
+        "6879dc7ea55f371c4f6559f61ff96fb5c115fa42",
+        "cee1eeb31247bbc8d2ab8cc5c7670e1f737983ec"
+      ],
+      "absorbedChanges": [
+        "ch_0mv7akprhbc53319852df",
+        "ch_0mv7e52zn861ad6244550"
+      ],
+      "resultTree": "314093761fe711cc2e00c84767d85bb16a7c6af2",
+      "createdAt": "2026-10-14T01:27:11.212Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mv7fjj422e8147b6a260",
+      "commit": "d2689d7dcab68dc6153f217e0b9ccc96de80d970",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "6879dc7ea55f371c4f6559f61ff96fb5c115fa42",
+        "cee1eeb31247bbc8d2ab8cc5c7670e1f737983ec"
+      ],
+      "createdAt": "2026-10-14T01:27:11.234Z"
+    }
+  ]
+}

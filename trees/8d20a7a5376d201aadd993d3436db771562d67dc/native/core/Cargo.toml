@@ -1,9 +1,0 @@
-[package]
-name = "vlab-core"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-publish = false
-
-[dependencies]
-gix = { version = "=0.87.1", default-features = false, features = ["sha1", "revision"] }

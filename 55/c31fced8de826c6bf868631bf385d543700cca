@@ -1,0 +1,29 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvid09wo3f9031c912de",
+      "mode": "compact",
+      "sourceRef": "feat/native-inspection",
+      "sourceHead": "8ca8f1e775a87361e18fc26aa516f102889ae89f",
+      "sourceSubject": "docs: record what N1's native commands take and refuse",
+      "targetBefore": "2bc25fcf430386f5193a84eb2557724e0432089a",
+      "landingCommit": "55c31fced8de826c6bf868631bf385d543700cca",
+      "base": "2bc25fcf430386f5193a84eb2557724e0432089a",
+      "absorbedCommits": [
+        "5cf3297c4c94c9688e202b456f6a835402498299",
+        "4c504870d13c324068b5ebfafef72c75430d6bab",
+        "8ca8f1e775a87361e18fc26aa516f102889ae89f"
+      ],
+      "absorbedChanges": [
+        "git:5cf3297c4c94c9688e202b456f6a835402498299",
+        "git:4c504870d13c324068b5ebfafef72c75430d6bab",
+        "git:8ca8f1e775a87361e18fc26aa516f102889ae89f"
+      ],
+      "resultTree": "b54162deab8d6e24d371e893f31652fb39a1a2c2",
+      "createdAt": "2026-10-21T17:01:41.548Z"
+    }
+  ]
+}

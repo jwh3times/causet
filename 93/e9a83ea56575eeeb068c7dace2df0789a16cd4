@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwksn910eeaee3061311",
+      "mode": "compact",
+      "sourceRef": "feat/420-local-facts-and-metadata",
+      "sourceHead": "6f3f4fe8ee94d1def301c2b60d7bc2b2538c6c6f",
+      "sourceSubject": "docs: update docs and changelog for v0.32.0",
+      "targetBefore": "1cda0ca65f1511a157274bef53bef684a587ec84",
+      "landingCommit": "93e9a83ea56575eeeb068c7dace2df0789a16cd4",
+      "base": "1cda0ca65f1511a157274bef53bef684a587ec84",
+      "absorbedCommits": [
+        "a3469270884726623c94ee3a7f76ff300ac479b5",
+        "6f3f4fe8ee94d1def301c2b60d7bc2b2538c6c6f"
+      ],
+      "absorbedChanges": [
+        "ch_0mwk5ky4effa1ee7fba2c",
+        "ch_0mwkmyhr9c1125dfb036c"
+      ],
+      "resultTree": "8ca481abc2f52221f7c821a2649773954105bc1f",
+      "createdAt": "2026-11-17T14:34:42.463Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwksn9coda1a4d989f22",
+      "commit": "93e9a83ea56575eeeb068c7dace2df0789a16cd4",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "6f3f4fe8ee94d1def301c2b60d7bc2b2538c6c6f",
+        "a3469270884726623c94ee3a7f76ff300ac479b5"
+      ],
+      "createdAt": "2026-11-17T14:34:42.840Z"
+    }
+  ]
+}

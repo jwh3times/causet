@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwpzwrj7a288863d16aa",
+      "mode": "compact",
+      "sourceRef": "docs/gh-job-log-escape-sequences",
+      "sourceHead": "49af3e845bbc07f5274e078d96ba594dfabc6db7",
+      "sourceSubject": "docs: update docs and changelog fragment",
+      "targetBefore": "46172db30ed1bdc4f21d960d9490eff4a1376d73",
+      "landingCommit": "c7780bf6c784d5749cb0eae614342ef534e7fc2b",
+      "base": "46172db30ed1bdc4f21d960d9490eff4a1376d73",
+      "absorbedCommits": [
+        "cf008315151001e15dfbb9994dc8aba4dbf998f3",
+        "49af3e845bbc07f5274e078d96ba594dfabc6db7"
+      ],
+      "absorbedChanges": [
+        "ch_0mwpzk0m2653f4c89c18c",
+        "ch_0mwpzna17dd7e624ef3a8"
+      ],
+      "resultTree": "07fc757a722a75c0327fe95644ab2efc78e94859",
+      "createdAt": "2026-11-21T05:56:54.574Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwpzws2z9f6a2e44093e",
+      "commit": "c7780bf6c784d5749cb0eae614342ef534e7fc2b",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "49af3e845bbc07f5274e078d96ba594dfabc6db7",
+        "cf008315151001e15dfbb9994dc8aba4dbf998f3"
+      ],
+      "createdAt": "2026-11-21T05:56:55.211Z"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0muigsoazebd03d5aa190",
+      "mode": "compact",
+      "sourceRef": "jwh3times/skimmer",
+      "sourceHead": "ba15f2f588b97931b5cf3e48c72796468decaf81",
+      "sourceSubject": "fix: compare inspectGitObjects natively in the engine differential",
+      "targetBefore": "32e22d079e81002b4f722c702f94fe8df08c40de",
+      "landingCommit": "13fd936b03f64dc3a8d9b69516a6ed3575bccf14",
+      "base": "32e22d079e81002b4f722c702f94fe8df08c40de",
+      "absorbedCommits": [
+        "ba15f2f588b97931b5cf3e48c72796468decaf81"
+      ],
+      "absorbedChanges": [
+        "git:ba15f2f588b97931b5cf3e48c72796468decaf81"
+      ],
+      "resultTree": "31bedd232b4f3ceb788c7e12677c5971f1631b36",
+      "createdAt": "2026-09-26T14:08:03.148Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv8ktukn8c41dcef3e77",
+      "mode": "compact",
+      "sourceRef": "chore/prepare-v0.23.0",
+      "sourceHead": "dc73eec053bb3ec50bd57dcd177c957e64584500",
+      "sourceSubject": "chore: prepare v0.23.0, the release that removes the vlab alias",
+      "targetBefore": "1f4f91ba59e22b15b674e3bcb9891e466b4e971f",
+      "landingCommit": "6aae8da1de100dd915d34deb7fad372ff55c0509",
+      "base": "1f4f91ba59e22b15b674e3bcb9891e466b4e971f",
+      "absorbedCommits": [
+        "dc73eec053bb3ec50bd57dcd177c957e64584500"
+      ],
+      "absorbedChanges": [
+        "ch_0mv8jdcyj849c4ab0fcb8"
+      ],
+      "resultTree": "9ed5a8fe1026be707388b91ea4711e620d260f55",
+      "createdAt": "2026-10-14T20:42:56.906Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mv8ktulg706525b4a2c9",
+      "commit": "6aae8da1de100dd915d34deb7fad372ff55c0509",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "dc73eec053bb3ec50bd57dcd177c957e64584500"
+      ],
+      "createdAt": "2026-10-14T20:42:56.932Z"
+    }
+  ]
+}

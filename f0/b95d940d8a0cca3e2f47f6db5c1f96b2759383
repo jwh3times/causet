@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw1j0r7l5c5d7879b25d",
+      "mode": "compact",
+      "sourceRef": "test/277-reftable-qualification",
+      "sourceHead": "cba64a8621707454663ed6f4de23add14f4d5b48",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "6b8cbac8f50e3289596a80891112322ec1e97bdf",
+      "landingCommit": "f0b95d940d8a0cca3e2f47f6db5c1f96b2759383",
+      "base": "6b8cbac8f50e3289596a80891112322ec1e97bdf",
+      "absorbedCommits": [
+        "7724e9998d2c6ba9ac04c493867233443bbe718d",
+        "cba64a8621707454663ed6f4de23add14f4d5b48"
+      ],
+      "absorbedChanges": [
+        "git:7724e9998d2c6ba9ac04c493867233443bbe718d",
+        "git:cba64a8621707454663ed6f4de23add14f4d5b48"
+      ],
+      "resultTree": "de2fcbb7183e7c9f27a75ae856870717e5a7f9f5",
+      "createdAt": "2026-11-04T02:57:39.053Z"
+    }
+  ]
+}

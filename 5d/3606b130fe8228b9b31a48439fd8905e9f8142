@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvd81i6ufd25c851ba2b",
+      "mode": "compact",
+      "sourceRef": "docs/n1-design",
+      "sourceHead": "f4ca3d7af857e606a8a3313ca0e15bd9a52ed17f",
+      "sourceSubject": "docs: accept ADR-0045, N1's native content store and lossless import",
+      "targetBefore": "7399fa2ca2d15cccf9362e4a227392e4ba6e0d60",
+      "landingCommit": "5d3606b130fe8228b9b31a48439fd8905e9f8142",
+      "base": "7399fa2ca2d15cccf9362e4a227392e4ba6e0d60",
+      "absorbedCommits": [
+        "f4ca3d7af857e606a8a3313ca0e15bd9a52ed17f"
+      ],
+      "absorbedChanges": [
+        "git:f4ca3d7af857e606a8a3313ca0e15bd9a52ed17f"
+      ],
+      "resultTree": "116e357216bb7aaa9880d49daba23a4fb129a8e5",
+      "createdAt": "2026-10-18T02:43:49.977Z"
+    }
+  ]
+}

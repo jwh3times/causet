@@ -1,0 +1,52 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwisbpyc984c3cf3d4ae",
+      "mode": "compact",
+      "sourceRef": "feat/419-fact-log",
+      "sourceHead": "5067831b3e382358caa41523660f2bcd9d056f8a",
+      "sourceSubject": "style: end import's fact module with one line feed",
+      "targetBefore": "7f0872690bd649f400bcfd07f633cfe35eb40685",
+      "landingCommit": "1cda0ca65f1511a157274bef53bef684a587ec84",
+      "base": "7f0872690bd649f400bcfd07f633cfe35eb40685",
+      "absorbedCommits": [
+        "4fc427523b25bb67b5bfddbe36f54e867c9f2135",
+        "40eaddd0d4679730235988f335752cbfc11da194",
+        "9e16f22e3cbe4c9eadbf88254efec98f03cecbf6",
+        "5067831b3e382358caa41523660f2bcd9d056f8a"
+      ],
+      "absorbedChanges": [
+        "ch_0mwil88m87bedf17243e3",
+        "ch_0mwimozd14f8c1621071c",
+        "ch_0mwimozwa39bdcf416f2c",
+        "ch_0mwimp8mm973cd1ef1cee"
+      ],
+      "resultTree": "ef808fb7f5c7ecfbcf2e729bce18d7e383252555",
+      "createdAt": "2026-11-16T04:50:12.175Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwisbqal7b3515163eec",
+      "commit": "1cda0ca65f1511a157274bef53bef684a587ec84",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "40eaddd0d4679730235988f335752cbfc11da194",
+        "4fc427523b25bb67b5bfddbe36f54e867c9f2135",
+        "5067831b3e382358caa41523660f2bcd9d056f8a",
+        "9e16f22e3cbe4c9eadbf88254efec98f03cecbf6"
+      ],
+      "createdAt": "2026-11-16T04:50:12.573Z"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvfovmrgc1fdd89651cd",
+      "mode": "compact",
+      "sourceRef": "feat/native-store-tracer",
+      "sourceHead": "6dd7b9ca8267e0c1bba75ba7a00f79d0c17abfb7",
+      "sourceSubject": "feat: import a Git repository into a native store, and read it back",
+      "targetBefore": "4b4c956b68739108492de3f377ddae79a4ca2600",
+      "landingCommit": "86eac7e664d2984c2209d9fe92de97b30649fb5d",
+      "base": "4b4c956b68739108492de3f377ddae79a4ca2600",
+      "absorbedCommits": [
+        "6dd7b9ca8267e0c1bba75ba7a00f79d0c17abfb7"
+      ],
+      "absorbedChanges": [
+        "git:6dd7b9ca8267e0c1bba75ba7a00f79d0c17abfb7"
+      ],
+      "resultTree": "96cdc79ebdc7758bc6cd0646886502c144519f33",
+      "createdAt": "2026-10-19T20:10:41.792Z"
+    }
+  ]
+}

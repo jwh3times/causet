@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mucq81iw997b4a28cc55",
+      "mode": "compact",
+      "sourceRef": "jwh3times/interactive-identity-decisions",
+      "sourceHead": "cb462ee8b605df1ce3e6d00e58ee254bc7ed1cce",
+      "sourceSubject": "feat: declare what each interactive rewrite does to logical identity",
+      "targetBefore": "f9655c77c9f96c878e895e42b3f787d741ff8e00",
+      "landingCommit": "ed11a84333505c9c8f8c9b33f0d13e99a1081e57",
+      "base": "f9655c77c9f96c878e895e42b3f787d741ff8e00",
+      "absorbedCommits": [
+        "cb462ee8b605df1ce3e6d00e58ee254bc7ed1cce"
+      ],
+      "absorbedChanges": [
+        "ch_0mucpmwlcc42e4e9c96ba"
+      ],
+      "resultTree": "8d20a7a5376d201aadd993d3436db771562d67dc",
+      "createdAt": "2026-09-22T13:45:19.551Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mucq81ka5d4a54f9f78b",
+      "commit": "ed11a84333505c9c8f8c9b33f0d13e99a1081e57",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "cb462ee8b605df1ce3e6d00e58ee254bc7ed1cce"
+      ],
+      "createdAt": "2026-09-22T13:45:19.594Z"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mtuf1n2s2c6271bd92a0",
+      "mode": "compact",
+      "sourceRef": "jwh3times/pompano",
+      "sourceHead": "515972d64cd6d4676a2edf1a1f04b7418a788730",
+      "sourceSubject": "test: verify long resolution paths on both platforms",
+      "targetBefore": "7885f30f6cabb0319429f1dbb9716f7f25703197",
+      "landingCommit": "dd4f8d48f7b17340887d122d5b9014b6a3db0b8f",
+      "base": "7885f30f6cabb0319429f1dbb9716f7f25703197",
+      "absorbedCommits": [
+        "c53eb72af6d8272296dbb587cfcf39ea142c0def",
+        "515972d64cd6d4676a2edf1a1f04b7418a788730"
+      ],
+      "absorbedChanges": [
+        "ch_0mtuey8cm511ec45425c9",
+        "ch_0mtuf0igbf896fc4a3e2e"
+      ],
+      "resultTree": "b21ce290779992ae7b0de148ca150bcfc8705098",
+      "createdAt": "2026-09-09T18:12:34.022Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mtuf1nbef7d82f208cab",
+      "commit": "dd4f8d48f7b17340887d122d5b9014b6a3db0b8f",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "OpenAI Codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "515972d64cd6d4676a2edf1a1f04b7418a788730",
+        "c53eb72af6d8272296dbb587cfcf39ea142c0def"
+      ],
+      "createdAt": "2026-09-09T18:12:34.250Z"
+    }
+  ]
+}
