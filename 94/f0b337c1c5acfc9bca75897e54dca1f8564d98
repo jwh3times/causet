@@ -1,0 +1,46 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu9ci7cte4c48d235827",
+      "mode": "compact",
+      "sourceRef": "rebase-overlay-28",
+      "sourceHead": "f52b5eac54940e3482e9a71ccbd98f988147f0f0",
+      "sourceSubject": "fix: make abort reachable from a re-materialization mismatch",
+      "targetBefore": "88b00fb443468bc6e37cab9315a546ef3a7993b7",
+      "landingCommit": "94f0b337c1c5acfc9bca75897e54dca1f8564d98",
+      "base": "88b00fb443468bc6e37cab9315a546ef3a7993b7",
+      "absorbedCommits": [
+        "1c48836e5caee08c09ddb82ad63a662d301d8ab3",
+        "f52b5eac54940e3482e9a71ccbd98f988147f0f0"
+      ],
+      "absorbedChanges": [
+        "ch_0mu9bdnu81a20511cf828",
+        "ch_0mu9bebv5da147a2d4ee9"
+      ],
+      "resultTree": "7896ec286e233ab61696cd3d6046cfa5099e9141",
+      "createdAt": "2026-09-20T04:58:00.579Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu9ci7uzfad6297278fa",
+      "commit": "94f0b337c1c5acfc9bca75897e54dca1f8564d98",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "1c48836e5caee08c09ddb82ad63a662d301d8ab3",
+        "f52b5eac54940e3482e9a71ccbd98f988147f0f0"
+      ],
+      "createdAt": "2026-09-20T04:58:01.163Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu75kv29e3177010ef39",
+      "mode": "compact",
+      "sourceRef": "capabilities-37",
+      "sourceHead": "1ee4626b3940c0b760e711503bba66f910a4cdd7",
+      "sourceSubject": "feat: advertise capabilities and negotiate them offline",
+      "targetBefore": "6b758869612a6dcaa0810a01a284398b057d74c1",
+      "landingCommit": "47d609fc99140d48368e6947fbe5484c217cfbac",
+      "base": "6b758869612a6dcaa0810a01a284398b057d74c1",
+      "absorbedCommits": [
+        "1ee4626b3940c0b760e711503bba66f910a4cdd7"
+      ],
+      "absorbedChanges": [
+        "ch_0mu755omp54a97d5cf1fd"
+      ],
+      "resultTree": "42184ccc72dba76f1958ba5ddf3fec8153a9f5bd",
+      "createdAt": "2026-09-18T16:08:34.955Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu75kvk4f8d8e3ed35ac",
+      "commit": "47d609fc99140d48368e6947fbe5484c217cfbac",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "1ee4626b3940c0b760e711503bba66f910a4cdd7"
+      ],
+      "createdAt": "2026-09-18T16:08:35.524Z"
+    }
+  ]
+}
