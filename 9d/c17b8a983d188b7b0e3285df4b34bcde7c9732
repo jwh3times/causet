@@ -1,0 +1,52 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu1vzglw576bd79512a5",
+      "mode": "compact",
+      "sourceRef": "jwh3times/elephantfish",
+      "sourceHead": "ee081b7b66b8b30b3fd2c4df56035fe7ec59ac0e",
+      "sourceSubject": "docs: propose a bound source inventory for portable verification (ADR-0031)",
+      "targetBefore": "b4200f879c6cf109e09ae36abd54e156dec1f0ec",
+      "landingCommit": "9dc17b8a983d188b7b0e3285df4b34bcde7c9732",
+      "base": "b4200f879c6cf109e09ae36abd54e156dec1f0ec",
+      "absorbedCommits": [
+        "03ad6146d1fb88a4102e310c1493800143d08596",
+        "93420615e712a9eb36c2e07353a2a630c2a69a9a",
+        "9ed5e6f93b45af1fb9c16832a013874a652d2656",
+        "ee081b7b66b8b30b3fd2c4df56035fe7ec59ac0e"
+      ],
+      "absorbedChanges": [
+        "ch_0mu1vx5p56929f6faa493",
+        "ch_0mu1vx6dj5fcc27c94769",
+        "ch_0mu1vx71n86602d9c3dce",
+        "ch_0mu1vx7pwa4ca2208258a"
+      ],
+      "resultTree": "8c02490a749060d4a6e175a1909ba2b310f1f892",
+      "createdAt": "2026-09-14T23:41:09.009Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu1vzh0fb5f88653d97c",
+      "commit": "9dc17b8a983d188b7b0e3285df4b34bcde7c9732",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-fable-5-1"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "03ad6146d1fb88a4102e310c1493800143d08596",
+        "93420615e712a9eb36c2e07353a2a630c2a69a9a",
+        "9ed5e6f93b45af1fb9c16832a013874a652d2656",
+        "ee081b7b66b8b30b3fd2c4df56035fe7ec59ac0e"
+      ],
+      "createdAt": "2026-09-14T23:41:09.471Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu7iosks19a3a37fd893",
+      "mode": "compact",
+      "sourceRef": "portable-verification-36",
+      "sourceHead": "8fe83ee9eab664e8d587070e315bb292f75994b4",
+      "sourceSubject": "feat: bind a proof bundle to Git's own objects",
+      "targetBefore": "47d609fc99140d48368e6947fbe5484c217cfbac",
+      "landingCommit": "c0c2abf2c3d57cfb4f51d8e41c4415aa004779a2",
+      "base": "47d609fc99140d48368e6947fbe5484c217cfbac",
+      "absorbedCommits": [
+        "8fe83ee9eab664e8d587070e315bb292f75994b4"
+      ],
+      "absorbedChanges": [
+        "ch_0mu7icm8qa08890312d19"
+      ],
+      "resultTree": "07a172fe4f12a5e4dce76d19cfdb127e5974b6c0",
+      "createdAt": "2026-09-18T22:15:33.355Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu7ioszrdea1d386e63a",
+      "commit": "c0c2abf2c3d57cfb4f51d8e41c4415aa004779a2",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "8fe83ee9eab664e8d587070e315bb292f75994b4"
+      ],
+      "createdAt": "2026-09-18T22:15:33.831Z"
+    }
+  ]
+}
