@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.metadata-status/v1",
+  "title": "Metadata status inventory",
+  "description": "Deterministic repository metadata inventory of vlab metadata status --json (CLI output; src/metadata.js metadataStatus). vcs-lab.metadata-validation/v1 shares this shape and adds strict.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "repository", "scopes", "summary", "diagnostics", "trust"],
+  "properties": {
+    "schema": { "const": "vcs-lab.metadata-status/v1" },
+    "repository": { "$ref": "#/$defs/repository" },
+    "scopes": { "$ref": "#/$defs/scopes" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "diagnostics": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/diagnostic" }
+    },
+    "trust": {
+      "type": "object",
+      "required": ["integrityChecked", "cryptographicallyTrusted", "authorized", "statement"],
+      "properties": {
+        "integrityChecked": { "const": true },
+        "cryptographicallyTrusted": { "const": false },
+        "authorized": { "const": false },
+        "statement": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" },
+    "repository": {
+      "type": "object",
+      "required": ["root", "objectFormat", "lineage"],
+      "properties": {
+        "root": { "type": "string" },
+        "objectFormat": { "enum": ["sha1", "sha256"] },
+        "lineage": {
+          "type": "object",
+          "required": ["algorithm", "objectFormat", "rootCommits", "id"],
+          "properties": {
+            "algorithm": { "const": "git-root-commits-sha256/v1" },
+            "objectFormat": { "enum": ["sha1", "sha256"] },
+            "rootCommits": { "type": "array", "items": { "$ref": "#/$defs/oid" } },
+            "id": { "type": "string", "pattern": "^lineage_[0-9a-f]{64}$" }
+          }
+        }
+      }
+    },
+    "scopes": {
+      "type": "object",
+      "required": ["sharedPortable", "trackedPortable", "sharedLocal", "worktreePrivate"],
+      "properties": {
+        "sharedPortable": {
+          "type": "object",
+          "required": ["notes", "resolutions"],
+          "properties": {
+            "notes": {
+              "type": "object",
+              "required": [
+                "ref", "targetCount", "recordCount", "acceptedCount",
+                "quarantinedCount", "bySchema", "byType", "records"
+              ],
+              "properties": {
+                "ref": { "type": "string" },
+                "targetCount": { "type": "integer", "minimum": 0 },
+                "recordCount": { "type": "integer", "minimum": 0 },
+                "acceptedCount": { "type": "integer", "minimum": 0 },
+                "quarantinedCount": { "type": "integer", "minimum": 0 },
+                "bySchema": { "type": "object" },
+                "byType": { "type": "object" },
+                "records": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/recordSummary" }
+                }
+              }
+            },
+            "resolutions": {
+              "type": "object",
+              "required": ["namespace", "refCount", "acceptedRefCount", "refs"],
+              "properties": {
+                "namespace": { "type": "string" },
+                "refCount": { "type": "integer", "minimum": 0 },
+                "acceptedRefCount": { "type": "integer", "minimum": 0 },
+                "refs": { "type": "array", "items": { "$ref": "#/$defs/refEntry" } }
+              }
+            }
+          }
+        },
+        "trackedPortable": {
+          "type": "object",
+          "required": ["manifestCount", "bySchema", "consistentCount", "manifests"],
+          "properties": {
+            "manifestCount": { "type": "integer", "minimum": 0 },
+            "bySchema": { "type": "object" },
+            "consistentCount": { "type": "integer", "minimum": 0 },
+            "manifests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "schema", "source", "consistent"],
+                "properties": {
+                  "path": { "type": "string" },
+                  "schema": { "type": ["string", "null"] },
+                  "source": { "type": ["string", "null"] },
+                  "artifactId": { "type": ["string", "null"] },
+                  "entityCount": { "type": ["integer", "null"] },
+                  "consistent": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "sharedLocal": {
+          "type": "object",
+          "required": ["workspaceRegistry", "checkpoints"],
+          "properties": {
+            "workspaceRegistry": {
+              "type": "object",
+              "required": ["present", "schema", "count", "workspaces"],
+              "properties": {
+                "present": { "type": "boolean" },
+                "schema": { "type": ["string", "null"] },
+                "count": { "type": "integer", "minimum": 0 },
+                "workspaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "name", "path", "lifecycle", "pathExists"],
+                    "properties": {
+                      "id": { "type": ["string", "null"] },
+                      "name": { "type": ["string", "null"] },
+                      "path": { "type": ["string", "null"] },
+                      "lifecycle": { "type": ["string", "null"] },
+                      "pathExists": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoints": {
+              "type": "object",
+              "required": ["refCount", "refs", "historyRefCount", "historyRefs", "totalRefCount"],
+              "properties": {
+                "refCount": { "type": "integer", "minimum": 0 },
+                "refs": { "type": "array", "items": { "$ref": "#/$defs/refEntry" } },
+                "historyRefCount": { "type": "integer", "minimum": 0 },
+                "historyRefs": { "type": "array", "items": { "$ref": "#/$defs/refEntry" } },
+                "totalRefCount": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        },
+        "worktreePrivate": {
+          "type": "object",
+          "required": ["worktreeCount", "pendingOperationCount", "forecastCount", "worktrees"],
+          "properties": {
+            "worktreeCount": { "type": "integer", "minimum": 0 },
+            "pendingOperationCount": { "type": "integer", "minimum": 0 },
+            "forecastCount": { "type": "integer", "minimum": 0 },
+            "worktrees": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "available", "pendingOperation", "pendingOperationKinds", "forecastCount"],
+                "properties": {
+                  "path": { "type": "string" },
+                  "available": { "type": "boolean" },
+                  "pendingOperation": { "type": "boolean" },
+                  "pendingOperationKinds": { "type": "array", "items": { "type": "string" } },
+                  "forecastCount": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["valid", "errors", "warnings", "acceptedPortableRecords", "quarantinedPortableRecords"],
+      "properties": {
+        "valid": { "type": "boolean" },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "acceptedPortableRecords": { "type": "integer", "minimum": 0 },
+        "quarantinedPortableRecords": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "recordSummary": {
+      "type": "object",
+      "required": ["attachment", "id", "schema", "type", "digest", "valid", "diagnostics"],
+      "properties": {
+        "attachment": { "$ref": "#/$defs/oid" },
+        "id": { "type": ["string", "null"] },
+        "schema": { "type": ["string", "null"] },
+        "type": { "type": ["string", "null"] },
+        "digest": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "valid": { "type": "boolean" },
+        "diagnostics": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "refEntry": {
+      "type": "object",
+      "required": ["ref", "oid"],
+      "properties": {
+        "ref": { "type": "string" },
+        "oid": { "$ref": "#/$defs/oid" }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "severity", "scope", "subject", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "enum": ["error", "warning"] },
+        "scope": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
