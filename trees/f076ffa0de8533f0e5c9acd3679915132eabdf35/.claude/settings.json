@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh project item-list *)",
+      "Bash(npm run sync:agents:check)",
+      "Bash(npm run -s sync:agents:check)",
+      "Bash(npm run lint:agents)",
+      "Bash(npm run -s lint:agents)",
+      "Bash(gh project field-list *)",
+      "Bash(gh run watch *)",
+      "Bash(gh label list *)",
+      "Bash(npm run test:docs)",
+      "Bash(npm run -s test:docs)",
+      "Bash(gh project view *)",
+      "Bash(cst status)",
+      "Bash(cst status *)",
+      "Bash(cst log *)",
+      "Bash(cst diff)",
+      "Bash(cst diff *)",
+      "Bash(cst show *)",
+      "Bash(cst --version)",
+      "Bash(cst provenance)",
+      "Bash(cst provenance HEAD *)",
+      "Bash(cst metadata validate *)",
+      "Bash(cst metadata status *)"
+    ]
+  }
+}
