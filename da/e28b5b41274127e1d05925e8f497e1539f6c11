@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvpmvhf11663f0c28fa4",
+      "mode": "compact",
+      "sourceRef": "feat/generated-history-corpus",
+      "sourceHead": "e36e62c1b807175664590a6c75937ccb6050424a",
+      "sourceSubject": "docs: amend ADR-0045 decision 3 to what an incremental import holds the same, and bound the corpus job at 90 minutes",
+      "targetBefore": "d6adf99f4e405cfb38931e22bef17e6917a67da2",
+      "landingCommit": "dae28b5b41274127e1d05925e8f497e1539f6c11",
+      "base": "d6adf99f4e405cfb38931e22bef17e6917a67da2",
+      "absorbedCommits": [
+        "3c15c99248047fa3da90492c6f5db4068e1f8a7f",
+        "e36e62c1b807175664590a6c75937ccb6050424a"
+      ],
+      "absorbedChanges": [
+        "git:3c15c99248047fa3da90492c6f5db4068e1f8a7f",
+        "git:e36e62c1b807175664590a6c75937ccb6050424a"
+      ],
+      "resultTree": "ee874da39799b4d4f0eecdfcae82c7be36ba2cd0",
+      "createdAt": "2026-10-26T19:12:17.393Z"
+    }
+  ]
+}
