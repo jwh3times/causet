@@ -1,0 +1,48 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvy37riocf1eff8d4ab5",
+      "mode": "compact",
+      "sourceRef": "fix/332-git-tree-modes",
+      "sourceHead": "cb5d2972a2b530dc28ec8adb3f3fcef829f3fa76",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "aa8ce26e62a5cad0d2bb5149898ecc0620780d62",
+      "landingCommit": "fad1e1f94737d9e4e2cfaa3926106ea96831de74",
+      "base": "aa8ce26e62a5cad0d2bb5149898ecc0620780d62",
+      "absorbedCommits": [
+        "162c1381288781e0b6493c6ca25d54de875a7f24",
+        "6f3f4ec48221187ce831b96787ffb68a21e0cfad",
+        "cb5d2972a2b530dc28ec8adb3f3fcef829f3fa76"
+      ],
+      "absorbedChanges": [
+        "ch_0mvxvdyw099e0bd0a48e1",
+        "git:6f3f4ec48221187ce831b96787ffb68a21e0cfad",
+        "ch_0mvxvglhec5a3b02e9da6"
+      ],
+      "resultTree": "cbf186ea41d6a86be6f1218a29a855820354136a",
+      "createdAt": "2026-11-01T17:11:53.662Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvy37rt06531ddc37101",
+      "commit": "fad1e1f94737d9e4e2cfaa3926106ea96831de74",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "162c1381288781e0b6493c6ca25d54de875a7f24",
+        "cb5d2972a2b530dc28ec8adb3f3fcef829f3fa76"
+      ],
+      "createdAt": "2026-11-01T17:11:53.988Z"
+    }
+  ]
+}

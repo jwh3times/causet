@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvb81yv0117990028fa5",
+      "mode": "compact",
+      "sourceRef": "docs/land-with-cst-push",
+      "sourceHead": "05bfb7070c0ae59b76bfc616ed950cb670cfd368",
+      "sourceSubject": "docs: land this repository with cst push and cst fetch",
+      "targetBefore": "c130e4680bdc039f440df6abec5ce22fb9aab3b5",
+      "landingCommit": "3fb4d58a8af1736cd76a3c232e7a10401b05be0f",
+      "base": "c130e4680bdc039f440df6abec5ce22fb9aab3b5",
+      "absorbedCommits": [
+        "05bfb7070c0ae59b76bfc616ed950cb670cfd368"
+      ],
+      "absorbedChanges": [
+        "ch_0mvb10dax1be847612966"
+      ],
+      "resultTree": "9b2603cbb353c39895e3a84d028362daf1a575a3",
+      "createdAt": "2026-10-16T17:08:39.232Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvb81yvv707624b336ae",
+      "commit": "3fb4d58a8af1736cd76a3c232e7a10401b05be0f",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "05bfb7070c0ae59b76bfc616ed950cb670cfd368"
+      ],
+      "createdAt": "2026-10-16T17:08:39.259Z"
+    }
+  ]
+}

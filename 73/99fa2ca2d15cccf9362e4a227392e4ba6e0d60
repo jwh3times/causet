@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvd74wjic75498725698",
+      "mode": "compact",
+      "sourceRef": "docs/native-exit-regime",
+      "sourceHead": "8a2fc0201e1dd6047ed9d0ddf3ebb833b8721c57",
+      "sourceSubject": "docs: accept ADR-0044, the exit regime every native phase must meet",
+      "targetBefore": "7ed64fb77207eb5aa5960aeb74af46175f576e91",
+      "landingCommit": "7399fa2ca2d15cccf9362e4a227392e4ba6e0d60",
+      "base": "7ed64fb77207eb5aa5960aeb74af46175f576e91",
+      "absorbedCommits": [
+        "8a2fc0201e1dd6047ed9d0ddf3ebb833b8721c57"
+      ],
+      "absorbedChanges": [
+        "git:8a2fc0201e1dd6047ed9d0ddf3ebb833b8721c57"
+      ],
+      "resultTree": "9bc0e869e9ab2a865b50ed8267a63e0ed85ab70e",
+      "createdAt": "2026-10-18T02:18:28.929Z"
+    }
+  ]
+}

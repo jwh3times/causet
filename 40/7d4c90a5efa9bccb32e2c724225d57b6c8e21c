@@ -1,0 +1,45 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvvkg2koe12cab0723e9",
+      "mode": "compact",
+      "sourceRef": "feat/357-storage-gate-no-list",
+      "sourceHead": "10fd9aaa87e542b3ce7046ba22d1735bcb0214c4",
+      "sourceSubject": "Merge remote-tracking branch 'origin/main' into feat/357-storage-gate-no-list",
+      "targetBefore": "c26b84dce6efea1552c9a51fac5e57ebe2241aa9",
+      "landingCommit": "407d4c90a5efa9bccb32e2c724225d57b6c8e21c",
+      "base": "c26b84dce6efea1552c9a51fac5e57ebe2241aa9",
+      "absorbedCommits": [
+        "d9868d096cacf6453691b7a5076e503aba0ead27",
+        "10fd9aaa87e542b3ce7046ba22d1735bcb0214c4"
+      ],
+      "absorbedChanges": [
+        "ch_0mvvf26ve79b9b659a491",
+        "git:10fd9aaa87e542b3ce7046ba22d1735bcb0214c4"
+      ],
+      "resultTree": "3b211fe58f3f534c1afcc28fa8b8a891b7123cf8",
+      "createdAt": "2026-10-30T22:50:56.176Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvvkg2u4b9c36d4b2e81",
+      "commit": "407d4c90a5efa9bccb32e2c724225d57b6c8e21c",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "d9868d096cacf6453691b7a5076e503aba0ead27"
+      ],
+      "createdAt": "2026-10-30T22:50:56.476Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mu9f5pkga0b0e604956a",
+      "mode": "compact",
+      "sourceRef": "docs-audit-2026-09-20",
+      "sourceHead": "e975bde2f6df917692b4a9f08252a3385e09be17",
+      "sourceSubject": "docs: correct what a documentation audit found",
+      "targetBefore": "94f0b337c1c5acfc9bca75897e54dca1f8564d98",
+      "landingCommit": "ca8383a8329767a7b8d39b79d4c7a0be594752c4",
+      "base": "94f0b337c1c5acfc9bca75897e54dca1f8564d98",
+      "absorbedCommits": [
+        "e975bde2f6df917692b4a9f08252a3385e09be17"
+      ],
+      "absorbedChanges": [
+        "ch_0mu9ekgnbcb3e966a6b89"
+      ],
+      "resultTree": "0a7246d2b8a3b91e20ee44efc0c49c582c91defd",
+      "createdAt": "2026-09-20T06:12:16.490Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu9f5pz012452e2b99af",
+      "commit": "ca8383a8329767a7b8d39b79d4c7a0be594752c4",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "e975bde2f6df917692b4a9f08252a3385e09be17"
+      ],
+      "createdAt": "2026-09-20T06:12:16.956Z"
+    }
+  ]
+}
