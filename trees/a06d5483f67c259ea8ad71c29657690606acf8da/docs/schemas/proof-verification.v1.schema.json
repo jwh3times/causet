@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.proof-verification/v1",
+  "title": "Proof bundle verification result",
+  "description": "The result of 'vlab verify-proof <file>'. Integrity checks the payload hash; classification checks stated verdicts, counts, and commit uniqueness; repository comparison checks evidence, complete ordered source history, identities, subjects, lineage, counts, and physical/effective bases (FR-PLAN-08). Offline success does not establish source completeness.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "bundleSchema", "integrity", "classification", "repository", "trust", "ok"],
+  "properties": {
+    "schema": { "const": "vcs-lab.proof-verification/v1" },
+    "bundleSchema": { "type": "string", "minLength": 1 },
+    "integrity": {
+      "type": "object",
+      "description": "Whether the bundle's own hash still matches its contents. Intact means unedited since production, not trustworthy: whoever produced it could restate the hash.",
+      "required": ["algorithm", "claimed", "computed", "intact"],
+      "properties": {
+        "algorithm": { "type": ["string", "null"] },
+        "claimed": { "type": ["string", "null"] },
+        "computed": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+        "intact": { "type": "boolean" }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "description": "Re-derive every supplied change from the stated evidence, check counts against the supplied statuses, and reject duplicate commit entries. This checks internal consistency, not source completeness.",
+      "required": ["changes", "reproduced", "disagreements", "agrees"],
+      "properties": {
+        "changes": { "type": "integer", "minimum": 0 },
+        "reproduced": { "type": "integer", "minimum": 0 },
+        "agrees": { "type": "boolean" },
+        "counts": {
+          "type": "object",
+          "required": ["claimed", "recomputed", "agrees"],
+          "properties": {
+            "claimed": { "type": "object" },
+            "recomputed": { "type": "object" },
+            "agrees": { "type": "boolean" }
+          }
+        },
+        "uniqueCommits": { "type": "boolean", "description": "Whether each supplied commit appears at most once." },
+        "disagreements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["commit", "changeId", "claimed", "recomputed"],
+            "properties": {
+              "commit": { "type": "string", "minLength": 1 },
+              "changeId": { "type": "string", "minLength": 1 },
+              "claimed": { "$ref": "#/$defs/verdict" },
+              "recomputed": { "$ref": "#/$defs/verdict" }
+            }
+          }
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "description": "Comparison against repository facts, including the complete ordered source inventory and physical/effective bases. Unrelated repositories and moved or missing heads are reported as skipped. Read failures after repository discovery are errors.",
+      "required": ["checked", "matches"],
+      "properties": {
+        "checked": { "type": "boolean" },
+        "matches": { "type": ["boolean", "null"] },
+        "reason": {
+          "type": ["string", "null"],
+          "description": "Why the comparison was skipped: not-requested, not-a-repository, bundle-incomplete, different-repository, target-moved, source-moved, or source-ref-missing. different-repository is checked first and is the only reason meaning the bundle will never apply here; the rest mean this repository has moved since the bundle was built."
+        },
+        "claimedLineage": { "type": ["string", "null"] },
+        "repositoryLineage": { "type": ["string", "null"] },
+        "claimedObjectFormat": { "type": ["string", "null"] },
+        "repositoryObjectFormat": { "type": ["string", "null"] },
+        "claimedTarget": { "type": "string" },
+        "repositoryTarget": { "type": "string" },
+        "claimedSource": { "type": "string" },
+        "repositorySource": { "type": "string" },
+        "sourceRef": { "type": "string" },
+        "checks": {
+          "type": "object",
+          "description": "Comparisons performed when checked is true. matches is true only when every comparison succeeds.",
+          "required": ["lineage", "evidence", "sourceChanges", "physicalBase", "effectiveBase", "counts"],
+          "properties": {
+            "lineage": { "type": "boolean" },
+            "evidence": { "type": "boolean" },
+            "sourceChanges": { "type": "boolean" },
+            "physicalBase": { "type": "boolean" },
+            "effectiveBase": { "type": "boolean" },
+            "counts": { "type": "boolean" }
+          }
+        },
+        "evidenceHash": {
+          "type": "object",
+          "properties": {
+            "claimed": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+            "repository": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+          }
+        }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "required": ["evidenceCheckedAgainstRepository", "statement"],
+      "properties": {
+        "evidenceCheckedAgainstRepository": { "type": "boolean" },
+        "statement": { "type": "string", "minLength": 1 }
+      }
+    },
+    "ok": {
+      "type": "boolean",
+      "description": "True when the hash matches, classifications and counts agree, commit entries are unique, and the repository comparison did not contradict the bundle. A skipped comparison narrows what is proven: source completeness, identities, and bases remain unchecked."
+    }
+  },
+  "$defs": {
+    "verdict": {
+      "type": "object",
+      "required": ["status", "proof"],
+      "properties": {
+        "status": { "type": "string", "minLength": 1 },
+        "proof": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
