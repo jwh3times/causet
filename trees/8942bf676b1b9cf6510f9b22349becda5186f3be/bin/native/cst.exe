@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+"use strict";
+
+// The `cst` command as published (ADR-0038 §2). With install scripts enabled,
+// `preinstall.js` replaces this file with the platform's native executable
+// before npm links the command, and no Node process starts when `cst` runs.
+// When scripts did not run, this launcher stays: it runs that executable
+// itself, paying Node's startup on every command. On a platform with no
+// published executable it runs the JavaScript CLI.
+
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { locate, packageRoot, verify } = require("./platform.js");
+
+const found = locate();
+if (found.missing) {
+  process.stderr.write(`cst: ${found.missing}; running the JavaScript CLI.\n`);
+  import(pathToFileURL(path.join(packageRoot, "bin", "vlab.js")).href).catch((error) => {
+    process.stderr.write(`cst: ${error?.message ?? error}\n`);
+    process.exitCode = 1;
+  });
+} else {
+  try {
+    verify(found);
+  } catch (error) {
+    process.stderr.write(`cst: ${error.message}\n`);
+    process.exit(1);
+  }
+  const ran = spawnSync(found.executable, process.argv.slice(2), {
+    stdio: "inherit",
+    // Says which path ran, for anything that wants to report it.
+    env: { ...process.env, CAUSET_LAUNCHER: "node" },
+  });
+  if (ran.error) {
+    process.stderr.write(`cst: ${found.executable} could not be started: ${ran.error.message}\n`);
+    process.exit(1);
+  }
+  if (ran.signal) process.kill(process.pid, ran.signal);
+  process.exit(ran.status ?? 1);
+}
