@@ -1,0 +1,5 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Hand the session off to the other machine"
+policy:
+  allow_implicit_invocation: false
