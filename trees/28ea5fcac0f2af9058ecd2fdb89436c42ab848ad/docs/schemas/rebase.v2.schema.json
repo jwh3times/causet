@@ -1,0 +1,485 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.rebase/v2",
+  "title": "Causal rebase receipt",
+  "description": "Completed causal rebase summary with plan identity, omissions, applications, recreated merges, trees, and timing, attached to the rebased tip (shared-portable note record; src/rebase-operations.js finalizeRebase). A strict superset of v1: v2 adds `recreatedMerges`, which a merge-preserving rewrite fills and a linear one leaves empty (ADR-0034).",
+  "x-vcs-lab-scope": "note-record",
+  "type": "object",
+  "required": [
+    "schema",
+    "type",
+    "id",
+    "operationId",
+    "forecastId",
+    "sourceRef",
+    "sourceHead",
+    "ontoRef",
+    "ontoHead",
+    "physicalBase",
+    "effectiveBase",
+    "planFingerprint",
+    "acceptCandidates",
+    "candidatePolicy",
+    "omitted",
+    "acceptedCandidates",
+    "applications",
+    "forkedSourceCommits",
+    "absorbedCommits",
+    "absorbedChanges",
+    "resultCommit",
+    "sourceTree",
+    "ontoTree",
+    "resultTree",
+    "exactStateEqualityAfter",
+    "timings",
+    "startedAt",
+    "createdAt",
+    "recreatedMerges"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.rebase/v2"
+    },
+    "type": {
+      "const": "rebase"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 4
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "forecastId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sourceRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ontoHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "physicalBase": {
+      "$ref": "#/$defs/oid"
+    },
+    "effectiveBase": {
+      "type": "object",
+      "required": [
+        "commit"
+      ],
+      "properties": {
+        "commit": {
+          "$ref": "#/$defs/oid"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "planFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "acceptCandidates": {
+      "type": "boolean"
+    },
+    "candidatePolicy": {
+      "enum": [
+        "none",
+        "accepted",
+        "review-required"
+      ]
+    },
+    "omitted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Coverage proof, or null for new work: commit-ancestry, receipt-commit, stable-change-id, receipt-change-id, git-patch-id-heuristic. Records written before v0.12.0 may carry signed-shaped-landing-receipt where receipt-commit now appears; nothing branches on the value, so readers pass it through unchanged (docs/schemas/compatibility.md)."
+          }
+        }
+      }
+    },
+    "acceptedCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof",
+          "decision"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Coverage proof, or null for new work: commit-ancestry, receipt-commit, stable-change-id, receipt-change-id, git-patch-id-heuristic. Records written before v0.12.0 may carry signed-shaped-landing-receipt where receipt-commit now appears; nothing branches on the value, so readers pass it through unchanged (docs/schemas/compatibility.md)."
+          },
+          "subject": {
+            "type": "string"
+          },
+          "decision": {
+            "const": "omit"
+          }
+        }
+      }
+    },
+    "applications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourceCommit",
+          "sourceChangeId",
+          "appliedCommit",
+          "appliedChangeId",
+          "targetBeforeTree",
+          "resultTree",
+          "relation",
+          "conflictedPaths",
+          "resolutions",
+          "semanticMerges"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceCommit": {
+            "$ref": "#/$defs/oid"
+          },
+          "sourceChangeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "appliedCommit": {
+            "$ref": "#/$defs/oid"
+          },
+          "appliedChangeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetBeforeTree": {
+            "$ref": "#/$defs/oid"
+          },
+          "resultTree": {
+            "$ref": "#/$defs/oid"
+          },
+          "relation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "conflictedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resolutions": {
+            "type": "array"
+          },
+          "semanticMerges": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "forkedSourceCommits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/oid"
+      }
+    },
+    "absorbedCommits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/oid"
+      }
+    },
+    "absorbedChanges": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "resultCommit": {
+      "$ref": "#/$defs/oid",
+      "description": "The commit this record is attached to; when the record carries attachedTo, both must be equal."
+    },
+    "sourceTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "resultTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "exactStateEqualityAfter": {
+      "type": "boolean"
+    },
+    "timings": {
+      "type": "object",
+      "description": "Pre-publication operation measurements, not whole-command telemetry. See docs/schemas/receipt-timings.md for the distinct measurement boundaries.",
+      "required": [
+        "activeApplicationMs",
+        "elapsedWallMs",
+        "git"
+      ],
+      "properties": {
+        "activeApplicationMs": {
+          "type": "number",
+          "description": "Accumulated active application spans, including successful continuation setup, excluding user pause time and finalization/publication."
+        },
+        "elapsedWallMs": {
+          "type": "number",
+          "description": "Wall time from operation.startedAt to receipt construction before publication, including time paused between invocations; not end-to-end command latency."
+        },
+        "git": {
+          "description": "Accumulated Git metric scopes inside application-queue calls. Excludes planning, continuation work before queue entry, finalization, record/provenance publication, and journal cleanup. Null means unavailable, not zero cost.",
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "attachedTo": {
+      "$ref": "#/$defs/oid"
+    },
+    "quarantinedFacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Identifiers reachable from the target that the conflict rule excluded, so a reviewer can see that coverage was computed on reduced evidence (ADR-0030). Absent in records written before v0.15.0; an empty array means nothing was excluded. Deliberately outside every plan fingerprint."
+    },
+    "range": {
+      "type": "object",
+      "required": [
+        "base",
+        "tip",
+        "explicit"
+      ],
+      "description": "The source set this plan describes. Without --from, `base` is the physical merge base and `explicit` is false, so a v1 plan is unchanged. The plan fingerprint covers `base`, because it decides what would be replayed; it does not cover `explicit`, because naming the same base is the same range (ADR-0032). Absent in records written before v0.15.0.",
+      "properties": {
+        "baseRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The revision the caller named, as typed, or null when the base was implicit."
+        },
+        "base": {
+          "$ref": "#/$defs/oid"
+        },
+        "tip": {
+          "$ref": "#/$defs/oid"
+        },
+        "explicit": {
+          "type": "boolean"
+        }
+      }
+    },
+    "excludedByRange": {
+      "type": "array",
+      "description": "Commits between the physical merge base and the range base: work the caller declared out of the source set. They are listed and nothing else \u2014 never replayed, classified, absorbed, or covered, and no receipt claims them. The omission is declared, not proven (ADR-0032).",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "subject"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "recreatedMerges": {
+      "type": "array",
+      "description": "The merges this rewrite recreated, in the order it recreated them. A recreated merge is a join, not a contribution: it claims nothing about the changes beneath it, and a plan may conclude nothing from this entry. It is not exact evidence under ADR-0004, it contributes to no coverage class, and `vlab merge-plan` must not count it as covering anything. The entry exists so a reader can audit what the rewrite did to the topology and so provenance can be carried onto the new object (ADR-0034). Empty for a linear rewrite; absent in records written before v0.17.0, which were always linear.",
+      "items": {
+        "type": "object",
+        "required": [
+          "originCommit",
+          "originChangeId",
+          "resultCommit",
+          "changeId",
+          "parents",
+          "resolutions",
+          "cleanJoin",
+          "relation"
+        ],
+        "properties": {
+          "originCommit": {
+            "$ref": "#/$defs/oid",
+            "description": "The merge that was recreated. It is never in absorbedCommits: a receipt that absorbed a join would be claiming the work beneath it."
+          },
+          "originChangeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The original merge's identity, or `git:<commit>` when it carried no Change-Id."
+          },
+          "resultCommit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The new join's new identity, which is never the original's. A rebase replaces the parents by construction, so a recreated merge is a different join even when its resolution is byte-identical; preserving the original identity would assert a sameness the operation cannot support, and would be the route by which a rewrite could inflate coverage (ADR-0034)."
+          },
+          "parents": {
+            "type": "array",
+            "description": "The rewritten parents, in order, each mapped to the original parent it replaces. v1 topology is two parents, both in the rebased range or ancestors of the new base; octopus merges and out-of-range parents are refused by name before any mutation.",
+            "items": {
+              "type": "object",
+              "required": [
+                "commit",
+                "replaces",
+                "source"
+              ],
+              "properties": {
+                "commit": {
+                  "$ref": "#/$defs/oid"
+                },
+                "replaces": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The original parent this one replaces, or null for a root commit's absent parent."
+                },
+                "source": {
+                  "enum": [
+                    "rewritten",
+                    "new-base"
+                  ],
+                  "description": "`rewritten` when the parent was itself rewritten by this operation; `new-base` when it was outside the range and the new base replaced it."
+                }
+              }
+            }
+          },
+          "resolutions": {
+            "type": "array",
+            "description": "The resolution outcomes the join required. Each publishes an ordinary vcs-lab.resolution/v1 record, because it is an ordinary resolution: that a merge rather than a pick produced the conflict changes nothing about its signature (ADR-0034).",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "signature",
+                "origin"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "signature": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "algorithm": {
+                  "type": "string"
+                },
+                "origin": {
+                  "enum": [
+                    "exact-reused",
+                    "decided"
+                  ],
+                  "description": "`exact-reused` when a recorded signature supplied the result, `decided` when a person resolved it during the operation."
+                },
+                "resolutionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "resultBlob": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "semanticMerges": {
+            "type": "array"
+          },
+          "cleanJoin": {
+            "type": "boolean",
+            "description": "True when the merge required no resolution at all."
+          },
+          "relation": {
+            "const": "recreated-merge",
+            "description": "Not an application relation, and must not be counted as one (ADR-0034)."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    }
+  }
+}
