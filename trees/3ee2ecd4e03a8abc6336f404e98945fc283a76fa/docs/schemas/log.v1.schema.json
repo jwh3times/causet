@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "causet.log/v1",
+  "title": "Native history log",
+  "description": "What cst log --json prints in a native repository (CLI output; native/cli/src/native_log.rs, ADR-0047 decision 12): the commits the walk shows, in the order it shows them, each a native commit (docs/native-history/commits.md §3) by its native ID. Text members are UTF-8 as Git's --format prints the commit, an encoding such as ISO-8859-1 re-encoded and bytes that are not UTF-8 replaced; a member ending in Hex holds the stored bytes, in lowercase hex, exactly when they are not UTF-8.",
+  "x-causet-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "commits"],
+  "properties": {
+    "schema": { "enum": ["causet.log/v1", "vcs-lab.log/v1"] },
+    "commits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/commit" }
+    }
+  },
+  "$defs": {
+    "nativeId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A native ID: the 64-character lowercase hex of its SHA-256 digest (ADR-0046, decision 5)."
+    },
+    "identity": {
+      "type": ["object", "null"],
+      "description": "An identity line, or null when the commit has none.",
+      "required": ["line", "name", "email", "date"],
+      "properties": {
+        "line": { "type": "string", "description": "The identity line's value as Git prints it." },
+        "name": { "type": ["string", "null"], "description": "The name Git's split_ident_line finds, null when the line has no <email>." },
+        "email": { "type": ["string", "null"], "description": "The email, without its angle brackets, null when the line has none." },
+        "date": { "type": ["string", "null"], "description": "The date in ISO 8601 with its zone, as --date=iso-strict prints it, null when the line has no date or Git's log cannot print it." },
+        "lineHex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "description": "The line as stored, present only when it is not UTF-8." }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "required": ["role", "actor"],
+      "properties": {
+        "role": { "enum": ["authored", "generated"] },
+        "actor": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["human", "agent"], "description": "Present only when declared (ADR-0047, decision 3)." },
+        "for": { "type": "string", "minLength": 1, "description": "Whom an agent acts for; present only with kind agent." }
+      }
+    },
+    "commit": {
+      "type": "object",
+      "required": [
+        "id", "tree", "parents", "author", "committer", "encoding", "changeId",
+        "derivedFrom", "originCommit", "actors", "message"
+      ],
+      "properties": {
+        "type": { "const": "commit", "description": "Present in causet.show/v1, where an entry may be a tag." },
+        "id": { "$ref": "#/$defs/nativeId" },
+        "tree": { "$ref": "#/$defs/nativeId" },
+        "parents": { "type": "array", "items": { "$ref": "#/$defs/nativeId" } },
+        "author": { "$ref": "#/$defs/identity" },
+        "committer": { "$ref": "#/$defs/identity" },
+        "encoding": { "type": ["string", "null"], "description": "The encoding the commit's message names, null for none." },
+        "changeId": { "type": ["string", "null"], "description": "The change identity lifted from the message (commits.md §5.3), null for none." },
+        "derivedFrom": { "type": ["string", "null"] },
+        "originCommit": { "type": ["string", "null"] },
+        "actors": { "type": "array", "items": { "$ref": "#/$defs/actor" }, "description": "The commit's commit-time actors (commits.md §2.2); an imported commit's are one authored actor, or none." },
+        "message": { "type": "string", "description": "The message, as %B prints it." },
+        "messageHex": { "type": "string", "pattern": "^([0-9a-f]{2})*$", "description": "The message as stored, present only when it is not UTF-8." }
+      }
+    }
+  }
+}

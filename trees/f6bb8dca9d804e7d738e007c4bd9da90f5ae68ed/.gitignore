@@ -1,0 +1,7 @@
+node_modules/
+*.log
+.DS_Store
+native/target/
+native/prebuilds/
+causal-vcs-lab-*.bundle
+causal-vcs-lab-*.zip
