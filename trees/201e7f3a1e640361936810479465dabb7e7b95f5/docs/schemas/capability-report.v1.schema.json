@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.capability-report/v1",
+  "title": "Capability negotiation report",
+  "description": "What two capability documents conclude about an exchange (CLI output of vlab capabilities --against; src/capabilities.js). A pure function of the two documents: it reads no network, no repository, and no clock, so where the peer document came from cannot change the result (ADR-0033).",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema",
+    "local",
+    "peer",
+    "repository",
+    "families",
+    "profiles",
+    "algorithms",
+    "objectFormats",
+    "features",
+    "bounds",
+    "summary"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.capability-report/v1"
+    },
+    "local": {
+      "$ref": "#/$defs/side"
+    },
+    "peer": {
+      "type": "object",
+      "required": [
+        "source",
+        "producer",
+        "repositoryScoped",
+        "statedFamilies"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "document",
+            "envelope"
+          ],
+          "description": "Where the peer statement came from. It does not change what the report concludes; it explains how much the peer stated."
+        },
+        "producer": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "statedBy": {
+          "type": "string"
+        },
+        "repositoryScoped": {
+          "type": "boolean"
+        },
+        "statedFamilies": {
+          "type": "boolean",
+          "description": "False when the peer statement carries no families at all, as an envelope manifest does not. Distinct from a peer that states an empty list."
+        },
+        "statedProfiles": {
+          "type": "boolean"
+        },
+        "statedBounds": {
+          "type": "boolean"
+        }
+      }
+    },
+    "repository": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Null unless both documents are repository-scoped.",
+      "required": [
+        "lineageRelation",
+        "admitted"
+      ],
+      "properties": {
+        "localObjectFormat": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "peerObjectFormat": {
+          "type": "string"
+        },
+        "objectFormatAgreed": {
+          "type": "boolean"
+        },
+        "localLineage": {
+          "type": "string"
+        },
+        "peerLineage": {
+          "type": "string"
+        },
+        "lineageRelation": {
+          "type": "string",
+          "description": "same, fork, unrelated, or incompatible, as lineageRelation in src/metadata.js decides."
+        },
+        "admitted": {
+          "type": "boolean",
+          "description": "Whether an exchange admits the relation: the same repository, or an ordinary fork of it."
+        }
+      }
+    },
+    "families": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/familyComparison"
+      }
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/namedComparison"
+      }
+    },
+    "algorithms": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/namedComparison"
+      }
+    },
+    "objectFormats": {
+      "type": "object",
+      "required": [
+        "local",
+        "peer",
+        "common",
+        "stated"
+      ],
+      "properties": {
+        "local": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "peer": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "common": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Null when the peer stated no object formats: unstated is neither empty nor agreed. The format an exchange turns on is the repository one, compared separately."
+        },
+        "stated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "required": [
+        "stated",
+        "common",
+        "localOnly",
+        "peerOnly"
+      ],
+      "properties": {
+        "stated": {
+          "type": "boolean"
+        },
+        "common": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "localOnly": {
+          "type": "array",
+          "description": "Behaviors this build has that the peer does not advertise. A record depending on one is withheld, so the peer stays fail-closed by construction rather than by its own quarantine.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "peerOnly": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "bounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "receiving",
+          "sending",
+          "stated"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "receiving": {
+            "type": "integer",
+            "description": "This build's bound, which governs what it may be sent."
+          },
+          "sending": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The peer's bound, which governs what this build may send. Bounds are the receiver's."
+          },
+          "stated": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "families",
+        "reducedFamilies",
+        "blockedFamilies",
+        "exchangeable",
+        "fullyCompatible",
+        "blockers",
+        "reductions"
+      ],
+      "properties": {
+        "families": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reducedFamilies": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockedFamilies": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exchangeable": {
+          "const": true,
+          "description": "Always true in a report that was produced: an exchange that is impossible refuses with no-common-version or repository-mismatch instead of reporting."
+        },
+        "fullyCompatible": {
+          "type": "boolean",
+          "description": "No family is reduced or blocked. The command exits non-zero when this is false, while the exchange itself remains possible."
+        },
+        "blockers": {
+          "type": "array"
+        },
+        "reductions": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "side": {
+      "type": "object",
+      "required": [
+        "producer",
+        "repositoryScoped"
+      ],
+      "properties": {
+        "producer": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "repositoryScoped": {
+          "type": "boolean"
+        }
+      }
+    },
+    "namedComparison": {
+      "type": "object",
+      "required": [
+        "name",
+        "local",
+        "peer",
+        "stated",
+        "agreed"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "local": {
+          "type": "string"
+        },
+        "peer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stated": {
+          "type": "boolean"
+        },
+        "agreed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "familyComparison": {
+      "type": "object",
+      "required": [
+        "family",
+        "scope",
+        "localWritten",
+        "localReadable",
+        "peerWritten",
+        "peerReadable",
+        "selectedForSend",
+        "selectedForReceive",
+        "unreadableByPeer",
+        "peerDisposition",
+        "status"
+      ],
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "localWritten": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "localReadable": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "peerWritten": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "peerReadable": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "selectedForSend": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "The highest version this build writes and the peer reads, for a document produced fresh for this exchange."
+        },
+        "selectedForReceive": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unreadableByPeer": {
+          "type": "array",
+          "description": "Versions this build writes that the peer does not read. Stored records of these versions are filtered before transfer rather than re-encoded, so the sender learns what the receiver would otherwise report afterwards.",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "peerDisposition": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "What the peer does with a version it does not read, from the peer's own advertisement."
+        },
+        "status": {
+          "enum": [
+            "compatible",
+            "reduced",
+            "blocked",
+            "peer-unknown-family",
+            "peer-not-stated"
+          ]
+        }
+      }
+    }
+  }
+}
