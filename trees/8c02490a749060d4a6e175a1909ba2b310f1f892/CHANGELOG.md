@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Propose the portable-verification contract for issue #36 (ADR-0031,
+  Proposed): a proof-bundle v2 that carries the raw commit objects of the
+  source range, reachability and note-inclusion proofs for every positive
+  coverage claim, and the anchors a remote verifier must obtain independently,
+  with conclusions reported in named tiers and absence claims reported as
+  claimed rather than proven. Disposable-repository evidence records that four
+  of the five adversarial fixtures the issue names (omission, injection,
+  commit substitution, Change-Id substitution) pass today's offline verifier
+  while only duplication is caught. No runtime, schema, or persisted state
+  changes.
+
+- Propose the conflict policy for competing causal facts (issue #44,
+  ADR-0030, Proposed): identity is the only conflict key, a conflicted fact
+  contributes nothing on either side, conflicts park rather than block or
+  overwrite, and a person resolves one with a declared local disposition.
+  Disposable two-clone evidence records that competing resolutions and
+  duplicate landings already coexist without a merge rule, and that the
+  planner still counts an id-conflicted receipt the validator quarantines.
+
+- Propose ADR-0029 for issue #43: a history-filtered repository may establish
+  lineage with its pre-image only through a declared lineage bridge that names
+  both lineage identities and carries the complete commit map, honored only
+  where it has been explicitly accepted; the shared-root rule stays fail-closed
+  and nothing inferred from content (trees, Change-Id trailers, object overlap,
+  replacement refs) ever establishes lineage. Disposable-repository evidence
+  shows a rewrite strands every fact inside its own repository, that a local
+  `git replace` graft already satisfies the shared-root rule silently, and
+  that import accepts a fork while proof verification reports it as a
+  different repository. No behavior changes; the ADR awaits the owner's
+  decision.
+
 - Propose target-checkpoint forecast semantics (issue #26, ADR-0028, Proposed):
   a target overlay is one immutable checkpoint pinned by commit identity,
   selected only explicitly, carried through reconciliation and rebase as

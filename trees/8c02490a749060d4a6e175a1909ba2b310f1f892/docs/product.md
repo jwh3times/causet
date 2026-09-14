@@ -955,7 +955,7 @@ acceptance signals.
 | FR-ID-06, FR-ID-07 | Delivered in v0.12.0 | `vlab audit identity` and `vcs-lab.logical-id/v1`. Whether FR-ID-07 also needs an operation log and a second carrier of `ch_*` in commit headers is a Gate B question inside [#40](https://github.com/jwh3times/vcs-lab/issues/40) |
 | FR-ID-08, FR-TRUST-04 | Delivered in v0.12.0 for commit granularity | Sub-commit anchoring is [#34](https://github.com/jwh3times/vcs-lab/issues/34), which is open product question 11 |
 | FR-LAND-10 | Deferred | [#39](https://github.com/jwh3times/vcs-lab/issues/39) |
-| FR-PLAN-08 | Delivered in v0.12.0 | The remote half is [#36](https://github.com/jwh3times/vcs-lab/issues/36) |
+| FR-PLAN-08 | Delivered in v0.12.0 | The remote half is [#36](https://github.com/jwh3times/vcs-lab/issues/36); its contract is proposed in [ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md) (Proposed) |
 | FR-RES-07 | Planned | [#35](https://github.com/jwh3times/vcs-lab/issues/35) |
 | FR-WS-08 | Deferred | [#40](https://github.com/jwh3times/vcs-lab/issues/40), under Gate B |
 | FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/vcs-lab/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
@@ -995,10 +995,14 @@ recorded in an ADR when it changes a durable decision.
 1. Should a future lineage version support deliberate history-filtered imports,
    and what proof can replace the shared-root rule without enabling unrelated
    metadata injection?
-   ([#43](https://github.com/jwh3times/vcs-lab/issues/43))
+   ([#43](https://github.com/jwh3times/vcs-lab/issues/43)). A declared,
+   locally accepted lineage bridge is proposed in
+   [ADR-0029](adr/0029-require-a-declared-lineage-bridge-for-imports-without-a-shared-root.md) (Proposed).
 2. Which causal claims are safe to merge automatically when two metadata
    sources disagree?
-   ([#44](https://github.com/jwh3times/vcs-lab/issues/44))
+   ([#44](https://github.com/jwh3times/vcs-lab/issues/44)). A per-family
+   conflict policy is proposed in
+   [ADR-0030](adr/0030-define-conflict-policy-for-competing-causal-facts.md) (Proposed).
 3. Should logical Change IDs be repository-scoped, globally namespaced, or
    issuer-qualified? **Answered in v0.12.0** by the frozen
    `vcs-lab.logical-id/v1` protocol ([docs/identity](identity/README.md)):
