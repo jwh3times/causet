@@ -61,7 +61,8 @@ identifiers, because they are derived rather than drawn:
   stages under `ordered-three-way-blobs/v1`. Two identical conflicts produce
   the same signature *on purpose*; that is what makes resolutions reusable.
 - **`lineage_<sha256>`** — repository lineage identity, derived from the root
-  commits under the canonical JSON profile.
+  commits under the canonical JSON profile, read with replacement objects
+  disabled so a local `git replace` graft cannot change it (issue #88).
 
 Content-derived identifiers collide exactly when their content matches, which
 is the intent. The rest of this document is about minted ones.

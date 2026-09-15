@@ -337,7 +337,9 @@ where every object id is 64 characters instead of 40, so any comparison that
 assumed a fixed width fails. It also pins the proof bundle's sharpest
 adversarial case: a bundle from an unrelated repository is intact and
 internally consistent, so only the lineage comparison can catch it, and it must
-be reported as `different-repository` rather than as a stale `target-moved`.
+be reported as `different-repository` rather than as a stale `target-moved`,
+while a fork of the bundle's repository (a shared root plus a further root)
+verifies and reports `lineageRelation: fork` (issue #89).
 The test skips itself if the host Git cannot create a SHA-256 repository.
 `test/schema-compatibility.test.js` keeps the published compatibility contract
 in `docs/schemas/compatibility.md` in agreement with `RECORD_FAMILIES` and

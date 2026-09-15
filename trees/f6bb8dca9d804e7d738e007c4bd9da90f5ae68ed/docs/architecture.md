@@ -1118,7 +1118,9 @@ checkpoints, reconciliation/rebase journals, and forecasts remain deliberately
 local. The envelope carries accepted records plus referenced commits that may no
 longer be reachable from an ordinary branch after a rebase.
 
-Envelope v1 lineage uses Git object format plus sorted root commits reachable
+Envelope v1 lineage uses Git object format plus sorted root commits, read with
+replacement objects disabled so a local `git replace` graft cannot change the
+identity (issue #88), reachable
 from branches, tags, and remote-tracking refs. Equal roots identify the same
 lineage; any shared root identifies an ordinary fork. Unrelated and
 history-filtered histories fail closed.

@@ -64,6 +64,11 @@
           "type": ["string", "null"],
           "description": "Why the comparison was skipped: not-requested, not-a-repository, bundle-incomplete, different-repository, target-moved, source-moved, or source-ref-missing. different-repository is checked first and is the only reason meaning the bundle will never apply here; the rest mean this repository has moved since the bundle was built."
         },
+        "lineageRelation": {
+          "type": "string",
+          "enum": ["same", "fork", "unrelated", "incompatible"],
+          "description": "How the bundle lineage relates to this repository lineage, by the rule vlab metadata import applies: same and fork (a shared root plus further roots) are verified; unrelated and incompatible are reported as different-repository."
+        },
         "claimedLineage": { "type": ["string", "null"] },
         "repositoryLineage": { "type": ["string", "null"] },
         "claimedObjectFormat": { "type": ["string", "null"] },
@@ -78,7 +83,10 @@
           "description": "Comparisons performed when checked is true. matches is true only when every comparison succeeds.",
           "required": ["lineage", "evidence", "sourceChanges", "physicalBase", "effectiveBase", "counts"],
           "properties": {
-            "lineage": { "type": "boolean" },
+            "lineage": {
+              "type": "boolean",
+              "description": "True when the bundle lineage is the same as, or a fork of, this repository lineage."
+            },
             "evidence": { "type": "boolean" },
             "sourceChanges": { "type": "boolean" },
             "physicalBase": { "type": "boolean" },

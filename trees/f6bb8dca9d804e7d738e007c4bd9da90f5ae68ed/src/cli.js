@@ -258,6 +258,9 @@ function formatProofVerification(result) {
         : `not checked against a repository (${result.repository.reason})`
     }`,
   ];
+  if (result.repository.lineageRelation) {
+    lines.push(`lineage      ${result.repository.lineageRelation}`);
+  }
   for (const [check, matches] of Object.entries(result.repository.checks ?? {})) {
     if (!matches) lines.push(`  ! repository ${check} does not match`);
   }

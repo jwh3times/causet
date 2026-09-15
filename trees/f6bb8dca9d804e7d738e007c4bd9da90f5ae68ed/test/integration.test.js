@@ -3971,6 +3971,28 @@ test("metadata envelope round-trips accepted facts between clones idempotently",
   );
   assert.match(unrelatedRefusal.message, /requires a shared root commit/i);
 
+  // A local replacement ref that grafts the unrelated root onto this
+  // repository's root makes Git itself report a shared root, but lineage is
+  // derived with replacement objects disabled, so the graft neither changes
+  // the lineage identity nor admits the envelope (issue #88).
+  const repoRoot = git(repo, "rev-list", "--max-parents=0", "main");
+  const unrelatedRoot = git(unrelated, "rev-list", "--max-parents=0", "main");
+  const lineageBeforeGraft = JSON.parse(vlab(unrelated, "metadata", "status", "--json")).repository.lineage;
+  assert.deepEqual(lineageBeforeGraft.rootCommits, [unrelatedRoot]);
+  git(unrelated, "fetch", "--no-tags", repo, "main");
+  git(unrelated, "replace", "--graft", unrelatedRoot, repoRoot);
+  assert.equal(
+    git(unrelated, "rev-list", "--max-parents=0", "--branches", "--tags", "--remotes"),
+    repoRoot,
+    "with the graft honored, Git reports the other repository's root",
+  );
+  const lineageWithGraft = JSON.parse(vlab(unrelated, "metadata", "status", "--json")).repository.lineage;
+  assert.deepEqual(lineageWithGraft, lineageBeforeGraft, "the graft does not change the lineage identity");
+  const graftedPreview = vlabResult(unrelated, "metadata", "import", envelopePath, "--dry-run", "--json");
+  assert.notEqual(graftedPreview.status, 0, "the graft does not admit an unrelated envelope");
+  assert.equal(JSON.parse(graftedPreview.stdout).code, "unsupported-repository-shape");
+  git(unrelated, "replace", "-d", unrelatedRoot);
+
   const destination = path.join(parent, "destination");
   git(parent, "clone", "--no-local", repo, destination);
   git(destination, "config", "core.autocrlf", "false");

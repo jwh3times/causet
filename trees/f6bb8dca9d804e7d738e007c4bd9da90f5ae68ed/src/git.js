@@ -1072,9 +1072,14 @@ export function mergeCommitsBetween(base, tip, cwd = process.cwd()) {
  * unique and sorted; empty when the repository has no such ref.
  */
 export function rootCommits(cwd = process.cwd()) {
+  // Lineage identity is derived from the repository's real root commits.
+  // Replacement refs (git replace, grafts) are local, unsigned, and invisible
+  // to the envelope, so a graft must not be able to turn an unrelated
+  // lineage into a shared one (issue #88). Whether every read should ignore
+  // replacements is a separate scope decision recorded on that issue.
   const result = readGit(
     ["rev-list", "--max-parents=0", "--branches", "--tags", "--remotes"],
-    { cwd, allowFailure: true },
+    { cwd, allowFailure: true, env: { GIT_NO_REPLACE_OBJECTS: "1" } },
   );
   return [...new Set(
     result.ok && result.stdout ? result.stdout.split(/\r?\n/).filter(Boolean) : [],

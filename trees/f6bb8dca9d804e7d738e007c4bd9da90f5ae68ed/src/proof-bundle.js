@@ -1,7 +1,13 @@
 import { sha256 } from "./ids.js";
 import { canonicalJson } from "./canonical-json.js";
 import { CliError } from "./errors.js";
-import { acceptedCausalRecords, readCausalRecordCatalog, repositoryLineage } from "./metadata.js";
+import {
+  acceptedCausalRecords,
+  lineageIdentityId,
+  lineageRelation,
+  readCausalRecordCatalog,
+  repositoryLineage,
+} from "./metadata.js";
 import { buildMergePlan, coverageEvidence } from "./merge-plan.js";
 import { commitHistory, currentHead, isAncestor, mergeBase, resolveObjectIds } from "./engine.js";
 
@@ -233,6 +239,25 @@ export function buildProofBundle(sourceRef, cwd = process.cwd()) {
 }
 
 /**
+ * Whether the bundle's stated lineage survives comparison with this
+ * repository's. `same` is decided by the id alone, so the whole identity is
+ * compared: a bundle that kept its id but altered its root list is a tampered
+ * claim, not this repository. `fork` shares a root with a different id, so
+ * the claim must at least be self-consistent: its id must be the hash of the
+ * identity it states, in this repository's algorithm and object format.
+ */
+function lineageClaimHolds(claimed, actual, relation) {
+  if (relation === "same") return canonicalJson(claimed) === canonicalJson(actual);
+  if (relation === "fork") {
+    return Array.isArray(claimed?.rootCommits) &&
+      claimed.algorithm === actual.algorithm &&
+      claimed.objectFormat === actual.objectFormat &&
+      claimed.id === lineageIdentityId(claimed);
+  }
+  return false;
+}
+
+/**
  * Check the bundle's evidence against a real repository, which is the only
  * check that can catch **fabricated** evidence. Recomputing the classification
  * proves a plan follows from what it states; it cannot notice that a stated
@@ -260,14 +285,21 @@ export function verifyAgainstRepository(bundle, cwd = process.cwd()) {
   // repository at all. Lineage is derived from the root commits, so it also
   // catches the case where the two repositories do not even share an object
   // format.
+  // The relation is the one `vlab metadata import` applies: a fork (a shared
+  // root plus further roots) holds every object the comparison needs and is
+  // verified like the same repository; only an unrelated or incompatible
+  // lineage means the bundle will never be about this repository (issue #89).
   const claimedLineage = bundle?.repository?.lineage ?? null;
   const actualLineage = repositoryLineage(cwd);
+  let relation = null;
   if (claimedLineage?.id) {
-    if (actualLineage?.id !== claimedLineage.id) {
+    relation = lineageRelation(claimedLineage, actualLineage);
+    if (!["same", "fork"].includes(relation)) {
       return {
         checked: false,
         reason: "different-repository",
         matches: null,
+        lineageRelation: relation,
         claimedLineage: claimedLineage.id,
         repositoryLineage: actualLineage?.id ?? null,
         claimedObjectFormat: claimedLineage.objectFormat ?? null,
@@ -333,7 +365,7 @@ export function verifyAgainstRepository(bundle, cwd = process.cwd()) {
     classifyFromEvidence(change, indexed),
   ));
   const checks = {
-    lineage: canonicalJson(claimedLineage) === canonicalJson(actualLineage),
+    lineage: lineageClaimHolds(claimedLineage, actualLineage, relation),
     evidence: canonicalJson(actual) === canonicalJson(bundle.evidence),
     sourceChanges: canonicalJson(sourceChanges) === canonicalJson(
       bundle.changes.map(({ commit, changeId, subject }) => ({ commit, changeId, subject })),
@@ -346,6 +378,7 @@ export function verifyAgainstRepository(bundle, cwd = process.cwd()) {
     checked: true,
     reason: null,
     matches: Object.values(checks).every(Boolean),
+    lineageRelation: relation,
     checks,
     evidenceHash: {
       claimed: sha256(canonicalJson(bundle.evidence ?? {})),

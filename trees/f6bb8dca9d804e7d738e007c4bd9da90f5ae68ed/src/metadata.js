@@ -109,16 +109,27 @@ function sortDiagnostics(diagnostics) {
 
 export function repositoryLineage(cwd = process.cwd()) {
   const context = repoContext(cwd);
-  const roots = rootCommits(cwd);
   const identity = {
     algorithm: METADATA_LINEAGE_ALGORITHM,
     objectFormat: context.objectFormat,
-    rootCommits: roots,
+    rootCommits: rootCommits(cwd),
   };
-  // The identity is hashed under the frozen canonical JSON profile
-  // (vcs-lab.canonical-json/v1); for this float-free shape the bytes are
-  // identical to the legacy serializer's, so lineage IDs are unchanged.
-  return { ...identity, id: `lineage_${sha256(profileCanonicalJson(identity))}` };
+  return { ...identity, id: lineageIdentityId(identity) };
+}
+
+/**
+ * The lineage id a stated identity must carry. The identity is hashed under
+ * the frozen canonical JSON profile (vcs-lab.canonical-json/v1); for this
+ * float-free shape the bytes are identical to the legacy serializer's, so
+ * lineage IDs are unchanged. A claimed lineage whose id does not equal this
+ * value has been altered after it was produced.
+ */
+export function lineageIdentityId(identity) {
+  return `lineage_${sha256(profileCanonicalJson({
+    algorithm: identity?.algorithm,
+    objectFormat: identity?.objectFormat,
+    rootCommits: identity?.rootCommits,
+  }))}`;
 }
 
 export function lineageRelation(source, destination) {

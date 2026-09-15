@@ -177,6 +177,7 @@ test("a proof bundle from another repository is rejected as such, not as a stale
   assert.equal(verified.repository.checked, false, "nothing is confirmed against this repository");
   assert.equal(verified.repository.matches, null);
   assert.equal(verified.repository.reason, "different-repository");
+  assert.equal(verified.repository.lineageRelation, "incompatible", "two object formats can never share a root");
   assert.equal(verified.repository.claimedObjectFormat, "sha256");
   assert.equal(verified.repository.repositoryObjectFormat, "sha1");
   assert.notEqual(verified.repository.claimedLineage, verified.repository.repositoryLineage);
@@ -186,4 +187,65 @@ test("a proof bundle from another repository is rejected as such, not as a stale
   const human = vlab(local, "verify-proof", file);
   assert.match(human, /different-repository/);
   assert.doesNotMatch(human, /target-moved/);
+});
+
+test("a proof bundle verifies against a fork of its repository and is refused by an unrelated one", () => {
+  // `vlab metadata import` accepts a fork: a repository that shares a root
+  // with the bundle's and has merged in an unrelated history holds every
+  // object the comparison needs. The verifier must apply the same relation
+  // rather than demand an identical lineage id, or a legitimate fork is told
+  // the bundle "was never about this repository" (issue #89).
+  const origin = makeRepository("sha1");
+  const file = path.join(origin, "..", "origin-bundle.json");
+  fs.writeFileSync(file, vlab(origin, "proof-bundle", "feature"));
+
+  const fork = path.join(origin, "..", "fork");
+  git(origin, "clone", "--no-local", "--branch", "main", origin, fork);
+  git(fork, "config", "user.name", "VCS Lab Object Format Test");
+  git(fork, "config", "user.email", "vcs-lab-objfmt@example.invalid");
+  vlab(fork, "init");
+  git(fork, "fetch", "--no-tags", "origin", "refs/heads/feature:refs/heads/feature", "refs/notes/*:refs/notes/*");
+  // An orphan branch adds a second root without moving main, so the bundle's
+  // target head is still this repository's head.
+  git(fork, "switch", "-q", "--orphan", "vendor");
+  write(fork, "vendor.txt", "vendored\n");
+  git(fork, "add", "vendor.txt");
+  git(fork, "commit", "-q", "-m", "vendor root");
+  git(fork, "switch", "-q", "main");
+  assert.equal(
+    git(fork, "rev-list", "--max-parents=0", "--branches").split(/\s+/).length,
+    2,
+    "the fork has two root commits",
+  );
+
+  const verified = JSON.parse(vlab(fork, "verify-proof", file, "--json"));
+  assert.equal(verified.repository.checked, true, "a fork is verified, not refused");
+  assert.equal(verified.repository.lineageRelation, "fork");
+  assert.equal(verified.repository.matches, true, "the fork holds the same evidence at the same heads");
+  assert.equal(verified.repository.checks.lineage, true);
+  assert.equal(verified.ok, true);
+  assert.match(vlab(fork, "verify-proof", file), /lineage\s+fork/);
+
+  // A fork claim must be self-consistent: keeping the id while altering the
+  // stated roots is tampering, and it fails the lineage check rather than
+  // being read as the same repository or as a fork.
+  const tampered = JSON.parse(fs.readFileSync(file, "utf8"));
+  tampered.repository.lineage.rootCommits = [...tampered.repository.lineage.rootCommits, "f".repeat(40)];
+  const tamperedFile = path.join(origin, "..", "tampered-bundle.json");
+  fs.writeFileSync(tamperedFile, JSON.stringify(tampered));
+  const tamperedRun = spawnSync(process.execPath, [cli, "verify-proof", tamperedFile, "--json"], { cwd: fork, encoding: "utf8", env: testEnv() });
+  assert.equal(tamperedRun.status, 1, "a tampered lineage claim does not verify");
+  const tamperedResult = JSON.parse(tamperedRun.stdout);
+  assert.equal(tamperedResult.integrity.intact, false, "the restated roots break the bundle hash");
+  assert.equal(tamperedResult.repository.checked, true);
+  assert.equal(tamperedResult.repository.lineageRelation, "fork", "the shared root still reads as a fork");
+  assert.equal(tamperedResult.repository.checks.lineage, false, "but the altered identity does not hold");
+  assert.equal(tamperedResult.ok, false);
+
+  const unrelated = makeRepository("sha1");
+  const refused = JSON.parse(vlab(unrelated, "verify-proof", file, "--json"));
+  assert.equal(refused.repository.checked, false);
+  assert.equal(refused.repository.reason, "different-repository");
+  assert.equal(refused.repository.lineageRelation, "unrelated", "no shared root in the same object format");
+  assert.match(vlab(unrelated, "verify-proof", file), /lineage\s+unrelated/);
 });
