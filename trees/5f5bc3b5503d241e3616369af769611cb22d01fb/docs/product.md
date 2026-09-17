@@ -961,7 +961,7 @@ acceptance signals.
 | FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/vcs-lab/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
 | FR-SPEC-13 | Gated; no additional format selected | [#31](https://github.com/jwh3times/vcs-lab/issues/31) and [#33](https://github.com/jwh3times/vcs-lab/issues/33) delivered the suite and contract. [#32](https://github.com/jwh3times/vcs-lab/issues/32) records the requirement-level evaluation and can be reopened for a concrete proposal. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |
 | FR-PERF-09 | Evidence gate | [#42](https://github.com/jwh3times/vcs-lab/issues/42); bounded native read scope accepted in ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
-| FR-PROTO-06 | Deferred | [#37](https://github.com/jwh3times/vcs-lab/issues/37) |
+| FR-PROTO-06 | Deferred | [#37](https://github.com/jwh3times/vcs-lab/issues/37); its contract is proposed in [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md) (Proposed) |
 | FR-TRUST-02, FR-TRUST-03 | Deferred | [#38](https://github.com/jwh3times/vcs-lab/issues/38) and [#39](https://github.com/jwh3times/vcs-lab/issues/39) |
 
 The following experimentally implemented requirements need continued real-world

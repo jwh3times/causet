@@ -61,6 +61,7 @@ sequence in §15.
 | [0030](0030-define-conflict-policy-for-competing-causal-facts.md) | Proposed | Quarantine identity-conflicted causal facts on both sides, park rather than refuse or overwrite, and resolve only by a declared local disposition |
 | [0031](0031-carry-a-bound-source-inventory-for-portable-verification.md) | Proposed | Carry a bound source inventory, compact Git-native proofs, and named anchors so a verifier without the repository reports tiered conclusions and never passes an absence claim |
 | [0032](0032-generalize-causal-rebase-to-explicit-linear-ranges.md) | Proposed | Name an explicit rebase range by its base on the current branch; excluded commits are listed and recorded, never proven or dropped silently |
+| [0033](0033-advertise-capabilities-as-a-document-negotiated-offline.md) | Proposed | Advertise capabilities as a registry-projected document and negotiate as a pure function of two documents, so every gateway conclusion is reproducible offline |
 
 ## Creating or changing an ADR
 

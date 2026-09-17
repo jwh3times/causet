@@ -21,6 +21,15 @@
   optional `nearDuplicateActors` count within `vcs-lab.identity-audit/v1`.
   `docs/identity/README.md` §8 records the actor naming convention.
 
+- Propose capability negotiation for a narrow remote gateway (issue #37,
+  ADR-0033, Proposed): negotiation is a pure function of two
+  `vcs-lab.capabilities/v1` documents projected from the runtime registries,
+  so every gateway conclusion is reproducible offline through a proposed
+  `vlab capabilities --against`; stored records are filtered per record
+  rather than re-encoded, a missing common version fails as
+  `no-common-version`, and the gateway plans, stores, and authenticates
+  nothing. No behavior changes until the owner decides.
+
 - Lead the empty-replay block message of `vlab rebase` with vlab's own
   instruction (`vlab rebase --abort`) and place Git's advice after it, so
   the first line an evaluator reads is not `git cherry-pick --skip`, the
