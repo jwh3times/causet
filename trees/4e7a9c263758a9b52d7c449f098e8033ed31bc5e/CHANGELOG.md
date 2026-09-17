@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Refuse a newer proof-bundle version as `unknown-schema-version` (issue
+  #98). `vlab verify-proof` reported `vcs-lab.proof-bundle/v2` and later as
+  `wrong-record-family`, whose published response is to stop and surface the
+  document to a human; the right family at an unreadable version now gets the
+  version refusal, naming the version this build reads, so the remedy is the
+  build that wrote it. Another family, or a document naming no schema, keeps
+  `wrong-record-family`.
+
 - Hand sessions off between machines through Proton Drive. `/handoff` now
   alerts on work not merged to `main`, publishes its document to the synced
   `Documents/Handoffs` folder, records it as the repository's active handoff

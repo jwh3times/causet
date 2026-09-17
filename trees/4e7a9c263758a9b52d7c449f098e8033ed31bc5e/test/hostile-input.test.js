@@ -433,11 +433,35 @@ test("hostile proof bundles fail closed before any member is dereferenced", () =
     ["verify-proof", written("array", () => [])],
     /not a JSON object/,
   );
+  // A newer proof bundle is the right family at a version this build cannot
+  // read: the remedy is the build that wrote it, not a human investigating a
+  // foreign document (issue #98). Another family keeps the family refusal.
+  const future = written("future", (b) => { b.schema = "vcs-lab.proof-bundle/v99"; });
+  assertRefusedCleanly(
+    repo,
+    "a newer proof-bundle version",
+    ["verify-proof", future],
+    /carries unsupported schema "vcs-lab\.proof-bundle\/v99"/,
+  );
+  const futureEnvelope = JSON.parse(vlabResult(repo, "verify-proof", future, "--json").stdout);
+  assert.equal(futureEnvelope.code, "unknown-schema-version");
+  assert.match(futureEnvelope.details, /reads v1 of that family/);
+
+  const foreign = written("family", (b) => { b.schema = "vcs-lab.landing/v1"; });
   assertRefusedCleanly(
     repo,
     "a bundle from another family",
-    ["verify-proof", written("family", (b) => { b.schema = "vcs-lab.proof-bundle/v99"; })],
+    ["verify-proof", foreign],
     /Not a vcs-lab\.proof-bundle\/v1 document/,
+  );
+  assert.equal(
+    JSON.parse(vlabResult(repo, "verify-proof", foreign, "--json").stdout).code,
+    "wrong-record-family",
+  );
+  assert.equal(
+    JSON.parse(vlabResult(repo, "verify-proof", written("unnamed", (b) => { delete b.schema; }), "--json").stdout).code,
+    "wrong-record-family",
+    "a document that names no schema is not claiming to be a proof bundle",
   );
 
   // The canonical profile refuses floats; the refusal is a domain diagnostic,

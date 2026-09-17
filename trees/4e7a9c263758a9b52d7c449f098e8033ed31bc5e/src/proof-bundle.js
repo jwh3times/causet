@@ -1,6 +1,7 @@
 import { sha256 } from "./ids.js";
 import { canonicalJson } from "./canonical-json.js";
 import { CliError } from "./errors.js";
+import { schemaClassification } from "./schemas.js";
 import {
   acceptedCausalRecords,
   lineageIdentityId,
@@ -136,6 +137,20 @@ export function assertProofBundleDocument(bundle) {
     throw new CliError("The proof bundle is not a JSON object.", { code: "malformed-input" });
   }
   if (bundle.schema !== PROOF_BUNDLE_SCHEMA) {
+    // The right family at another version is a build mismatch, not a foreign
+    // document: its remedy is the build that wrote it (issue #98). The proof
+    // bundle is not in RECORD_FAMILIES, so the family is compared here.
+    const { family, version } = schemaClassification(bundle.schema);
+    const { family: ownFamily, version: ownVersion } = schemaClassification(PROOF_BUNDLE_SCHEMA);
+    if (family === ownFamily && version !== null) {
+      throw new CliError(
+        `The proof bundle carries unsupported schema ${JSON.stringify(bundle.schema)}.`,
+        {
+          code: "unknown-schema-version",
+          details: `This build reads v${ownVersion} of that family.`,
+        },
+      );
+    }
     throw new CliError(
       `Not a ${PROOF_BUNDLE_SCHEMA} document (found ${JSON.stringify(bundle.schema ?? null)}).`,
         { code: "wrong-record-family" },
