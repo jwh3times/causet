@@ -125,7 +125,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/capabilities.js` | The `vcs-lab.capabilities/v1` document projected from the runtime registries, and negotiation as a pure function of two such documents (ADR-0033) | `src/schemas.js`, `src/metadata.js`, `src/metadata-envelope.js`, `src/canonical-json.js` |
 | `src/cli.js` | Argument parsing, command dispatch, human and JSON presentation, benchmarks | All domain modules |
 | `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
-| `src/engine.js` | The read-side engine seam: the catalog of 40 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
+| `src/engine.js` | The read-side engine seam: the catalog of 42 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
 | `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021) | None |
 | `src/faults.js` | Test-only deterministic fault injection: `VLAB_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `VLAB_TEST_GATE` holds a process at a named point until a test releases it | None |
 | `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
@@ -144,6 +144,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/notes.js` | Append/list/read causal records in `refs/notes/vcs-lab`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory | `src/git.js`, `src/store.js` |
 | `src/operations.js` | Commit/cherry-pick and reconciliation start/queue/continue/abort/finalize | Plan, forecast, notes, resolution/spec modules |
 | `src/pending-operation.js` | Safe reconciliation/rebase journal routing for shared conflict tools | Reconciliation and rebase state |
+| `src/proof-binding.js` | The Git bindings a proof bundle carries so a verifier without the repository can check it: the bound source inventory, reachability paths, receipt inclusion proofs, and the object-id recomputation that makes them proofs (ADR-0031) | `src/engine.js`, `src/git.js`, `src/schemas.js` |
 | `src/proof-bundle.js` | Portable coverage proof bundles and their independent verifier, which applies its own copy of the lattice (`PROOF_RULES`) and compares the evidence with the repository | Merge plan, canonical JSON, metadata, engine |
 | `src/provenance.js` | Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `VLAB_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
 | `src/quarantine.js` | The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/vcs-lab/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030) | `src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js` |
@@ -288,6 +289,7 @@ use at the current development baseline:
 | `vcs-lab.landing` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
 | `vcs-lab.metadata-envelope` | v1 | v1 | `manifest.json of a metadata export directory` | `envelope` |
 | `vcs-lab.note` | v1 | v1 | `refs/notes/vcs-lab note blobs` | `note-container` |
+| `vcs-lab.proof-bundle` | v1, v2 | v2 | `a file handed to vlab verify-proof` | `envelope` |
 | `vcs-lab.provenance` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
 | `vcs-lab.quarantined-record` | v1 | v1 | `refs/vcs-lab/quarantine/<lineage>/<record id> blobs` | `shared-local` |
 | `vcs-lab.rebase` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
@@ -1185,6 +1187,49 @@ names. Nothing here authenticates a claim: which copy is true remains the trust
 question of §15.3, and this policy only guarantees that neither copy is used
 until someone decides.
 
+### 15.2.3 Portable verification is bound to Git objects
+
+[ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md)
+answers what a proof bundle must carry for a party that does not share the
+repository. v1 carried the classification and the evidence it was derived from,
+which lets a verifier recompute the classification — but `changes` was the
+sender's word, and #46 showed that a bundle could omit, inject, or misidentify
+source changes, restate its hash, and still report `ok` offline.
+
+`vcs-lab.proof-bundle/v2` is a strict superset of v1 that carries Git's own
+bindings: the raw commit objects of `physicalBase..sourceHead`, a commit path
+from the target head for every positive coverage claim, an inclusion proof from
+the notes tip to each receipt's note blob, and the anchors those proofs terminate
+at. Objects are carried once in a map keyed by id, because every path shares its
+first commits with every other; that is what keeps a bundle proportional to
+history *depth* rather than to the number of claims.
+
+The mechanism is that a verifier recomputes each object id from the carried
+bytes. A sender chooses what to put in a bundle, but it cannot choose the id of a
+commit whose message it altered, so the claims either reproduce Git's hashes or
+do not.
+
+Conclusions are placed in tiers, which are different statements rather than
+degrees of confidence in one:
+
+| Tier | Says |
+| --- | --- |
+| self-consistent | the classification follows from the evidence the bundle states |
+| bound | the stated evidence is tied to Git objects between the heads the bundle *states* |
+| anchored | those heads are the real ones, confirmed from a channel the verifier chose |
+
+A third party may act on the anchored tier. `vlab verify-proof --anchors-from
+<remote>` reads anchors with `git ls-remote` from a remote **the verifier**
+names; a remote named inside the bundle is only ever a hint, because its producer
+controls that name. Root commits are not ref tips, so that channel cannot supply
+them, and the report says so rather than treating them as confirmed.
+
+Absence stays unprovable without objects. `new` is a claim about the whole target
+history and `candidate-equivalent` is a claim about trees, so both are reported as
+claimed rather than proven, and `ok` never asserts a conclusion the carried
+material cannot support. The repository-backed comparison is unchanged and
+remains the only check that establishes absence.
+
 ### 15.2.2 Capabilities are a document, not a conversation
 
 [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md)
@@ -1341,6 +1386,9 @@ lock without rewriting history.
 | A peer reads no version of a family this build writes | Filter those records out of the exchange and name them; the rest still moves (ADR-0033). |
 | A peer disagrees about a profile, algorithm, object format, or lineage | Refuse with `no-common-version` or `repository-mismatch` before any transfer; there is nothing both sides would read alike. |
 | A capability document of an unknown version, or over its bound | Refuse with `unknown-schema-version` or `resource-bound-exceeded`; the bound is checked before the document is parsed. |
+| A proof bundle whose carried objects do not hash to the ids they claim | Fail verification and name each object; the bundle does not reach the bound tier (ADR-0031). |
+| A proof bundle whose proofs would exceed `proofBundleBytes` | Refuse to emit and name the member that did not fit; a truncated proof cannot be told apart from an omission. |
+| An anchor a verifier's chosen channel cannot confirm | Report it unconfirmed and stay at the bound tier; it is not a binding failure. |
 | Import ID conflict under `--park-conflicts` | Apply the rest atomically; write the incoming copy under `refs/vcs-lab/quarantine/<lineage>/<record id>`; report `parked-record-conflict` against the local copy so neither side proves coverage (ADR-0030). |
 | Import resolution-ref conflict under `--park-conflicts` | Leave the destination ref exactly where it pointed, park the incoming records that name it, and keep the rest of the exchange applicable. |
 | An arriving digest a disposition already rejected | Report it as `disposed` and neither apply nor park it again. |
@@ -1589,7 +1637,7 @@ delivered as `workspace create --cone` (§12), and
 closed phase 0a by measuring and rejecting Git's read-side maintenance
 caches. The read-side engine seam of phase 0b is implemented
 ([ADR-0019](adr/0019-route-every-git-read-through-one-engine-seam.md), §14.4):
-every repository read is one of 40 cataloged operations, the native engine
+every repository read is one of 42 cataloged operations, the native engine
 is selectable with per-operation Git fallback, and the suite's `VLAB_ENGINE=native`
 mode refuses any read outside the seam.
 The schema catalog, canonical-JSON profile, compatibility contract

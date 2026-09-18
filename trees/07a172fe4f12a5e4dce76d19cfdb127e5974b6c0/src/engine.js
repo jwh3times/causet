@@ -48,6 +48,8 @@ const GIT_OPERATIONS = Object.freeze({
   findCommitsByChangeId: git.findCommitsByChangeId,
   patchEquivalentCommits: git.patchEquivalentCommits,
   historyGraph: git.historyGraph,
+  ancestryPath: git.ancestryPath,
+  remoteRefs: git.remoteRefs,
   // Refs and notes
   refExists: git.refExists,
   refTarget: git.refTarget,
@@ -152,6 +154,8 @@ export function commitSubject(...args) { return dispatch("commitSubject", args);
 export function findCommitsByChangeId(...args) { return dispatch("findCommitsByChangeId", args); }
 export function patchEquivalentCommits(...args) { return dispatch("patchEquivalentCommits", args); }
 export function historyGraph(...args) { return dispatch("historyGraph", args); }
+export function ancestryPath(...args) { return dispatch("ancestryPath", args); }
+export function remoteRefs(...args) { return dispatch("remoteRefs", args); }
 // Refs and notes
 export function refExists(...args) { return dispatch("refExists", args); }
 export function refTarget(...args) { return dispatch("refTarget", args); }
@@ -288,6 +292,14 @@ function differentialProbes(cwd) {
       ...needsHead(() => patchEquivalentCommits(head, head, root, cwd)),
     },
     { operation: "historyGraph", ...needsHead(() => historyGraph(cwd)) },
+    { operation: "ancestryPath", ...needsHead(() => ancestryPath(head, root, cwd)) },
+    {
+      // The one catalog read that leaves the machine, so the probe asks this
+      // repository about itself rather than reaching for a network: the
+      // differential exists to compare engines, not to test connectivity.
+      operation: "remoteRefs",
+      run: () => remoteRefs(repoContext(cwd).root, cwd),
+    },
     { operation: "refExists", run: () => refExists(`refs/notes/${notesRef}`, cwd) },
     { operation: "refTarget", run: () => refTarget(`refs/notes/${notesRef}`, cwd) },
     { operation: "listRefs", run: () => listRefs("refs/heads/", cwd) },

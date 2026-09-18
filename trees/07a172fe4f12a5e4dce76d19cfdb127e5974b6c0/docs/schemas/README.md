@@ -103,6 +103,8 @@ and rebase timing snapshots include and exclude.
 | Schema | Document | Store |
 | --- | --- | --- |
 | `vcs-lab.metadata-envelope/v1` | [metadata-envelope.v1.schema.json](metadata-envelope.v1.schema.json) | `manifest.json` beside `objects.bundle` |
+| `vcs-lab.proof-bundle/v2` | [proof-bundle.v2.schema.json](proof-bundle.v2.schema.json) | A file handed to `vlab verify-proof`; carries the Git bindings of ADR-0031 |
+| `vcs-lab.proof-bundle/v1` | [proof-bundle.v1.schema.json](proof-bundle.v1.schema.json) | Superseded; still read, and reaches only the self-consistent tier |
 
 ### CLI-output families
 
@@ -164,8 +166,8 @@ rendering at all.
 | `vlab commit` | Projection `{commit, changeId, message}` |
 | `vlab merge-plan` | `vcs-lab.merge-plan/v1` |
 | `vlab audit identity` | `vcs-lab.identity-audit/v1`; exits non-zero when errors are reported, while warnings such as `near-duplicate-actor-names` leave the exit code at zero |
-| `vlab proof-bundle` | `vcs-lab.proof-bundle/v1`; always JSON, since the bundle exists to be handed to another tool |
-| `vlab verify-proof` | `vcs-lab.proof-verification/v1`; exits non-zero when the bundle does not verify |
+| `vlab proof-bundle` | `vcs-lab.proof-bundle/v2`; always JSON, since the bundle exists to be handed to another tool. Refuses rather than truncating when its proofs would exceed `proofBundleBytes` |
+| `vlab verify-proof` | `vcs-lab.proof-verification/v1`; reports a tier and the conclusions the carried material cannot support, and exits non-zero when the bundle does not verify. `--anchors-from <remote>` reads anchors with `git ls-remote` from a remote the verifier names |
 | `vlab rebase-plan` | `vcs-lab.rebase-plan/v1` |
 | `vlab rebase-forecast` | `vcs-lab.rebase-forecast/v1` |
 | `vlab rebase`, `vlab rebase --continue` | Projection `{operationId, plan, receipt}` with `plan` a `vcs-lab.rebase-plan/v1` and `receipt` a `vcs-lab.rebase/v1` |

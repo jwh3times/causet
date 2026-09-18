@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+- Bind a proof bundle to Git's own objects, so a verifier without the repository
+  can check it (issue #36, FR-PLAN-08; ADR-0031). `vcs-lab.proof-bundle/v2` is a
+  strict superset of v1: the v1 members and the repository-backed comparison are
+  unchanged, and v2 adds the raw commit objects of `physicalBase..sourceHead`, a
+  commit path from the target head for every positive coverage claim, an
+  inclusion proof from the notes tip to each receipt the classification relies
+  on, and the anchors those proofs terminate at.
+
+  The mechanism is that the verifier recomputes every carried object's id from
+  its bytes. A sender chooses what to put in a bundle but cannot choose the id of
+  a commit whose message it altered, so the four adversarial shapes #46 found —
+  omitting a change, injecting a commit from an unrelated repository,
+  substituting a foreign commit id, and borrowing a Change-Id — now fail offline
+  after the forger restates the bundle hash, where before they passed. Forging a
+  receipt blob and rewriting a carried object fail the same way.
+
+  Conclusions are reported at a tier, and the tiers are different statements
+  rather than degrees of confidence: *self-consistent* says the classification
+  follows from what the bundle states, *bound* says that evidence is tied to Git
+  objects between the heads the bundle states, and *anchored* says those heads are
+  the real ones. `vlab verify-proof --anchors-from <remote>` supplies the last
+  one with `git ls-remote` against a remote the **verifier** names; a remote
+  named inside the bundle is only a hint, because its producer controls that
+  name, and root commits are not ref tips so that channel reports them as
+  unsupplied rather than confirmed.
+
+  Absence stays out of reach without objects: `new` is a claim about the whole
+  target history and `candidate-equivalent` is a claim about trees, so both are
+  reported as claimed rather than proven, `ok` never asserts a conclusion the
+  carried material cannot support, and the result lists each unavailable
+  conclusion with its reason. A v1 bundle still verifies, at the self-consistent
+  tier only. A producer whose proofs would exceed `proofBundleBytes` refuses to
+  emit and names the member that did not fit, because a truncated proof cannot be
+  told apart from an omission.
+
+  `vcs-lab.proof-bundle` is now a registered family in `RECORD_FAMILIES` — scope
+  `envelope`, written v2, also reads v1, refused on anything else — which
+  completes ADR-0033's dependent branch: `bound-source-inventory/v1` is
+  advertised as a feature and `proofBundleBytes` is advertised as a bound.
+
+  One assertion changed meaning rather than breaking: the integration suite used
+  to record that an offline verifier could not discover omitted history, which
+  was the honest limit of v1. It now discovers it, while still reporting that the
+  repository was not consulted and that absence remains unproven.
+
 - Advertise capabilities and negotiate them offline (issue #37, FR-PROTO-06;
   ADR-0033). `vlab capabilities` prints a `vcs-lab.capabilities/v1` document
   projected from `RECORD_FAMILIES`, `RESOURCE_BOUNDS`, and the profile and

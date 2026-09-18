@@ -805,6 +805,55 @@ either side of this: the manual strategy stops in a conflicted worktree, and
 dropping every record on that attachment. See
 [ADR-0030](docs/adr/0030-define-conflict-policy-for-competing-causal-facts.md).
 
+## Verifying a plan without the repository
+
+`vlab proof-bundle <source>` emits a `vcs-lab.proof-bundle/v2` document and
+`vlab verify-proof <file>` checks it. The bundle carries the classification, the
+evidence it was derived from, and — since v2 — Git's own bindings for what it
+claims: the raw commit objects of the source range, a commit path from the target
+head for every covered change, an inclusion proof from the notes tip to each
+receipt it relies on, and the anchors those proofs terminate at.
+
+```bash
+vlab proof-bundle feature > proof.json
+vlab verify-proof proof.json --offline
+vlab verify-proof proof.json --offline --anchors-from https://github.com/you/project.git
+```
+
+The verifier recomputes every carried object's id from its bytes. That is the
+whole mechanism: a sender chooses what to put in a bundle, but it cannot choose
+the id of a commit whose message it altered. So a bundle that omits a change,
+injects a commit from an unrelated repository, substitutes a foreign commit id, or
+borrows a Change-Id fails offline — even after the forger recomputes the bundle
+hash, which before v2 was enough to pass.
+
+A conclusion is reported at one of three tiers, and they are different statements
+rather than degrees of confidence:
+
+| Tier | What it says |
+| --- | --- |
+| self-consistent | the classification follows from the evidence the bundle states |
+| bound | that evidence is tied to Git objects, between the heads the bundle *states* |
+| anchored | those heads are the real ones, confirmed from a channel you chose |
+
+`--anchors-from <remote>` is that channel: it reads `git ls-remote` from a remote
+**you** name. A remote named inside the bundle is only a hint, because the
+bundle's producer controls it. Root commits are not ref tips, so that channel
+cannot confirm them and the report says so instead of pretending otherwise.
+
+What stays out of reach without the repository is absence. That a change is
+genuinely `new` is a claim about the whole target history, and
+`candidate-equivalent` is a claim about trees, which the bundle deliberately does
+not carry. Both are reported as *claimed*, never proven, and `ok` never asserts a
+conclusion the carried material cannot support; the report lists each one with
+its reason. Running `verify-proof` inside the repository still adds the
+comparison that catches fabricated evidence, and it is the only check that
+establishes absence.
+
+A v1 bundle from an older producer still verifies, at the self-consistent tier
+only. See
+[ADR-0031](docs/adr/0031-carry-a-bound-source-inventory-for-portable-verification.md).
+
 ## What this build can exchange
 
 Two builds decide what they may exchange by comparing documents, not by asking a

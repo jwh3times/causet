@@ -61,6 +61,7 @@ version in `also read` is migrated forward as section 3 describes.
 | `vcs-lab.disposition` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/dispositions.json` |
 | `vcs-lab.spec-manifest` | tracked | v4 | v1, v2, v3 | refuse | `.vcs-lab/specs/**` |
 | `vcs-lab.metadata-envelope` | envelope | v1 | — | refuse | `manifest.json` of a metadata export directory |
+| `vcs-lab.proof-bundle` | envelope | v2 | v1 | refuse | a file handed to vlab verify-proof |
 | `vcs-lab.capabilities` | advertisement | v1 | — | refuse | produced on demand by vlab capabilities; served by a gateway |
 
 `vcs-lab.application` writes two versions on purpose: `vlab cherry-pick`
@@ -109,8 +110,13 @@ The rule follows from who wrote the record and what is lost by guessing.
 - **Tracked spec manifests are refused forward and migrated backward.** They are
   committed, derived, and rebuildable, so an unreadable one is repaired by
   re-indexing rather than guessed at.
-- **Envelopes are refused.** Import is an explicit, auditable act on untrusted
-  input; a version mismatch is reported rather than partially applied.
+- **Envelopes and proof bundles are refused.** Both are documents handed
+  between hosts and read before anything in them is trusted. Import is an
+  explicit, auditable act on untrusted input, and verification exists precisely
+  to not trust the sender, so a version mismatch is reported rather than
+  partially applied. A v1 proof bundle is still read: it carries no Git
+  bindings, so a verifier reports only the self-consistent tier for it and says
+  which conclusions that leaves unavailable (ADR-0031).
 - **Capability documents are refused.** A client cannot negotiate from a
   document it does not understand: every conclusion it would draw — which
   versions to send, which records to withhold, which bound applies — would be
@@ -160,6 +166,13 @@ decisions cannot authorize v2 results. Regenerate the forecast, or abort and
 restart the pending operation. Raw exact-resolution records retain their
 existing byte-based approval rules.
 
+**`vcs-lab.proof-bundle` v1 is read but never written.** A v2 bundle is a
+strict superset: the v1 members and the repository-backed comparison are
+unchanged, and v2 adds the bound source inventory, reachability and inclusion
+proofs, and the anchors. Nothing migrates a v1 bundle forward — it is a document
+someone already produced, not a store — so a v1 bundle simply reaches a lower
+tier of conclusion, which the verification result states.
+
 **`vcs-lab.forecast` v1 is read but never written and never rewritten.** A v1
 forecast is accepted by `forecastForPlan` and read field by field; it is not
 back-filled, and the staleness and fingerprint checks apply to it unchanged. It
@@ -187,7 +200,7 @@ tracked, or imported input refuses the command.
 | `envelopeBundleBytes` | 2147483648 | The `objects.bundle` size an envelope declares | Refuse |
 | `envelopeRecords` | 1000000 | Records one envelope declares | Refuse |
 | `provenanceActors` | 64 | Actors in one `vcs-lab.provenance/v1` record | Refuse the write; a landing's provenance is the union of every absorbed commit's actors, so this bounds what one branch can accumulate before the claim stops being reviewable by a person |
-| `proofBundleBytes` | 16777216 | One `vcs-lab.proof-bundle/v1` document handed to `vlab verify-proof` | Refuse before reading the file |
+| `proofBundleBytes` | 16777216 | One `vcs-lab.proof-bundle/v1` or `/v2` document handed to `vlab verify-proof` | Refuse before reading the file. A producer whose proofs would exceed it refuses to emit and names the member that did not fit, rather than truncating: a truncated proof cannot be told apart from an omission, which is the attack the bound inventory exists to catch |
 | `capabilityDocumentBytes` | 1048576 | One `vcs-lab.capabilities/v1` document read by `vlab capabilities --against` or from a gateway | Refuse before parsing the document |
 
 Bounds divide in one more way once a peer is involved. **Bounds are the

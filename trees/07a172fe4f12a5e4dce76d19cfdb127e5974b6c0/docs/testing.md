@@ -302,6 +302,33 @@ disposition rather than requiring a caller to match English. One test pins the
 boundary: a global flag consumed before the argument parse keeps prose, because
 no output mode is known yet, while an unknown command is enveloped.
 
+`test/portable-verification.test.js` covers the Git bindings a proof bundle
+carries ([ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md)).
+Its fixture is the one the ADR's evidence table was measured on: a source branch
+whose changes land on one of each lattice outcome, so every adversarial shape has
+something real to attack. The suite is written from the forger's side — each case
+mutates an honest bundle **and recomputes the bundle hash**, because a forger who
+could not do that was already caught by v1, and the interesting question is what
+survives a restated hash.
+
+The property the suite establishes is that it is Git's hashes, not the tool's
+prose, that catch these. Every carried object is re-hashed with `git hash-object`
+in the test itself rather than through vcs-lab, so a bug in the producer and a
+matching bug in the verifier cannot agree with each other. Each of ADR-0031's
+adversarial shapes then has its own case, and the two the ADR did not list but the
+implementation makes possible — rewriting a carried object and forging a receipt
+blob — have one too. A merge inside the source range is covered because it is the
+case that makes the "every parent is carried or is the base" rule necessary, and
+the whole binding is run again under sha256, where object ids are a different
+length and a verifier that assumed sha1 would silently accept anything.
+
+Three tests guard the honesty of the report rather than the mechanism: a v1
+bundle must still verify at the self-consistent tier and say which conclusions
+that leaves unavailable; an unconfirmed anchor must lower the tier without
+failing the bundle, because a remote that has not seen a branch yet is not
+evidence of forgery; and `new` must stay unproven at every tier, since absence is
+the one claim no bounded bundle can carry.
+
 `test/capabilities.test.js` covers capability advertisement and negotiation
 ([ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md)).
 Because negotiation is a pure function of two documents, every case is this

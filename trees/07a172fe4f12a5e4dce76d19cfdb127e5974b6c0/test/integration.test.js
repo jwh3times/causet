@@ -5952,7 +5952,7 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
   fs.writeFileSync(bundlePath, vlab(repo, "proof-bundle", "feature"));
   const bundle = JSON.parse(fs.readFileSync(bundlePath, "utf8"));
 
-  assert.equal(bundle.schema, "vcs-lab.proof-bundle/v1");
+  assert.equal(bundle.schema, "vcs-lab.proof-bundle/v2");
   assert.match(bundle.repository.lineage.id, /^lineage_[0-9a-f]{64}$/);
   const covered = bundle.changes.filter((change) => change.status === "covered");
   const fresh = bundle.changes.filter((change) => change.status === "new");
@@ -6006,8 +6006,9 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
   assert.equal(resignedReport.integrity.intact, true, "the restated hash looks intact");
   assert.equal(resignedReport.classification.agrees, false, "but the claim is still caught");
 
-  // 4. Fabricated evidence is self-consistent, so only the repository catches
-  //    it. Offline verification must not claim more than it proved.
+  // 4. Fabricated evidence is self-consistent, so v1 offline could not catch it
+  //    and said so. The carried reachability proofs of ADR-0031 changed that:
+  //    a receipt invented for this bundle has no path from the target head.
   const fabricated = JSON.parse(JSON.stringify(bundle));
   const victim = fabricated.changes.find((change) => change.status === "new");
   fabricated.evidence.receipts.push({
@@ -6025,8 +6026,19 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
   const fabricatedPath = path.join(repo, "fabricated.json");
   fs.writeFileSync(fabricatedPath, JSON.stringify(fabricated));
 
-  const offline = JSON.parse(vlab(repo, "verify-proof", fabricatedPath, "--offline", "--json"));
-  assert.equal(offline.ok, true, "offline verification cannot detect fabricated evidence");
+  const offlineRun = vlabResult(repo, "verify-proof", fabricatedPath, "--offline", "--json");
+  assert.notEqual(offlineRun.status, 0, "a fabricated receipt has no carried proof");
+  const offline = JSON.parse(offlineRun.stdout);
+  assert.equal(offline.ok, false);
+  assert.equal(offline.binding.agrees, false);
+  assert.ok(
+    offline.binding.problems.some((problem) => problem.includes(victim.commit)),
+    "the report names the claim that carries no path",
+  );
+  assert.equal(offline.tier, "self-consistent",
+    "a bundle whose bindings do not hold does not reach the bound tier");
+  // The repository still was not consulted, and the statement still says so: the
+  // binding is a stronger offline check, not a substitute for the comparison.
   assert.equal(offline.repository.checked, false);
   assert.equal(offline.trust.evidenceCheckedAgainstRepository, false);
   assert.match(offline.trust.statement, /not that the evidence is true/);
@@ -6119,9 +6131,19 @@ test("proof verification binds rehashed claims to the complete source history an
   omitted.changes = [];
   recount(omitted);
   const offline = JSON.parse(verify(omitted, "--offline", "--json").stdout);
-  assert.equal(offline.ok, true, "an offline verifier cannot discover omitted history");
+  // Before the bound source inventory of ADR-0031 this was the honest limit of
+  // an offline verifier: it could not discover history the sender left out. The
+  // carried commit objects changed that — the inventory no longer matches the
+  // change list, and the walk from the source head names what is missing —
+  // while the repository itself is still not consulted.
+  assert.equal(offline.ok, false, "a v2 offline verifier discovers omitted history");
+  assert.equal(offline.binding.agrees, false);
+  assert.ok(offline.binding.problems.length >= 1);
   assert.equal(offline.repository.checked, false);
   assert.match(offline.trust.statement, /source completeness.*not checked/);
+  // What stays out of reach without the repository is absence: that the changes
+  // the bundle *does* list are all the work there is.
+  assert.ok(offline.unavailable.some((entry) => entry.conclusion === "new-work-is-absent"));
   const duplicate = structuredClone(bundle);
   duplicate.changes.push(duplicate.changes[0]);
   recount(duplicate);

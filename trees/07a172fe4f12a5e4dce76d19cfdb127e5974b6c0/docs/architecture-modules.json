@@ -20,7 +20,7 @@
     "dependencies": "None"
   },
   "src/engine.js": {
-    "responsibility": "The read-side engine seam: the catalog of 40 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison",
+    "responsibility": "The read-side engine seam: the catalog of 42 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison",
     "dependencies": "`src/git.js`, `src/native-engine.js`"
   },
   "src/native-engine.js": {
@@ -70,6 +70,10 @@
   "src/metadata-transfer.js": {
     "responsibility": "Sanitized bundle export, dry-run inspection, conflict planning, staging, and atomic ref import",
     "dependencies": "Metadata, envelope, Git"
+  },
+  "src/proof-binding.js": {
+    "responsibility": "The Git bindings a proof bundle carries so a verifier without the repository can check it: the bound source inventory, reachability paths, receipt inclusion proofs, and the object-id recomputation that makes them proofs (ADR-0031)",
+    "dependencies": "`src/engine.js`, `src/git.js`, `src/schemas.js`"
   },
   "src/capabilities.js": {
     "responsibility": "The `vcs-lab.capabilities/v1` document projected from the runtime registries, and negotiation as a pure function of two such documents (ADR-0033)",

@@ -1336,6 +1336,56 @@ export function findCommitsByChangeId(changeId, cwd = process.cwd()) {
 }
 
 /** The decorated `git log --graph` text of every ref, for `vlab graph`. */
+/**
+ * The commits that lie on a path from `from` down to `to`, each with the parents
+ * of it that also lie on such a path, so a caller can walk one concrete chain.
+ * `--ancestry-path` is what restricts the set to commits that are genuinely
+ * between the two, rather than merely reachable from `from`.
+ *
+ * An empty array means no path exists, which is an ordinary answer: a receipt
+ * whose attachment was superseded from the same base is legitimately
+ * unreachable.
+ */
+export function ancestryPath(from, to, cwd = process.cwd()) {
+  validateObjectExpressions([from, to]);
+  const scan = readGit(
+    ["rev-list", "--ancestry-path", "--topo-order", "--parents", `${to}..${from}`],
+    { cwd, allowFailure: true },
+  );
+  if (!scan.ok) return [];
+  const onPath = new Set([to]);
+  const rows = [];
+  for (const line of scan.stdout.split(/\r?\n/).filter(Boolean)) {
+    const [commit, ...parents] = line.split(" ").filter(Boolean);
+    onPath.add(commit);
+    rows.push({ commit, parents });
+  }
+  return rows.map((row) => ({
+    commit: row.commit,
+    parents: row.parents.filter((parent) => onPath.has(parent)),
+  }));
+}
+
+/**
+ * `{ ref, oid }` for every ref a remote advertises. This is the one read in the
+ * catalog that leaves the machine, and it exists for one caller: a verifier
+ * obtaining proof-bundle anchors from a remote *it* chose (ADR-0031). The remote
+ * is an argument rather than something read out of a document, and a remote that
+ * cannot be reached yields null rather than throwing, because "I could not ask"
+ * and "the answer disagrees" are different conclusions.
+ */
+export function remoteRefs(remote, cwd = process.cwd()) {
+  validateObjectExpressions([remote]);
+  const scan = readGit(["ls-remote", remote], { cwd, allowFailure: true });
+  if (!scan.ok) return null;
+  const entries = [];
+  for (const line of scan.stdout.split(/\r?\n/).filter(Boolean)) {
+    const [oid, ref] = line.split(/\s+/);
+    if (oid && ref) entries.push({ ref, oid });
+  }
+  return entries;
+}
+
 export function historyGraph(cwd = process.cwd()) {
   return readText(
     [

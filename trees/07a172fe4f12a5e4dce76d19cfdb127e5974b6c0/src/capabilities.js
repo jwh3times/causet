@@ -38,6 +38,7 @@ export const ADVERTISED_BOUNDS = Object.freeze([
   "envelopeRecords",
   "provenanceActors",
   "capabilityDocumentBytes",
+  "proofBundleBytes",
 ]);
 
 export const UNADVERTISED_BOUNDS = Object.freeze({
@@ -45,8 +46,6 @@ export const UNADVERTISED_BOUNDS = Object.freeze({
     "worktree-private and shared-local state, which no exchange carries",
   specManifestBytes:
     "tracked manifests, which move with ordinary Git content rather than through an exchange",
-  proofBundleBytes:
-    "the proof bundle is not yet a registered exchanged family; it is advertised with its v2 (#36, ADR-0031)",
 });
 
 /**

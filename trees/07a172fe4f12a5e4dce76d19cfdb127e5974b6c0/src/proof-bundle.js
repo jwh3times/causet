@@ -1,7 +1,8 @@
 import { sha256 } from "./ids.js";
 import { canonicalJson } from "./canonical-json.js";
 import { CliError } from "./errors.js";
-import { schemaClassification } from "./schemas.js";
+import { RESOURCE_BOUNDS, schemaClassification, withinBound } from "./schemas.js";
+import { buildBindings, verifyBindings } from "./proof-binding.js";
 import {
   acceptedCausalRecords,
   lineageIdentityId,
@@ -10,9 +11,55 @@ import {
   repositoryLineage,
 } from "./metadata.js";
 import { buildMergePlan, coverageEvidence } from "./merge-plan.js";
-import { commitHistory, currentHead, isAncestor, mergeBase, resolveObjectIds } from "./engine.js";
+import {
+  commitHistory,
+  currentHead,
+  isAncestor,
+  mergeBase,
+  remoteRefs,
+  resolveObjectIds,
+} from "./engine.js";
 
-export const PROOF_BUNDLE_SCHEMA = "vcs-lab.proof-bundle/v1";
+export const PROOF_BUNDLE_SCHEMA = "vcs-lab.proof-bundle/v2";
+/** The version before the bound inventory. Still read; never written. */
+export const PROOF_BUNDLE_SCHEMA_V1 = "vcs-lab.proof-bundle/v1";
+const READABLE_BUNDLE_SCHEMAS = [PROOF_BUNDLE_SCHEMA_V1, PROOF_BUNDLE_SCHEMA];
+
+/**
+ * The conclusions a verifier cannot reach from carried material alone, and why
+ * (ADR-0031's tier table). Reporting them is not a formality: `new` is an
+ * absence claim, and a landing policy that treated an unproven absence as
+ * verified would be trusting the sender for exactly the claim the sender has the
+ * most reason to get wrong.
+ */
+const UNAVAILABLE_WITHOUT_OBJECTS = [
+  {
+    conclusion: "new-work-is-absent",
+    reason:
+      "Coverage is a positive claim with a compact proof; newness is an absence " +
+      "claim over the whole target history, which no bounded bundle can carry. " +
+      "Only the repository-backed comparison establishes it.",
+  },
+  {
+    conclusion: "candidate-equivalence",
+    reason:
+      "A patch-identity match is a claim about trees, and trees are what the " +
+      "bundle deliberately does not carry, so a candidate stays advisory.",
+  },
+  {
+    conclusion: "physical-base-is-best-common-ancestor",
+    reason:
+      "The carried path shows the stated base is an ancestor of both heads, not " +
+      "that no nearer common ancestor exists; that needs the full graph.",
+  },
+];
+
+const ANCHORS_NOT_CURRENT = {
+  conclusion: "anchors-are-current",
+  reason:
+    "The bundle states its anchors and cannot prove them. Obtain them from a " +
+    "channel you trust to raise every bound conclusion to the anchored tier.",
+};
 
 /**
  * The coverage proof lattice, restated as data a verifier can apply without
@@ -136,23 +183,24 @@ export function assertProofBundleDocument(bundle) {
   if (!isPlainObject(bundle)) {
     throw new CliError("The proof bundle is not a JSON object.", { code: "malformed-input" });
   }
-  if (bundle.schema !== PROOF_BUNDLE_SCHEMA) {
+  if (!READABLE_BUNDLE_SCHEMAS.includes(bundle.schema)) {
     // The right family at another version is a build mismatch, not a foreign
-    // document: its remedy is the build that wrote it (issue #98). The proof
-    // bundle is not in RECORD_FAMILIES, so the family is compared here.
+    // document: its remedy is the build that wrote it (issue #98).
     const { family, version } = schemaClassification(bundle.schema);
-    const { family: ownFamily, version: ownVersion } = schemaClassification(PROOF_BUNDLE_SCHEMA);
+    const { family: ownFamily } = schemaClassification(PROOF_BUNDLE_SCHEMA);
     if (family === ownFamily && version !== null) {
       throw new CliError(
         `The proof bundle carries unsupported schema ${JSON.stringify(bundle.schema)}.`,
         {
           code: "unknown-schema-version",
-          details: `This build reads v${ownVersion} of that family.`,
+          details: `This build reads ${READABLE_BUNDLE_SCHEMAS.join(", ")}.`,
         },
       );
     }
+    // The complaint is about the family, so the message names the family rather
+    // than one of its versions: this build reads several.
     throw new CliError(
-      `Not a ${PROOF_BUNDLE_SCHEMA} document (found ${JSON.stringify(bundle.schema ?? null)}).`,
+      `Not a vcs-lab.proof-bundle document (found ${JSON.stringify(bundle.schema ?? null)}).`,
         { code: "wrong-record-family" },
     );
   }
@@ -212,6 +260,43 @@ export function assertProofBundleDocument(bundle) {
       });
     }
   }
+  if (bundle.schema === PROOF_BUNDLE_SCHEMA) {
+    // The v2 members. A bundle that claims v2 and omits them is malformed
+    // rather than merely unbound: the version is a promise about what it
+    // carries.
+    for (const name of ["objects", "sourceInventory", "reachability", "receiptInclusion", "anchors"]) {
+      expectObject(bundle[name], name);
+    }
+    if (isPlainObject(bundle.objects)) {
+      for (const [oid, object] of Object.entries(bundle.objects)) {
+        if (!isPlainObject(object)) {
+          problems.push(`objects.${oid} must be an object`);
+          continue;
+        }
+        expectString(object.base64, `objects.${oid}.base64`);
+        if (!["commit", "tree", "blob"].includes(object.type)) {
+          problems.push(`objects.${oid}.type must be commit, tree, or blob`);
+        }
+      }
+    }
+    if (isPlainObject(bundle.sourceInventory)) {
+      expectArray(bundle.sourceInventory.commits, "sourceInventory.commits");
+    }
+    if (isPlainObject(bundle.reachability)) {
+      expectArray(bundle.reachability.paths, "reachability.paths");
+      if (Array.isArray(bundle.reachability.paths)) {
+        bundle.reachability.paths.forEach((entry, index) => {
+          expectObject(entry, `reachability.paths[${index}]`);
+          if (isPlainObject(entry)) {
+            expectArray(entry.commits, `reachability.paths[${index}].commits`);
+          }
+        });
+      }
+    }
+    if (isPlainObject(bundle.receiptInclusion)) {
+      expectArray(bundle.receiptInclusion.receipts, "receiptInclusion.receipts");
+    }
+  }
   if (problems.length) {
     throw new CliError("The proof bundle is not structurally valid.", {
       code: "malformed-input",
@@ -230,10 +315,11 @@ export function assertProofBundleDocument(bundle) {
 export function buildProofBundle(sourceRef, cwd = process.cwd()) {
   const plan = buildMergePlan(sourceRef, cwd);
   const evidence = coverageEvidence(sourceRef, cwd);
+  const lineage = repositoryLineage(cwd);
   const bundle = {
     schema: PROOF_BUNDLE_SCHEMA,
     repository: {
-      lineage: repositoryLineage(cwd),
+      lineage,
     },
     target: { head: plan.targetHead },
     source: { ref: plan.sourceRef, head: plan.sourceHead },
@@ -249,8 +335,37 @@ export function buildProofBundle(sourceRef, cwd = process.cwd()) {
     })),
     counts: plan.counts,
   };
+  // The v1 members above are unchanged, and the repository-backed comparison
+  // still reads exactly them. Everything below is what a verifier without the
+  // repository needs (ADR-0031).
+  Object.assign(bundle, buildBindings(plan, evidence, lineage, cwd));
   bundle.integrity = { algorithm: "sha256", bundleHash: bundleHash(bundle) };
+  assertWithinProofBound(bundle);
   return bundle;
+}
+
+/**
+ * Refuse to emit a bundle over the published bound rather than truncating it
+ * (ADR-0031). A truncated proof is indistinguishable from an omission, which is
+ * the attack the bound inventory exists to catch, so the producer names the
+ * member that did not fit and stops.
+ */
+function assertWithinProofBound(bundle) {
+  const bytes = Buffer.byteLength(`${JSON.stringify(bundle, null, 2)}\n`);
+  if (withinBound("proofBundleBytes", bytes)) return;
+  const sizeOf = (member) => Buffer.byteLength(JSON.stringify(bundle[member] ?? null));
+  const largest = ["objects", "evidence", "reachability", "receiptInclusion", "sourceInventory"]
+    .map((member) => ({ member, bytes: sizeOf(member) }))
+    .sort((left, right) => right.bytes - left.bytes)[0];
+  throw new CliError(
+    `The proof bundle is ${bytes} bytes, over the proofBundleBytes bound of ${RESOURCE_BOUNDS.proofBundleBytes}.`,
+    {
+      code: "resource-bound-exceeded",
+      details:
+        `The largest member is '${largest.member}' at ${largest.bytes} bytes. A truncated ` +
+        "proof cannot be told apart from an omission, so nothing was emitted.",
+    },
+  );
 }
 
 /**
@@ -416,8 +531,109 @@ export function verifyAgainstRepository(bundle, cwd = process.cwd()) {
  * could state receipts that do not exist. That requires the repository, and is
  * what `verifyAgainstRepository` adds.
  */
-export function verifyProofBundle(bundle, repository = null) {
+/**
+ * Which tier a conclusion about this bundle may be reported at (ADR-0031).
+ *
+ * The tiers are not degrees of confidence in the same statement; they are
+ * different statements. Tier 0 says the classification follows from what the
+ * bundle states. Tier 1 says the stated evidence is bound to Git objects
+ * between the *stated* heads. Tier 2 says those heads are the real ones,
+ * which no bundle can say about itself — only a channel the verifier chose can.
+ * A third party may act on tier 2.
+ */
+function conclusionTier(binding, anchors) {
+  if (!binding.checked || !binding.agrees) return "self-consistent";
+  return anchors?.anchored ? "anchored" : "bound";
+}
+
+/**
+ * Anchors obtained from a remote the *verifier* names, read with
+ * `git ls-remote` (ADR-0031 owner decision 5). A remote named inside the bundle
+ * is only ever a hint, because the bundle's producer controls that name, so this
+ * takes the remote as an argument and never reads one out of the document.
+ *
+ * Root commits are not ref tips, so this channel cannot supply them; that is
+ * reported rather than quietly treated as confirmed.
+ */
+export function anchorsFromLsRemote(bundle, remote, cwd = process.cwd()) {
+  const advertised = remoteRefs(remote, cwd);
+  if (advertised === null) {
+    return {
+      channel: "ls-remote",
+      remote,
+      available: false,
+      reason: "remote-unreadable",
+      confirmed: [],
+      unconfirmed: [],
+      anchored: false,
+      details: "The remote could not be read; no anchor was confirmed or denied.",
+    };
+  }
+  const refsByOid = new Map();
+  for (const entry of advertised) {
+    refsByOid.set(entry.oid, [...(refsByOid.get(entry.oid) ?? []), entry.ref]);
+  }
+  const wanted = [
+    ["targetHead", bundle.anchors?.targetHead ?? bundle.target?.head ?? null],
+    ["sourceHead", bundle.anchors?.sourceHead ?? bundle.source?.head ?? null],
+    ["notesTip", bundle.anchors?.notesTip ?? null],
+  ].filter(([, oid]) => Boolean(oid));
+  const confirmed = [];
+  const unconfirmed = [];
+  for (const [name, oid] of wanted) {
+    const refs = refsByOid.get(oid);
+    if (refs) confirmed.push({ anchor: name, oid, refs });
+    else unconfirmed.push({ anchor: name, oid, reason: "not-a-ref-tip-on-the-chosen-remote" });
+  }
+  const roots = bundle.anchors?.lineageRoots ?? [];
+  return {
+    channel: "ls-remote",
+    remote,
+    available: true,
+    reason: null,
+    confirmed,
+    unconfirmed,
+    // Root commits are history, not ref tips; a verifier that wants them
+    // anchored needs objects, which is the repository-backed path.
+    lineageRoots: { count: roots.length, supplied: false, reason: "root-commits-are-not-ref-tips" },
+    anchored: wanted.length > 0 && unconfirmed.length === 0,
+  };
+}
+
+export function verifyProofBundle(bundle, repository = null, anchors = null) {
   assertProofBundleDocument(bundle);
+  const binding = bundle.schema === PROOF_BUNDLE_SCHEMA
+    ? verifyBindings(bundle)
+    : {
+        checked: false,
+        reason: "not-carried",
+        problems: [],
+        agrees: false,
+        coverage: [],
+        receipts: [],
+      };
+  const tier = conclusionTier(binding, anchors);
+  const provenByBinding = new Map(
+    (binding.coverage ?? []).map((entry) => [entry.commit, entry]),
+  );
+  const unavailable = [
+    ...UNAVAILABLE_WITHOUT_OBJECTS,
+    ...(anchors?.anchored ? [] : [ANCHORS_NOT_CURRENT]),
+    ...(binding.checked ? [] : [
+      {
+        conclusion: "source-inventory-is-complete",
+        reason:
+          "A v1 bundle carries no Git objects, so a verifier without the repository " +
+          "cannot tell an omitted change from a change that never existed.",
+      },
+      {
+        conclusion: "coverage-rests-on-reachable-commits",
+        reason:
+          "Without carried reachability paths, a coverage claim is only as good as " +
+          "the evidence list the sender chose to state.",
+      },
+    ]),
+  ];
   const expected = bundle.integrity?.bundleHash ?? null;
   const actual = bundleHash(bundle);
   const indexed = indexEvidence(bundle.evidence ?? {});
@@ -454,6 +670,23 @@ export function verifyProofBundle(bundle, repository = null) {
       agrees: disagreements.length === 0 && countsAgree && uniqueCommits,
     },
     repository: repository ?? { checked: false, reason: "not-requested", matches: null },
+    binding,
+    anchors: anchors ?? { channel: "none", confirmed: [], unconfirmed: [], anchored: false },
+    tier,
+    changes: (bundle.changes ?? []).map((change) => {
+      const proof = provenByBinding.get(change.commit);
+      const proven = Boolean(proof?.proven);
+      return {
+        commit: change.commit,
+        status: change.status,
+        proof: change.proof,
+        proven,
+        // A change is only ever at the report's tier when its own claim was
+        // bound; an unproven claim stays where v1 left it.
+        tier: proven ? tier : "self-consistent",
+      };
+    }),
+    unavailable,
     trust: {
       evidenceCheckedAgainstRepository: Boolean(repository?.checked),
       statement: repository?.checked
@@ -469,6 +702,10 @@ export function verifyProofBundle(bundle, repository = null) {
       disagreements.length === 0 &&
       countsAgree &&
       uniqueCommits &&
-      repository?.matches !== false,
+      repository?.matches !== false &&
+      // A v2 bundle promises bindings; carrying ones that do not hold is a
+      // failure, not a lower tier. A v1 bundle promises none, so its absence
+      // is reported in `unavailable` and does not fail the check.
+      (!binding.checked || binding.agrees),
   };
 }

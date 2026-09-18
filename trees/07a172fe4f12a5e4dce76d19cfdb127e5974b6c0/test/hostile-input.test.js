@@ -445,14 +445,14 @@ test("hostile proof bundles fail closed before any member is dereferenced", () =
   );
   const futureEnvelope = JSON.parse(vlabResult(repo, "verify-proof", future, "--json").stdout);
   assert.equal(futureEnvelope.code, "unknown-schema-version");
-  assert.match(futureEnvelope.details, /reads v1 of that family/);
+  assert.match(futureEnvelope.details, /reads vcs-lab.proof-bundle.v1, vcs-lab.proof-bundle.v2/);
 
   const foreign = written("family", (b) => { b.schema = "vcs-lab.landing/v1"; });
   assertRefusedCleanly(
     repo,
     "a bundle from another family",
     ["verify-proof", foreign],
-    /Not a vcs-lab\.proof-bundle\/v1 document/,
+    /Not a vcs-lab\.proof-bundle document/,
   );
   assert.equal(
     JSON.parse(vlabResult(repo, "verify-proof", foreign, "--json").stdout).code,

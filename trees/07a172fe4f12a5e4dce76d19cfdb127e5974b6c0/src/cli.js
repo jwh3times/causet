@@ -15,6 +15,7 @@ import {
   buildProofBundle,
   verifyAgainstRepository,
   verifyProofBundle,
+  anchorsFromLsRemote,
 } from "./proof-bundle.js";
 import { buildRebasePlan, formatRebasePlan } from "./rebase-plan.js";
 import {
@@ -111,7 +112,7 @@ Usage:
   vlab hard-squash <source> [-m <message>]
   vlab merge-plan <source> [--json]
   vlab proof-bundle <source>
-  vlab verify-proof <file> [--offline] [--json]
+  vlab verify-proof <file> [--offline] [--anchors-from <remote>] [--json]
   vlab rebase-plan <onto> [<source>] [--json]
   vlab rebase-forecast <onto> [<source>] [--accept-candidates] [--json]
   vlab rebase <onto> [--accept-candidates] [--use-forecast <id>] [--json]
@@ -186,7 +187,7 @@ function parseArgs(args) {
   // Declared provenance can name several actors on one commit (FR-ID-08), so
   // these accumulate instead of the last one winning.
   const repeatableFlags = new Set(["--authored-by", "--generated-by", "--reviewed-by"]);
-  const valueFlags = new Set(["--message", "-m", "--from", "--path", "--owner", "--focus", "--cone", "--against", "--label", "--reason", "--resolution", "--use-forecast", "--samples", "--warmup", "--documents", "--blocks", "--history", "--workspaces", "--notes", "--resolutions", "--budget-ms", "--areas", "--files-per-area"]);
+  const valueFlags = new Set(["--message", "-m", "--from", "--path", "--owner", "--focus", "--cone", "--against", "--anchors-from", "--label", "--reason", "--resolution", "--use-forecast", "--samples", "--warmup", "--documents", "--blocks", "--history", "--workspaces", "--notes", "--resolutions", "--budget-ms", "--areas", "--files-per-area"]);
   for (let index = 0; index < args.length; index += 1) {
     const item = args[index];
     if (valueFlags.has(item) || repeatableFlags.has(item)) {
@@ -251,9 +252,18 @@ function formatIdentityAudit(result) {
 }
 
 function formatProofVerification(result) {
+  const tierProse = {
+    "self-consistent":
+      "self-consistent: the classification follows from the evidence the bundle states",
+    bound:
+      "bound: the stated evidence is tied to Git objects between the heads the bundle states",
+    anchored:
+      "anchored: those heads were confirmed from a channel you chose, so a third party may act on this",
+  };
   const lines = [
     "Proof bundle verification",
     `bundle       ${result.bundleSchema}`,
+    `tier         ${tierProse[result.tier] ?? result.tier}`,
     `integrity    ${result.integrity.intact ? "intact" : "BROKEN"} (${result.integrity.algorithm ?? "unknown"})`,
     `changes      ${result.classification.reproduced}/${result.classification.changes} reproduced from the evidence the bundle states`,
     `counts       ${result.classification.counts.agrees ? "agree" : "DO NOT AGREE"} with the supplied changes`,
@@ -266,8 +276,28 @@ function formatProofVerification(result) {
         : `not checked against a repository (${result.repository.reason})`
     }`,
   ];
+  lines.push(
+    `binding      ${
+      result.binding.checked
+        ? result.binding.agrees
+          ? `holds; ${result.binding.objects.carried} carried objects recompute their own ids`
+          : "DOES NOT HOLD"
+        : `not carried by this bundle version (${result.binding.reason})`
+    }`,
+  );
+  if (result.anchors.channel !== "none") {
+    lines.push(
+      `anchors      ${result.anchors.confirmed.length} confirmed, ${result.anchors.unconfirmed.length} unconfirmed via ${result.anchors.channel} ${result.anchors.remote ?? ""}`.trimEnd(),
+    );
+    for (const entry of result.anchors.unconfirmed) {
+      lines.push(`  ? anchor ${entry.anchor} ${short(entry.oid)}: ${entry.reason}`);
+    }
+  }
   if (result.repository.lineageRelation) {
     lines.push(`lineage      ${result.repository.lineageRelation}`);
+  }
+  for (const problem of result.binding.problems ?? []) {
+    lines.push(`  ! binding: ${problem}`);
   }
   for (const [check, matches] of Object.entries(result.repository.checks ?? {})) {
     if (!matches) lines.push(`  ! repository ${check} does not match`);
@@ -284,8 +314,14 @@ function formatProofVerification(result) {
     result.ok
       ? "The classification follows from the evidence the bundle states."
       : "The bundle does not verify.",
-    result.trust.statement,
   );
+  if (result.unavailable?.length) {
+    lines.push("", "Conclusions unavailable from the carried material");
+    for (const entry of result.unavailable) {
+      lines.push(`  - ${entry.conclusion}: ${entry.reason}`);
+    }
+  }
+  lines.push("", result.trust.statement);
   return lines.join("\n");
 }
 
@@ -1286,7 +1322,12 @@ export async function main(rawArgs) {
         // it cannot silently downgrade the command to an offline success.
         if (!repository) repository = verifyAgainstRepository(bundle);
       }
-      const result = verifyProofBundle(bundle, repository);
+      // Anchors come from a remote the *verifier* names, never one read out of
+      // the bundle: its producer controls that name (ADR-0031 decision 5).
+      const anchors = options.anchorsFrom
+        ? anchorsFromLsRemote(bundle, options.anchorsFrom)
+        : null;
+      const result = verifyProofBundle(bundle, repository, anchors);
       print(options.json ? result : formatProofVerification(result), options.json);
       if (!result.ok) process.exitCode = 1;
       return;

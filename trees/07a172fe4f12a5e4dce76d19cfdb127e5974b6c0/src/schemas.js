@@ -41,6 +41,7 @@ export const EXCHANGED_SCOPES = Object.freeze([
  * published meaning.
  */
 export const EXCHANGE_FEATURES = Object.freeze([
+  "bound-source-inventory/v1",
   "causal-notes/v1",
   "causal-rebase/v1",
   "exact-resolutions/v1",
@@ -218,6 +219,17 @@ export const RECORD_FAMILIES = new Map([
     written: [1],
     unknownVersion: "refuse",
     store: "manifest.json of a metadata export directory",
+  }],
+  ["vcs-lab.proof-bundle", {
+    scope: "envelope",
+    registered: [1, 2],
+    readable: [1, 2],
+    written: [2],
+    // Handed to another host and read before anything is trusted, exactly like a
+    // metadata envelope: a version this build cannot read is reported rather
+    // than partially interpreted (ADR-0031, ADR-0033).
+    unknownVersion: "refuse",
+    store: "a file handed to vlab verify-proof",
   }],
   ["vcs-lab.capabilities", {
     scope: "advertisement",
