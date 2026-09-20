@@ -1676,8 +1676,12 @@ New capabilities should enter through versioned contracts:
 
 ## 21. Known limitations and architectural debt
 
-- Envelopes are explicit offline artifacts; automatic remote capability
-  negotiation and synchronization are not implemented.
+- Envelopes are explicit offline artifacts, and synchronization between hosts
+  is not implemented. Capability negotiation itself is: `vlab capabilities`
+  projects the document and `--against` negotiates a peer's, reaching every
+  conclusion negotiation defines without a server ([ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md)).
+  What is missing is the gateway that would serve the current document of a
+  party not in the room.
 - Records written before v0.12.0 may still carry the historical
   `signed-shaped-landing-receipt` proof label, which readers pass through
   unchanged (§7.1).
@@ -1708,7 +1712,9 @@ New capabilities should enter through versioned contracts:
   very large objects or workloads may fall back or require redesign.
 - Markdown merge units are heading sections; nested requirement text does not
   merge independently.
-- There is no cryptographic trust, server policy, or negotiated protocol.
+- There is no cryptographic trust, server policy, or wire protocol. Capability
+  negotiation is a contract between two documents, not a protocol between two
+  processes.
 
 ## 22. Candidate next architectural increment
 

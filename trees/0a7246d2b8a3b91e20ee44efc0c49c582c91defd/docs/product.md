@@ -358,7 +358,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 | FR-REC-09 | P0 | Abort shall restore the exact reconciliation starting commit, including after earlier queue entries applied. | Implemented | Mid-queue abort test verifies restoration and no receipts. |
 | FR-REC-10 | P1 | Completion shall publish application receipts and one reconciliation receipt only after all invariants pass. | Implemented | Partial records remain in the private journal until finalization. |
 | FR-REC-11 | P1 | Output shall distinguish active application time from elapsed time waiting on a human or agent. | Implemented | Receipt timings include active and elapsed values. |
-| FR-REC-12 | P2 | Forecasting shall support explicitly captured workspace drafts/checkpoints without pretending mutable bytes are committed state. | Implemented for source checkpoints | `workspace forecast --source-checkpoint` pins checkpoint/base/tree identity and ignores live dirty bytes. |
+| FR-REC-12 | P2 | Forecasting shall support explicitly captured workspace drafts/checkpoints without pretending mutable bytes are committed state. | Implemented on both sides | `workspace forecast --source-checkpoint` pins the source checkpoint's commit/base/tree identity, and `--target-checkpoint` on `vlab forecast`, `vlab workspace forecast`, and `vlab rebase-forecast` pins a target overlay the same way ([ADR-0028](adr/0028-define-target-checkpoint-forecast-semantics.md), built in #26 and #28; see FR-WS-10). Live dirty bytes remain unread on both sides, which is the part of this requirement that does not bend: an overlay is a checkpoint someone captured, never whatever happens to be on disk. |
 
 ### 9.6 Conflict resolution memory
 
@@ -965,13 +965,13 @@ acceptance signals.
 | FR-RES-07 | Planned | [#35](https://github.com/jwh3times/vcs-lab/issues/35) |
 | FR-WS-08 | Deferred | [#40](https://github.com/jwh3times/vcs-lab/issues/40), under Gate B |
 | FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/vcs-lab/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
-| FR-SPEC-13 | Gated; no additional format selected | [#31](https://github.com/jwh3times/vcs-lab/issues/31) and [#33](https://github.com/jwh3times/vcs-lab/issues/33) delivered the suite and contract. [#32](https://github.com/jwh3times/vcs-lab/issues/32) records the requirement-level evaluation and can be reopened for a concrete proposal. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |
+| FR-SPEC-13 | Gated; no additional format selected | [#111](https://github.com/jwh3times/vcs-lab/issues/111), whose first deliverable is the selection and the argument for it. The groundwork is delivered: [#31](https://github.com/jwh3times/vcs-lab/issues/31) built the shared conformance suite and [#33](https://github.com/jwh3times/vcs-lab/issues/33) the adapter contract, and [#32](https://github.com/jwh3times/vcs-lab/issues/32) recorded why requirement-level merge stayed out. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |
 | FR-PERF-09 | Evidence gate | [#42](https://github.com/jwh3times/vcs-lab/issues/42); bounded native read scope accepted in ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
 | FR-PROTO-06 | Offline half implemented; gateway deferred | [#37](https://github.com/jwh3times/vcs-lab/issues/37); [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md) is accepted and built. What is deferred is the server, not the contract: `vlab capabilities --against` already reaches every conclusion negotiation defines |
 | FR-TRUST-02, FR-TRUST-03 | Deferred | [#38](https://github.com/jwh3times/vcs-lab/issues/38) and [#39](https://github.com/jwh3times/vcs-lab/issues/39) |
 
-The following experimentally implemented requirements need continued real-world
-and cross-platform evidence rather than new semantics: FR-GIT-08, FR-LAND-09,
+The following requirements are implemented but need continued real-world and
+cross-platform evidence rather than new semantics: FR-GIT-08, FR-LAND-09,
 FR-REC-12, FR-RES-08, FR-WS-07, FR-PERF-10, and FR-PROTO-04.
 
 ## 16. Risks and mitigations
@@ -1053,7 +1053,9 @@ recorded in an ADR when it changes a durable decision.
    ([#33](https://github.com/jwh3times/vcs-lab/issues/33))
 9. Which document formats have stable enough semantic boundaries for safe
    deterministic adapters?
-   ([#31](https://github.com/jwh3times/vcs-lab/issues/31),
+   ([#111](https://github.com/jwh3times/vcs-lab/issues/111); the suite and the
+   contract a candidate must satisfy were delivered by
+   [#31](https://github.com/jwh3times/vcs-lab/issues/31) and
    [#33](https://github.com/jwh3times/vcs-lab/issues/33))
 10. How much causal history can be compacted without weakening audit or
     invalidating old plans, and how is an append-only fact log pruned?

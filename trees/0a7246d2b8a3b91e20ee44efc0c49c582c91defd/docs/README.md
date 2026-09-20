@@ -36,6 +36,9 @@ the versioned record of delivered behavior.
   provides a quick operational guide.
 - [Required human follow-ups](human-followups.md) — agent completion policy for
   public follow-up issues/wiki, private board tracking, and restricted security advisories.
+- [Domain glossary](CONTEXT.md) — the terms accepted decisions have settled, and
+  the wordings to avoid for each. It grows as terms are resolved rather than
+  describing everything at once.
 - [Architecture decision records](adr/README.md) — decisions whose constraints
   should survive refactoring.
 

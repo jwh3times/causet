@@ -54,6 +54,23 @@
   captured version anyway. A pending operation with a hand-edited worktree still
   refuses, which the regression test asserts alongside both recoveries.
 
+- Correct what a 2026-09-20 documentation audit found. `docs/architecture.md`
+  §21 still said automatic capability negotiation was not implemented, which
+  contradicted FR-PROTO-06 and ADR-0033 — negotiation shipped offline in v0.15.0
+  and only the gateway is missing. FR-REC-12 still read "Implemented for source
+  checkpoints", which understated #26 and #28. `docs/CONTEXT.md` was reachable
+  only from the agent configuration, so the docs index now carries the glossary.
+  `docs/testing.md` gains a section for the seven repository-machinery suites it
+  never named, the known no-`--host` benchmark failure on Windows
+  ([#100](https://github.com/jwh3times/vcs-lab/issues/100)), and why the forecast
+  engine default is split by platform
+  ([#8](https://github.com/jwh3times/vcs-lab/issues/8)).
+
+  FR-SPEC-13 was the one incomplete requirement whose trace pointed only at
+  closed issues, which made §15's promise of a trace to a live issue false for
+  it; [#111](https://github.com/jwh3times/vcs-lab/issues/111) now carries it,
+  gated on selecting a format.
+
 ## 0.15.0
 
 - Refresh the `lab-windows-a` benchmark baseline for the conflict-policy ref

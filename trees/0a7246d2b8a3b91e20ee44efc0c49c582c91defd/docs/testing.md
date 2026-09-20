@@ -128,10 +128,15 @@ VLAB_GIT_SESSION=0 npm test
 ```
 
 Run it with each forecast engine forced. The default engine differs by
-platform (`merge-tree` on Windows, `worktree` elsewhere), so both runs are
-needed on every host: the merge-tree run simulates every clean forecast step
-through `git merge-tree` and falls back to the worktree simulator where it
-must, and the worktree run exercises the oracle throughout:
+platform (`merge-tree` on Windows, `worktree` elsewhere, because merge-tree
+needs Git 2.49 and POSIX baselines lag it), so both runs are needed on every
+host. Flipping the default to `merge-tree` everywhere, once that version is the
+baseline or common on POSIX, is
+[issue #8](https://github.com/jwh3times/vcs-lab/issues/8); until it closes, the
+split default is deliberate and the two runs are not redundant. The merge-tree
+run simulates every clean forecast step through `git merge-tree` and falls back
+to the worktree simulator where it must; the worktree run exercises the oracle
+throughout:
 
 ```powershell
 $env:VLAB_FORECAST_ENGINE = "merge-tree"
@@ -634,6 +639,13 @@ containers on the Windows host cannot supply that qualification. Real-repository
 multi-host evidence and budget ratification remain in
 [issue #42](https://github.com/jwh3times/vcs-lab/issues/42).
 
+A known failure worth recognizing before it costs an hour: on Windows,
+`npm run test:benchmark` with no `--host` and no `VLAB_BENCHMARK_HOST` fails
+rather than skipping. It falls back to the committed `legacyHosts.win32` entry,
+which records 41 publication processes against today's ~139. Always name the
+host. Folding the legacy entry into the host-keyed comparison, or removing it,
+is [issue #100](https://github.com/jwh3times/vcs-lab/issues/100).
+
 ## Static checks
 
 Before merging a documentation or source change:
@@ -650,6 +662,22 @@ For broad JavaScript changes, run `node --check` over every tracked JavaScript
 file under `src`, `bin`, `scripts`, and `test`. `npm run test:docs` verifies
 local Markdown link targets. New or changed formal requirement IDs must remain
 unique and every reference must resolve to a definition.
+
+## Repository-machinery suites
+
+Seven suites check the repository's own machinery rather than `vlab` behavior.
+They are cheap, they run in every mode with the rest, and they are listed here
+because a suite no document names is a suite nobody maintains.
+
+| Suite | What it fails on |
+| --- | --- |
+| `test/native-engine.test.js` | The optional binding disagreeing with Git, or a build that loads but answers differently. It skips when no prebuild is present, so a green run does not by itself mean the binding was exercised — `VLAB_ENGINE=native` is what proves that. |
+| `test/benchmark-host.test.js` | The baseline file's schema, host keying, and the v2 migration. It reads the committed `legacyHosts` as fixture material, which is why a baseline re-record must touch `hosts.<label>` and nothing else. |
+| `test/scale-benchmark-analysis.test.js` | The repository-scale benchmark's own arithmetic — per-entity amplification and the phase summary — without running the benchmark. |
+| `test/ci-plan.test.js` | The change classifier in `scripts/ci-plan.mjs` choosing the wrong job set, which is how a documentation-only change would silently skip a suite it needed. |
+| `test/doc-links.test.js` | A local Markdown link with no target. The same check `npm run test:docs` runs, wired into the suite so a broken link fails a plain `npm test`. |
+| `test/sync-agent-assets.test.js` | Drift between `.agents/skills/` and the generated `.claude/skills/` mirror, and between `.claude/agents/` and `.codex/agents/`. The mirror is generated; this is what stops a hand-edit surviving. |
+| `test/handoff-map.test.js` | The cross-machine handoff map's read/write discipline in `scripts/handoff-map.mjs` — that an entry is consumed once and cleared. |
 
 ## Release gate
 
