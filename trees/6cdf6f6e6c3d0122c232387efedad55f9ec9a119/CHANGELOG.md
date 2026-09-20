@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+- Propose contracts for the three board items whose gate is a written decision:
+  merge-preserving causal rebase (issue #29,
+  [ADR-0034](docs/adr/0034-recreate-merges-as-joins-that-claim-nothing.md)),
+  interactive identity decisions (issue #30,
+  [ADR-0035](docs/adr/0035-make-interactive-rewrites-declare-what-they-do-to-identity.md)),
+  and the lower-confidence resolution tier (issue #35, FR-RES-07,
+  [ADR-0036](docs/adr/0036-keep-suggested-resolutions-outside-the-resolution-family.md)).
+  All three are Proposed and change no behavior; each ends with what the owner
+  must decide.
+
+  ADR-0034 answers the question #29 was opened for — what a receipt for a
+  recreated merge may claim. A merge contributes nothing of its own except the
+  resolutions that made the join, so a recreated merge claims nothing about the
+  changes beneath it, takes a new identity recording the merge it came from, and
+  carries only its resolutions through the existing exact rules. Coverage keeps
+  coming from per-change applications alone, which is what stops a rewrite
+  manufacturing evidence.
+
+  ADR-0035 names the hazard that shapes interactive rebase: Change-Id coverage
+  assumes an identity means the same work everywhere, and `edit` breaks that
+  silently across clones. Each of the four operations gets its own rule —
+  `reword` composes the trailer itself rather than trusting an editor, `edit`
+  retains identity but publishes an amendment that downgrades bare Change-Id
+  coverage, and `squash`/`fixup` reuse the landing absorption model with exactly
+  one surviving trailer instead of Git's concatenated messages.
+
+  ADR-0036 makes ADR-0007's "cannot masquerade as exact or deterministic"
+  structural instead of advisory. A suggested resolution is a separate
+  worktree-private family the exact-reuse path cannot read, rather than a
+  confidence field every future reader would have to honour; acceptance is a
+  person editing the file, after which the existing capture path records an
+  ordinary exact resolution.
+
 - Stop the benchmark check failing on every unidentified host (issue #100).
   Without `--host`, reference selection fell back to `legacyHosts.<platform>`,
   which is frozen at whatever the code did when it was captured and is never

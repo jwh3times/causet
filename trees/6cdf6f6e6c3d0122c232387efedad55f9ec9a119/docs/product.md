@@ -370,7 +370,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 | FR-RES-04 | P0 | Ambiguous result variants shall require an explicit resolution ID. | Implemented | Multiple candidates cannot be silently selected. |
 | FR-RES-05 | P1 | A result blob shall be retained against normal garbage collection. | Implemented | Hidden resolution ref points to a commit containing the blob. |
 | FR-RES-06 | P1 | Receipts shall distinguish created, accepted, modified, and rejected decisions. | Implemented | Application and resolution records preserve outcome. |
-| FR-RES-07 | P2 | Lower-confidence learned or semantic candidates shall occupy a separate tier from exact signatures. | Planned | Confidence/provenance is visible and exact tier remains unchanged. |
+| FR-RES-07 | P2 | Lower-confidence learned or semantic candidates shall occupy a separate tier from exact signatures. | Planned; contract proposed | Confidence/provenance is visible and exact tier remains unchanged. |
 | FR-RES-08 | P2 | Resolution data shall synchronize and verify safely across clones. | Implemented experimentally | Metadata round-trip retains records and result blobs with integrity checks. |
 
 ### 9.7 AI-oriented workspaces and worktrees
@@ -776,8 +776,12 @@ Each links to the issue that carries it; the board is where its status lives.
   ([#28](https://github.com/jwh3times/vcs-lab/issues/28)) followed it, inheriting
   the ADR-0028 contract unchanged.
 - Broader causal rebase forms beyond explicit linear ranges: merge preservation
-  ([#29](https://github.com/jwh3times/vcs-lab/issues/29)), interactive editing
-  ([#30](https://github.com/jwh3times/vcs-lab/issues/30)). Explicit linear
+  ([#29](https://github.com/jwh3times/vcs-lab/issues/29),
+  [ADR-0034](adr/0034-recreate-merges-as-joins-that-claim-nothing.md) proposed)
+  and interactive editing
+  ([#30](https://github.com/jwh3times/vcs-lab/issues/30),
+  [ADR-0035](adr/0035-make-interactive-rewrites-declare-what-they-do-to-identity.md)
+  proposed). Explicit linear
   ranges ([#27](https://github.com/jwh3times/vcs-lab/issues/27)) landed in
   v0.15.0 and checkpoint/draft overlays
   ([#28](https://github.com/jwh3times/vcs-lab/issues/28)) after it; a range whose
@@ -962,7 +966,7 @@ acceptance signals.
 | FR-ID-08, FR-TRUST-04 | Delivered in v0.12.0 for commit granularity | Sub-commit anchoring is [#34](https://github.com/jwh3times/vcs-lab/issues/34), which is open product question 11 |
 | FR-LAND-10 | Deferred | [#39](https://github.com/jwh3times/vcs-lab/issues/39) |
 | FR-PLAN-08 | Delivered; the remote half landed in v0.15.0 | [ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md) is built in [#36](https://github.com/jwh3times/vcs-lab/issues/36). What remains unavailable to a remote verifier is absence — that a change is genuinely new, and that a candidate's patch really matches — which needs objects the bundle deliberately does not carry |
-| FR-RES-07 | Planned | [#35](https://github.com/jwh3times/vcs-lab/issues/35) |
+| FR-RES-07 | Planned; contract proposed | [#35](https://github.com/jwh3times/vcs-lab/issues/35); [ADR-0036](adr/0036-keep-suggested-resolutions-outside-the-resolution-family.md) proposes the only shape in which the tier would be safe — a private family the exact-reuse path cannot read — and leaves whether to build it as an open decision |
 | FR-WS-08 | Deferred | [#40](https://github.com/jwh3times/vcs-lab/issues/40), under Gate B |
 | FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/vcs-lab/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
 | FR-SPEC-13 | Gated; no additional format selected | [#111](https://github.com/jwh3times/vcs-lab/issues/111), whose first deliverable is the selection and the argument for it. The groundwork is delivered: [#31](https://github.com/jwh3times/vcs-lab/issues/31) built the shared conformance suite and [#33](https://github.com/jwh3times/vcs-lab/issues/33) the adapter contract, and [#32](https://github.com/jwh3times/vcs-lab/issues/32) recorded why requirement-level merge stayed out. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |

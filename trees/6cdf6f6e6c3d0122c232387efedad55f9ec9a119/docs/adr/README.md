@@ -62,6 +62,9 @@ sequence in §15.
 | [0031](0031-carry-a-bound-source-inventory-for-portable-verification.md) | Accepted | Carry a bound source inventory, compact Git-native proofs, and named anchors so a verifier without the repository reports tiered conclusions and never passes an absence claim |
 | [0032](0032-generalize-causal-rebase-to-explicit-linear-ranges.md) | Accepted | Name an explicit rebase range by its base on the current branch; excluded commits are listed and recorded, never proven or dropped silently |
 | [0033](0033-advertise-capabilities-as-a-document-negotiated-offline.md) | Accepted | Advertise capabilities as a registry-projected document and negotiate as a pure function of two documents, so every gateway conclusion is reproducible offline |
+| [0034](0034-recreate-merges-as-joins-that-claim-nothing.md) | Proposed | Recreate a merge as a join that claims nothing about the changes beneath it, taking a new identity and carrying only its resolutions |
+| [0035](0035-make-interactive-rewrites-declare-what-they-do-to-identity.md) | Proposed | Give reword, edit, squash, and fixup their own identity rules; an edit records an amendment so Change-Id coverage stops over-claiming |
+| [0036](0036-keep-suggested-resolutions-outside-the-resolution-family.md) | Proposed | Keep a model-suggested resolution in a private family the exact-reuse path cannot read, so it cannot masquerade as a decision |
 
 ## Creating or changing an ADR
 
