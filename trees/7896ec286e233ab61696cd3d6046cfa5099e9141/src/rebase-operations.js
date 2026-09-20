@@ -501,6 +501,14 @@ function finalizeRebase(operation, cwd) {
         ].join("\n"),
       );
     }
+    // The merged draft is on disk from here on, so the worktree is dirty by this
+    // operation's own doing. Journaled before the prediction is compared, and
+    // written rather than only held in memory, so an abort — after a mismatch or
+    // after an interruption in this window — can tell that dirt apart from the
+    // user's own and still run. ADR-0028 names abort as the recovery for a
+    // re-materialization mismatch, so it has to be reachable from it.
+    operation.overlayRematerialized = true;
+    writeRebaseState(operation, cwd);
     const predicted = operation.forecastApproval?.predictedOverlayTree ?? null;
     if (predicted && predicted !== restored.tree) {
       markMismatch(
@@ -985,7 +993,11 @@ export function abortRebase(options = {}) {
   requireOperationBranch(operation, cwd);
   if (cherryPickHead(cwd)) {
     runGit(["cherry-pick", "--abort"], { cwd });
-  } else {
+  } else if (!operation.overlayRematerialized) {
+    // Skipped only once the journal says this operation put the overlay back
+    // itself. The clean check exists to protect the user's own edits, and in
+    // that one state the dirt is the merged draft this operation wrote — which
+    // abort is about to replace with the captured version anyway.
     assertClean(cwd);
   }
   if (currentHead(cwd) !== operation.originalHead) {

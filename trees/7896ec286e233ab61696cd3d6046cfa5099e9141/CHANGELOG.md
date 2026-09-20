@@ -38,6 +38,22 @@
   a carried overlay. The member was already in the reconciliation result and only
   the rendering was missing.
 
+- Make abort reachable from a re-materialization mismatch, on both applications.
+  ADR-0028 names abort as the recovery for that state and the refusal says so in
+  as many words, but abort was refusing it with `dirty-worktree`: by the time the
+  re-materialized tree is compared with the prediction, the merged draft is
+  already in the worktree and there is no pending cherry-pick, so abort's clean
+  check ran and stopped the very recovery it was told to run. Reproduced on both
+  `vlab reconcile --abort` and `vlab rebase --abort`; the reconciliation half
+  arrived with #26 in v0.15.0 and had not been exercised.
+
+  The journals now record `overlayRematerialized` at the moment the draft goes
+  back, and abort skips the clean check only when that flag is set. The check
+  exists to protect the user's own edits, and in that one state the dirt is the
+  merged draft the operation itself wrote — which abort replaces with the
+  captured version anyway. A pending operation with a hand-edited worktree still
+  refuses, which the regression test asserts alongside both recoveries.
+
 ## 0.15.0
 
 - Refresh the `lab-windows-a` benchmark baseline for the conflict-policy ref

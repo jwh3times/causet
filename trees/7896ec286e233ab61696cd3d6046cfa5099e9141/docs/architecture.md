@@ -1480,7 +1480,7 @@ lock without rewriting history.
 | A capability document of an unknown version, or over its bound | Refuse with `unknown-schema-version` or `resource-bound-exceeded`; the bound is checked before the document is parsed. |
 | A target overlay whose live tree drifted from its checkpoint | Refuse with `stale-overlay` before any mutation; the capture is behind, so the remedy is a new checkpoint and nothing is re-captured automatically (ADR-0028). |
 | A target overlay whose base head moved, or whose checkpoint object is gone | Refuse with `stale-forecast` before any mutation. |
-| A re-materialized overlay that does not match its prediction | Leave the operation in `forecast-mismatch`, publish nothing, and recover by abort. |
+| A re-materialized overlay that does not match its prediction | Leave the operation in `forecast-mismatch`, publish nothing, and recover by abort. The draft is already back in the worktree by then, so the journal records `overlayRematerialized` and abort skips its clean check in exactly that state; a pending operation the user has edited by hand still refuses. |
 | An overlay an abort cannot read | Restore the committed tip anyway, report the overlay unrecoverable, and leave the worktree clean rather than inventing bytes. |
 | A rebase range whose base is not an ancestor of the tip, is the tip, or whose tip is not a branch tip | Refuse with `unsupported-range` before anything moves; re-parenting the commits after a mid-branch tip is interactive editing, not a linear range (ADR-0032). |
 | A rebase forecast approved for a different range base | Refuse as `stale-forecast`, naming both ranges; the fingerprint covers the base, so the refusal cannot be bypassed. |

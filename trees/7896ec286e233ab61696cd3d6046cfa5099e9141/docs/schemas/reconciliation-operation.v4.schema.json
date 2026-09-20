@@ -160,6 +160,10 @@
       "type": "string",
       "format": "date-time"
     },
+    "overlayRematerialized": {
+      "type": "boolean",
+      "description": "True once this operation has put the overlay back into the worktree, which happens after the committed result verifies and before the re-materialized tree is compared with the prediction. Journaled because it is what tells an abort that a dirty worktree in 'forecast-mismatch' is this operation's own doing rather than the user's, so the recovery ADR-0028 names stays reachable. Absent or false otherwise."
+    },
     "targetOverlay": {
       "type": [
         "object",

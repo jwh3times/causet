@@ -672,3 +672,108 @@ test("the human result of an application states what became of the overlay", (t)
   );
   assert.equal(/overlay/i.test(plainText), false);
 });
+
+// ---------------------------------------------------------------------------
+// Abort is reachable from a re-materialization mismatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Break the overlay tree a stored forecast pins, so re-materialization cannot
+ * match it.
+ *
+ * Every input the mismatch could otherwise come from — a moved head, a moved
+ * draft, a missing checkpoint — is refused by `assertOverlayCurrent` before the
+ * application starts, which is the contract working. Corrupting the pinned
+ * prediction is therefore the one way left to reach the state ADR-0028 names,
+ * and it exercises exactly the comparison under test.
+ */
+function breakPredictedOverlayTree(worktree, forecastId) {
+  const gitDir = git(worktree, "rev-parse", "--git-dir");
+  const root = path.isAbsolute(gitDir) ? gitDir : path.join(worktree, gitDir);
+  const file = path.join(root, "vcs-lab", "forecasts", `${forecastId}.json`);
+  const stored = JSON.parse(fs.readFileSync(file, "utf8"));
+  stored.predictedOverlayTree = "0".repeat(40);
+  fs.writeFileSync(file, JSON.stringify(stored, null, 2));
+}
+
+test("abort recovers from a re-materialization mismatch on both applications", (t) => {
+  // The worktree is dirty in this state, and it is dirty because the operation
+  // itself put the merged draft back before comparing it. Abort is what the
+  // contract and the refusal both name as the recovery, so the clean check must
+  // not be what stops it.
+  const reconciled = overlaid(t);
+  draftAndCheckpoint(reconciled.workspace);
+  const reconcileForecast = vlabJson(
+    reconciled.workspace, "forecast", "feature", "--target-checkpoint",
+  );
+  const reconcileTip = git(reconciled.workspace, "rev-parse", "HEAD");
+  breakPredictedOverlayTree(reconciled.workspace, reconcileForecast.id);
+
+  const reconcileRefusal = refusal(
+    reconciled.workspace, "reconcile", "feature", "--use-forecast", reconcileForecast.id,
+  );
+  assert.equal(reconcileRefusal.code, "stale-forecast");
+  assert.match(reconcileRefusal.details, /Nothing was published/);
+  assert.match(reconcileRefusal.details, /vlab reconcile --abort/);
+  assert.equal(vlabJson(reconciled.workspace, "reconcile", "--status").state, "forecast-mismatch");
+  assert.notEqual(git(reconciled.workspace, "status", "--porcelain"), "",
+    "the operation left the merged draft on disk, which is what makes this the hard case");
+
+  const reconcileAbort = vlabJson(reconciled.workspace, "reconcile", "--abort");
+  assert.equal(reconcileAbort.aborted, true);
+  assert.equal(git(reconciled.workspace, "rev-parse", "HEAD"), reconcileTip);
+  assert.equal(reconcileAbort.overlay.restored, true);
+  assert.equal(readText(reconciled.workspace, "target-only.txt"), "draft in progress\n");
+  assert.equal(fs.existsSync(path.join(reconciled.workspace, "scratch.txt")), true);
+  assert.deepEqual(vlabJson(reconciled.workspace, "receipts"), [],
+    "a refused re-materialization publishes nothing");
+
+  const rebased = rebasable(t);
+  rebaseDraft(rebased.workspace);
+  const rebaseForecast = vlabJson(
+    rebased.workspace, "rebase-forecast", "main", "--target-checkpoint",
+  );
+  const rebaseTip = git(rebased.workspace, "rev-parse", "HEAD");
+  breakPredictedOverlayTree(rebased.workspace, rebaseForecast.id);
+
+  const rebaseRefusal = refusal(
+    rebased.workspace, "rebase", "main", "--use-forecast", rebaseForecast.id,
+  );
+  assert.equal(rebaseRefusal.code, "stale-forecast");
+  assert.match(rebaseRefusal.details, /Nothing was published/);
+  assert.match(rebaseRefusal.details, /vlab rebase --abort/);
+  assert.equal(vlabJson(rebased.workspace, "rebase", "--status").state, "forecast-mismatch");
+
+  const rebaseAbort = vlabJson(rebased.workspace, "rebase", "--abort");
+  assert.equal(rebaseAbort.aborted, true);
+  assert.equal(rebaseAbort.restoredHead, rebaseTip);
+  assert.equal(rebaseAbort.overlay.restored, true);
+  assert.equal(readText(rebased.workspace, "feature-only.txt"), "feature work, still drafting\n");
+  assert.equal(fs.existsSync(path.join(rebased.workspace, "scratch.txt")), true);
+  assert.equal(
+    vlabJson(rebased.workspace, "receipts").some((receipt) => receipt.type === "rebase"),
+    false,
+  );
+
+  // The clean check is skipped only in that one journaled state. An ordinary
+  // pending operation with a hand-edited worktree still refuses.
+  const guarded = rebasable(t);
+  rebaseDraft(guarded.workspace);
+  const guardedForecast = vlabJson(
+    guarded.workspace, "rebase-forecast", "main", "--target-checkpoint",
+  );
+  const interrupted = spawnSync(
+    process.execPath,
+    [cli, "rebase", "main", "--use-forecast", guardedForecast.id, "--json"],
+    {
+      cwd: guarded.workspace,
+      encoding: "utf8",
+      env: testEnv({ VLAB_TEST_FAULT: "rebase:before-journal-advance" }),
+    },
+  );
+  assert.notEqual(interrupted.status, 0);
+  write(guarded.workspace, "hand-edited.txt", "the user's own work\n");
+  const guardedRefusal = refusal(guarded.workspace, "rebase", "--abort");
+  assert.equal(guardedRefusal.code, "dirty-worktree");
+  assert.equal(readText(guarded.workspace, "hand-edited.txt"), "the user's own work\n");
+});
