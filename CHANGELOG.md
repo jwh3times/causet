@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Stop native-engine `vlab` processes from occasionally aborting on exit on
+  Windows with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` after
+  printing correct output (issue #130). The binding returned object contents
+  as external buffers with Rust finalizers, which could run during environment
+  teardown. It now copies contents into Node-owned buffers. A process reading
+  the contents of 388 objects crashed in 47 of 300 runs before the change and
+  in none of 300 after.
+
 - Replace `scripts/sync-agent-assets.mjs` with `scripts/sync-agents.mjs`, the
   agent-mirror generator shared byte-for-byte across repositories, and its
   `node:test` suite `scripts/sync-agents.test.mjs` (which `npm test` now picks
