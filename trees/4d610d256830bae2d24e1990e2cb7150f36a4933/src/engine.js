@@ -12,7 +12,7 @@
 import * as git from "./git.js";
 import { CliError } from "./errors.js";
 import { sha256 } from "./ids.js";
-import { loadNativeEngine } from "./native-engine.js";
+import { UNSUPPORTED_INPUT, loadNativeEngine } from "./native-engine.js";
 
 export { READ_ENGINES, defaultReadEngine, readEngine, withReadEngine } from "./git.js";
 
@@ -120,7 +120,7 @@ function dispatch(operation, args) {
       } catch (error) {
         git.recordEngineFallback({
           operation,
-          reason: "native-error",
+          reason: error?.code === UNSUPPORTED_INPUT ? "unsupported-input" : "native-error",
           detail: error?.message ?? String(error),
         });
       }

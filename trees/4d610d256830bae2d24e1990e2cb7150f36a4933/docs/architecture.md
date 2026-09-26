@@ -1140,7 +1140,11 @@ the default everywhere and the oracle. `native` loads the optional Rust binding
 for the five resolution-catalog operations in ADR-0027. A missing prebuild reports
 `binding-missing` and every operation passes through to Git. When the
 selected engine lacks an operation or throws, the seam answers with Git and
-records the fallback; `endGitMetrics` reports `engine`, the `fallbacks`
+records the fallback with its reason: `unsupported` for an operation the
+binding does not implement, `unsupported-input` for an input it refuses by
+design (a ref-rooted object name, a SHA-256 or reftable repository, an
+aliased path, command-scope configuration), and `native-error` for anything
+else, such as an exhausted budget or a malformed tree. `endGitMetrics` reports `engine`, the `fallbacks`
 aggregated per operation and reason, `nativeReads` counts, and `directReads`.
 
 The bounded first native read increment is accepted in

@@ -41,7 +41,10 @@ unordered trees,
 unsupported cases, and exhausted budgets fall back for the entire operation.
 They never return a partial catalog. Git remains authoritative for the fallback
 result or error. `nativeReads` metrics count successful operations; `fallbacks`
-report operations delegated to Git.
+report operations delegated to Git. A refusal whose message starts with
+`unsupported ` (object name, ref pattern, peel, notes ref, repository profile or
+extension, UNC or aliased path, environment) is reported as `unsupported-input`;
+budgets, malformed or duplicate trees, and other failures are `native-error`.
 An in-memory gix allocation limit also bounds packed delta bases and intermediate
 buffers, so a small final object cannot bypass the content limit with a large base.
 

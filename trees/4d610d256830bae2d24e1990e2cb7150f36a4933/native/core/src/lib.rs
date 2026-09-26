@@ -32,7 +32,18 @@ fn open(cwd: &str) -> Result<Repository> {
     Default::default(),
     gix::open::Options::default().config_overrides(["gitoxide.objects.allocLimit=67108864"]),
   )
-  .map_err(err)?;
+  .map_err(|e| {
+    // Without gix's SHA-256 support the open itself fails on the object
+    // format; that is the same profile refusal as the hash check below.
+    let mut source: Option<&dyn std::error::Error> = Some(&e);
+    while let Some(error) = source {
+      if error.to_string().contains("extensions.objectFormat") {
+        return String::from("unsupported repository profile");
+      }
+      source = error.source();
+    }
+    err(e)
+  })?;
   if repo.workdir().is_none() || repo.object_hash() != gix::hash::Kind::Sha1 {
     return Err("unsupported repository profile".into());
   }

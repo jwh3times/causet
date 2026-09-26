@@ -1126,7 +1126,10 @@ the worktree simulator. `--engine native` (or `VLAB_ENGINE=native`) selects
 the optional [native resolution-read binding](docs/native-engine.md) for one
 invocation. Its five supported operations report successful execution under
 `nativeReads`; unsupported operations and unavailable bindings use Git and appear
-under `fallbacks`. A missing prebuild reports `binding-missing`. Metrics also
+under `fallbacks`. A missing prebuild reports `binding-missing`; an input the
+binding refuses by design, such as a SHA-256 repository or command-scope Git
+configuration, reports `unsupported-input`; `native-error` is reserved for
+anything else. Metrics also
 include `engine` and `directReads`, the number of reads
 that bypassed the engine seam (always zero; such a read is refused in native
 mode). Trace output contains command names, durations, and whether a query

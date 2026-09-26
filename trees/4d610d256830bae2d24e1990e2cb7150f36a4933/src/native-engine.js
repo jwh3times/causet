@@ -4,6 +4,28 @@ import { realpathSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 
+/**
+ * The binding and this wrapper refuse inputs outside the supported profile
+ * with a message that starts "unsupported " (an object name, ref pattern,
+ * repository profile, environment, or path shape). Such a refusal is marked
+ * so the engine seam reports it as `unsupported-input` rather than
+ * `native-error`; budgets and malformed data remain errors.
+ */
+export const UNSUPPORTED_INPUT = "native-unsupported-input";
+
+function refusing(operation) {
+  return (...args) => {
+    try {
+      return operation(...args);
+    } catch (error) {
+      if (typeof error?.message === "string" && error.message.startsWith("unsupported ")) {
+        error.code = UNSUPPORTED_INPUT;
+      }
+      throw error;
+    }
+  };
+}
+
 /** Optional local prebuild. Loading never downloads or compiles code. */
 export function loadNativeEngine(load = require) {
   const unavailable = (reason) => Object.freeze({
@@ -48,17 +70,19 @@ export function loadNativeEngine(load = require) {
       ...(contents ? { content: record.content ?? null } : {}),
     }));
   };
+  const operations = {
+    repoContext: context,
+    listRefs: (pattern, directory) => binding.listRefs(pattern, cwd(directory))
+      .map(({ name, oid }) => ({ ref: name, oid })),
+    inspectGitObjects: (expressions, directory) => objects(expressions, directory, false),
+    readGitObjects: (expressions, directory) => objects(expressions, directory, true),
+    listNoteEntries: (ref, directory) => binding.listNoteEntries(ref, cwd(directory)),
+  };
   return Object.freeze({
     available: true,
     reason: null,
     profile: "files-sha1-resolution-v1",
-    operations: Object.freeze({
-      repoContext: context,
-      listRefs: (pattern, directory) => binding.listRefs(pattern, cwd(directory))
-        .map(({ name, oid }) => ({ ref: name, oid })),
-      inspectGitObjects: (expressions, directory) => objects(expressions, directory, false),
-      readGitObjects: (expressions, directory) => objects(expressions, directory, true),
-      listNoteEntries: (ref, directory) => binding.listNoteEntries(ref, cwd(directory)),
-    }),
+    operations: Object.freeze(Object.fromEntries(Object.entries(operations)
+      .map(([name, operation]) => [name, refusing(operation)]))),
   });
 }

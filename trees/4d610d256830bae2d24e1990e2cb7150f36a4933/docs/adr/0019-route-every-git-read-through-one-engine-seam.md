@@ -170,3 +170,28 @@ Facts verified on the Windows development host on 2026-08-30 (Git
   `docs/testing.md` and `AGENTS.md`
 - Documents: `docs/architecture.md` §3, §14, §18, §19; `README.md`;
   `docs/roadmap.md` Horizon 2 item 1; `docs/product.md` FR-GIT-07 and §14
+
+## Amendment 2026-09-26
+
+### A refused input is `unsupported-input`, not `native-error`
+
+Decision 5 named three fallback reasons. With a real binding
+([ADR-0027](0027-bound-native-read-engine-entry-by-the-resolution-catalog-budget.md)),
+`native-error` covered two different facts: a fault, and an input that the
+binding refuses by design. Examples of the second are a ref-rooted object name,
+a SHA-256 or reftable repository, an aliased path, and command-scope Git
+configuration. A reader chasing a `native-error` found a designed restriction
+([issue #125](https://github.com/jwh3times/vcs-lab/issues/125)). The owner chose
+a fourth reason over reusing `unsupported`, so that "the engine does not
+implement this operation" and "the engine refuses this input" stay distinct.
+
+- `unsupported`: the selected engine does not implement the operation.
+- `unsupported-input`: it implements the operation but refuses these inputs or
+  this repository profile. The binding and its JavaScript wrapper signal this
+  with a message that starts `unsupported `. `src/native-engine.js` marks those
+  errors, and the seam reads the mark.
+- `native-error`: everything else, including exhausted budgets, malformed or
+  duplicate trees, and binding failures.
+
+The fallback itself is unchanged: Git answers the whole operation. Only the
+recorded reason changes.

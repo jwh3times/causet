@@ -55,6 +55,12 @@ function compare(operation, args, native = true) {
     assert.ok(metrics.fallbacks.length > 0, JSON.stringify(metrics));
     assert.deepEqual(metrics.nativeReads, {});
   }
+  return metrics;
+}
+
+function refused(operation, args) {
+  const metrics = compare(operation, args, false);
+  assert.deepEqual(metrics.fallbacks.map((item) => item.reason), ["unsupported-input"], operation);
 }
 
 test("native reads match Git for loose and packed objects, refs, notes, and linked worktrees", { skip: !available }, (t) => {
@@ -86,15 +92,16 @@ test("native reads match Git for loose and packed objects, refs, notes, and link
 
 test("unsupported expressions and repository profiles fall back as complete operations", { skip: !available }, (t) => {
   const { root, head } = fixture(t);
-  compare("readGitObjects", [[head, "HEAD~0"], root], false);
-  compare("listRefs", ["refs/heads/*", root], false);
+  refused("readGitObjects", [[head, "HEAD~0"], root]);
+  refused("inspectGitObjects", [["HEAD^{commit}"], root]);
+  refused("listRefs", ["refs/heads/*", root]);
   const sha256 = fixture(t, ["--object-format=sha256"]);
-  compare("repoContext", [sha256.root], false);
-  compare("listNoteEntries", ["vcs-lab", sha256.root], false);
+  refused("repoContext", [sha256.root]);
+  refused("listNoteEntries", ["vcs-lab", sha256.root]);
   const version = spawnSync("git", ["--version"], { encoding: "utf8" }).stdout.match(/(\d+)\.(\d+)/);
   if (Number(version[1]) > 2 || Number(version[2]) >= 45) {
     const reftable = fixture(t, ["--ref-format=reftable"]);
-    compare("listRefs", ["refs/heads", reftable.root], false);
+    refused("listRefs", ["refs/heads", reftable.root]);
   } else assert.notEqual(process.env.VLAB_REQUIRE_NATIVE, "1", "qualification requires a reftable-capable Git");
 });
 
@@ -118,7 +125,9 @@ test("native notes reject duplicate, malformed, and oversized trees without part
   compare("listNoteEntries", ["vcs-lab", root], false);
   const oversized = rawObject(root, "blob", Buffer.alloc(64 * 1024 * 1024 + 1, 97));
   compare("inspectGitObjects", [[oversized], root]);
-  compare("readGitObjects", [[head, oversized], root], false);
+  // An exhausted budget is a bound the data reached, not a refused input shape.
+  assert.deepEqual(compare("readGitObjects", [[head, oversized], root], false).fallbacks
+    .map((item) => item.reason), ["native-error"]);
 });
 
 test("missing and broken optional bindings preserve Git functionality", (t) => {
@@ -147,7 +156,7 @@ test("unordered trees and aliased worktree paths delegate to Git", { skip: !avai
   const alias = `${root}-alias`;
   fs.symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
   t.after(() => fs.unlinkSync(alias));
-  compare("repoContext", [alias], false);
+  refused("repoContext", [alias]);
   if (process.platform === "win32") {
     assert.throws(() => engine.nativeEngine().operations.repoContext("\\\\server\\share\\repo"), /unsupported aliased/);
   }

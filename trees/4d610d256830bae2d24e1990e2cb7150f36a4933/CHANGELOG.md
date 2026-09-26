@@ -24,6 +24,16 @@
   compared. Like the other HEAD-derived probes, it is now `skipped` in a
   repository with no commit on HEAD.
 
+- Report a native-engine fallback caused by an input the binding refuses by
+  design as `unsupported-input` instead of `native-error` (issue #125,
+  [ADR-0019 amendment](docs/adr/0019-route-every-git-read-through-one-engine-seam.md#amendment-2026-09-26)).
+  This covers a ref-rooted object name, an unsupported ref pattern, peel or
+  notes ref, a SHA-256, reftable or otherwise extended repository, a UNC or
+  aliased path, and command-scope Git configuration. `native-error` now means
+  a budget was exhausted, a tree was malformed, or the binding failed. The
+  binding also reports a SHA-256 repository as `unsupported repository
+  profile` instead of surfacing gix's configuration-load failure.
+
 - Keep a missing causal-note attachment as an integrity error while making the
   likely notes-only-fetch case actionable (issue #120). Human and JSON
   diagnostics now direct the reader to fetch `refs/notes/vcs-lab` together
