@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add `.github/workflows/perf.yml`, which runs the performance checkpoint
+  harness on GitHub-hosted Windows and Ubuntu runners on manual dispatch,
+  weekly on `main`, and for pull requests touching `native/`, the harness, or
+  the workflow (issue #151). It reports what a shared runner can measure
+  fairly (byte equality, exit status, Git process counts, and comparisons
+  within one run) as a job summary and a 90-day artifact. It adds the Rust CLI
+  automatically once a `vlab` binary is built. Timings never fail it; absolute
+  figures remain the local reference host's.
+
 - Add `scripts/perf-checkpoint.mjs`, the whole-command benchmark for the Rust
   CLI program's performance checkpoints (issue #151, ADR-0037). It times
   complete `vlab` processes per implementation against a plain-Git floor on
