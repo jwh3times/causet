@@ -49,7 +49,10 @@ An in-memory gix allocation limit also bounds packed delta bases and intermediat
 buffers, so a small final object cannot bypass the content limit with a large base.
 
 The core forbids unsafe Rust. Binding entry points catch unwinding panics and
-convert errors before the engine seam falls back. This does not turn an abort or
+convert errors before the engine seam falls back. Object contents cross into
+JavaScript as Node-owned copies, never as external buffers. An external
+buffer's Rust finalizer can run while Node tears the environment down, and on
+Windows that aborted the process after correct output (issue #130). This does not turn an abort or
 out-of-memory condition into a recoverable JavaScript error.
 
 ## Qualification

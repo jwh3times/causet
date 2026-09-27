@@ -1,4 +1,4 @@
-use napi::{Error, Result, bindgen_prelude::Buffer};
+use napi::{Env, Error, Result, bindgen_prelude::BufferSlice};
 use napi_derive::napi;
 
 fn convert<T>(result: vlab_core::Result<T>) -> Result<T> {
@@ -28,13 +28,13 @@ pub struct NoteRecord {
   pub target: String,
 }
 #[napi(object)]
-pub struct ObjectRecord {
+pub struct ObjectRecord<'env> {
   pub expression: String,
   pub exists: bool,
   pub oid: Option<String>,
   pub kind: Option<String>,
   pub size: f64,
-  pub content: Option<Buffer>,
+  pub content: Option<BufferSlice<'env>>,
 }
 
 #[napi(catch_unwind)]
@@ -56,25 +56,32 @@ pub fn list_refs(pattern: String, cwd: String) -> Result<Vec<RefRecord>> {
       .collect(),
   )
 }
+// Contents are copied into Node-owned buffers rather than handed over as
+// external buffers: an external buffer's Rust finalizer can run while Node
+// tears the environment down, which aborts the process on exit (#130).
 #[napi(catch_unwind)]
-pub fn read_objects(
+pub fn read_objects<'env>(
+  env: &'env Env,
   expressions: Vec<String>,
   cwd: String,
   contents: bool,
-) -> Result<Vec<ObjectRecord>> {
-  Ok(
-    convert(vlab_core::objects(expressions, &cwd, contents))?
-      .into_iter()
-      .map(|r| ObjectRecord {
+) -> Result<Vec<ObjectRecord<'env>>> {
+  convert(vlab_core::objects(expressions, &cwd, contents))?
+    .into_iter()
+    .map(|r| {
+      Ok(ObjectRecord {
         expression: r.expression,
         exists: r.oid.is_some(),
         oid: r.oid,
         kind: r.kind,
         size: r.size as f64,
-        content: r.content.map(Into::into),
+        content: r
+          .content
+          .map(|data| BufferSlice::copy_from(env, data))
+          .transpose()?,
       })
-      .collect(),
-  )
+    })
+    .collect()
 }
 #[napi(catch_unwind)]
 pub fn list_note_entries(notes_ref: String, cwd: String) -> Result<Vec<NoteRecord>> {

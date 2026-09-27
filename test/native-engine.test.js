@@ -197,6 +197,24 @@ test("the engine differential compares every native operation natively", { skip:
   }
 });
 
+test("processes that read native object contents exit cleanly", { skip: !available }, (t) => {
+  // Contents once crossed as external buffers whose Rust finalizers could run
+  // during environment teardown and abort the process after correct output
+  // (#130). Each child creates hundreds of content buffers and exits at once.
+  const { root, head } = fixture(t);
+  const moduleUrl = new URL("../src/native-engine.js", import.meta.url).href;
+  const script = `import { loadNativeEngine } from ${JSON.stringify(moduleUrl)};
+    const read = loadNativeEngine().operations.readGitObjects;
+    console.log(read(Array(400).fill(${JSON.stringify(`${head}:result`)}), process.cwd()).length);`;
+  for (let run = 0; run < 40; run += 1) {
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd: root, encoding: "utf8", env: testEnv(),
+    });
+    assert.equal(result.status, 0, `run ${run}: ${result.stderr}`);
+    assert.equal(result.stdout.trim(), "400");
+  }
+});
+
 test("absent empty-tree objects retain Git existence semantics", { skip: !available }, (t) => {
   const { root } = fixture(t);
   compare("readGitObjects", [["4b825dc642cb6eb9a060e54bf8d69288fbee4904"], root]);
