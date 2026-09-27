@@ -129,14 +129,21 @@ function removeTree(target) {
 
 // ------------------------------------------------------------------ host load
 
+/**
+ * Busy percentage of all CPUs over one second, from the kernel's per-CPU
+ * counters. Spawning a probe (PowerShell, typeperf) would itself load the
+ * host it is measuring, so nothing is spawned.
+ */
 function cpuLoadPercent() {
-  if (process.platform === "win32") {
-    const result = spawnSync("powershell.exe", ["-NoProfile", "-Command",
-      "(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average"], { encoding: "utf8", windowsHide: true });
-    const value = Number(result.stdout.trim());
-    return Number.isFinite(value) ? value : null;
-  }
-  return Math.round((os.loadavg()[0] / os.cpus().length) * 100);
+  const totals = () => os.cpus().reduce((sum, cpu) => {
+    const time = cpu.times;
+    return { idle: sum.idle + time.idle, all: sum.all + time.user + time.nice + time.sys + time.idle + time.irq };
+  }, { idle: 0, all: 0 });
+  const before = totals();
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+  const after = totals();
+  const all = after.all - before.all;
+  return all > 0 ? Math.round((1 - (after.idle - before.idle) / all) * 100) : null;
 }
 function loadSample(label) {
   // Sustained load, not a momentary spike, decides whether a host is quiet:
