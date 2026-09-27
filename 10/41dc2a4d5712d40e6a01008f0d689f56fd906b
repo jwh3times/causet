@@ -1,0 +1,25 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mujygab04410534ed8e1",
+      "mode": "compact",
+      "sourceRef": "jwh3times/perf-ci",
+      "sourceHead": "8ca4520a30cc0a510adc17ee0b748fe4e0835794",
+      "sourceSubject": "ci: run the performance harness on hosted runners",
+      "targetBefore": "0ca45b6e614e3351b7ef7ed1008abddd34b6d28c",
+      "landingCommit": "1041dc2a4d5712d40e6a01008f0d689f56fd906b",
+      "base": "0ca45b6e614e3351b7ef7ed1008abddd34b6d28c",
+      "absorbedCommits": [
+        "8ca4520a30cc0a510adc17ee0b748fe4e0835794"
+      ],
+      "absorbedChanges": [
+        "ch_0mujxx7ar9a0a2351cccc"
+      ],
+      "resultTree": "fb24e9773c3d9d939c31aad966eaae42a4843f44",
+      "createdAt": "2026-09-27T15:10:04.396Z"
+    }
+  ]
+}
