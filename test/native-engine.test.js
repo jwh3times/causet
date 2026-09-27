@@ -8,6 +8,7 @@ import test from "node:test";
 import * as engine from "../src/engine.js";
 import * as git from "../src/git.js";
 import { loadNativeEngine } from "../src/native-engine.js";
+import { parkedRecordIds } from "../src/quarantine.js";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
 
@@ -195,6 +196,25 @@ test("the engine differential compares every native operation natively", { skip:
   for (const operation of Object.keys(engine.nativeEngine().operations)) {
     assert.deepEqual(fallbacks[operation], [], operation);
   }
+});
+
+test("parked disputes are listed natively, keeping only two-level refs", { skip: !available }, (t) => {
+  const { root, run, head } = fixture(t);
+  run("update-ref", "refs/vcs-lab/quarantine/lineage-a/record-1", head);
+  run("update-ref", "refs/vcs-lab/quarantine/lineage-b/record-2/extra", head);
+  run("update-ref", "refs/vcs-lab/quarantine/stray", head);
+  const expected = git.withReadEngine("git", () => [...parkedRecordIds(root)]);
+  const collector = git.beginGitMetrics("quarantine");
+  let actual;
+  let metrics;
+  git.withReadEngine("native", () => {
+    actual = [...parkedRecordIds(root)];
+    metrics = git.endGitMetrics(collector);
+  });
+  assert.deepEqual(actual, expected);
+  assert.deepEqual(actual, ["record-1"]);
+  assert.deepEqual(metrics.fallbacks, []);
+  assert.equal(metrics.processes, 0);
 });
 
 test("processes that read native object contents exit cleanly", { skip: !available }, (t) => {

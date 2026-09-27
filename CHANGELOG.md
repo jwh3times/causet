@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- List parked disputes under `refs/vcs-lab/quarantine/` by prefix instead of
+  a `*/*` glob, which the native engine refuses. Results are unchanged, since
+  both callers already keep only two-level refs. With the native engine,
+  `vlab metadata status` now answers both quarantine listings natively. On a
+  clone of this repository it went from 5 Git processes to 3, and its median
+  from 277 ms to 214 ms (issue #42).
+
 - Stop native-engine `vlab` processes from occasionally aborting on exit on
   Windows with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` after
   printing correct output (issue #130). The binding returned object contents

@@ -67,6 +67,12 @@ export function parsedParkedRef(ref) {
   return { sourceLineage: parts[0], recordId: parts[1] };
 }
 
+// Listed by prefix rather than a `*/*` glob, which the native engine refuses;
+// callers keep only the two-level refs `parsedParkedRef` accepts.
+function parkedRefs(cwd) {
+  return listRefs(`${QUARANTINE_REFS}/`, cwd);
+}
+
 /**
  * The record identifiers this repository holds a parked dispute about. A
  * conflicted fact contributes nothing on either side, so these identifiers
@@ -74,7 +80,7 @@ export function parsedParkedRef(ref) {
  */
 export function parkedRecordIds(cwd = process.cwd()) {
   const ids = new Set();
-  for (const entry of listRefs(`${QUARANTINE_REFS}/*/*`, cwd)) {
+  for (const entry of parkedRefs(cwd)) {
     const parsed = parsedParkedRef(entry.ref);
     if (parsed) ids.add(parsed.recordId);
   }
@@ -89,7 +95,7 @@ export function parkedRecordIds(cwd = process.cwd()) {
  */
 export function listParkedRecords(cwd = process.cwd()) {
   const context = repoContext(cwd);
-  const refs = listRefs(`${QUARANTINE_REFS}/*/*`, context.root)
+  const refs = parkedRefs(context.root)
     .filter((entry) => parsedParkedRef(entry.ref))
     .sort((left, right) => left.ref.localeCompare(right.ref));
   if (refs.length === 0) return [];
