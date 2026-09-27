@@ -1,0 +1,25 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mujdq4w4f21f53190e70",
+      "mode": "compact",
+      "sourceRef": "jwh3times/skimmer",
+      "sourceHead": "0fe64210c43825bc22b4618ec65519137401dc54",
+      "sourceSubject": "perf: list parked disputes by prefix so native reads can answer",
+      "targetBefore": "ccd9b9bc1d5a29c1728ff4197805364599efee26",
+      "landingCommit": "04ba0de73795347f9f779217935a3f3426e88dab",
+      "base": "ccd9b9bc1d5a29c1728ff4197805364599efee26",
+      "absorbedCommits": [
+        "0fe64210c43825bc22b4618ec65519137401dc54"
+      ],
+      "absorbedChanges": [
+        "git:0fe64210c43825bc22b4618ec65519137401dc54"
+      ],
+      "resultTree": "28ea5fcac0f2af9058ecd2fdb89436c42ab848ad",
+      "createdAt": "2026-09-27T05:29:52.038Z"
+    }
+  ]
+}
