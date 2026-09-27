@@ -65,6 +65,7 @@ sequence in §15.
 | [0034](0034-recreate-merges-as-joins-that-claim-nothing.md) | Accepted | Recreate a merge as a join that claims nothing about the changes beneath it, taking a new identity and carrying only its resolutions |
 | [0035](0035-make-interactive-rewrites-declare-what-they-do-to-identity.md) | Accepted | Give reword, edit, squash, and fixup their own identity rules; an edit records an amendment so Change-Id coverage stops over-claiming |
 | [0036](0036-keep-suggested-resolutions-outside-the-resolution-family.md) | Accepted | Keep a model-suggested resolution in a private family the exact-reuse path cannot read, so it cannot masquerade as a decision |
+| [0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) | Proposed | Reimplement the CLI in Rust as a byte-identical port under Gate A discipline, delegating unported commands to the JavaScript CLI until cutover |
 
 ## Creating or changing an ADR
 
