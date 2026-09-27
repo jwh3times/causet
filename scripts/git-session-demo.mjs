@@ -4,11 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { fileURLToPath } from "node:url";
 import { MERGE_TREE_ENGINE_MIN_GIT } from "../src/git.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli = path.join(projectRoot, "bin", "vlab.js");
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-git-session-demo-"));
 
 function run(command, args, options = {}) {
@@ -33,8 +31,8 @@ function write(content) {
 
 function measure(...flags) {
   const started = performance.now();
-  const result = run(process.execPath, [
-    cli,
+  const result = run(vlabCommand, [
+    ...vlabPrefix(),
     "forecast",
     "feature",
     ...flags,
@@ -67,7 +65,7 @@ git("config", "user.email", "vcs-lab@example.test");
 write("base\n");
 git("add", "history.txt");
 git("commit", "-q", "-m", "base");
-run(process.execPath, [cli, "init"]);
+run(vlabCommand, [...vlabPrefix(), "init"]);
 git("switch", "-q", "-c", "feature");
 for (let index = 1; index <= 12; index += 1) {
   write(`${index}\n`);

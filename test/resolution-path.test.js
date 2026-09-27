@@ -4,11 +4,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { resolutionSignatureFor } from "../src/schemas.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const cli = fileURLToPath(new URL("../bin/vlab.js", import.meta.url));
 const publisher = new URL("../src/resolutions.js", import.meta.url).href;
 const errors = new URL("../src/errors.js", import.meta.url).href;
 
@@ -115,7 +114,7 @@ test("CLI resolution publication reports a path error and reconciliation remains
   fs.writeFileSync(path.join(repo, "a.txt"), "target\n");
   git(repo, "commit", "-am", "target");
   const target = git(repo, "rev-parse", "HEAD");
-  const run = (...args) => spawnSync(process.execPath, [cli, ...args], {
+  const run = (...args) => spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd: repo, env: testEnv(), encoding: "utf8",
   });
   assert.notEqual(start, target);

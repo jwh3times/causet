@@ -13,6 +13,7 @@ import { listNoteRecords } from "../src/notes.js";
 import { listResolutionRecords } from "../src/resolutions.js";
 import { resolutionCatalogFloor } from "../src/scale-benchmark.js";
 import { hostProvenance, selectBaseline } from "./benchmark-host.mjs";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
 const script = fileURLToPath(import.meta.url);
 const root = path.resolve(path.dirname(script), "..");
@@ -121,7 +122,7 @@ if (process.argv[2] === "--sample") {
         samples[engine].push({ ...sample, wholeProcessMs: child.wholeMs });
       }
       for (const engine of index % 2 === 0 ? ["git", "native"] : ["native", "git"]) {
-        const child = execute(process.execPath, [path.join(root, "bin/vlab.js"), ...phase.cli, "--engine", engine], repo);
+        const child = execute(vlabCommand, [...vlabPrefix(), ...phase.cli, "--engine", engine], repo);
         const value = JSON.parse(child.stdout);
         if (cliOracle === undefined) cliOracle = value;
         assert.deepEqual(value, cliOracle, `${name}/${engine}: CLI result changed`);

@@ -2,10 +2,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli = path.join(projectRoot, "bin", "vlab.js");
 const parent = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-resolution-demo-"));
 const repo = path.join(parent, "repo");
 const workspace = path.join(parent, "reuse-worktree");
@@ -26,11 +24,11 @@ function git(cwd, ...args) {
 }
 
 function vlab(cwd, ...args) {
-  return run(process.execPath, [cli, ...args], cwd);
+  return run(vlabCommand, [...vlabPrefix(), ...args], cwd);
 }
 
 function expectConflict(cwd, source) {
-  const attempt = spawnSync(process.execPath, [cli, "reconcile", source], {
+  const attempt = spawnSync(vlabCommand, [...vlabPrefix(), "reconcile", source], {
     cwd,
     encoding: "utf8",
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
