@@ -4,10 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const cli = fileURLToPath(new URL("../bin/vlab.js", import.meta.url));
 const NOTES = "refs/notes/vcs-lab";
 
 function exec(command, args, cwd, options = {}) {
@@ -22,7 +21,7 @@ function exec(command, args, cwd, options = {}) {
 const git = (cwd, ...args) => exec("git", args, cwd);
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(process.execPath, [cli, ...args], {
+  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

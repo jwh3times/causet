@@ -6,9 +6,9 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli = path.join(projectRoot, "bin", "vlab.js");
 
 const fixtures = JSON.parse(
   fs.readFileSync(path.join(projectRoot, "docs", "conformance", "fixtures.json"), "utf8"),
@@ -32,11 +32,11 @@ function git(cwd, ...args) {
 }
 
 function vlab(cwd, ...args) {
-  return exec(process.execPath, [cli, ...args], cwd);
+  return exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(process.execPath, [cli, ...args], {
+  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

@@ -88,7 +88,10 @@ changes, run `npm test`, `VLAB_GIT_SESSION=1 npm test`, `VLAB_GIT_SESSION=0 npm 
 `VLAB_FORECAST_ENGINE=worktree npm test`, `VLAB_FORECAST_ENGINE=merge-tree npm test`
 (the default forecast engine differs by platform), and `VLAB_ENGINE=native npm test`
 (every read must pass through `src/engine.js`; never call `runGit` for a read
-in a domain module). No numeric coverage threshold is
+in a domain module). Every CLI launch in the suites goes through
+`test-support/vlab-command.js`; never spawn `bin/vlab.js` directly, so that
+`VLAB_CLI=<executable> npm test` can run the same suites against another
+implementation of the CLI (ADR-0037). No numeric coverage threshold is
 defined; preserve the behavioral and failure-safety guarantees in
 `docs/testing.md`.
 

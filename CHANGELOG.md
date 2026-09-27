@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Route every CLI launch in the test suites, the demos, the benchmark and the
+  real-repository harness through `test-support/vlab-command.js`, so
+  `VLAB_CLI=<executable> npm test` runs the same suites against another
+  implementation of the CLI, such as the Rust port (issue #140, ADR-0037). A
+  `.js` path runs under Node and anything else is executed directly. When
+  `VLAB_CLI` is set, each test that never invoked the CLI is reported as
+  module-level, and `VLAB_CLI_REPORT=<file>` collects them for counting. With
+  `VLAB_CLI` unset, nothing changes.
+
 - Add `.github/workflows/perf.yml`, which runs the performance checkpoint
   harness on GitHub-hosted Windows and Ubuntu runners on manual dispatch,
   weekly on `main`, and for pull requests touching `native/`, the harness, or

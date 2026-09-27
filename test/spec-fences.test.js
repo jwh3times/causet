@@ -5,11 +5,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { materializeResolutionCandidate } from "../src/resolutions.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const cli = fileURLToPath(new URL("../bin/vlab.js", import.meta.url));
 
 function assertRefusal(action, code) {
   assert.throws(action, (error) => {
@@ -26,7 +25,7 @@ function fixture(t) {
   }).trim();
   const git = (...args) => run("git", args);
   const vlab = (...args) => {
-    const output = run(process.execPath, [cli, ...args, "--json"]);
+    const output = run(vlabCommand, [...vlabPrefix(), ...args, "--json"]);
     return args[0] === "init" ? output : JSON.parse(output);
   };
   git("init", "-b", "main");
@@ -54,7 +53,7 @@ function fixture(t) {
     git("commit", "--allow-empty", "-m", "fixture");
     return git("rev-parse", "HEAD");
   };
-  const human = (...args) => run(process.execPath, [cli, ...args]);
+  const human = (...args) => run(vlabCommand, [...vlabPrefix(), ...args]);
   return { root, git, vlab, human, source, manifestFile, stored, save, index, legacy, commit };
 }
 
