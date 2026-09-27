@@ -869,6 +869,30 @@ classes; larger runners are charged even in public repositories.
 
 ## Evidence retention
 
+### Performance checkpoints for the Rust CLI
+
+`scripts/perf-checkpoint.mjs` is Part A of the performance checkpoints of the
+Rust CLI program (#136, #151; ADR-0037 decision 7). It times whole `vlab`
+processes, including startup, per implementation, against a plain-Git floor,
+on three fixtures it builds and removes itself:
+- a real clone pinned to a release and its notes;
+- the synthetic scale fixture with a populated resolution catalog;
+- a deterministic template repository, of which each write sample gets a fresh
+  copy.
+
+It checks that deterministic reads print identical bytes across samples,
+engines and implementations, and counts Git processes from `VLAB_TRACE`
+lines. It emits JSON evidence and a Markdown summary:
+
+```sh
+node scripts/perf-checkpoint.mjs --host lab-windows-a --checkpoint <n>   --output <new-file.json> --markdown <new-file.md> [--impl rust=<vlab-executable>]
+```
+
+Results never gate anything. The full procedure (host preparation, Parts B and
+C, validity checks, recording, and optimization issues) is the wiki's
+[Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing)
+page, and each checkpoint is recorded there.
+
 ### Measuring a real repository
 
 Use `scripts/measure-real-repository.mjs` for the read-only part of
