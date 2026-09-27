@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add `scripts/perf-checkpoint.mjs`, the whole-command benchmark for the Rust
+  CLI program's performance checkpoints (issue #151, ADR-0037). It times
+  complete `vlab` processes per implementation against a plain-Git floor on
+  three fixtures it builds itself: a pinned real clone, the scale fixture with
+  a populated resolution catalog, and a deterministic template repository
+  copied fresh for every write sample. It covers startup, 20 read commands
+  measured under both engines, and 10 writes. It checks byte equality across
+  samples, engines and implementations, and counts Git processes from trace
+  lines. Results are reported, never gating. The procedure lives on the wiki's
+  Performance testing page.
+
 - Accept reimplementing the CLI in Rust as a semantics-preserving port (issue
   #137, ADR-0037). The goal is a standalone `vlab` that runs without Node.js
   (program #136). The port is Gate A work rather than phase 5 of ADR-0015,
