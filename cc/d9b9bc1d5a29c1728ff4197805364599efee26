@@ -1,0 +1,25 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0muj9iu82815aa719f4a6",
+      "mode": "compact",
+      "sourceRef": "jwh3times/skimmer",
+      "sourceHead": "1f87db360b05129a8bb4f07a00ea406a6cef1ec9",
+      "sourceSubject": "fix: copy native object contents into Node-owned buffers",
+      "targetBefore": "9a54f53091dc217f68cc49e4bd8451d247f0ace1",
+      "landingCommit": "ccd9b9bc1d5a29c1728ff4197805364599efee26",
+      "base": "9a54f53091dc217f68cc49e4bd8451d247f0ace1",
+      "absorbedCommits": [
+        "1f87db360b05129a8bb4f07a00ea406a6cef1ec9"
+      ],
+      "absorbedChanges": [
+        "git:1f87db360b05129a8bb4f07a00ea406a6cef1ec9"
+      ],
+      "resultTree": "1b01afff6c374165eff3f7c92f80f28bb74ddb98",
+      "createdAt": "2026-09-27T03:32:13.134Z"
+    }
+  ]
+}
