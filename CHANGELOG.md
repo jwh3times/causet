@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0
 
 - List parked disputes under `refs/vcs-lab/quarantine/` by prefix instead of
   a `*/*` glob, which the native engine refuses. Results are unchanged, since
