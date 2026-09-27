@@ -1,0 +1,29 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mujuoqih4b69b1e1af8d",
+      "mode": "compact",
+      "sourceRef": "jwh3times/adr-0037",
+      "sourceHead": "ff9be58e75c5e48d6cecb435042dafa6d0766e26",
+      "sourceSubject": "docs: accept ADR-0037 and amend ADR-0015",
+      "targetBefore": "5e4523baa727b8afa01bc19534b19ee3d7313f4a",
+      "landingCommit": "92d4bfd9935113af7ac73585541a2a743f6851c2",
+      "base": "5e4523baa727b8afa01bc19534b19ee3d7313f4a",
+      "absorbedCommits": [
+        "f3ff1b48da4378edbf0e52de3e8257baca820ef0",
+        "84db02832a28bb0d934a35e88672228c65e857a5",
+        "ff9be58e75c5e48d6cecb435042dafa6d0766e26"
+      ],
+      "absorbedChanges": [
+        "ch_0mujthk184578eafb8be4",
+        "ch_0mujuicd3b38ac277d776",
+        "ch_0mujunz6hfffa1c265004"
+      ],
+      "resultTree": "626947e39ad781c9943206dd9c1c85c04b131f42",
+      "createdAt": "2026-09-27T13:24:40.228Z"
+    }
+  ]
+}
