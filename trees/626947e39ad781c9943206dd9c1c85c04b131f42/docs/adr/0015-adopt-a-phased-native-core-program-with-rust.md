@@ -1,6 +1,6 @@
 # ADR-0015: Adopt a phased native-core program with Rust as the core language
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [ADR-0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) (2026-09-27)
 - **Date:** 2026-08-28
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-09, GP-12, FR-GIT-01 through FR-GIT-04,
@@ -202,3 +202,12 @@ decision) so that phase 0a can use `git merge-tree --merge-base`.
 - Per-phase ADRs, written before each phase's code: merge-tree forecast
   simulator; engine seam and differential equality; Rust core backend matrix;
   derived catalog; virtual forecast merge; canonical fact log
+
+## Amendment 2026-09-27
+
+[ADR-0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) moves the
+"optional thin Rust CLI" out of phase 5. It reimplements the whole CLI in Rust as a
+semantics-preserving port, run as its own track under Gate A discipline. That supersedes
+this ADR's rejection of "a Rust-first CLI rewrite", for the reasons ADR-0037 records. The
+phase order, gates, and funded costs above are otherwise unchanged. The rationale above is
+kept as written.

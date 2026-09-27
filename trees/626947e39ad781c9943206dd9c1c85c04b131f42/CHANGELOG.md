@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Accept reimplementing the CLI in Rust as a semantics-preserving port (issue
+  #137, ADR-0037). The goal is a standalone `vlab` that runs without Node.js
+  (program #136). The port is Gate A work rather than phase 5 of ADR-0015,
+  which is marked amended. For this program only, it waives Gate A's
+  named-budget precondition and its two-release sunset. The only stop rule is
+  parity. Benchmarks never stop the program: they run at checkpoints and are
+  reported on the Performance testing wiki page, and a regression becomes an
+  optimization issue. Git stays a runtime requirement. During the transition,
+  a hybrid binary delegates each unported command to the JavaScript CLI, which
+  stays the byte-for-byte oracle until two minor releases after cutover.
+  `docs/product.md` §15 gains the CLI-port track, and GP-12 notes it.
+
 ## 0.18.0
 
 - List parked disputes under `refs/vcs-lab/quarantine/` by prefix instead of
