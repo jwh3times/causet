@@ -99,7 +99,7 @@ Two Gate A rules are **waived for this program only**, on the owner's direction:
 - **The two-release sunset.**
   - A sunset exists to remove an engine that failed its named budget. With no named budget,
     there is nothing for it to measure.
-  - The stop rule below replaces it.
+  - The parity-only stop rule and the checkpoint report in decision 7 replace it.
 
 Phases 1 to 4 are unchanged. The port neither requires nor authorizes a native catalog
 (phase 3) or native mutation and in-memory merge (phase 4); each still needs its own
@@ -163,20 +163,38 @@ The `VLAB_CLI` mode keeps running both implementations in CI. After those two re
 - the JavaScript implementation and the N-API binding (`native/binding`) are removed;
 - the conformance fixtures, canonical JSON vectors, and schema catalog remain the contract.
 
-### 7. The stop rule
+### 7. The stop rule, and performance as a running report
 
 The program stops, with the hybrid binary removed and the JavaScript CLI kept as the
-product, if either of these holds:
+product, **only if parity fails**: a command cannot reach byte-identical parity without
+changing a published contract, and the owner declines to change that contract through the
+JavaScript CLI first.
 
-- **Parity fails.** A command cannot reach byte-identical parity without changing a
-  published contract, and the owner declines to change that contract through the
-  JavaScript CLI first.
-- **Performance is worse.** At #151, the Rust CLI is slower than the JavaScript CLI
-  (whole command) on any benchmark phase on `lab-windows-a` with identical results, and
-  the cause cannot be fixed within the port.
+**No benchmark result stops the program, and none blocks a command from going native or the
+cutover.** The owner's direction on 2026-09-27 is that Rust is the right implementation
+whatever the interim numbers show. Performance is measured and reported, and a regression
+becomes optimization work:
 
-Performance is otherwise **reported, not gating**. The whole-command numbers go to #42,
-where the budget decision lives.
+- **Checkpoints.** Benchmarks run at defined points (#151):
+  - checkpoint 0: the JavaScript CLI's baseline;
+  - after the skeleton with every command delegated, which measures the delegation cost;
+  - after each port;
+  - after the packaged install;
+  - at cutover.
+
+  Each checkpoint runs on `lab-windows-a`. POSIX figures are added where a host is
+  available.
+- **What each checkpoint records.** Whole-command and phase timings for the Rust CLI, the
+  JavaScript CLI, and the raw-Git floor, together with Git process counts, host load
+  conditions, and the exact commits measured.
+- **Where it is recorded.** The running report is the public wiki page
+  [Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing),
+  one section per checkpoint, newest first, with raw samples retained on #151.
+- **What a slower result produces.** An optimization issue linked from the report,
+  carrying the measurement and the suspected cause. It never produces a stop, a revert, or
+  a hold on the port.
+
+The whole-command numbers also feed #42, where any budget decision lives.
 
 ### 8. Layout and discipline
 
@@ -197,9 +215,9 @@ where the budget decision lives.
   with its own decision.
 - Every ported command passes its CLI-level tests under `VLAB_CLI` in all six modes before
   it stops delegating.
-- Process counts are part of parity. A ported command may use fewer Git processes only
-  where a read moves to a qualified native backend, and may never use more.
-- The benchmark's exact counts are checked against the JavaScript CLI's.
+- Git process counts are **reported, not part of parity**. Each checkpoint compares them
+  with the JavaScript CLI's. A ported command that launches more is an optimization
+  finding filed as an issue, never a parity failure.
 - Nothing under Gate B begins because of this program.
 
 ## Consequences
@@ -254,8 +272,9 @@ where the budget decision lives.
    interchangeable across implementations.
 5. **After cutover:** the JavaScript CLI retained as an oracle for two minor releases,
    then removed together with the N-API binding.
-6. **The stop rule:** in particular, whether "slower than the JavaScript CLI on any phase"
-   should instead be "on the phases named in #42".
+6. **The stop rule:** parity only. Performance never stops the program, as the owner
+   directed on 2026-09-27; it is reported at checkpoints on the Performance testing wiki
+   page, and a regression becomes an optimization issue.
 
 On acceptance, the same change amends ADR-0015 (status `Accepted, amended by ADR-0037`) and
 updates `docs/product.md` §15: the phase table and GP-12's note. The phase table is not
@@ -266,6 +285,9 @@ changed while this ADR is Proposed.
 - **Program and order:** #136. Enablers #140 (suites against any executable) and #141
   (skeleton and delegation), then #142 and #143, the ports #144–#149, then #150, #151, #152.
 - **Distribution:** #138 (ADR), #139 (npm publishing setup, human), #150 (CI).
+- **Performance:** #151 runs the checkpoints and maintains the running report on the
+  [Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing)
+  wiki page. Optimization findings become their own issues.
 - **On acceptance:** `docs/adr/0015-…` status line; `docs/product.md` §15 (phase table and
   gate text) and GP-12's row; `docs/architecture.md` once the first native command ships.
 - **At cutover:** NFR-PORT-01 (the Node.js requirement), `README.md` install, `AGENTS.md`,
