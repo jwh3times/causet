@@ -137,12 +137,15 @@ function cpuLoadPercent() {
   return Math.round((os.loadavg()[0] / os.cpus().length) * 100);
 }
 function loadSample(label) {
+  // Sustained load, not a momentary spike, decides whether a host is quiet:
+  // the median of five readings is the figure; the maximum is recorded too.
   const samples = [];
-  for (let index = 0; index < 3; index += 1) samples.push(cpuLoadPercent());
-  const valid = samples.filter((value) => value !== null);
+  for (let index = 0; index < 5; index += 1) samples.push(cpuLoadPercent());
+  const valid = samples.filter((value) => value !== null).sort((a, b) => a - b);
   return {
     label, at: new Date().toISOString(),
-    cpuPercent: valid.length ? Math.max(...valid) : null, cpuSamples: samples,
+    cpuPercent: valid.length ? valid[Math.floor(valid.length / 2)] : null,
+    cpuMaxPercent: valid.length ? valid.at(-1) : null, cpuSamples: samples,
     freeMemoryBytes: os.freemem(),
   };
 }
@@ -402,7 +405,7 @@ function markdown(evidence) {
   lines.push(`- **Implementations:** ${evidence.implementations.map((impl) => `\`${impl.name}\` (${impl.version})`).join(", ")}`);
   lines.push(`- **Native binding:** ${evidence.nativeBinding.available ? `available (\`${evidence.nativeBinding.sha256?.slice(0, 12)}\`)` : `unavailable (${evidence.nativeBinding.reason})`}`);
   lines.push(`- **Sampling:** ${evidence.settings.samples} timed samples after ${evidence.settings.warmup} warm-ups, interleaved across sides. Whole-process wall time`);
-  lines.push(`- **Load:** ${evidence.load.map((item) => `${item.label} ${item.cpuPercent ?? "?"}% CPU / ${(item.freeMemoryBytes / 2 ** 30).toFixed(1)} GiB free`).join("; ")}${evidence.noisy ? " — **noisy host**" : ""}${evidence.note ? `. Note: ${evidence.note}` : ""}`);
+  lines.push(`- **Load:** ${evidence.load.map((item) => `${item.label} ${item.cpuPercent ?? "?"}% CPU (max ${item.cpuMaxPercent ?? "?"}%) / ${(item.freeMemoryBytes / 2 ** 30).toFixed(1)} GiB free`).join("; ")}${evidence.noisy ? " — **noisy host**" : ""}${evidence.note ? `. Note: ${evidence.note}` : ""}`);
   lines.push(`- **Fixtures:** ${Object.values(evidence.fixtures).map((fixture) => `\`${fixture.name}\`: ${fixture.description}${fixture.commits ? ` (${fixture.commits} commits)` : ""}`).join("; ")}`);
   lines.push(`- **Equality:** ${evidence.equalityProblems.length === 0 ? "every deterministic read printed identical bytes across samples, engines and implementations" : evidence.equalityProblems.join("; ")}`);
   lines.push(`- **Duration:** ${Math.round(evidence.durationMs / 1000)} s`, "");
