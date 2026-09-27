@@ -1,12 +1,13 @@
 # ADR-0037: Reimplement the vlab CLI in Rust as a semantics-preserving port
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers
 - **Implementation:** [#136](https://github.com/jwh3times/vcs-lab/issues/136) (program map),
   decided in [#137](https://github.com/jwh3times/vcs-lab/issues/137)
 - **Amends:** [ADR-0015](0015-adopt-a-phased-native-core-program-with-rust.md) (phase order and
-  the rejected "Rust-first CLI rewrite"), when accepted
+  the rejected "Rust-first CLI rewrite")
 - **Related:** [ADR-0001](0001-use-git-as-the-compatibility-and-storage-substrate.md),
   [ADR-0009](0009-use-an-invocation-scoped-git-object-session.md),
   [ADR-0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md),
@@ -276,9 +277,12 @@ The whole-command numbers also feed #42, where any budget decision lives.
    directed on 2026-09-27; it is reported at checkpoints on the Performance testing wiki
    page, and a regression becomes an optimization issue.
 
-On acceptance, the same change amends ADR-0015 (status `Accepted, amended by ADR-0037`) and
-updates `docs/product.md` §15: the phase table and GP-12's note. The phase table is not
-changed while this ADR is Proposed.
+## Owner decision (2026-09-27)
+
+The owner accepted all six decisions. Decision 6, the stop rule, was amended before
+acceptance: no benchmark stops the program, and performance is a running report
+(decision 7). The same change marks ADR-0015 as amended and updates `docs/product.md` §15
+and GP-12.
 
 ## Implementation map
 
@@ -288,7 +292,8 @@ changed while this ADR is Proposed.
 - **Performance:** #151 runs the checkpoints and maintains the running report on the
   [Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing)
   wiki page. Optimization findings become their own issues.
-- **On acceptance:** `docs/adr/0015-…` status line; `docs/product.md` §15 (phase table and
-  gate text) and GP-12's row; `docs/architecture.md` once the first native command ships.
+- **Updated on acceptance:** ADR-0015's status line, `docs/product.md` §15 (the phase
+  table and the Gate A text) and GP-12's row. `docs/architecture.md` follows once the first
+  native command ships.
 - **At cutover:** NFR-PORT-01 (the Node.js requirement), `README.md` install, `AGENTS.md`,
   `docs/testing.md`, and `docs/native-engine.md`.

@@ -251,7 +251,7 @@ ADR that explains why.
 | GP-09 | Every optimization preserves semantics | Performance paths must produce the same plan, decisions, tree, and receipts as the ordinary Git path. |
 | GP-10 | Mutation is recoverable | Operations either complete with durable records, pause with sufficient context, or abort to the exact starting commit. |
 | GP-11 | Trust is explicit | A record being present is not equivalent to it being signed, authorized, or server-approved. |
-| GP-12 | Measure before replacing | Native storage, daemons, and protocol components require evidence from the compatibility layer. A semantics-preserving alternative engine may exist behind an equality-tested seam before any replacement decision (§15 Gate A). |
+| GP-12 | Measure before replacing | Native storage, daemons, and protocol components require evidence from the compatibility layer. A semantics-preserving alternative engine may exist behind an equality-tested seam before any replacement decision (§15 Gate A). The CLI itself is being reimplemented in Rust as a semantics-preserving port under [ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md), which is Gate A work and not a replacement decision. |
 
 Every increment inherits these, whichever horizon or phase it belongs to. Six
 consequences are worth restating because they are what a review actually checks:
@@ -860,6 +860,13 @@ caches and no canonical record store or persisted-contract change, and is
 removed from the package if it has not met its named budget within two minor
 releases after the engine first ships (ADR-0014).
 
+[ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) applies
+Gate A to the Rust CLI port ([#136](https://github.com/jwh3times/vcs-lab/issues/136)). For
+that program only, it waives item 3 and the two-release sunset. Its only stop rule is
+byte-identical parity. Performance is reported at checkpoints, on the wiki's
+[Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing) page,
+and never gates the program.
+
 **Gate B: semantics-changing native store, protocol, or draft stacks.** Begins
 only when trials demonstrate all of:
 
@@ -931,8 +938,9 @@ not open automatically, and phases 5 and 6 remain Gate B questions under
 | 2 Native planning and status | Gate A; remains gated on its own scope decision | Merge-plan and rebase-plan construction, receipt reachability, Change-ID extraction, the advisory `git-patch-id-heuristic` proof (a stable patch-id proof, if wanted, gets its own ADR), spec blob-identity checks; the FR-ID-06 audit and the FR-PLAN-08 proof bundle and verifier (both delivered in v0.12.0 over the Git engine; this phase re-implements them behind the seam) | Plan fingerprints byte-identical across engines on the suite plus at least 1,000 generated histories; status semantics preserved at zero processes | Per-operation fallback. |
 | 3 Derived catalog | Gate A, still gated, plus the incremental-catalog row below (an already-batched path over a representative budget, per ADR-0013) | Deletable fact segments with per-record digests, rebuildable indexes, `builtFrom` stamps, reindex command, approval facts, advisory leases in a mutable side file; caches outside synced folders; notes and refs remain canonical | 5,000-fact benchmark under budget with zero processes on both hosts; deleting the catalog yields identical output; torn-tail and stale-catalog recovery pass; writer-lock waits under 10 ms at 16 concurrent agents | Delete the directory. |
 | 4 In-memory forecasts and native mutation | Gate A; remains gated on its own scope decision | Ref transactions and object writes for checkpoints and retained resolutions; virtual three-way merge applying exact-resolution memory and Markdown section merge, with `git merge-tree` as co-oracle | Predicted-tree equality on the suite plus at least 1,000 generated three-way cases; divergence always surfaces as a blocker; FR-REC-06 apply-time check retained | Flag; droppable after 0a evidence. |
-| 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08); optional thin Rust CLI with byte-identical JSON — [issue #40](https://github.com/jwh3times/vcs-lab/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/vcs-lab/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
+| 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/vcs-lab/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/vcs-lab/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
 | 6 Gateway; service only if the row below fires | Gate B | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/vcs-lab/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/vcs-lab/issues/37)), actor trust ([#38](https://github.com/jwh3times/vcs-lab/issues/38)), then landing policy ([#39](https://github.com/jwh3times/vcs-lab/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
+| CLI port (a track beside phases 1–6) | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/vcs-lab/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `vlab` that runs without Node.js ([#152](https://github.com/jwh3times/vcs-lab/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
 
 ### Decision rows: what evidence permits which next step
 
