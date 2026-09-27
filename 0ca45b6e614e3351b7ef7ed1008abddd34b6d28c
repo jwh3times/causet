@@ -1,0 +1,31 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mujwo7gfdeff8e09aafd",
+      "mode": "compact",
+      "sourceRef": "jwh3times/perf-harness",
+      "sourceHead": "c2244051581f339982275c0256972e1312500c07",
+      "sourceSubject": "fix: measure host CPU load without spawning a probe",
+      "targetBefore": "92d4bfd9935113af7ac73585541a2a743f6851c2",
+      "landingCommit": "0ca45b6e614e3351b7ef7ed1008abddd34b6d28c",
+      "base": "92d4bfd9935113af7ac73585541a2a743f6851c2",
+      "absorbedCommits": [
+        "9bce784cadb667f1a7724f2d255d18dbb44597c8",
+        "d331d0ae01a1f153abd0f8e70e90cd0299c8c1ba",
+        "cf744986dfc2f759fa031bec48059770ae205e86",
+        "c2244051581f339982275c0256972e1312500c07"
+      ],
+      "absorbedChanges": [
+        "ch_0mujvbi5wb477e6b22986",
+        "ch_0mujvcm9ab682e104b077",
+        "ch_0mujvcxv9f557f09c466a",
+        "ch_0mujveltn79df9430ac53"
+      ],
+      "resultTree": "de84c3c5988430dbc0833691223a4990d125bb85",
+      "createdAt": "2026-09-27T14:20:14.734Z"
+    }
+  ]
+}
