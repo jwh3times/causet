@@ -86,6 +86,8 @@ function parseArgs(argv) {
 
 const perfGitConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), "vlab-perf-gitconfig-"));
 const perfGitConfig = path.join(perfGitConfigDir, "gitconfig");
+// Removed on every exit path, including an argument or load-guard failure.
+process.on("exit", () => fs.rmSync(perfGitConfigDir, { recursive: true, force: true }));
 fs.writeFileSync(perfGitConfig, [
   "[user]", "\tname = Perf Bench", "\temail = perf@example.invalid",
   "[core]", "\tautocrlf = false",
