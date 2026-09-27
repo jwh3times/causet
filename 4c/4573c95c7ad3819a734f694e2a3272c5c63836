@@ -1,0 +1,25 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mukftterd19d6ba4d920",
+      "mode": "compact",
+      "sourceRef": "jwh3times/vlab-cli-harness",
+      "sourceHead": "6bebc3824c6e8a76ca5b1bc9f4d0f0ad2d059f94",
+      "sourceSubject": "test: run the suites against any vlab executable through VLAB_CLI",
+      "targetBefore": "1041dc2a4d5712d40e6a01008f0d689f56fd906b",
+      "landingCommit": "4c4573c95c7ad3819a734f694e2a3272c5c63836",
+      "base": "1041dc2a4d5712d40e6a01008f0d689f56fd906b",
+      "absorbedCommits": [
+        "6bebc3824c6e8a76ca5b1bc9f4d0f0ad2d059f94"
+      ],
+      "absorbedChanges": [
+        "ch_0mukd9ynu0ff2235a4252"
+      ],
+      "resultTree": "01d493f170c9598a93a29a0a302412ce1b15061a",
+      "createdAt": "2026-09-27T23:16:29.152Z"
+    }
+  ]
+}
