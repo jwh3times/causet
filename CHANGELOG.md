@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Propose how the Rust CLI is distributed through npm (issue #138, ADR-0038,
+  Proposed). A main package, `causal-vcs-lab`, lists one package per platform
+  (`@vcs-lab/cli-<platform>`) as exact-version `optionalDependencies`. Its
+  `preinstall` step copies the verified platform executable onto the `bin`
+  target before npm links it, so `vlab` runs with no Node process on Windows
+  and POSIX. A Node launcher remains the fallback when install scripts do not
+  run. Nothing is downloaded or compiled at install time. The first release
+  covers Windows x64 and Linux x64; arm64, musl and macOS follow in waves.
+  Publishing uses npm trusted publishing with provenance, and code signing is
+  deferred.
+
 - Add `.github/workflows/perf.yml`, which runs the performance checkpoint
   harness on GitHub-hosted Windows and Ubuntu runners on manual dispatch,
   weekly on `main`, and for pull requests touching `native/`, the harness, or

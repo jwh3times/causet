@@ -66,6 +66,7 @@ sequence in §15.
 | [0035](0035-make-interactive-rewrites-declare-what-they-do-to-identity.md) | Accepted | Give reword, edit, squash, and fixup their own identity rules; an edit records an amendment so Change-Id coverage stops over-claiming |
 | [0036](0036-keep-suggested-resolutions-outside-the-resolution-family.md) | Accepted | Keep a model-suggested resolution in a private family the exact-reuse path cannot read, so it cannot masquerade as a decision |
 | [0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) | Accepted | Reimplement the CLI in Rust as a byte-identical port under Gate A discipline, delegating unported commands to the JavaScript CLI until cutover |
+| [0038](0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md) | Proposed | Deliver the Rust CLI as per-platform npm packages; a preinstall copy puts the executable at the bin target so `vlab` runs without Node, with a Node launcher as the fallback |
 
 ## Creating or changing an ADR
 
