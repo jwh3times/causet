@@ -43,7 +43,7 @@ sequence in §15.
 | [0012](0012-treat-workspace-lifecycle-as-reversible-materialization-and-drafts-as-checkpoint-inputs.md) | Accepted | Treat workspace lifecycle as reversible materialization and drafts as checkpoint inputs |
 | [0013](0013-measure-scan-amplification-before-adding-indexes-or-a-service.md) | Accepted | Measure scan amplification before adding indexes or a service |
 | [0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md) | Accepted | Split the native implementation gate into engine and store gates |
-| [0015](0015-adopt-a-phased-native-core-program-with-rust.md) | Accepted | Adopt a phased native-core program with Rust as the core language |
+| [0015](0015-adopt-a-phased-native-core-program-with-rust.md) | Accepted; amended by ADR-0037 | Adopt a phased native-core program with Rust as the core language |
 | [0016](0016-simulate-clean-forecast-steps-with-a-merge-tree-session.md) | Accepted | Simulate clean forecast steps with a merge-tree session behind a flag |
 | [0017](0017-commit-a-per-host-benchmark-baseline-with-an-automated-regression-check.md) | Accepted | Commit a per-host benchmark baseline with an automated regression check |
 | [0018](0018-disable-git-rerere-inside-vlab-picks-and-landing-merges.md) | Accepted | Disable Git rerere inside vlab's cherry-picks and landing merges |
@@ -65,6 +65,7 @@ sequence in §15.
 | [0034](0034-recreate-merges-as-joins-that-claim-nothing.md) | Accepted | Recreate a merge as a join that claims nothing about the changes beneath it, taking a new identity and carrying only its resolutions |
 | [0035](0035-make-interactive-rewrites-declare-what-they-do-to-identity.md) | Accepted | Give reword, edit, squash, and fixup their own identity rules; an edit records an amendment so Change-Id coverage stops over-claiming |
 | [0036](0036-keep-suggested-resolutions-outside-the-resolution-family.md) | Accepted | Keep a model-suggested resolution in a private family the exact-reuse path cannot read, so it cannot masquerade as a decision |
+| [0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) | Accepted | Reimplement the CLI in Rust as a byte-identical port under Gate A discipline, delegating unported commands to the JavaScript CLI until cutover |
 
 ## Creating or changing an ADR
 
