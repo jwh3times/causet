@@ -40,6 +40,12 @@ or build step.
   mode on both platforms plus the Node 20 floor; use it for release and
   high-risk platform qualification as described in `docs/testing.md`.
   The per-host benchmark remains local.
+- `.github/workflows/perf.yml` runs `scripts/perf-checkpoint.mjs` on hosted
+  Windows and Ubuntu runners: on manual dispatch, weekly on `main`, and for PRs
+  touching `native/`, the harness, or the workflow. It reports only what a
+  shared runner can measure fairly (equality, exit status, Git process counts,
+  and comparisons within one run). Timings never fail it; the absolute
+  reference stays the local procedure on the wiki's Performance testing page.
 - `npm run test:benchmark` compares bounded benchmarks against the committed
   per-host baseline in `benchmarks/baseline.json`; `npm run benchmark:record -- --host <label>`
   refreshes an explicitly identified machine's entry on a quiet machine. Use the

@@ -888,6 +888,18 @@ lines. It emits JSON evidence and a Markdown summary:
 node scripts/perf-checkpoint.mjs --host lab-windows-a --checkpoint <n>   --output <new-file.json> --markdown <new-file.md> [--impl rust=<vlab-executable>]
 ```
 
+`.github/workflows/perf.yml` runs the same harness on GitHub-hosted Windows
+and Ubuntu runners: on manual dispatch (samples and suites are inputs), weekly
+on `main`, and for pull requests touching `native/`, the harness, or the
+workflow. Hosted runners are shared, so absolute milliseconds are not
+comparable between runs. The job contributes what survives that: byte
+equality, exit status, Git process counts, and comparisons made within one
+run (native against the Git engine, each command against its Git floor, and
+the Rust CLI against the JavaScript CLI, which the job adds automatically once
+the workspace builds a `vlab` binary). It posts the summary to the job page
+and keeps the JSON as an artifact for 90 days. It fails only when the harness
+cannot measure, never on a timing.
+
 Results never gate anything. The full procedure (host preparation, Parts B and
 C, validity checks, recording, and optimization issues) is the wiki's
 [Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing)
