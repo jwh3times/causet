@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Propose migrating the persisted `vcs-lab` identifiers to `causet` (issue
+  #159, ADR-0039, Proposed). Existing records keep their `vcs-lab.*` ids
+  forever, because rewriting them would change hashed bytes, so classification
+  reads `vcs-lab.` as a permanent alias of `causet.` while writers emit only
+  `causet.*`. A `cst migrate` command creates `refs/notes/causet` and
+  `refs/causet/*` at the same objects, moves runtime directories, repoints the
+  notes configuration and stages the spec-manifest move, and never deletes
+  anything. Old refs, paths and `VLAB_*` variables stay readable for a window
+  of at least two minor releases. This repository's origin migrates from a
+  fresh clone by creating refs only. The owner renames the repository after
+  the code migration.
+
 - Accept how the Rust CLI is distributed through npm (issue #138, ADR-0038).
   The owner chose the name: the npm package is `causet`, for causal set, and
   the command is `cst`, with `vlab` kept as a transition alias; renaming the
