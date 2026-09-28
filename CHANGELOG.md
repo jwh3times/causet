@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rename the Rust crates to `causet-core`, `causet-binding` and `causet-cli`,
+  and the optional prebuild to `native/prebuilds/<platform>-<arch>/causet-core.node`
+  (issue #159, ADR-0039 §7 step 2). Rebuild with `npm run build:native`; a
+  `vlab-core.node` left from an earlier build is no longer loaded.
+
 - Add the Rust CLI skeleton (issue #141, ADR-0037 decision 4). The `native/`
   workspace now builds `cst`, a hybrid executable that is not yet packaged.
   - **It answers natively** help, `--version`, the global flag and

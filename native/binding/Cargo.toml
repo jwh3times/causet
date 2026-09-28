@@ -1,5 +1,5 @@
 [package]
-name = "vlab-binding"
+name = "causet-binding"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -9,7 +9,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-vlab-core = { path = "../core" }
+causet-core = { path = "../core" }
 napi = { version = "=3.12.4", default-features = false, features = ["napi8", "dyn-symbols"] }
 napi-derive = "=3.6.5"
 

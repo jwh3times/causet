@@ -1799,7 +1799,7 @@ per-entity process amplification.
 [ADR-0014](adr/0014-split-the-native-implementation-gate-into-engine-and-store-gates.md)
 and [ADR-0015](adr/0015-adopt-a-phased-native-core-program-with-rust.md) set
 the next increments: first Git-native wins with no new language, then a schema
-catalog and a read-side engine seam, then a Rust `vlab-core` behind that seam
+catalog and a read-side engine seam, then a Rust `causet-core` behind that seam
 under Gate A with a kill switch and sunset. The first increment is delivered
 on both platforms: [ADR-0016](adr/0016-simulate-clean-forecast-steps-with-a-merge-tree-session.md)
 simulates clean forecast steps through one `git merge-tree` session (the

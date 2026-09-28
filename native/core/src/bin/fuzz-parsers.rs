@@ -43,7 +43,7 @@ fn main() {
         _ => {}
       }
     }
-    vlab_core::fuzz_parsers(&bytes);
+    causet_core::fuzz_parsers(&bytes);
   }
   println!("completed {cases} mutation cases without a panic");
 }

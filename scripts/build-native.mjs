@@ -13,18 +13,18 @@ const result = spawnSync(process.env.CARGO || "cargo", ["build", "--locked", "--
 });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
-const library = process.platform === "win32" ? "vlab_binding.dll"
-  : process.platform === "darwin" ? "libvlab_binding.dylib" : "libvlab_binding.so";
+const library = process.platform === "win32" ? "causet_binding.dll"
+  : process.platform === "darwin" ? "libcauset_binding.dylib" : "libcauset_binding.so";
 const directory = path.join(root, "native/prebuilds", `${process.platform}-${process.arch}`);
 mkdirSync(directory, { recursive: true });
-copyFileSync(path.join(root, "native/target/release", library), path.join(directory, "vlab-core.node"));
+copyFileSync(path.join(root, "native/target/release", library), path.join(directory, "causet-core.node"));
 
 const metadata = spawnSync(process.env.CARGO || "cargo", ["metadata", "--locked", "--format-version", "1", "--filter-platform", target], {
   cwd: path.join(root, "native"), encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
 });
 if (metadata.error) throw metadata.error;
 if (metadata.status !== 0) throw new Error(metadata.stderr);
-const notices = ["Third-party notices for the optional vlab native binding.\n"];
+const notices = ["Third-party notices for the optional causet native binding.\n"];
 const graph = JSON.parse(metadata.stdout);
 const tree = spawnSync(process.env.CARGO || "cargo", ["tree", "--locked", "--prefix", "none", "--format", "{p}"], {
   cwd: path.join(root, "native"), encoding: "utf8",

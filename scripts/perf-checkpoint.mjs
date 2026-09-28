@@ -462,7 +462,7 @@ for (const impl of options.impls) {
   impl.version = run(impl.command[0], [...impl.command.slice(1), "--version"], root, childEnv()).stdout.trim();
   impl.executableSha256 = impl.name === "js" ? null : sha256(fs.readFileSync(impl.command[0]));
 }
-const binding = path.join(root, "native/prebuilds", `${process.platform}-${process.arch}`, "vlab-core.node");
+const binding = path.join(root, "native/prebuilds", `${process.platform}-${process.arch}`, "causet-core.node");
 // Ask the engine module directly: `doctor` needs a repository, and a silent
 // "unavailable" here would skip every native-engine measurement.
 const { describeReadEngines } = await import(pathToFileURL(path.join(root, "src/engine.js")).href);

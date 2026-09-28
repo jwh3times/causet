@@ -111,7 +111,7 @@ jobs:
           skipped="$(grep -E '^(ℹ|#) skipped' suite.log | tail -1 | awk '{print $NF}')"
           echo "skipped: ${skipped:-none reported}"
           test "$skipped" = "1"
-      - name: No lingering vlab processes
+      - name: No lingering causet processes
         # Release-gate item 7. The suite's fixtures start Git object-session
         # workers and Git processes; every one must be gone when the suite is.
         # Linux only: the Windows runner's Git Bash has no pgrep.

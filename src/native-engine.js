@@ -34,7 +34,7 @@ export function loadNativeEngine(load = require) {
   if (process.env.VLAB_TEST_NATIVE_BINDING === "missing") return unavailable("binding-missing");
   let binding;
   try {
-    binding = load(`../native/prebuilds/${process.platform}-${process.arch}/vlab-core.node`);
+    binding = load(`../native/prebuilds/${process.platform}-${process.arch}/causet-core.node`);
     if (binding.profileVersion?.() !== 1 || ["repoContext", "listRefs", "readObjects", "listNoteEntries"]
       .some((operation) => typeof binding[operation] !== "function")) {
       return unavailable("binding-incompatible");

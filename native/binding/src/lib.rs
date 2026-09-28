@@ -1,7 +1,7 @@
 use napi::{Env, Error, Result, bindgen_prelude::BufferSlice};
 use napi_derive::napi;
 
-fn convert<T>(result: vlab_core::Result<T>) -> Result<T> {
+fn convert<T>(result: causet_core::Result<T>) -> Result<T> {
   result.map_err(Error::from_reason)
 }
 
@@ -39,7 +39,7 @@ pub struct ObjectRecord<'env> {
 
 #[napi(catch_unwind)]
 pub fn repo_context(cwd: String) -> Result<Context> {
-  let c = convert(vlab_core::context(&cwd))?;
+  let c = convert(causet_core::context(&cwd))?;
   Ok(Context {
     root: c.root,
     git_dir: c.git_dir,
@@ -50,7 +50,7 @@ pub fn repo_context(cwd: String) -> Result<Context> {
 #[napi(catch_unwind)]
 pub fn list_refs(pattern: String, cwd: String) -> Result<Vec<RefRecord>> {
   Ok(
-    convert(vlab_core::refs(&pattern, &cwd))?
+    convert(causet_core::refs(&pattern, &cwd))?
       .into_iter()
       .map(|(name, oid)| RefRecord { name, oid })
       .collect(),
@@ -66,7 +66,7 @@ pub fn read_objects<'env>(
   cwd: String,
   contents: bool,
 ) -> Result<Vec<ObjectRecord<'env>>> {
-  convert(vlab_core::objects(expressions, &cwd, contents))?
+  convert(causet_core::objects(expressions, &cwd, contents))?
     .into_iter()
     .map(|r| {
       Ok(ObjectRecord {
@@ -86,7 +86,7 @@ pub fn read_objects<'env>(
 #[napi(catch_unwind)]
 pub fn list_note_entries(notes_ref: String, cwd: String) -> Result<Vec<NoteRecord>> {
   Ok(
-    convert(vlab_core::notes(&notes_ref, &cwd))?
+    convert(causet_core::notes(&notes_ref, &cwd))?
       .into_iter()
       .map(|(note, target)| NoteRecord { note, target })
       .collect(),
