@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.19.0
 
 - Amend ADR-0038 (issue #139): the npm organization name `causet` is
   unavailable, so the platform packages are `@holland-vip/causet-<platform>`,
