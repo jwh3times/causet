@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Accept how the Rust CLI is distributed through npm (issue #138, ADR-0038).
+  The owner chose the name: the npm package is `causet`, for causal set, and
+  the command is `cst`, with `vlab` kept as a transition alias; renaming the
+  persisted `vcs-lab` identifiers and the repository is a separate migration
+  (#159). The main package lists one package per platform
+  (`@causet/cli-<platform>`) as exact-version `optionalDependencies`. Its
+  `preinstall` step copies the verified platform executable onto the `bin`
+  target before npm links it, so `cst` runs with no Node process on Windows
+  and POSIX. A Node launcher remains the fallback when install scripts do not
+  run. Nothing is downloaded or compiled at install time. The first release
+  covers Windows x64 and Linux x64; arm64, musl and macOS follow in waves.
+  Publishing uses npm trusted publishing with provenance, and code signing is
+  deferred.
+
 - Route every CLI launch in the test suites, the demos, the benchmark and the
   real-repository harness through `test-support/vlab-command.js`, so
   `VLAB_CLI=<executable> npm test` runs the same suites against another
