@@ -1,6 +1,6 @@
 # ADR-0038: Deliver the Rust CLI through per-platform npm packages, linked without Node
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes)
 - **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers
@@ -317,3 +317,39 @@ That is tracked as #159 and does not change this ADR's decisions.
   kept as an alias, before any Rust code depends on the name (§4).
 - **At cutover (#152):** `README.md` install instructions and `docs/native-engine.md`'s packaging
   section.
+
+## Amendment 2026-09-28: `@holland-vip/` scope, and no placeholder publishes
+
+**The `causet` organization name is unavailable on npm.** npm treats organization names,
+usernames and package names as first come, first served. It "does not resolve squatting claims on
+demand" and transfers a name only on a trademark claim
+([dispute policy](https://docs.npmjs.com/policies/disputes)). The package name `causet` is still
+free: packages and organizations are separate namespaces.
+
+The same policy forbids publishing "a package … simply for the purposes of reserving it for future
+use". So the placeholder publishes that #139's procedure first described are withdrawn.
+
+Decided by the owner on 2026-09-28:
+
+- **Platform packages go under the owner's existing `@holland-vip/` organization,** named
+  `@holland-vip/causet-<platform>`, for example `@holland-vip/causet-win32-x64` and
+  `@holland-vip/causet-linux-x64-gnu`.
+  - This replaces `@causet/cli-<platform>` everywhere §4, §6 and the owner decisions name it.
+  - It also replaces the unscoped `causet-<platform>` fallback, because an owned scope protects
+    sibling names and an unscoped name does not.
+  - If `@causet/` is ever obtained, moving to it is an ordinary release change. The main
+    package's `optionalDependencies` name the new packages, and the old ones are deprecated.
+    Users only ever type `causet`.
+- **The main package stays `causet`, unscoped.** Its first publish is a real release: v0.19.0, the
+  JavaScript CLI with `cst` and the `vlab` alias. §1 already has the main package carry the
+  JavaScript CLI until cutover, so shipping it before the Rust binaries exist changes nothing
+  about the layout. Every later release adds the platform packages when #150 produces them.
+- **First publishes are manual, and every later one is trusted.** npm configures a trusted
+  publisher only on a package that already exists:
+  - `causet` is first published by the owner from the v0.19.0 tarball (#139, step 3);
+  - each platform package is first published once from #150's CI artifacts (#139, step 4).
+
+  From then on, the release workflow publishes through trusted publishing with provenance, and
+  tokens are disallowed.
+- **No name is published before it has real content.** Scoped platform names need no early claim,
+  because only `holland-vip` can publish under `@holland-vip/`.
