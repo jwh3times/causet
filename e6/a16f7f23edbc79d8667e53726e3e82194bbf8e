@@ -1,0 +1,27 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mulbblfcfa8d58026c06",
+      "mode": "compact",
+      "sourceRef": "jwh3times/adr-0039",
+      "sourceHead": "7ab44210d180d08a5577d579b131c1b3be279f4e",
+      "sourceSubject": "docs: accept ADR-0039",
+      "targetBefore": "b66d75559ee37c41b9b659221e72b8fec105248c",
+      "landingCommit": "e6a16f7f23edbc79d8667e53726e3e82194bbf8e",
+      "base": "b66d75559ee37c41b9b659221e72b8fec105248c",
+      "absorbedCommits": [
+        "05a67d3b92e6663f00ceab3825c1e093cc05e7b5",
+        "7ab44210d180d08a5577d579b131c1b3be279f4e"
+      ],
+      "absorbedChanges": [
+        "ch_0mulb0l4wea14cd3e9fd5",
+        "ch_0mulbaosc32c9c3648446"
+      ],
+      "resultTree": "a7f7fc44a6d25ddef8170be35c621199dcf5d435",
+      "createdAt": "2026-09-28T13:58:06.756Z"
+    }
+  ]
+}
