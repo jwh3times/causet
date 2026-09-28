@@ -88,7 +88,7 @@ export function withReadEngine(engine, callback) {
 
 function sessionDiagnostic(event, details = {}) {
   if (process.env.VLAB_GIT_SESSION_DIAGNOSTICS !== "1") return;
-  const line = `[vlab session] ${JSON.stringify({
+  const line = `[cst session] ${JSON.stringify({
     at: new Date().toISOString(),
     pid: process.pid,
     event,
@@ -151,7 +151,7 @@ function recordDirectRead(command) {
   }
   if (process.env.VLAB_TRACE === "1") {
     process.stderr.write(
-      `[vlab trace] git ${command} was read outside the engine seam\n`,
+      `[cst trace] git ${command} was read outside the engine seam\n`,
     );
   }
 }
@@ -185,7 +185,7 @@ function traceGitMetric(item) {
         : "reused persistent process"
       : "new process";
   process.stderr.write(
-    `[vlab trace] ${item.durationMs.toFixed(1)}ms git ${item.command} (${detail})\n`,
+    `[cst trace] ${item.durationMs.toFixed(1)}ms git ${item.command} (${detail})\n`,
   );
 }
 
@@ -744,7 +744,7 @@ function queryObjectSession(cwd, command, expressions) {
     session.disable();
     if (process.env.VLAB_TRACE === "1") {
       process.stderr.write(
-        `[vlab trace] Git object session unavailable; using ordinary processes (${error.message})\n`,
+        `[cst trace] Git object session unavailable; using ordinary processes (${error.message})\n`,
       );
     }
     return null;

@@ -177,8 +177,9 @@ function stats(values) {
   };
 }
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+// `[vlab trace]` is the prefix before #159, so earlier builds stay measurable (ADR-0039 §1).
 const traceProcesses = (stderr) => stderr.split(/\r?\n/)
-  .filter((line) => /^\[vlab trace\] .* \((new process|new persistent process)\)$/.test(line)).length;
+  .filter((line) => /^\[(?:cst|vlab) trace\] .* \((new process|new persistent process)\)$/.test(line)).length;
 
 // ------------------------------------------------------------------ fixtures
 

@@ -206,7 +206,7 @@ function tracedGitCommands(cwd, ...args) {
   // lines that actually started one, which is what a process budget is about.
   const processes = [];
   for (const line of result.stderr.split(/\r?\n/)) {
-    const match = line.match(/^\[vlab trace\] [\d.]+ms git (\S+) \(([^)]+)\)/);
+    const match = line.match(/^\[cst trace\] [\d.]+ms git (\S+) \(([^)]+)\)/);
     if (!match) continue;
     commands.push(match[1]);
     if (match[2] === "new process" || match[2] === "new persistent process") {
@@ -3176,7 +3176,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
     env: testEnv({ VLAB_TRACE: "1" }),
   });
   assert.equal(traced.status, 0);
-  assert.match(traced.stderr, /\[vlab trace\].*git --version/);
+  assert.match(traced.stderr, /\[cst trace\].*git --version/);
 
   const tracedOption = spawnSync(
     vlabCommand,
@@ -4125,7 +4125,7 @@ test("workspace listing batches one status query per existing path and preserves
 
   const traceCommands = (stderr) => stderr
     .split(/\r?\n/)
-    .map((line) => line.match(/^\[vlab trace\] [\d.]+ms git (\S+) /)?.[1])
+    .map((line) => line.match(/^\[cst trace\] [\d.]+ms git (\S+) /)?.[1])
     .filter(Boolean);
   const listTraced = (...args) => spawnSync(
     vlabCommand,

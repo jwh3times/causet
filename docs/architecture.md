@@ -1089,8 +1089,8 @@ Without an active session the ordinary listing command is used directly.
 Opt-in lifecycle diagnostics record session/worker creation, request posting,
 shared-memory waits, Git request/response events, fallback, and shutdown.
 `VLAB_GIT_SESSION_DIAGNOSTICS=1` writes one JSON line per event to stderr from
-the main thread (`[vlab session]`, which also covers the merge-tree session
-below) and from the object-session worker (`[vlab session-worker]`), and
+the main thread (`[cst session]`, which also covers the merge-tree session
+below) and from the object-session worker (`[cst session-worker]`), and
 `VLAB_GIT_SESSION_DIAGNOSTICS_FILE=<path>` additionally appends the same lines
 to that file, with a failed append ignored so diagnostics can never change
 session behaviour. They are disabled during normal operation and are intended

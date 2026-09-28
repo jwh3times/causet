@@ -4,7 +4,7 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 
 function sessionDiagnostic(event, details = {}) {
   if (process.env.VLAB_GIT_SESSION_DIAGNOSTICS !== "1") return;
-  const line = `[vlab session-worker] ${JSON.stringify({
+  const line = `[cst session-worker] ${JSON.stringify({
     at: new Date().toISOString(),
     pid: process.pid,
     threadId,
