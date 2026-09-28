@@ -200,9 +200,19 @@ evidence for the selected CLI is the tests *not* in that report.
 
 With `VLAB_CLI` pointing at `bin/vlab.js` explicitly, every mode passes exactly
 as it does with `VLAB_CLI` unset; that run proves the indirection adds nothing.
-Once a Rust CLI exists, `VLAB_CLI=<rust vlab>` in all six modes is the
-qualification a ported command needs before it stops delegating (ADR-0037
-decision 4).
+`VLAB_CLI=native/target/release/cst.exe` (or `cst` off Windows) in all six
+modes is the qualification a ported command needs before it stops delegating
+(ADR-0037 decision 4).
+
+The Rust CLI (`native/cli`, #141) delegates each command it has not ported to
+the JavaScript CLI. `VLAB_DELEGATE=always` forces delegation of everything, to
+compare a ported command with the oracle, and `VLAB_DELEGATE=never` refuses
+delegation, so what remains is only what the Rust CLI answers itself.
+`test/native-cli.test.js` uses `never` to compare every native answer (help,
+version, and each usage failure, human and JSON) with the JavaScript CLI byte
+for byte, and checks that a delegated command's output and exit status pass
+through unchanged. It uses the `VLAB_CLI` executable, or else the release build
+`node scripts/build-native.mjs` produces, and skips when neither exists.
 
 The suite includes `test/schema-catalog.test.js`, which keeps the published
 JSON Schema catalog in `docs/schemas/` in agreement with the executable

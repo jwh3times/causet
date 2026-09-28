@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- Add the Rust CLI skeleton (issue #141, ADR-0037 decision 4). The `native/`
+  workspace now builds `cst`, a hybrid executable that is not yet packaged.
+  - **It answers natively** help, `--version`, the global flag and
+    environment failures, a flag missing its value, an unknown command, and
+    every command's argument-only usage failure, human and `--json` alike.
+    It takes the help text and the version from `src/cli.js` and
+    `src/version.js` at build time, so neither can drift.
+  - **It delegates everything else, whole,** to `node bin/vlab.js` with the
+    same arguments, environment, working directory and streams, and returns
+    its exit code. It finds `bin/vlab.js` above its own location, or at
+    `VLAB_JS_CLI`. Delegation adds one process on Windows and none on POSIX,
+    where the JavaScript CLI replaces it.
+  - **`VLAB_DELEGATE`** is the forced-delegation switch: `always` sends every
+    invocation to the JavaScript CLI, and `never` refuses to delegate, so a
+    test can prove what is native.
+  - `test/native-cli.test.js` compares every native answer with the
+    JavaScript CLI byte for byte. It runs when a release build or a
+    `VLAB_CLI` executable exists, which CI's native build provides.
+    `.github/workflows/perf.yml` now measures `cst`.
+
 ## 0.19.1
 
 - Publish as `@holland-vip/causet` (ADR-0038, second amendment). npm refused

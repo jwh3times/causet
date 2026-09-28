@@ -69,10 +69,10 @@ jobs:
           node scripts/build-native.mjs
       - name: Select implementations
         id: impls
-        # The Rust CLI (#141) joins automatically once the workspace builds a
-        # `vlab` binary; until then the JavaScript CLI is measured alone.
+        # The workspace builds the Rust CLI, `cst` (#141), which answers what it
+        # has ported and delegates every other command to the JavaScript CLI.
         run: |
-          for candidate in native/target/release/vlab.exe native/target/release/vlab; do
+          for candidate in native/target/release/cst.exe native/target/release/cst; do
             if [ -f "$candidate" ]; then
               echo "args=--impl rust=$candidate" >> "$GITHUB_OUTPUT"
               echo "Rust CLI found: $candidate"
