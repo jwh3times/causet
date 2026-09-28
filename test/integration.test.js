@@ -17,7 +17,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 
 test("cst is the command and vlab stays an alias for the same entry point", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
-  assert.equal(manifest.name, "causet");
+  assert.equal(manifest.name, "@holland-vip/causet");
   assert.equal(manifest.bin.cst, "./bin/vlab.js");
   assert.equal(manifest.bin.vlab, manifest.bin.cst);
 });

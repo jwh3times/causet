@@ -1,8 +1,19 @@
 {
-  "name": "causet",
-  "version": "0.19.0",
+  "name": "@holland-vip/causet",
+  "version": "0.19.1",
   "description": "A Git-backed laboratory for causal reconciliation, validated metadata portability, sparse specifications, reusable resolutions, and AI workspaces.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwh3times/vcs-lab.git"
+  },
+  "homepage": "https://github.com/jwh3times/vcs-lab#readme",
+  "bugs": {
+    "url": "https://github.com/jwh3times/vcs-lab/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "cst": "./bin/vlab.js",
     "vlab": "./bin/vlab.js"

@@ -75,7 +75,8 @@ npm link
 cst --help
 ```
 
-The command is `cst` and the package is `causet` (ADR-0038). `vlab`, the command's old name,
+The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038), installed with
+`npm install -g @holland-vip/causet`. `vlab`, the command's old name,
 still works as an alias for the same program during the transition, and prints identical
 output.
 
@@ -90,7 +91,7 @@ On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are o
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causet-0.19.0.bundle vcs-lab
+git clone /path/to/causet-0.19.1.bundle vcs-lab
 cd vcs-lab
 git remote remove origin
 npm link
@@ -102,7 +103,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 ```bash
 git init -b main
 git add .
-git commit -m "Bootstrap causet 0.19.0"
+git commit -m "Bootstrap causet 0.19.1"
 npm link
 npm test
 ```
