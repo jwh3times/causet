@@ -1,0 +1,127 @@
+//! `cst`, the Rust command-line interface (ADR-0037). While the port is under
+//! way it answers natively only what `front` models byte for byte, and
+//! delegates every other invocation, whole, to the JavaScript CLI.
+#![forbid(unsafe_code)]
+
+mod delegate;
+mod front;
+mod json;
+
+use front::Outcome;
+use std::{env, ffi::OsString, io::Write, process};
+
+const HELP: &str = include_str!(concat!(env!("OUT_DIR"), "/help.txt"));
+const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
+
+/// Chooses between the native answer and the JavaScript CLI: `always`
+/// delegates every invocation, so a ported command can be compared with the
+/// oracle; `never` refuses to delegate, so a test can prove what is native.
+const DELEGATE_VARIABLE: &str = "VLAB_DELEGATE";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Delegation {
+  Auto,
+  Always,
+  Never,
+}
+
+fn main() {
+  let raw: Vec<OsString> = env::args_os().skip(1).collect();
+  let delegation = match env::var(DELEGATE_VARIABLE).as_deref() {
+    Err(env::VarError::NotPresent) | Ok("" | "auto") => Delegation::Auto,
+    Ok("always") => Delegation::Always,
+    Ok("never") => Delegation::Never,
+    Ok(other) => exit_with(&format!(
+      "cst: Unknown delegation mode '{other}' in {DELEGATE_VARIABLE}. Use one of: auto, always, never.\n"
+    )),
+    Err(env::VarError::NotUnicode(_)) => {
+      exit_with(&format!("cst: {DELEGATE_VARIABLE} is not valid Unicode.\n"))
+    }
+  };
+  let outcome = if delegation == Delegation::Always {
+    Outcome::Delegate {
+      command: String::new(),
+    }
+  } else {
+    decide(&raw)
+  };
+  let mut stdout = std::io::stdout().lock();
+  let mut stderr = std::io::stderr().lock();
+  // Output errors are ignored, as Node ignores them on a closed stream.
+  let code = match outcome {
+    Outcome::Help => {
+      let _ = writeln!(stdout, "{HELP}");
+      0
+    }
+    Outcome::Version => {
+      let _ = writeln!(stdout, "causet {VERSION}");
+      0
+    }
+    Outcome::Fail {
+      failure,
+      json: true,
+    } => {
+      let _ = writeln!(stdout, "{}", json::envelope(&failure));
+      1
+    }
+    Outcome::Fail {
+      failure,
+      json: false,
+    } => {
+      let _ = writeln!(stderr, "cst: {}", failure.message);
+      1
+    }
+    Outcome::Delegate { command } => {
+      if delegation == Delegation::Never {
+        exit_with(&format!(
+          "cst: '{command}' is not ported to the Rust CLI yet, and {DELEGATE_VARIABLE}=never forbids delegating it.\n"
+        ));
+      }
+      let _ = stdout.flush();
+      drop(stdout);
+      drop(stderr);
+      match delegate::entry_point().and_then(|entry| {
+        delegate::run(&entry, &raw).map_err(|error| {
+          format!(
+            "Node.js could not be started to run {}: {error}",
+            entry.display()
+          )
+        })
+      }) {
+        Ok(code) => code,
+        Err(message) => exit_with(&format!("cst: {message}\n")),
+      }
+    }
+  };
+  process::exit(code);
+}
+
+/// The front end sees what the JavaScript CLI would see. Arguments or
+/// selector variables that are not valid Unicode reach Node with replacement
+/// characters, which `front` does not model, so those invocations delegate.
+fn decide(raw: &[OsString]) -> Outcome {
+  let Some(args) = raw
+    .iter()
+    .map(|item| item.clone().into_string().ok())
+    .collect::<Option<Vec<_>>>()
+  else {
+    return Outcome::Delegate {
+      command: String::new(),
+    };
+  };
+  let names = ["VLAB_FORECAST_ENGINE", "VLAB_ENGINE"];
+  if names
+    .iter()
+    .any(|name| matches!(env::var(name), Err(env::VarError::NotUnicode(_))))
+  {
+    return Outcome::Delegate {
+      command: String::new(),
+    };
+  }
+  front::decide(&args, &|name| env::var(name).ok(), HELP)
+}
+
+fn exit_with(message: &str) -> ! {
+  let _ = std::io::stderr().write_all(message.as_bytes());
+  process::exit(1);
+}
