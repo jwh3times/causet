@@ -82,7 +82,7 @@ let nativeEngineCache = null;
  * repository state; no repository cache survives an operation.
  */
 export function nativeEngine() {
-  if (process.env.VLAB_TEST_NATIVE_BINDING === "missing") return loadNativeEngine();
+  if (process.env.CAUSET_TEST_NATIVE_BINDING === "missing") return loadNativeEngine();
   if (!nativeEngineCache) nativeEngineCache = loadNativeEngine();
   return nativeEngineCache;
 }

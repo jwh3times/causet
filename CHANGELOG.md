@@ -12,6 +12,9 @@
   `--trace-git` output must match the new prefix. `scripts/perf-checkpoint.mjs`
   accepts both, so earlier builds stay measurable; the change alters the
   harness's `scriptSha256`, so compare checkpoints within one run.
+- Rename the suite-internal fault and test hooks from `VLAB_TEST_*` to
+  `CAUSET_TEST_*`, with no fallback (issue #159, ADR-0039 §1). Only the suites
+  set them.
 
 - Add the Rust CLI skeleton (issue #141, ADR-0037 decision 4). The `native/`
   workspace now builds `cst`, a hybrid executable that is not yet packaged.

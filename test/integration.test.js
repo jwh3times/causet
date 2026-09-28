@@ -3332,7 +3332,7 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_TEST_GIT_SESSION_FAILURE: "1",
+        CAUSET_TEST_GIT_SESSION_FAILURE: "1",
       }),
     },
   );
@@ -5477,7 +5477,7 @@ test("merge-tree forecasts fall back with a reason when the merge-tree session i
     encoding: "utf8",
     env: testEnv({
       VLAB_FORECAST_ENGINE: "merge-tree",
-      VLAB_TEST_MERGE_TREE_SESSION_FAILURE: "1",
+      CAUSET_TEST_MERGE_TREE_SESSION_FAILURE: "1",
     }),
   });
   assert.equal(failed.status, 0, failed.stderr);
@@ -5570,7 +5570,7 @@ test("merge-tree forecasts fall back to git-too-old before the first request on 
   const { repo, source } = tooOldFixture(t);
   const worktree = forecastWithEngine(repo, "worktree", "forecast", "feature");
   const spoofed = mergeTreeForecastWithEnv(repo, {
-    VLAB_TEST_MERGE_TREE_GIT_VERSION: "2.48.1.windows.1",
+    CAUSET_TEST_MERGE_TREE_GIT_VERSION: "2.48.1.windows.1",
   });
   assertImmediateTooOldFallback(spoofed, worktree, source, "2.48.1.windows.1");
   assert.equal(forecastFileCount(repo), 2);
@@ -5578,7 +5578,7 @@ test("merge-tree forecasts fall back to git-too-old before the first request on 
   if (mergeTreeEngineSupported()) {
     // A version at the floor is accepted and the engine runs.
     const accepted = mergeTreeForecastWithEnv(repo, {
-      VLAB_TEST_MERGE_TREE_GIT_VERSION: `${MERGE_TREE_ENGINE_MIN_GIT}.0`,
+      CAUSET_TEST_MERGE_TREE_GIT_VERSION: `${MERGE_TREE_ENGINE_MIN_GIT}.0`,
     });
     assert.equal(accepted.forecast.engine, "merge-tree");
     assert.deepEqual(accepted.forecast.fallbacks, []);
@@ -6528,11 +6528,11 @@ function stripVolatile(value) {
 }
 
 test("every repository read passes through the engine seam and the native engine passes through to Git", async (t) => {
-  const previousBinding = process.env.VLAB_TEST_NATIVE_BINDING;
-  process.env.VLAB_TEST_NATIVE_BINDING = "missing";
+  const previousBinding = process.env.CAUSET_TEST_NATIVE_BINDING;
+  process.env.CAUSET_TEST_NATIVE_BINDING = "missing";
   t.after(() => {
-    if (previousBinding === undefined) delete process.env.VLAB_TEST_NATIVE_BINDING;
-    else process.env.VLAB_TEST_NATIVE_BINDING = previousBinding;
+    if (previousBinding === undefined) delete process.env.CAUSET_TEST_NATIVE_BINDING;
+    else process.env.CAUSET_TEST_NATIVE_BINDING = previousBinding;
   });
   // Import discipline: only the seam reads from the Git engine, and only a
   // deliberate raw-Git measurement may bypass it -- the doctor's process-cost

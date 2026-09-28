@@ -144,7 +144,7 @@
     "dependencies": "Reconciliation and rebase state"
   },
   "src/faults.js": {
-    "responsibility": "Test-only deterministic fault injection: `VLAB_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `VLAB_TEST_GATE` holds a process at a named point until a test releases it",
+    "responsibility": "Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it",
     "dependencies": "None"
   },
   "src/forecasts.js": {

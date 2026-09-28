@@ -31,7 +31,7 @@ export function loadNativeEngine(load = require) {
   const unavailable = (reason) => Object.freeze({
     available: false, reason, profile: null, operations: Object.freeze({}),
   });
-  if (process.env.VLAB_TEST_NATIVE_BINDING === "missing") return unavailable("binding-missing");
+  if (process.env.CAUSET_TEST_NATIVE_BINDING === "missing") return unavailable("binding-missing");
   let binding;
   try {
     binding = load(`../native/prebuilds/${process.platform}-${process.arch}/causet-core.node`);

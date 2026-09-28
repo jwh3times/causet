@@ -244,7 +244,7 @@ a leaked JavaScript runtime error, and **no ref moved**. The runtime-error
 check matters because the error boundary prints any failure as `vlab: <message>`,
 so an exit code alone cannot tell a refusal from a crash.
 `test/failure-boundary.test.js` interrupts the mutating paths of both
-reconciliation and causal rebase at named fault points with `VLAB_TEST_FAULT`
+reconciliation and causal rebase at named fault points with `CAUSET_TEST_FAULT`
 and asserts what survives: the journal is always recoverable, no record is
 ever duplicated, `--continue` refuses rather than republishing, and an abort
 restores the head — or, for a rebase, the branch ref that had already moved —
@@ -260,10 +260,10 @@ covers out-of-band Git: a `cherry-pick --continue`, `--skip`, or `--abort`
 driven behind vlab's back during a paused operation must leave the resume
 refusing, publishing nothing, and still recoverable through vlab's own abort.
 The same file proves the notes lock closes the publication race:
-`VLAB_TEST_GATE=notes:after-read` parks one publisher between reading a
+`CAUSET_TEST_GATE=notes:after-read` parks one publisher between reading a
 commit's note container and writing it back (the gated process creates
-`<VLAB_TEST_GATE_FILE>.reached` on arrival and proceeds once
-`<VLAB_TEST_GATE_FILE>` exists), a second publisher must wait rather than
+`<CAUSET_TEST_GATE_FILE>.reached` on arrival and proceeds once
+`<CAUSET_TEST_GATE_FILE>` exists), a second publisher must wait rather than
 complete, and both records are present afterwards; with the lock removed the
 same test shows the second record lost. A lock left by a process that is gone,
 or a minute-old lock from a host that cannot be checked, is abandoned, while a
@@ -309,7 +309,7 @@ budgets, and proves that a listing plus its note blobs uses one Git process.
 
 `test/integration.test.js` also pins the object session's response-buffer bound. Overflowing
 the real 64 MiB content buffer needs a blob of roughly 48 MiB, far too large to
-build on every suite run, so `VLAB_TEST_SESSION_BUFFER_BYTES` shrinks the
+build on every suite run, so `CAUSET_TEST_SESSION_BUFFER_BYTES` shrinks the
 buffer to meet a small fixture. What is asserted is not the threshold but the
 behaviour at it: an overflowing response is replaced by a `response-too-large`
 envelope, the session is disabled for the rest of the invocation — hence
@@ -320,16 +320,16 @@ fallback that returned different data would be worse than one that failed. The
 override is inert unless it parses as a positive integer, which is itself
 asserted, since it shrinks a safety bound.
 Two more test-only switches in `src/git.js` force the fallback paths without a
-broken Git. `VLAB_TEST_GIT_SESSION_FAILURE=1` makes the object session spawn a
+broken Git. `CAUSET_TEST_GIT_SESSION_FAILURE=1` makes the object session spawn a
 nonexistent Git command, so its worker fails to start and the command completes
 through ordinary processes; the suite asserts that the plan is identical and
-that the trace announces the fallback. `VLAB_TEST_MERGE_TREE_SESSION_FAILURE=1`
+that the trace announces the fallback. `CAUSET_TEST_MERGE_TREE_SESSION_FAILURE=1`
 does the same to the merge-tree session, so a forecast records one merge-tree
 fallback and reruns the whole queue in the worktree simulator with identical
-trees. `VLAB_TEST_MERGE_TREE_GIT_VERSION=<version>` makes the merge-tree
+trees. `CAUSET_TEST_MERGE_TREE_GIT_VERSION=<version>` makes the merge-tree
 session report that Git version instead of the one its trace2 event names,
 which is how the `git-too-old` fallback is exercised on a host whose Git is new
-enough. Like `VLAB_TEST_FAULT` and `VLAB_TEST_GATE`, each is inert unless it is
+enough. Like `CAUSET_TEST_FAULT` and `CAUSET_TEST_GATE`, each is inert unless it is
 set exactly.
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan `src/` for every `new CliError` and fail

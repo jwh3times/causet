@@ -100,7 +100,7 @@ test("an interrupted publication leaves a recoverable journal and no duplicate r
   ]) {
     const repo = makeReconcilable();
     const interrupted = vlabResult(repo, ["reconcile", "feature", "--json"], {
-      VLAB_TEST_FAULT: point,
+      CAUSET_TEST_FAULT: point,
     });
     assert.equal(
       interrupted.status,
@@ -155,7 +155,7 @@ test("aborting an interrupted publication restores the head and leaves no effect
   const repo = makeReconcilable();
   const before = git(repo, "rev-parse", "HEAD");
   const interrupted = vlabResult(repo, ["reconcile", "feature", "--json"], {
-    VLAB_TEST_FAULT: "reconcile:before-clear",
+    CAUSET_TEST_FAULT: "reconcile:before-clear",
   });
   assert.equal(interrupted.status, FAULT_EXIT_CODE);
   assert.equal(receipts(repo).length, 2, "both receipts were published before the fault");
@@ -269,7 +269,7 @@ test("an interrupted rebase publication is recoverable and never duplicates a re
     const repo = makeRebasable();
     const before = git(repo, "rev-parse", "feature");
     const interrupted = vlabResult(repo, ["rebase", "main", "--json"], {
-      VLAB_TEST_FAULT: point,
+      CAUSET_TEST_FAULT: point,
     });
     assert.equal(
       interrupted.status,
@@ -336,7 +336,7 @@ test("aborting an interrupted rebase restores the branch and leaves no effective
   const repo = makeRebasable();
   const before = git(repo, "rev-parse", "feature");
   const interrupted = vlabResult(repo, ["rebase", "main", "--json"], {
-    VLAB_TEST_FAULT: "rebase:before-clear",
+    CAUSET_TEST_FAULT: "rebase:before-clear",
   });
   assert.equal(interrupted.status, FAULT_EXIT_CODE);
   assert.equal(receipts(repo).length, 2, "both records were published before the fault");
@@ -496,7 +496,7 @@ test("a journal never claims more progress than Git actually made", () => {
     const before = git(repo, "rev-parse", ref);
 
     const interrupted = vlabResult(repo, [command, target, "--json"], {
-      VLAB_TEST_FAULT: point,
+      CAUSET_TEST_FAULT: point,
     });
     assert.equal(interrupted.status, FAULT_EXIT_CODE);
 
@@ -553,12 +553,12 @@ test("an interrupted abort can be completed by running it again", () => {
 
     // Get into the worst state first: everything published, journal uncleared.
     vlabResult(repo, [command, target, "--json"], {
-      VLAB_TEST_FAULT: `${command}:before-clear`,
+      CAUSET_TEST_FAULT: `${command}:before-clear`,
     });
     assert.equal(receipts(repo).length, 2, "both records were published");
 
     const interruptedAbort = vlabResult(repo, [command, "--abort", "--json"], {
-      VLAB_TEST_FAULT: `${command}:abort-before-clear`,
+      CAUSET_TEST_FAULT: `${command}:abort-before-clear`,
     });
     assert.equal(interruptedAbort.status, FAULT_EXIT_CODE);
     assert.equal(
@@ -607,7 +607,7 @@ test("a session response too large for its buffer falls back without changing th
   // Overflowing the real 64 MiB content buffer needs a blob of roughly 48 MiB,
   // which is far too large to build on every suite run. The behaviour worth
   // pinning is not the threshold but what happens at it, so
-  // VLAB_TEST_SESSION_BUFFER_BYTES shrinks the buffer to meet a small fixture.
+  // CAUSET_TEST_SESSION_BUFFER_BYTES shrinks the buffer to meet a small fixture.
   const repo = makeReconciled();
 
   const plan = (env) => {
@@ -625,7 +625,7 @@ test("a session response too large for its buffer falls back without changing th
     trace.split("\n").filter((line) => line.includes("session unavailable")).length;
 
   const served = plan({});
-  const overflowed = plan({ VLAB_TEST_SESSION_BUFFER_BYTES: "2048" });
+  const overflowed = plan({ CAUSET_TEST_SESSION_BUFFER_BYTES: "2048" });
 
   // The fixture must actually exercise both sides, or the comparison below
   // proves nothing.
@@ -684,7 +684,7 @@ test("the session buffer override is inert unless it names a positive integer", 
     const result = vlabResult(repo, ["merge-plan", "feature", "--json"], {
       VLAB_GIT_SESSION: "1",
       VLAB_TRACE: "1",
-      VLAB_TEST_SESSION_BUFFER_BYTES: value,
+      CAUSET_TEST_SESSION_BUFFER_BYTES: value,
       VLAB_ENGINE: "git",
     });
     assert.equal(result.status, 0, `${JSON.stringify(value)}: the command still succeeds`);
@@ -840,8 +840,8 @@ test("two publishers appending to one commit at once lose no record", async () =
   const commit = git(repo, "rev-parse", "HEAD");
   const gate = path.join(path.dirname(repo), "gate");
   const first = publisher(repo, commit, "first", {
-    VLAB_TEST_GATE: "notes:after-read",
-    VLAB_TEST_GATE_FILE: gate,
+    CAUSET_TEST_GATE: "notes:after-read",
+    CAUSET_TEST_GATE_FILE: gate,
   });
   await until(() => fs.existsSync(`${gate}.reached`));
 
@@ -943,13 +943,13 @@ async function competingWorkspaceWriters(repo, firstArgs, secondArgs, secondCwd 
   const firstGate = path.join(path.dirname(repo), "workspace-first-gate");
   const secondGate = path.join(path.dirname(repo), "workspace-second-gate");
   const first = workspaceWriter(repo, firstArgs, {
-    VLAB_TEST_GATE: "workspaces:after-read", VLAB_TEST_GATE_FILE: firstGate,
+    CAUSET_TEST_GATE: "workspaces:after-read", CAUSET_TEST_GATE_FILE: firstGate,
   });
   let second;
   try {
     await until(() => fs.existsSync(`${firstGate}.reached`));
     second = workspaceWriter(secondCwd, secondArgs, {
-      VLAB_TEST_GATE: "workspaces:lock-contended", VLAB_TEST_GATE_FILE: secondGate,
+      CAUSET_TEST_GATE: "workspaces:lock-contended", CAUSET_TEST_GATE_FILE: secondGate,
     });
     // This signal proves the second process actually attempted acquisition
     // while the first held its old registry snapshot. No scheduling sleep is
@@ -1055,7 +1055,7 @@ test("interrupted workspace holders require explicit recovery without stale-lock
   const lock = workspaceRuntime(repo, "workspaces.lock");
   const destination = path.join(path.dirname(repo), "after-crash");
   const args = ["workspace", "create", "after-crash", "--path", destination, "--json"];
-  const stopped = vlabResult(repo, args, { VLAB_TEST_FAULT: "workspaces:after-read" });
+  const stopped = vlabResult(repo, args, { CAUSET_TEST_FAULT: "workspaces:after-read" });
   assert.equal(stopped.status, FAULT_EXIT_CODE);
   assert.equal(fs.existsSync(destination), false);
   const abandoned = fs.readFileSync(lock);
@@ -1134,7 +1134,7 @@ function pausedWorkspace(operation, pause = "publication") {
   const originalHead = git(workspace, "rev-parse", "HEAD");
   if (pause === "publication") {
     assert.equal(vlabResult(workspace, [operation, source, "--json"], {
-      VLAB_TEST_FAULT: `${operation}:before-publish`,
+      CAUSET_TEST_FAULT: `${operation}:before-publish`,
     }).status, FAULT_EXIT_CODE);
   } else {
     const forecast = JSON.parse(vlab(workspace,

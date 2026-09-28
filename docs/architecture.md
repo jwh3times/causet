@@ -127,7 +127,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
 | `src/engine.js` | The read-side engine seam: the catalog of 44 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
 | `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021) | None |
-| `src/faults.js` | Test-only deterministic fault injection: `VLAB_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `VLAB_TEST_GATE` holds a process at a named point until a test releases it | None |
+| `src/faults.js` | Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it | None |
 | `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
 | `src/git-carriers.js` | Copy-on-write notes trees, typed dependency closure, bounded carrier parents, and checked ref commands | Engine, Git writes, schemas |
 | `src/git-session-worker.js` | Owns asynchronous `git cat-file --batch-command` stream for a synchronous caller | Worker threads, Git |
@@ -1494,7 +1494,7 @@ whose holder is on this host and no longer running, or a minute-old lock
 whose holder cannot be checked, is abandoned; a running holder's lock is
 waited for five seconds and then refused with `notes-locked`. The
 failure-boundary suite proves the window is closed by parking one publisher
-inside it with `VLAB_TEST_GATE` while another runs.
+inside it with `CAUSET_TEST_GATE` while another runs.
 
 `refs/vcs-lab/retention` retains each published attachment and the typed closure
 specified by `referencedObjectsForRecord`. Its previous tip remains an ancestor

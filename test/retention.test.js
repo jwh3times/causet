@@ -120,7 +120,7 @@ test("retained interrupted receipts survive abort and GC without covering the re
   generatedChange(repo, "source");
   git(repo, "switch", "main");
   generatedChange(repo, "target");
-  assert.equal(run(repo, ["reconcile", "source", "--json"], { VLAB_TEST_FAULT: "reconcile:before-clear" }).status, 70);
+  assert.equal(run(repo, ["reconcile", "source", "--json"], { CAUSET_TEST_FAULT: "reconcile:before-clear" }).status, 70);
   const accepted = vlab(repo, "metadata", "validate", "--json").summary.acceptedPortableRecords;
   vlab(repo, "reconcile", "--abort", "--json");
   gc(repo, parent);
@@ -246,7 +246,7 @@ test("a resolution, its note, and object retention publish together across hard 
     const { repo, parent } = fixture(t);
     const script = resolutionScript(repo);
     const before = refs(repo);
-    assert.equal(scriptRun(repo, script, { VLAB_TEST_FAULT: point }).status, 70);
+    assert.equal(scriptRun(repo, script, { CAUSET_TEST_FAULT: point }).status, 70);
     if (point.endsWith("before-publish")) {
       assert.equal(refs(repo), before);
       assert.equal(scriptRun(repo, script).status, 0, "a new writer abandons the exited writer's lock");
@@ -321,7 +321,7 @@ test("a foreign notes writer causes atomic publication to refuse without moving 
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const script = `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`;
   const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
-    cwd: repo, env: testEnv({ VLAB_TEST_GATE: "notes:after-read", VLAB_TEST_GATE_FILE: gate }), stdio: ["ignore", "pipe", "pipe"],
+    cwd: repo, env: testEnv({ CAUSET_TEST_GATE: "notes:after-read", CAUSET_TEST_GATE_FILE: gate }), stdio: ["ignore", "pipe", "pipe"],
   });
   let stderr = "";
   child.stderr.on("data", chunk => { stderr += chunk; });
