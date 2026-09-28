@@ -1,0 +1,31 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mukj941d63905ce65fa7",
+      "mode": "compact",
+      "sourceRef": "jwh3times/adr-0038",
+      "sourceHead": "9a680206c311dbec3b408325d4d7c64d5d1cec83",
+      "sourceSubject": "Merge main into jwh3times/adr-0038",
+      "targetBefore": "4c4573c95c7ad3819a734f694e2a3272c5c63836",
+      "landingCommit": "b66d75559ee37c41b9b659221e72b8fec105248c",
+      "base": "4c4573c95c7ad3819a734f694e2a3272c5c63836",
+      "absorbedCommits": [
+        "b4de5abfd3593b05fc56bd5a867538187cd1f061",
+        "3ae82071564f8cc09aaea149401637155867b80e",
+        "8362ceb19d470d833fe1b140c69273a0b48ac84d",
+        "9a680206c311dbec3b408325d4d7c64d5d1cec83"
+      ],
+      "absorbedChanges": [
+        "ch_0mukd859e5bfffab260ac",
+        "ch_0mukj0zcwe74a3e2b0420",
+        "ch_0mukj7bz56a909d47770c",
+        "git:9a680206c311dbec3b408325d4d7c64d5d1cec83"
+      ],
+      "resultTree": "bcb2f375220bc974ea91129739b1578016305761",
+      "createdAt": "2026-09-28T00:52:21.628Z"
+    }
+  ]
+}
