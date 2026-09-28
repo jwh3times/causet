@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Amend ADR-0038 (issue #139): the npm organization name `causet` is
+  unavailable, so the platform packages are `@holland-vip/causet-<platform>`,
+  movable to `@causet/` later without affecting users, who install `causet`.
+  Because npm's terms forbid publishing to reserve a name, no placeholder
+  packages are published: `causet` is first published as the real v0.19.0
+  release, and each platform package when #150 builds it.
+
 - Rename the command to `cst` and the package to `causet` (issue #158,
   ADR-0038). Help, usage, error prefixes (`cst: …`) and recovery hints name
   `cst`, `--version` prints `causet <version>`, and `npm pack` produces
