@@ -3,15 +3,17 @@
 ## Unreleased
 
 - Propose how the Rust CLI is distributed through npm (issue #138, ADR-0038,
-  Proposed). A main package, `causal-vcs-lab`, lists one package per platform
-  (`@vcs-lab/cli-<platform>`) as exact-version `optionalDependencies`. Its
-  `preinstall` step copies the verified platform executable onto the `bin`
-  target before npm links it, so `vlab` runs with no Node process on Windows
-  and POSIX. A Node launcher remains the fallback when install scripts do not
-  run. Nothing is downloaded or compiled at install time. The first release
-  covers Windows x64 and Linux x64; arm64, musl and macOS follow in waves.
-  Publishing uses npm trusted publishing with provenance, and code signing is
-  deferred.
+  Proposed). The owner chose the name: the npm package is `causet`, for causal
+  set, and the command is `cst`, with `vlab` kept as a transition alias;
+  persisted `vcs-lab` identifiers do not change. The main package lists one
+  package per platform (`@causet/cli-<platform>`) as exact-version
+  `optionalDependencies`. Its `preinstall` step copies the verified platform
+  executable onto the `bin` target before npm links it, so `cst` runs with no
+  Node process on Windows and POSIX. A Node launcher remains the fallback when
+  install scripts do not run. Nothing is downloaded or compiled at install
+  time. The first release covers Windows x64 and Linux x64; arm64, musl and
+  macOS follow in waves. Publishing uses npm trusted publishing with
+  provenance, and code signing is deferred.
 
 - Add `.github/workflows/perf.yml`, which runs the performance checkpoint
   harness on GitHub-hosted Windows and Ubuntu runners on manual dispatch,

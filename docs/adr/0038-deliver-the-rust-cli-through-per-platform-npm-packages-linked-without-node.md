@@ -84,22 +84,24 @@ still your program's responsibility to handle the lack of the dependency."
 
 ### 1. Layout: one main package, plus one package per platform as `optionalDependencies`
 
-- **The main package** owns the `vlab` command. It contains the JavaScript CLI as long as
-  ADR-0037 keeps it: the delegation target during the transition, and the oracle afterwards. It
-  lists every platform package in `optionalDependencies`, pinned to its own exact version.
-- **Each platform package** contains one prebuilt `vlab` executable and its third-party notices.
+- **The main package, `causet`,** owns the `cst` command (and `vlab` as a transition alias, §4).
+  It contains the JavaScript CLI as long as ADR-0037 keeps it: the delegation target during the
+  transition, and the oracle afterwards. It lists every platform package in
+  `optionalDependencies`, pinned to its own exact version.
+- **Each platform package** contains one prebuilt `cst` executable and its third-party notices.
   It declares `os`, `cpu` and, on Linux, `libc`, so npm installs only the matching one. It has no
   scripts and no dependencies.
 - **Nothing is downloaded or compiled.** There is no fallback to a nested `npm install` or an HTTP
   fetch, unlike esbuild. The promise in `docs/native-engine.md` stands as written.
 
-### 2. `vlab` reaches the binary without Node: a `preinstall` copy onto a fixed `bin` target
+### 2. `cst` reaches the binary without Node: a `preinstall` copy onto a fixed `bin` target
 
-- **The main package declares `"bin": { "vlab": "bin/native/vlab.exe" }` on every platform.**
+- **The main package declares `"bin": { "cst": "bin/native/cst.exe" }` on every platform,**
+  plus `"vlab": "bin/native/cst.exe"` while the transition alias lasts (§4).
   - The `.exe` suffix is what Windows needs.
-  - POSIX ignores it: the symlink is named `vlab`, and the kernel runs an ELF or Mach-O file
+  - POSIX ignores it: the symlink is named `cst`, and the kernel runs an ELF or Mach-O file
     whatever it is called.
-- **As published, `bin/native/vlab.exe` is a small Node launcher** with a `#!/usr/bin/env node`
+- **As published, `bin/native/cst.exe` is a small Node launcher** with a `#!/usr/bin/env node`
   line. The launcher finds the installed platform package's executable and runs it with the same
   arguments and standard streams, then exits with its code.
 - **The launcher's directory holds a `package.json` of `{ "type": "commonjs" }`.** This package is
@@ -111,15 +113,15 @@ still your program's responsibility to handle the lack of the dependency."
   executable,** after checking that the executable's `--version` output equals the main
   package's version. Because `preinstall` runs before bins are linked, npm then finds a target
   with no `#!` line:
-  - on POSIX, `vlab` is a symlink to the native executable;
-  - on Windows, `vlab.cmd` is `"%dp0%\…\bin\native\vlab.exe" %*`.
+  - on POSIX, `cst` is a symlink to the native executable;
+  - on Windows, `cst.cmd` is `"%dp0%\…\bin\native\cst.exe" %*`.
 
-  Either way, **no Node process is started when `vlab` runs.**
+  Either way, **no Node process is started when `cst` runs.**
 - **When scripts do not run** (`--ignore-scripts`, a package manager that blocks dependency
-  scripts, or a failed copy), the launcher stays in place. `vlab` still works, paying the Node
-  startup cost on every command, and `vlab doctor` says so.
+  scripts, or a failed copy), the launcher stays in place. `cst` still works, paying the Node
+  startup cost on every command, and `cst doctor` says so.
 - **This is a measured claim, not an assumed one.** Checkpoint 8 on the Performance testing page
-  (#150) measures `vlab --version` through the npm-installed command on each platform. It
+  (#150) measures `cst --version` through the npm-installed command on each platform. It
   measures both paths: with scripts, and with `--ignore-scripts`. On Windows the `.cmd` shim still
   costs one `cmd.exe` start, which checkpoint 0 did not isolate. Checkpoint 8 records it against a
   direct launch of the executable.
@@ -147,21 +149,49 @@ still your program's responsibility to handle the lack of the dependency."
   - After that, it exits with an error that names the supported platforms and the issue for
     requesting another.
 
-### 4. Names
+### 4. Names: `causet` and `cst` (owner decision, 2026-09-27)
 
-- **The main package keeps the name it already has, `causal-vcs-lab`.** The command stays
-  `vlab`.
-- **Platform packages go under an organization scope, `@vcs-lab/`.** Examples:
-  `@vcs-lab/cli-win32-x64`, `@vcs-lab/cli-linux-x64-gnu`, `@vcs-lab/cli-linux-x64-musl`,
-  `@vcs-lab/cli-darwin-arm64`. A scope groups them, stops anyone squatting a sibling name, and is
-  where trusted publishing is configured.
-- **If the `vcs-lab` organization cannot be created, the fallback is unscoped names:**
-  `causal-vcs-lab-<platform>`.
-- **Availability, checked with `npm view` on 2026-09-27 at 22:00 UTC.** `causal-vcs-lab`,
-  `@vcs-lab/cli`, `@vcs-lab/vlab`, `vcs-lab`, `vlab` and `@jwh3times/vlab` all return 404: nothing
-  is published under those names. That does not prove any of them can be registered. npm may
-  refuse a name as too similar to an existing one, and organization availability can only be
-  checked while signed in, which is part of #139.
+The owner chose the name on 2026-09-27, because an npm name is permanent and should mean
+something. "vcs-lab" was the experiment's working title: a version-control-system *laboratory*.
+
+- **The npm package is `causet`.** A *causal set* is physics' model of history as a partial order
+  of events, each knowing what preceded and caused it. That is this tool's model: a commit graph
+  whose changes keep a stable identity and carry verifiable receipts of what caused what.
+- **The command is `cst`.** It is short, easy to type, and collides with nothing on the
+  qualification hosts. Common tools already own `cs` (Coursier) and `cz` (Commitizen), so neither
+  was a candidate.
+- **Platform packages go under the `@causet/` organization scope,** for example
+  `@causet/cli-win32-x64`, `@causet/cli-linux-x64-gnu`, `@causet/cli-linux-x64-musl` and
+  `@causet/cli-darwin-arm64`. A scope groups them, stops anyone squatting a sibling name, and is
+  where trusted publishing is configured. If the organization cannot be created, the fallback is
+  unscoped `causet-<platform>`.
+- **Availability, checked with `npm view` on 2026-09-27:** `causet`, `causet-cli`,
+  `causet-win32-x64`, `causet-linux-x64-gnu`, `@causet/cli` and `@causet/cli-win32-x64` all return
+  404. That does not prove they can be registered: npm may refuse a name as too similar to an
+  existing one, and organization availability is checked only while signed in (#139). Until the
+  names are claimed (#139's placeholder publish), they are not ours. Claim them promptly.
+
+**What does not change.** The name belongs to the distribution and the command, not the data.
+- These persisted identifiers stay as they are:
+  - the `vcs-lab.*` record families and schema identifiers;
+  - `refs/notes/vcs-lab` and `refs/vcs-lab/*`;
+  - `.git/vcs-lab/`, `.vcs-lab/specs`;
+  - the `VLAB_*` environment variables.
+
+  They already exist in repositories and exchanged envelopes. Renaming any of them would be a
+  migration with its own ADR, and nothing here requires one.
+- The repository keeps its name.
+
+**The command transition.** Renaming the command is a change to the CLI contract, so under
+ADR-0037 it happens in the JavaScript CLI first:
+1. The JavaScript CLI ships `cst` as its command, keeps `vlab` as an alias for the same entry
+   point, and prints `cst` in help, usage and messages. The alias changes no output, so `--json`
+   output and exit codes stay identical under both names.
+2. The Rust executable answers to both names during the transition, because npm links both.
+3. The `vlab` alias is removed no earlier than the end of ADR-0037's oracle period, two minor
+   releases after cutover, and only with a changelog notice one release ahead.
+
+This rename is its own issue, and it can land before any Rust code exists.
 
 ### 5. Supply chain
 
@@ -183,13 +213,13 @@ still your program's responsibility to handle the lack of the dependency."
   - The first release covers Windows and Linux only, and provenance with checksums already binds
     each executable to the commit and workflow that built it.
   - Revisit before the third wave (macOS), or earlier if Windows Defender or SmartScreen friction
-    is observed on an npm-installed `vlab`. Each certificate becomes its own human-action issue.
+    is observed on an npm-installed `cst`. Each certificate becomes its own human-action issue.
 
 ### 6. Versioning: lockstep, with a refusal on mismatch
 
 - Every platform package is published at exactly the main package's version, from the same
   workflow run and the same commit.
-- The main package pins each one with an exact version (`"@vcs-lab/cli-win32-x64": "0.19.0"`, not
+- The main package pins each one with an exact version (`"@causet/cli-win32-x64": "0.19.0"`, not
   a range).
 - The `preinstall` copy and the launcher both compare the executable's `--version` output with the
   main package's version, and **refuse** to run a mismatched executable, naming both versions.
@@ -197,7 +227,7 @@ still your program's responsibility to handle the lack of the dependency."
 ### 7. GitHub releases
 
 Each release also attaches:
-- one archive per platform (`vlab-<version>-<rust-target>.zip` for Windows and `.tar.gz`
+- one archive per platform (`cst-<version>-<rust-target>.zip` for Windows and `.tar.gz`
   elsewhere);
 - a `SHA256SUMS` file;
 - the packed npm tarballs.
@@ -221,7 +251,7 @@ from the same workflow run, so their digests match.
 
 ### Positive
 
-- With scripts enabled, `vlab` starts with no Node process on Windows and POSIX alike. That is the
+- With scripts enabled, `cst` starts with no Node process on Windows and POSIX alike. That is the
   cost ADR-0037 exists to remove, and checkpoint 8 measures it.
 - Offline and mirrored installs work, because nothing is fetched outside npm's own resolution.
 - One command name and one main package throughout the transition, the oracle period, and after.
@@ -231,7 +261,7 @@ from the same workflow run, so their digests match.
 - The main package has a `preinstall` script. Users who audit install scripts see one, although it
   only copies a file between packages already on disk.
 - Under `--ignore-scripts` or a script-blocking package manager, every command pays Node startup
-  until the user reinstalls with scripts. `vlab doctor` makes this visible.
+  until the user reinstalls with scripts. `cst doctor` makes this visible.
 - Each platform added costs a CI job and a published package per release.
 - The `cmd.exe` hop on Windows remains. It is cheaper than Node, but it is not zero, and no npm
   mechanism removes it.
@@ -245,7 +275,7 @@ from the same workflow run, so their digests match.
   written a shim that calls `node` by then, and Windows is the reference platform.
 - **A download at install time** (a `postinstall` fetch of the right binary). It breaks the "never
   downloads" promise, offline installs, and registry mirrors.
-- **Separate per-platform main packages** (`npm i -g @vcs-lab/cli-win32-x64`). Users would have to
+- **Separate per-platform main packages** (`npm i -g @causet/cli-win32-x64`). Users would have to
   know their platform, and the command would differ between machines.
 - **Bundling every platform's executable in the main package.** Every install would download every
   platform, which is several times the size for no benefit.
@@ -254,12 +284,13 @@ from the same workflow run, so their digests match.
 
 1. **Layout:** a main package plus per-platform `optionalDependencies`, with no download or
    compile at install time.
-2. **The `bin` mechanism:** `bin/native/vlab.exe`, replaced by a `preinstall` copy, with the
+2. **The `bin` mechanism:** `bin/native/cst.exe`, replaced by a `preinstall` copy, with the
    Node launcher as the fallback when scripts do not run.
 3. **The matrix:** Windows x64 and Linux x64 glibc first. Then Linux arm64, Windows arm64 and musl.
    Then macOS, qualified only by CI.
-4. **Names:** `causal-vcs-lab` for the main package, and the `@vcs-lab/` scope for platform
-   packages, with unscoped names as the fallback.
+4. **Names: decided by the owner on 2026-09-27.** The package is `causet`, the command is
+   `cst` (with `vlab` as a transition alias), and platform packages go under `@causet/`, with
+   unscoped `causet-<platform>` as the fallback. Persisted identifiers keep `vcs-lab`.
 5. **Signing:** not required for the first release. Revisit before macOS, or on observed
    Defender or SmartScreen friction.
 6. **Lockstep versioning,** with a refusal on mismatch.
@@ -270,7 +301,10 @@ from the same workflow run, so their digests match.
 - **#150:** the per-platform build jobs, the platform `package.json` files, the main package's
   `optionalDependencies` and `bin`, the launcher and `preinstall` script, digest and version
   checks, trusted publishing, release assets, and checkpoint 8.
-- **#139:** creating the `vcs-lab` organization and the packages, and configuring a trusted
-  publisher per package (the wiki's `Human-action-139` procedure).
+- **#139:** creating the `causet` organization, claiming `causet` and the platform package names
+  with placeholder publishes, and configuring a trusted publisher per package (the wiki's
+  `Human-action-139` procedure).
+- **The command rename:** a separate issue makes `cst` the JavaScript CLI's command, with `vlab`
+  kept as an alias, before any Rust code depends on the name (§4).
 - **At cutover (#152):** `README.md` install instructions and `docs/native-engine.md`'s packaging
   section.
