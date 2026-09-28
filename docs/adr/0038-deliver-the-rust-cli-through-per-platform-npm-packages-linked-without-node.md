@@ -1,6 +1,7 @@
 # ADR-0038: Deliver the Rust CLI through per-platform npm packages, linked without Node
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers
 - **Implementation:** [#138](https://github.com/jwh3times/vcs-lab/issues/138) (this decision),
@@ -171,16 +172,18 @@ something. "vcs-lab" was the experiment's working title: a version-control-syste
   existing one, and organization availability is checked only while signed in (#139). Until the
   names are claimed (#139's placeholder publish), they are not ours. Claim them promptly.
 
-**What does not change.** The name belongs to the distribution and the command, not the data.
-- These persisted identifiers stay as they are:
-  - the `vcs-lab.*` record families and schema identifiers;
-  - `refs/notes/vcs-lab` and `refs/vcs-lab/*`;
-  - `.git/vcs-lab/`, `.vcs-lab/specs`;
-  - the `VLAB_*` environment variables.
+**What this ADR does not change.** The name here belongs to the distribution and the command.
+These persisted identifiers are left as they are by this ADR:
+- the `vcs-lab.*` record families and schema identifiers;
+- `refs/notes/vcs-lab` and `refs/vcs-lab/*`;
+- `.git/vcs-lab/`, `.vcs-lab/specs`;
+- the `VLAB_*` environment variables;
+- the repository name.
 
-  They already exist in repositories and exchanged envelopes. Renaming any of them would be a
-  migration with its own ADR, and nothing here requires one.
-- The repository keeps its name.
+They already exist in repositories and exchanged envelopes, so renaming them is a migration, not an
+edit. On 2026-09-27 the owner directed that they, and the repository, move to `causet` as well.
+That is [#159](https://github.com/jwh3times/vcs-lab/issues/159), whose migration contract is its
+own ADR. Until #159 lands, they keep their current names.
 
 **The command transition.** Renaming the command is a change to the CLI contract, so under
 ADR-0037 it happens in the JavaScript CLI first:
@@ -280,7 +283,7 @@ from the same workflow run, so their digests match.
 - **Bundling every platform's executable in the main package.** Every install would download every
   platform, which is several times the size for no benefit.
 
-## What the owner must decide
+## What the owner decided
 
 1. **Layout:** a main package plus per-platform `optionalDependencies`, with no download or
    compile at install time.
@@ -295,6 +298,12 @@ from the same workflow run, so their digests match.
    Defender or SmartScreen friction.
 6. **Lockstep versioning,** with a refusal on mismatch.
 7. **GitHub release assets:** archives, `SHA256SUMS`, and npm tarballs.
+
+## Owner decision (2026-09-27)
+
+The owner chose the names (decision 4) and then accepted the other six decisions as written. The
+same day the owner also directed a full rename of the `vcs-lab` identifiers and the repository.
+That is tracked as #159 and does not change this ADR's decisions.
 
 ## Implementation map
 
