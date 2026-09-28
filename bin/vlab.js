@@ -13,7 +13,7 @@ main(process.argv.slice(2)).catch((error) => {
     console.log(JSON.stringify(errorEnvelope(error), null, 2));
   } else {
     const message = error?.message ?? String(error);
-    console.error(`vlab: ${message}`);
+    console.error(`cst: ${message}`);
     if (error?.details) {
       console.error(error.details);
     }

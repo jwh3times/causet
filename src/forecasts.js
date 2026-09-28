@@ -1134,7 +1134,7 @@ export function forecastForPlan(id, plan, cwd = process.cwd()) {
   // refused rather than interpreted (ADR-0020).
   assertReadableSchema(forecast?.schema, `Forecast '${id}'`, {
     family: "vcs-lab.forecast",
-    recovery: "Generate a new forecast with: vlab forecast",
+    recovery: "Generate a new forecast with: cst forecast",
   });
   assertCurrentSpecDecisions(forecast);
   if (forecast.id !== id) {

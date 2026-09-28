@@ -219,12 +219,12 @@ equal trees, and equal trees do not imply the same intent or review event.
 
 ### 4.2 Change ID generation and propagation
 
-`vlab commit` appends a generated `Change-Id: ch_*` trailer unless an identity
+`cst commit` appends a generated `Change-Id: ch_*` trailer unless an identity
 is already deliberately supplied by the workflow. Ordinary commits without a
 trailer are assigned an ephemeral planning identity `git:<commit-oid>`; this
 does not pretend they will survive rewriting.
 
-`vlab cherry-pick` defaults to the same logical ID. `--fork` creates a new
+`cst cherry-pick` defaults to the same logical ID. `--fork` creates a new
 Change ID and adds origin trailers. During conflict continuation, `--fork`
 likewise marks the target result as changed intent rather than a contextual
 adaptation of the same intent.
@@ -273,7 +273,7 @@ identity belongs in tracked files.
 
 An ordinary clone's default refspec fetches branches, not
 `refs/notes/vcs-lab` or `refs/vcs-lab/*`. A complete causal read needs both:
-the notes namespace supplies the records, and the shared vlab namespace
+the notes namespace supplies the records, and the shared cst namespace
 supplies the retention carrier and reusable resolution objects those records
 depend on. Fetching notes alone can therefore produce `missing-attachment`
 diagnostics for healthy facts whose attachment commits are present on the
@@ -302,7 +302,7 @@ use at the current development baseline:
 | --- | --- | --- | --- | --- |
 | `vcs-lab.amendment` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
 | `vcs-lab.application` | v1, v4 | v1, v4 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.capabilities` | v1 | v1 | `produced on demand by vlab capabilities; served by a gateway` | `advertisement` |
+| `vcs-lab.capabilities` | v1 | v1 | `produced on demand by cst capabilities; served by a gateway` | `advertisement` |
 | `vcs-lab.disposition` | v1 | v1 | `entries of <common dir>/vcs-lab/dispositions.json` | `shared-local` |
 | `vcs-lab.dispositions` | v1 | v1 | `<common dir>/vcs-lab/dispositions.json` | `shared-local` |
 | `vcs-lab.forecast` | v1, v2 | v2 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
@@ -310,7 +310,7 @@ use at the current development baseline:
 | `vcs-lab.landing` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
 | `vcs-lab.metadata-envelope` | v1 | v1 | `manifest.json of a metadata export directory` | `envelope` |
 | `vcs-lab.note` | v1 | v1 | `refs/notes/vcs-lab note blobs` | `note-container` |
-| `vcs-lab.proof-bundle` | v1, v2 | v2 | `a file handed to vlab verify-proof` | `envelope` |
+| `vcs-lab.proof-bundle` | v1, v2 | v2 | `a file handed to cst verify-proof` | `envelope` |
 | `vcs-lab.provenance` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
 | `vcs-lab.quarantined-record` | v1 | v1 | `refs/vcs-lab/quarantine/<lineage>/<record id> blobs` | `shared-local` |
 | `vcs-lab.rebase` | v1, v2, v3 | v3 | `refs/notes/vcs-lab note containers` | `note-record` |
@@ -418,13 +418,13 @@ unchanged (see the [compatibility contract](schemas/compatibility.md)).
 
 ### 7.1.1 Portable proof bundles
 
-`vlab proof-bundle <source>` emits `vcs-lab.proof-bundle/v1`: the plan plus the
+`cst proof-bundle <source>` emits `vcs-lab.proof-bundle/v1`: the plan plus the
 evidence the lattice was evaluated against, so a third party can recompute the
 classification rather than trust it (FR-PLAN-08). Each covered change becomes
 traceable to the receipt that covered it, which the plan's bare `proof` string
 cannot express.
 
-`vlab verify-proof <file>` runs three checks and reports them separately,
+`cst verify-proof <file>` runs three checks and reports them separately,
 because they establish different things:
 
 | Check | Catches | Needs a repository |
@@ -816,14 +816,14 @@ checks validate referenced blobs and the retained `result` entry. A record is
 quarantined when its stored ref, retention commit, ordered signature, or
 retained result blob disagrees with the discovered state; a retention ref that
 is dangling or does not name a commit is ignored, and a failed scan is an error
-rather than an empty catalog. `vlab metadata validate` peels retention refs
+rather than an empty catalog. `cst metadata validate` peels retention refs
 exactly as the catalog does, so the two never disagree about whether a
 retention ref accepts its record. Accepted records are ordered newest-first by
 creation time.
 
 ## 12. Workspace and checkpoint architecture
 
-`vlab workspace create` records a logical descriptor and creates a normal
+`cst workspace create` records a logical descriptor and creates a normal
 linked worktree on `vlab/ws/<slug>`. The compatibility branch is necessary for
 Git's current worktree retention semantics, not the desired final workspace
 model. [ADR-0012](adr/0012-treat-workspace-lifecycle-as-reversible-materialization-and-drafts-as-checkpoint-inputs.md)
@@ -846,7 +846,7 @@ reapplies its cone, so an archive/restore cycle does not silently write every
 file back, and `git sparse-checkout disable` inside the worktree reverses it.
 Cone paths are validated as relative and inside the repository before they
 reach Git. Measured on the Windows host with 3000 files across 20
-directories, a cone over one directory took `vlab workspace create` from
+directories, a cone over one directory took `cst workspace create` from
 1804 ms to 467 ms; the full checkout was the first phase in the program
 measured over the 1000 ms interactive budget (issue #10).
 
@@ -897,7 +897,7 @@ and retain it through validation, materialization, and the atomic JSON rename.
 `saveWorkspaces` requires that lock. Thus a contender always reads the latest
 published registry after the preceding writer finishes. Listing, checkpoint
 lookup, and prune previews read an atomic registry snapshot without locking.
-The lock serializes cooperating vlab registry writers; older builds without
+The lock serializes cooperating cst registry writers; older builds without
 this lock, ordinary Git commands, and workspace content edits do not participate.
 
 The claim is created exclusively, carries a random ownership token plus
@@ -1026,7 +1026,7 @@ Git commonly reports a conflict in the tracked sidecar even when Markdown
 blocks are independent. During forecast or a paused operation, `specs.js` reads
 the base/target/source Markdown and manifests in batches, builds a semantic
 plan, and exposes it as a deterministic decision. A forecast can pin and later
-authorize it. Without a forecast, `vlab spec resolve` stages the explicit
+authorize it. Without a forecast, `cst spec resolve` stages the explicit
 suggestion. Continue validates that the sidecar still describes staged
 Markdown and records `accepted` or `modified`.
 
@@ -1163,8 +1163,8 @@ through it would measure the seam. Their results are timings and never reach
 domain logic. The read-only classification is the same one that decides
 object-session invalidation.
 
-`vlab doctor` reports both selectors (`engine`, `forecastEngine`), and
-`vlab doctor --differential` runs every cataloged operation through each
+`cst doctor` reports both selectors (`engine`, `forecastEngine`), and
+`cst doctor --differential` runs every cataloged operation through each
 engine against the current repository, comparing result digests, process
 counts, and fallbacks operation by operation
 (`vcs-lab.engine-differential/v1`). Each probe uses only input shapes the
@@ -1214,11 +1214,11 @@ identity is its only conflict key: a record id with a different digest, or a
 resolution ref with a different target. Two records with distinct identifiers
 never conflict, whatever they claim — two receipts of one family on one
 attachment commit are independent facts, because an ordinary re-run of
-`vlab reconcile` with everything already covered legitimately writes a second
+`cst reconcile` with everything already covered legitimately writes a second
 one.
 
 Four behaviours follow, and every reader implements the same one rule so the
-planner, the resolution catalog, and `vlab metadata status` cannot disagree
+planner, the resolution catalog, and `cst metadata status` cannot disagree
 about which facts exist:
 
 1. **A conflicted fact contributes nothing, on both sides.** Neither copy proves
@@ -1233,7 +1233,7 @@ about which facts exist:
    disputed record from a peer must never stop local work (NFR-SEC-03), and
    replaying a change that was in fact landed is recoverable while omitting one
    that was not is data loss.
-3. **Conflicts park.** `vlab metadata import` keeps its refuse-whole-envelope
+3. **Conflicts park.** `cst metadata import` keeps its refuse-whole-envelope
    default; `--park-conflicts` applies the non-conflicting records and refs
    atomically and writes each conflicting incoming record, with its envelope hash
    and source lineage, as the blob of one ref under
@@ -1241,9 +1241,9 @@ about which facts exist:
    automatic transport may use. Git's own `git notes merge` stays forbidden on
    `refs/notes/vcs-lab`: the manual strategy stops in a conflicted worktree and
    `-s union` concatenates the containers into something
-   `vlab metadata status` reads as `malformed-record`, dropping every record on
+   `cst metadata status` reads as `malformed-record`, dropping every record on
    that attachment.
-4. **A person disposes, once.** `vlab metadata dispose <record id>
+4. **A person disposes, once.** `cst metadata dispose <record id>
    --keep-local|--replace-local` removes the parked copy and records a
    `vcs-lab.disposition/v1` entry naming the digest kept and the digests
    rejected, so a later exchange carrying a rejected digest is reported as
@@ -1270,8 +1270,8 @@ as without one.
 An overlay is one checkpoint commit whose recorded base equals the committed
 head, identified by that commit rather than by the checkpoint ref, which moves
 when the next checkpoint is captured. Nothing is ever captured on a user's
-behalf: `--target-checkpoint` on `vlab forecast`, `vlab workspace forecast`, and
-`vlab rebase-forecast` selects an existing checkpoint, and uncommitted work
+behalf: `--target-checkpoint` on `cst forecast`, `cst workspace forecast`, and
+`cst rebase-forecast` selects an existing checkpoint, and uncommitted work
 without one is refused rather than quietly promoted into approved state.
 
 The forecast carries a **second** predicted tree: the worktree after the overlay
@@ -1379,7 +1379,7 @@ degrees of confidence in one:
 | bound | the stated evidence is tied to Git objects between the heads the bundle *states* |
 | anchored | those heads are the real ones, confirmed from a channel the verifier chose |
 
-A third party may act on the anchored tier. `vlab verify-proof --anchors-from
+A third party may act on the anchored tier. `cst verify-proof --anchors-from
 <remote>` reads anchors with `git ls-remote` from a remote **the verifier**
 names; a remote named inside the bundle is only ever a hint, because its producer
 controls that name. Root commits are not ref tips, so that channel cannot supply
@@ -1429,7 +1429,7 @@ the capability document itself — the producer selects the highest version in
 advertise them, and tokens are opaque, so one a reader does not know is ignored
 rather than refused. Bounds are the receiver's.
 
-`vlab capabilities` prints the document and `vlab capabilities --against` the
+`cst capabilities` prints the document and `cst capabilities --against` the
 report. Neither writes anything: in particular `capabilities` must not call
 `initLab`, because a command that states what a build can do has no business
 writing repository configuration.
@@ -1442,7 +1442,7 @@ clock that partitions rather than orders, and 48 random bits. Accidental
 collision is negligible at that entropy; deliberate collision is trivial and
 would remain so at any entropy, because a `Change-Id` is a line of text in a
 commit message. Identifiers coordinate work across clones; they do not
-authenticate it, and `vlab audit identity` (FR-ID-06) is what detects a copied
+authenticate it, and `cst audit identity` (FR-ID-06) is what detects a copied
 or forged one.
 
 ### 15.3 Trust limitation
@@ -1559,7 +1559,7 @@ lock without rewriting history.
 | Import ID conflict under `--park-conflicts` | Apply the rest atomically; write the incoming copy under `refs/vcs-lab/quarantine/<lineage>/<record id>`; report `parked-record-conflict` against the local copy so neither side proves coverage (ADR-0030). |
 | Import resolution-ref conflict under `--park-conflicts` | Leave the destination ref exactly where it pointed, park the incoming records that name it, and keep the rest of the exchange applicable. |
 | An arriving digest a disposition already rejected | Report it as `disposed` and neither apply nor park it again. |
-| A parked record this build cannot read | `vlab metadata status` reports it and keeps scanning; `vlab metadata dispose` refuses with the code its reason names. |
+| A parked record this build cannot read | `cst metadata status` reports it and keeps scanning; `cst metadata dispose` refuses with the code its reason names. |
 | Import publication race/failure | Checked atomic ref transaction fails; existing destination facts remain intact. |
 | Two publishers write the notes ref at once | Serialized on the notes lock (§15.4); a lock whose holder is gone is abandoned, a running holder's is waited for and then refused with `notes-locked`. |
 | Temporary forecast worktree cleanup encounters in-progress Git state | Abort it best-effort, remove worktree, prune metadata. |
@@ -1632,10 +1632,10 @@ worktree, and merge-tree session phases, and name the engine that produced the
 pinned trees. Reconciliation accumulates active time across start/continue
 processes and separately records elapsed wall time.
 
-`vlab doctor --benchmark` measures ordinary repository probes and the object
-session, and `vlab doctor --differential` compares the read engines operation
-by operation. `vlab spec benchmark` measures cold, unchanged, and one-change corpus
-paths plus metadata size. `vlab metadata benchmark` creates a bounded
+`cst doctor --benchmark` measures ordinary repository probes and the object
+session, and `cst doctor --differential` compares the read engines operation
+by operation. `cst spec benchmark` measures cold, unchanged, and one-change corpus
+paths plus metadata size. `cst metadata benchmark` creates a bounded
 disposable repository and measures history, stock worktree discovery, registry
 reads, complete workspace status, notes, retained resolutions, and complete
 metadata status. Every phase checks semantic equality across samples and
@@ -1746,7 +1746,7 @@ New capabilities should enter through versioned contracts:
 ## 21. Known limitations and architectural debt
 
 - Envelopes are explicit offline artifacts, and synchronization between hosts
-  is not implemented. Capability negotiation itself is: `vlab capabilities`
+  is not implemented. Capability negotiation itself is: `cst capabilities`
   projects the document and `--against` negotiates a peer's, reaching every
   conclusion negotiation defines without a server ([ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md)).
   What is missing is the gateway that would serve the current document of a

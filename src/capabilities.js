@@ -316,7 +316,7 @@ function compareRepository(local, peer) {
  * `unreadableByPeer` is the per-record rule: a stored record's version is fixed
  * by whoever wrote it and may not be re-encoded, so the sender learns which of
  * its versions the receiver would quarantine *before* the transfer rather than
- * from the receiver's `vlab metadata status` after it. `selectedForSend` is the
+ * from the receiver's `cst metadata status` after it. `selectedForSend` is the
  * per-document rule: for something produced fresh for this exchange, the highest
  * version both sides admit.
  */
@@ -517,7 +517,7 @@ function summarize(report) {
 
 /**
  * The whole offline path: this build's document, the peer's, and what the two
- * conclude. `vlab capabilities --against` is this function.
+ * conclude. `cst capabilities --against` is this function.
  */
 export function negotiateAgainst(target, options = {}) {
   const local = capabilityDocument({ cwd: options.cwd });

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Rename the command to `cst` and the package to `causet` (issue #158,
+  ADR-0038). Help, usage, error prefixes (`cst: …`) and recovery hints name
+  `cst`, `--version` prints `causet <version>`, and `npm pack` produces
+  `causet-<version>.tgz`. **`vlab` remains an alias** for the same entry
+  point, with identical output, until at least two minor releases after the
+  Rust cutover; its removal will be announced a release ahead. Persisted and
+  exchanged identifiers are unchanged for now: the `vcs-lab.*` record
+  families, `refs/notes/vcs-lab`, `refs/vcs-lab/*`, `vlab/ws/*` branches,
+  `.git/vcs-lab`, `VLAB_*`, the `[vlab trace]` diagnostic prefix, and the
+  envelope `producer.name` of `causal-vcs-lab`. Their migration is #159.
+
 - Accept migrating the persisted `vcs-lab` identifiers to `causet` (issue
   #159, ADR-0039). Existing records keep their `vcs-lab.*` ids forever,
   because rewriting them would change hashed bytes, so classification reads

@@ -171,7 +171,7 @@ test("a declared role outside the closed vocabulary is refused", () => {
   git(repo, "add", "-A");
   const empty = vlabResult(repo, ["commit", "-m", "two", "--generated-by", ""]);
   assert.notEqual(empty.status, 0, "an empty actor name is refused");
-  assert.match(empty.stderr, /^vlab: /m, "the refusal is a domain diagnostic");
+  assert.match(empty.stderr, /^cst: /m, "the refusal is a domain diagnostic");
 });
 
 test("provenance survives a hard squash, which is where Git loses it", () => {

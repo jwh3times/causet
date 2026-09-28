@@ -42,7 +42,7 @@ and rebase timing snapshots include and exclude.
   per family in [compatibility.md](compatibility.md) (ADR-0020), whose runtime
   authority is `RECORD_FAMILIES` and `RESOURCE_BOUNDS` in `src/schemas.js`.
   In short: unknown portable record schemas are quarantined rather than
-  consumed (`vlab metadata status` reports them), and unsupported private,
+  consumed (`cst metadata status` reports them), and unsupported private,
   shared-local, tracked, or envelope schemas are refused with an error.
 - `x-vcs-lab-scope` annotates each document with its persistence scope and
   must agree with `schemaClassification` in `src/schemas.js`; `cli-output`
@@ -91,7 +91,7 @@ and rebase timing snapshots include and exclude.
 
 | Schema | Document | Store |
 | --- | --- | --- |
-| `vcs-lab.capabilities/v1` | [capabilities.v1.schema.json](capabilities.v1.schema.json) | None: projected from the registries by `vlab capabilities`, and served by a gateway when one exists |
+| `vcs-lab.capabilities/v1` | [capabilities.v1.schema.json](capabilities.v1.schema.json) | None: projected from the registries by `cst capabilities`, and served by a gateway when one exists |
 
 ### Tracked-portable (committed beside the working tree)
 
@@ -107,7 +107,7 @@ and rebase timing snapshots include and exclude.
 | Schema | Document | Store |
 | --- | --- | --- |
 | `vcs-lab.metadata-envelope/v1` | [metadata-envelope.v1.schema.json](metadata-envelope.v1.schema.json) | `manifest.json` beside `objects.bundle` |
-| `vcs-lab.proof-bundle/v2` | [proof-bundle.v2.schema.json](proof-bundle.v2.schema.json) | A file handed to `vlab verify-proof`; carries the Git bindings of ADR-0031 |
+| `vcs-lab.proof-bundle/v2` | [proof-bundle.v2.schema.json](proof-bundle.v2.schema.json) | A file handed to `cst verify-proof`; carries the Git bindings of ADR-0031 |
 | `vcs-lab.proof-bundle/v1` | [proof-bundle.v1.schema.json](proof-bundle.v1.schema.json) | Superseded; still read, and reaches only the self-consistent tier |
 
 ### CLI-output families
@@ -155,7 +155,7 @@ Current commands emit plan v2 and benchmark v3; see the command table below.
 | --- | --- |
 | `vcs-lab.forecast/v1` | Superseded by `vcs-lab.forecast/v2`; still accepted when reading stored forecasts, never written. |
 | `vcs-lab.rebase-plan/v1` | Superseded by `vcs-lab.rebase-plan/v2`, which adds the preserved topology and redefines `constraints.supported` (ADR-0034). Command output, never stored, so nothing holds a v1 plan except a v1 forecast or journal, both of which are refused. |
-| `vcs-lab.rebase-forecast/v1` | Superseded by `vcs-lab.rebase-forecast/v2`. Refused rather than read: it pins a v1 plan fingerprint that no v2 plan can match. Regenerate with `vlab rebase-forecast`. |
+| `vcs-lab.rebase-forecast/v1` | Superseded by `vcs-lab.rebase-forecast/v2`. Refused rather than read: it pins a v1 plan fingerprint that no v2 plan can match. Regenerate with `cst rebase-forecast`. |
 | `vcs-lab.rebase-operation/v1` | Superseded by `vcs-lab.rebase-operation/v2`. Refused rather than resumed: its queue cannot express a recreated merge. Finish or abort an in-flight v1 journal with the build that wrote it. |
 | `vcs-lab.rebase-plan/v2` | Superseded by `vcs-lab.rebase-plan/v3`, which adds the declared interactive program (ADR-0035). Command output, never stored. |
 | `vcs-lab.rebase-forecast/v2` | Superseded by `vcs-lab.rebase-forecast/v3`. Refused rather than read, for the same reason v1 is: it pins a plan fingerprint no v3 plan can match. |
@@ -173,53 +173,53 @@ rendering at all.
 
 | Command | JSON output |
 | --- | --- |
-| `vlab commit` | Projection `{commit, changeId, message}` |
-| `vlab merge-plan` | `vcs-lab.merge-plan/v1` |
-| `vlab audit identity` | `vcs-lab.identity-audit/v1`; exits non-zero when errors are reported, while warnings such as `near-duplicate-actor-names` leave the exit code at zero |
-| `vlab proof-bundle` | `vcs-lab.proof-bundle/v2`; always JSON, since the bundle exists to be handed to another tool. Refuses rather than truncating when its proofs would exceed `proofBundleBytes` |
-| `vlab verify-proof` | `vcs-lab.proof-verification/v1`; reports a tier and the conclusions the carried material cannot support, and exits non-zero when the bundle does not verify. `--anchors-from <remote>` reads anchors with `git ls-remote` from a remote the verifier names |
-| `vlab rebase-plan` | `vcs-lab.rebase-plan/v3` |
-| `vlab rebase-forecast` | `vcs-lab.rebase-forecast/v3` |
-| `vlab rebase`, `vlab rebase --continue` | Projection `{operationId, plan, recreatedMerges, amendments, absorptions, receipt}` with `plan` a `vcs-lab.rebase-plan/v3`, `receipt` a `vcs-lab.rebase/v3`, and the three lists repeated from the receipt for convenience (each empty when the rewrite declared nothing of that kind) |
-| `vlab rebase --status` | Projection: `{active: false, state: "idle"}`, or `{active, operationId, state, worktree, sourceRef, sourceHead, sourceBranchRef, ontoRef, ontoHead, forecastId, progress, current, applied, recreatedMerges, recovery, timings, startedAt, updatedAt}` with `applied` an array of `vcs-lab.rebase-application/v1` and `recreatedMerges` the joins recreated so far, which are never applications. `progress` counts the steps that run, so a commit the plan omits is in neither `completed` nor `remaining` |
-| `vlab rebase --abort` | Projection `{aborted, operationId, sourceRef, restoredHead}` |
-| `vlab forecast` | `vcs-lab.forecast/v2` |
-| `vlab reconcile`, `vlab reconcile --continue` | Projection `{operationId, plan, receipt}` with `plan` a `vcs-lab.merge-plan/v1` and `receipt` a `vcs-lab.reconciliation/v6` |
-| `vlab reconcile --status` | Projection like `rebase --status` (with `targetBranchRef` in place of `sourceBranchRef`, without `ontoRef`/`ontoHead`; `recovery` names the expected and actual branch, with `branchMatches` null for a journal written before the branch was recorded) with `applied` an array of `vcs-lab.application/v4` |
-| `vlab reconcile --abort` | Projection `{aborted, operationId, restoredHead}` |
-| `vlab resolve status` | Projection `{active, operationId, conflicts}` |
-| `vlab resolve apply` | Projection `{operationId, applied: [{path, resolution}]}` |
-| `vlab resolve reject` | Projection `{operationId, rejected: [{path, candidates}]}` |
-| `vlab resolve list` | Array of `vcs-lab.resolution/v1` with `attachedTo`, `discoveredRef`, and `commit` projections added |
-| `vlab provenance [<rev>] [--all]` | `{ revision, inspected, entries[] }`; each entry projects one `vcs-lab.provenance/v1` record with the commit subject added |
-| `vlab cherry-pick` | `vcs-lab.application/v1`, or the no-op projection `{noOp, reason, originCommit, originChangeId, targetBefore}` |
-| `vlab receipts` | Array of note records (any note-record family above) with `attachedTo` added |
-| `vlab metadata status` | `vcs-lab.metadata-status/v1` |
-| `vlab metadata validate` | `vcs-lab.metadata-validation/v1` |
-| `vlab metadata retain --dry-run/--apply` | `vcs-lab.metadata-retention/v1` |
-| `vlab metadata export` | `vcs-lab.metadata-export/v1` (writes a `vcs-lab.metadata-envelope/v1` manifest) |
-| `vlab metadata import --dry-run` | `vcs-lab.metadata-import-preview/v1` |
-| `vlab metadata import --apply` | `vcs-lab.metadata-import/v1` |
-| `vlab metadata dispose` | `vcs-lab.metadata-disposition/v1` (records a `vcs-lab.disposition/v1` entry) |
-| `vlab capabilities` | `vcs-lab.capabilities/v1`; repository-scoped inside a repository, build-scoped outside one |
-| `vlab capabilities --against` | `vcs-lab.capability-report/v1`; exits non-zero when a family is reduced or blocked, while the exchange itself remains possible |
-| `vlab metadata benchmark` | `vcs-lab.repository-scale-benchmark/v1` |
-| `vlab workspace create/move/archive/restore/repair` | `vcs-lab.workspace/v1` plus inspection projections (`lifecycle` default, `status`, `pathStatus`, `head`, `dirtyFiles`; mutations add `changed`) |
-| `vlab workspace list` | Array of inspected `vcs-lab.workspace/v1` |
-| `vlab workspace checkpoint` | `vcs-lab.checkpoint/v1` |
-| `vlab workspace prune` | `vcs-lab.workspace-prune/v1` |
-| `vlab workspace forecast` | `vcs-lab.forecast/v2` (with `workspaceComparison` populated) |
-| `vlab spec index` | Projection `{manifestPath, manifest, changes, entityCount, cacheHit, cacheMode, contentRead, written, ...}`; `--all` wraps per-file results in a summary projection |
-| `vlab spec show` | Projection `{manifestPath, manifest}` with a materialized manifest view (adds `sourceBytes`, `sourceLines`, `blocks`); stored v1/v2/v3/v4 schema and parser semantics are retained |
-| `vlab spec merge-plan` | `vcs-lab.spec-merge-plan/v2` |
-| `vlab spec status` | Projection `{active, operationId, plans}` |
-| `vlab spec resolve` | Projection `{operationId, applied}` |
-| `vlab spec benchmark` | `vcs-lab.spec-benchmark/v3` |
-| `vlab doctor` | Projection `{ok, version, git, node, repository, notesRef, engine, forecastEngine, differential?, benchmark?, objectSession?}`; `version` is the vcs-lab build identity and `differential` is a `vcs-lab.engine-differential/v1` |
+| `cst commit` | Projection `{commit, changeId, message}` |
+| `cst merge-plan` | `vcs-lab.merge-plan/v1` |
+| `cst audit identity` | `vcs-lab.identity-audit/v1`; exits non-zero when errors are reported, while warnings such as `near-duplicate-actor-names` leave the exit code at zero |
+| `cst proof-bundle` | `vcs-lab.proof-bundle/v2`; always JSON, since the bundle exists to be handed to another tool. Refuses rather than truncating when its proofs would exceed `proofBundleBytes` |
+| `cst verify-proof` | `vcs-lab.proof-verification/v1`; reports a tier and the conclusions the carried material cannot support, and exits non-zero when the bundle does not verify. `--anchors-from <remote>` reads anchors with `git ls-remote` from a remote the verifier names |
+| `cst rebase-plan` | `vcs-lab.rebase-plan/v3` |
+| `cst rebase-forecast` | `vcs-lab.rebase-forecast/v3` |
+| `cst rebase`, `cst rebase --continue` | Projection `{operationId, plan, recreatedMerges, amendments, absorptions, receipt}` with `plan` a `vcs-lab.rebase-plan/v3`, `receipt` a `vcs-lab.rebase/v3`, and the three lists repeated from the receipt for convenience (each empty when the rewrite declared nothing of that kind) |
+| `cst rebase --status` | Projection: `{active: false, state: "idle"}`, or `{active, operationId, state, worktree, sourceRef, sourceHead, sourceBranchRef, ontoRef, ontoHead, forecastId, progress, current, applied, recreatedMerges, recovery, timings, startedAt, updatedAt}` with `applied` an array of `vcs-lab.rebase-application/v1` and `recreatedMerges` the joins recreated so far, which are never applications. `progress` counts the steps that run, so a commit the plan omits is in neither `completed` nor `remaining` |
+| `cst rebase --abort` | Projection `{aborted, operationId, sourceRef, restoredHead}` |
+| `cst forecast` | `vcs-lab.forecast/v2` |
+| `cst reconcile`, `cst reconcile --continue` | Projection `{operationId, plan, receipt}` with `plan` a `vcs-lab.merge-plan/v1` and `receipt` a `vcs-lab.reconciliation/v6` |
+| `cst reconcile --status` | Projection like `rebase --status` (with `targetBranchRef` in place of `sourceBranchRef`, without `ontoRef`/`ontoHead`; `recovery` names the expected and actual branch, with `branchMatches` null for a journal written before the branch was recorded) with `applied` an array of `vcs-lab.application/v4` |
+| `cst reconcile --abort` | Projection `{aborted, operationId, restoredHead}` |
+| `cst resolve status` | Projection `{active, operationId, conflicts}` |
+| `cst resolve apply` | Projection `{operationId, applied: [{path, resolution}]}` |
+| `cst resolve reject` | Projection `{operationId, rejected: [{path, candidates}]}` |
+| `cst resolve list` | Array of `vcs-lab.resolution/v1` with `attachedTo`, `discoveredRef`, and `commit` projections added |
+| `cst provenance [<rev>] [--all]` | `{ revision, inspected, entries[] }`; each entry projects one `vcs-lab.provenance/v1` record with the commit subject added |
+| `cst cherry-pick` | `vcs-lab.application/v1`, or the no-op projection `{noOp, reason, originCommit, originChangeId, targetBefore}` |
+| `cst receipts` | Array of note records (any note-record family above) with `attachedTo` added |
+| `cst metadata status` | `vcs-lab.metadata-status/v1` |
+| `cst metadata validate` | `vcs-lab.metadata-validation/v1` |
+| `cst metadata retain --dry-run/--apply` | `vcs-lab.metadata-retention/v1` |
+| `cst metadata export` | `vcs-lab.metadata-export/v1` (writes a `vcs-lab.metadata-envelope/v1` manifest) |
+| `cst metadata import --dry-run` | `vcs-lab.metadata-import-preview/v1` |
+| `cst metadata import --apply` | `vcs-lab.metadata-import/v1` |
+| `cst metadata dispose` | `vcs-lab.metadata-disposition/v1` (records a `vcs-lab.disposition/v1` entry) |
+| `cst capabilities` | `vcs-lab.capabilities/v1`; repository-scoped inside a repository, build-scoped outside one |
+| `cst capabilities --against` | `vcs-lab.capability-report/v1`; exits non-zero when a family is reduced or blocked, while the exchange itself remains possible |
+| `cst metadata benchmark` | `vcs-lab.repository-scale-benchmark/v1` |
+| `cst workspace create/move/archive/restore/repair` | `vcs-lab.workspace/v1` plus inspection projections (`lifecycle` default, `status`, `pathStatus`, `head`, `dirtyFiles`; mutations add `changed`) |
+| `cst workspace list` | Array of inspected `vcs-lab.workspace/v1` |
+| `cst workspace checkpoint` | `vcs-lab.checkpoint/v1` |
+| `cst workspace prune` | `vcs-lab.workspace-prune/v1` |
+| `cst workspace forecast` | `vcs-lab.forecast/v2` (with `workspaceComparison` populated) |
+| `cst spec index` | Projection `{manifestPath, manifest, changes, entityCount, cacheHit, cacheMode, contentRead, written, ...}`; `--all` wraps per-file results in a summary projection |
+| `cst spec show` | Projection `{manifestPath, manifest}` with a materialized manifest view (adds `sourceBytes`, `sourceLines`, `blocks`); stored v1/v2/v3/v4 schema and parser semantics are retained |
+| `cst spec merge-plan` | `vcs-lab.spec-merge-plan/v2` |
+| `cst spec status` | Projection `{active, operationId, plans}` |
+| `cst spec resolve` | Projection `{operationId, applied}` |
+| `cst spec benchmark` | `vcs-lab.spec-benchmark/v3` |
+| `cst doctor` | Projection `{ok, version, git, node, repository, notesRef, engine, forecastEngine, differential?, benchmark?, objectSession?}`; `version` is the vcs-lab build identity and `differential` is a `vcs-lab.engine-differential/v1` |
 
-`vlab merge`, `vlab compact-merge`, and `vlab hard-squash` print their
+`cst merge`, `cst compact-merge`, and `cst hard-squash` print their
 `vcs-lab.landing/v1` receipt as JSON whatever the flags: like every command
-whose handler has no text renderer, `--json` is a no-op for them. `vlab init`,
-`vlab branch`, `vlab graph`, `vlab version`, and `vlab help` print text and
+whose handler has no text renderer, `--json` is a no-op for them. `cst init`,
+`cst branch`, `cst graph`, `cst version`, and `cst help` print text and
 have no JSON form. The [conformance contract](../conformance/README.md) lists
 which commands are which and pins the parity of those that have both.

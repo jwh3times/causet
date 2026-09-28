@@ -261,7 +261,7 @@ export const RECORD_FAMILIES = new Map([
     // metadata envelope: a version this build cannot read is reported rather
     // than partially interpreted (ADR-0031, ADR-0033).
     unknownVersion: "refuse",
-    store: "a file handed to vlab verify-proof",
+    store: "a file handed to cst verify-proof",
   }],
   ["vcs-lab.capabilities", {
     scope: "advertisement",
@@ -271,7 +271,7 @@ export const RECORD_FAMILIES = new Map([
     // A client cannot negotiate from a document it does not understand, and
     // refusing costs exactly one exchange (ADR-0033).
     unknownVersion: "refuse",
-    store: "produced on demand by vlab capabilities; served by a gateway",
+    store: "produced on demand by cst capabilities; served by a gateway",
   }],
 ]);
 
@@ -311,7 +311,7 @@ export const RESOURCE_BOUNDS = Object.freeze({
    * can accumulate before the claim stops being reviewable by a person.
    */
   provenanceActors: 64,
-  /** Bytes of one `vcs-lab.proof-bundle/v1` document handed to `vlab verify-proof`. */
+  /** Bytes of one `vcs-lab.proof-bundle/v1` document handed to `cst verify-proof`. */
   proofBundleBytes: 16 * 1024 * 1024,
   /**
    * Bytes of one `vcs-lab.capabilities/v1` document, checked before it is

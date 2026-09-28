@@ -507,7 +507,7 @@ function assertNoOperationJournal(gitDir, action, recovery) {
     if (fs.lstatSync(journal, { throwIfNoEntry: false })) {
       throw new CliError(`Cannot ${action}: a ${command} operation journal exists at '${journal}'.`, {
         code: "operation-in-progress",
-        details: `${recovery} Run 'vlab ${command} --status', then continue a resolved conflict or abort the operation in that worktree before retrying. If this build cannot read the journal, preserve it and recover with the build that wrote it.`,
+        details: `${recovery} Run 'cst ${command} --status', then continue a resolved conflict or abort the operation in that worktree before retrying. If this build cannot read the journal, preserve it and recover with the build that wrote it.`,
       });
     }
   }

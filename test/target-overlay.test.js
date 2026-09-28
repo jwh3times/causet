@@ -713,7 +713,7 @@ test("abort recovers from a re-materialization mismatch on both applications", (
   );
   assert.equal(reconcileRefusal.code, "stale-forecast");
   assert.match(reconcileRefusal.details, /Nothing was published/);
-  assert.match(reconcileRefusal.details, /vlab reconcile --abort/);
+  assert.match(reconcileRefusal.details, /cst reconcile --abort/);
   assert.equal(vlabJson(reconciled.workspace, "reconcile", "--status").state, "forecast-mismatch");
   assert.notEqual(git(reconciled.workspace, "status", "--porcelain"), "",
     "the operation left the merged draft on disk, which is what makes this the hard case");
@@ -740,7 +740,7 @@ test("abort recovers from a re-materialization mismatch on both applications", (
   );
   assert.equal(rebaseRefusal.code, "stale-forecast");
   assert.match(rebaseRefusal.details, /Nothing was published/);
-  assert.match(rebaseRefusal.details, /vlab rebase --abort/);
+  assert.match(rebaseRefusal.details, /cst rebase --abort/);
   assert.equal(vlabJson(rebased.workspace, "rebase", "--status").state, "forecast-mismatch");
 
   const rebaseAbort = vlabJson(rebased.workspace, "rebase", "--abort");

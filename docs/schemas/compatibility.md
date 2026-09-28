@@ -63,10 +63,10 @@ version in `also read` is migrated forward as section 3 describes.
 | `vcs-lab.disposition` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/dispositions.json` |
 | `vcs-lab.spec-manifest` | tracked | v4 | v1, v2, v3 | refuse | `.vcs-lab/specs/**` |
 | `vcs-lab.metadata-envelope` | envelope | v1 | — | refuse | `manifest.json` of a metadata export directory |
-| `vcs-lab.proof-bundle` | envelope | v2 | v1 | refuse | a file handed to vlab verify-proof |
-| `vcs-lab.capabilities` | advertisement | v1 | — | refuse | produced on demand by vlab capabilities; served by a gateway |
+| `vcs-lab.proof-bundle` | envelope | v2 | v1 | refuse | a file handed to cst verify-proof |
+| `vcs-lab.capabilities` | advertisement | v1 | — | refuse | produced on demand by cst capabilities; served by a gateway |
 
-`vcs-lab.application` writes two versions on purpose: `vlab cherry-pick`
+`vcs-lab.application` writes two versions on purpose: `cst cherry-pick`
 publishes `v1` and reconciliation publishes the richer `v4`. Both are current;
 neither supersedes the other.
 
@@ -82,7 +82,7 @@ The rule follows from who wrote the record and what is lost by guessing.
 - **Shared-portable notes are quarantined, never refused.** They arrive by
   `git fetch` from clones that may run a newer vcs-lab, so an unknown version is
   an ordinary event, not a fault. An unknown record is reported by
-  `vlab metadata status`, excluded from coverage proof and planning, and left on
+  `cst metadata status`, excluded from coverage proof and planning, and left on
   disk untouched. A single bad record from a peer must never stop local work,
   and untrusted input must never be interpreted (NFR-SEC-03).
 - **Note containers are ignored and protected.** A container of another version
@@ -105,7 +105,7 @@ The rule follows from who wrote the record and what is lost by guessing.
   person made: the registry says which digest of a disputed fact was kept, and a
   parked record is the copy that lost. Interpreting either from a version we do
   not understand could return the wrong copy of a causal fact to service, so the
-  command refuses and says which build to read it with. `vlab metadata status`
+  command refuses and says which build to read it with. `cst metadata status`
   is the exception its scope already allows: it reports an unreadable parked
   record as a diagnostic and keeps scanning, exactly as it does for a
   workspace registry it cannot parse (ADR-0030).
@@ -213,7 +213,7 @@ tracked, or imported input refuses the command.
 
 | Bound | Bytes or count | Applies to | On excess |
 | --- | --- | --- | --- |
-| `noteContainerBytes` | 8388608 | One `refs/notes/vcs-lab` note blob, and one `refs/vcs-lab/quarantine/**` parked-record blob | Quarantine: no records, `oversize-record` warning from `vlab metadata status`, and `appendNote` refuses to rewrite it. A parked blob over the bound is reported by `vlab metadata status` and refused by `vlab metadata dispose`; parking a record that would cross it is refused |
+| `noteContainerBytes` | 8388608 | One `refs/notes/vcs-lab` note blob, and one `refs/vcs-lab/quarantine/**` parked-record blob | Quarantine: no records, `oversize-record` warning from `cst metadata status`, and `appendNote` refuses to rewrite it. A parked blob over the bound is reported by `cst metadata status` and refused by `cst metadata dispose`; parking a record that would cross it is refused |
 | `noteContainerRecords` | 4096 | Records in one note container | Quarantine, as above; an append that would cross the bound is refused |
 | `localStateBytes` | 67108864 | One `vcs-lab/**` JSON file in the git or common directory | Refuse before reading the file |
 | `specManifestBytes` | 8388608 | One `.vcs-lab/specs/**` manifest, in the working tree or at a revision | Refuse |
@@ -221,8 +221,8 @@ tracked, or imported input refuses the command.
 | `envelopeBundleBytes` | 2147483648 | The `objects.bundle` size an envelope declares | Refuse |
 | `envelopeRecords` | 1000000 | Records one envelope declares | Refuse |
 | `provenanceActors` | 64 | Actors in one `vcs-lab.provenance/v1` record | Refuse the write; a landing's provenance is the union of every absorbed commit's actors, so this bounds what one branch can accumulate before the claim stops being reviewable by a person |
-| `proofBundleBytes` | 16777216 | One `vcs-lab.proof-bundle/v1` or `/v2` document handed to `vlab verify-proof` | Refuse before reading the file. A producer whose proofs would exceed it refuses to emit and names the member that did not fit, rather than truncating: a truncated proof cannot be told apart from an omission, which is the attack the bound inventory exists to catch |
-| `capabilityDocumentBytes` | 1048576 | One `vcs-lab.capabilities/v1` document read by `vlab capabilities --against` or from a gateway | Refuse before parsing the document |
+| `proofBundleBytes` | 16777216 | One `vcs-lab.proof-bundle/v1` or `/v2` document handed to `cst verify-proof` | Refuse before reading the file. A producer whose proofs would exceed it refuses to emit and names the member that did not fit, rather than truncating: a truncated proof cannot be told apart from an omission, which is the attack the bound inventory exists to catch |
+| `capabilityDocumentBytes` | 1048576 | One `vcs-lab.capabilities/v1` document read by `cst capabilities --against` or from a gateway | Refuse before parsing the document |
 
 Bounds divide in one more way once a peer is involved. **Bounds are the
 receiver's**: the bound that governs what this build may send is the peer's, and
@@ -261,7 +261,7 @@ Naming these is part of the contract; they are growth limits, not safety limits,
 and each needs a retention design rather than a constant.
 
 - No cap on the number of notes, note targets, or causal records in a
-  repository. `vlab metadata status` reads every note in one batch and holds the
+  repository. `cst metadata status` reads every note in one batch and holds the
   whole inventory in memory.
 - No cap on operation-journal queue length, on the number of stored forecasts
   (nothing prunes `<git dir>/vcs-lab/forecasts/`), on registered workspaces, or
@@ -284,7 +284,7 @@ document disagree.
 
 ## 6. Known inconsistency
 
-`vlab metadata validate` reports an unsupported `vcs-lab.spec-manifest` version
+`cst metadata validate` reports an unsupported `vcs-lab.spec-manifest` version
 as a warning and keeps scanning, while `materializeManifest` refuses the same
 manifest with an error. This is deliberate — validation is a report over
 everything present, and only a command that must interpret a manifest fails —

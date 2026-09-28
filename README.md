@@ -72,8 +72,12 @@ From this directory:
 
 ```bash
 npm link
-vlab --help
+cst --help
 ```
+
+The command is `cst` and the package is `causet` (ADR-0038). `vlab`, the command's old name,
+still works as an alias for the same program during the transition, and prints identical
+output.
 
 Alternatively, run it without installing:
 
@@ -86,7 +90,7 @@ On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are o
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causal-vcs-lab-0.18.0.bundle vcs-lab
+git clone /path/to/causet-0.18.0.bundle vcs-lab
 cd vcs-lab
 git remote remove origin
 npm link
@@ -98,7 +102,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 ```bash
 git init -b main
 git add .
-git commit -m "Bootstrap causal-vcs-lab 0.18.0"
+git commit -m "Bootstrap causet 0.18.0"
 npm link
 npm test
 ```
@@ -113,7 +117,7 @@ cd vlab-playground
 git init -b main
 git config user.name "Local Tester"
 git config user.email "tester@example.test"
-vlab init
+cst init
 ```
 
 Create a base and a feature with stable change identities:
@@ -121,18 +125,18 @@ Create a base and a feature with stable change identities:
 ```bash
 echo base > app.txt
 git add app.txt
-vlab commit -m "base"
+cst commit -m "base"
 
-vlab branch feature
+cst branch feature
 echo feature > feature.txt
 git add feature.txt
-vlab commit -m "feature part one"
+cst commit -m "feature part one"
 echo more >> feature.txt
 git add feature.txt
-vlab commit -m "feature part two"
+cst commit -m "feature part two"
 ```
 
-`vlab commit` passes `--all` and `--allow-empty` through to `git commit`:
+`cst commit` passes `--all` and `--allow-empty` through to `git commit`:
 `--all` stages every tracked change first and `--allow-empty` records a
 commit whose tree is unchanged. Either way the commit receives its
 `Change-Id` trailer.
@@ -141,14 +145,14 @@ commit whose tree is unchanged. Either way the commit receives its
 
 ```bash
 git switch main
-vlab merge feature --compact
+cst merge feature --compact
 git log --first-parent --oneline
 git show -s --format=%P HEAD
 ```
 
 The first-parent log contains one landing unit, while the commit has a real second parent. Stock Git can safely merge the branches later.
 
-`vlab compact-merge <source>` is the same landing as `vlab merge <source> --compact`, and `vlab hard-squash <source>` the same as `vlab merge <source> --hard-squash`; `vlab merge` without a mode flag lands compactly. All three print their `vcs-lab.landing/v1` receipt as JSON whatever the flags.
+`cst compact-merge <source>` is the same landing as `cst merge <source> --compact`, and `cst hard-squash <source>` the same as `cst merge <source> --hard-squash`; `cst merge` without a mode flag lands compactly. All three print their `vcs-lab.landing/v1` receipt as JSON whatever the flags.
 
 ### Strict hard squash and causal reconciliation
 
@@ -158,22 +162,22 @@ Repeat the experiment with another feature:
 git switch -c hard-feature main
 echo first > hard.txt
 git add hard.txt
-vlab commit -m "hard feature one"
+cst commit -m "hard feature one"
 echo second >> hard.txt
 git add hard.txt
-vlab commit -m "hard feature two"
+cst commit -m "hard feature two"
 
 git switch main
-vlab merge hard-feature --hard-squash
+cst merge hard-feature --hard-squash
 
 git switch hard-feature
 echo continuation > continuation.txt
 git add continuation.txt
-vlab commit -m "hard feature continuation"
+cst commit -m "hard feature continuation"
 
 git switch main
-vlab merge-plan hard-feature
-vlab reconcile hard-feature
+cst merge-plan hard-feature
+cst reconcile hard-feature
 ```
 
 The planner should report the first two changes as `covered` by the landing receipt and only the continuation as `new`. `reconcile` cherry-picks only the proven-new change and records another causal receipt.
@@ -181,17 +185,17 @@ The planner should report the first two changes as `covered` by the landing rece
 Inspect the ordinary branch graph together with the causal relationships:
 
 ```bash
-vlab graph
-vlab receipts
+cst graph
+cst receipts
 ```
 
-`vlab graph` deliberately hides internal Git notes and checkpoint refs. Raw `git log --all` includes the history of `refs/notes/vcs-lab`, which can appear as unrelated commits titled `Notes added by 'git notes add'`. For a clean stock-Git view, use:
+`cst graph` deliberately hides internal Git notes and checkpoint refs. Raw `git log --all` includes the history of `refs/notes/vcs-lab`, which can appear as unrelated commits titled `Notes added by 'git notes add'`. For a clean stock-Git view, use:
 
 ```bash
 git log --graph --oneline --decorate --branches --tags --remotes
 ```
 
-`vlab receipts` is human-readable by default; use `vlab receipts --json` for the complete machine-readable records.
+`cst receipts` is human-readable by default; use `cst receipts --json` for the complete machine-readable records.
 
 ### Failure output
 
@@ -211,12 +215,12 @@ Every command's failure has a machine-readable form. Without `--json` a failure 
 
 ### Authorship provenance
 
-`vlab commit` can declare who produced a change, and the declaration survives the rewrites that destroy ordinary Git attribution:
+`cst commit` can declare who produced a change, and the declaration survives the rewrites that destroy ordinary Git attribution:
 
 ```bash
-vlab commit -m "Add the parser" --generated-by claude-opus-5 --reviewed-by "Jerry Holland"
-VLAB_AGENT=claude-opus-5 vlab commit -m "Add the tests"   # an agent harness sets this once
-vlab provenance HEAD            # or: vlab provenance main --all
+cst commit -m "Add the parser" --generated-by claude-opus-5 --reviewed-by "Jerry Holland"
+VLAB_AGENT=claude-opus-5 cst commit -m "Add the tests"   # an agent harness sets this once
+cst provenance HEAD            # or: cst provenance main --all
 ```
 
 When actors are declared by flags or `VLAB_AGENT`, commit takes the shared notes
@@ -241,21 +245,21 @@ The planner uses three statuses:
 - `?` likely patch-equivalent, requiring explicit confirmation;
 - `+` new work.
 
-Similarity is deliberately advisory. Run `vlab reconcile <branch> --accept-candidates` only after reviewing candidate equivalence.
+Similarity is deliberately advisory. Run `cst reconcile <branch> --accept-candidates` only after reviewing candidate equivalence.
 
 ### Proof bundles and the identity audit
 
 A plan's verdict can be handed to another party together with the evidence it rests on:
 
 ```bash
-vlab proof-bundle hard-feature > proof.json
-vlab verify-proof proof.json
-vlab verify-proof proof.json --offline
+cst proof-bundle hard-feature > proof.json
+cst verify-proof proof.json
+cst verify-proof proof.json --offline
 ```
 
-`vlab proof-bundle` always prints JSON (`vcs-lab.proof-bundle/v1`): the merge plan with the target commits and change IDs, the reachable accepted receipts and what each absorbs, and the advisory patch-equivalent set, hashed under the canonical JSON profile. `vlab verify-proof` re-derives every classification from that evidence with its own copy of the proof lattice and reports three checks separately: `integrity` catches editing, `classification` catches a claim that does not follow from the stated evidence even when the hash was restated, and `repository` checks evidence, the complete ordered source inventory, commit identities and subjects, counts, lineage, and physical/effective bases against the current repository. Duplicate commits and inconsistent counts also fail offline checks. `--offline` skips the repository check: success establishes internal consistency, while evidence truth, source completeness, commit identities, and bases remain unchecked; a bundle from an unrelated repository is reported as `different-repository`. The command exits non-zero when the bundle does not verify.
+`cst proof-bundle` always prints JSON (`vcs-lab.proof-bundle/v1`): the merge plan with the target commits and change IDs, the reachable accepted receipts and what each absorbs, and the advisory patch-equivalent set, hashed under the canonical JSON profile. `cst verify-proof` re-derives every classification from that evidence with its own copy of the proof lattice and reports three checks separately: `integrity` catches editing, `classification` catches a claim that does not follow from the stated evidence even when the hash was restated, and `repository` checks evidence, the complete ordered source inventory, commit identities and subjects, counts, lineage, and physical/effective bases against the current repository. Duplicate commits and inconsistent counts also fail offline checks. `--offline` skips the repository check: success establishes internal consistency, while evidence truth, source completeness, commit identities, and bases remain unchecked; a bundle from an unrelated repository is reported as `different-repository`. The command exits non-zero when the bundle does not verify.
 
-`vlab audit identity` scans every commit reachable from any ref and every causal record. It reports commits carrying more than one `Change-Id` trailer, commits sharing a `Change-Id` with no identity-preserving application record linking them, applied commits with more than one claimed origin, and records that break the identity invariants, and it exits non-zero when it reports errors (`--json` emits `vcs-lab.identity-audit/v1`). It also warns, without failing, when provenance actor names look like one actor spelled two ways, such as `codex` and `OpenAI Codex`; the [actor naming convention](docs/identity/README.md#8-naming-a-provenance-actor) says how to spell them. A `Change-Id` is a line of text anyone with repository access can write, so identifiers coordinate work rather than authenticate it and the audit is the defence ([docs/identity](docs/identity/README.md)).
+`cst audit identity` scans every commit reachable from any ref and every causal record. It reports commits carrying more than one `Change-Id` trailer, commits sharing a `Change-Id` with no identity-preserving application record linking them, applied commits with more than one claimed origin, and records that break the identity invariants, and it exits non-zero when it reports errors (`--json` emits `vcs-lab.identity-audit/v1`). It also warns, without failing, when provenance actor names look like one actor spelled two ways, such as `codex` and `OpenAI Codex`; the [actor naming convention](docs/identity/README.md#8-naming-a-provenance-actor) says how to spell them. A `Change-Id` is a line of text anyone with repository access can write, so identifiers coordinate work rather than authenticate it and the audit is the defence ([docs/identity](docs/identity/README.md)).
 
 ## Planning and forecasting a causal rebase
 
@@ -264,10 +268,10 @@ branch without switching or modifying the caller:
 
 ```bash
 git switch hard-feature
-vlab rebase-plan main
-vlab rebase-plan main hard-feature --json
-vlab rebase-forecast main
-vlab rebase-forecast main hard-feature --json
+cst rebase-plan main
+cst rebase-plan main hard-feature --json
+cst rebase-forecast main
+cst rebase-forecast main hard-feature --json
 git status --short
 ```
 
@@ -303,8 +307,8 @@ logical identity ([ADR-0035](docs/adr/0035-make-interactive-rewrites-declare-wha
   `candidate-equivalent`. A receipt naming the specific commit still proves that
   commit, and ancestry still proves what ancestry proves.
 
-`reword` and `edit` pause for the caller — `vlab rebase --continue -m "..."` for
-a message, `vlab rebase --continue` after staging content. An `edit` is the only
+`reword` and `edit` pause for the caller — `cst rebase --continue -m "..."` for
+a message, `cst rebase --continue` after staging content. An `edit` is the only
 action whose result a forecast cannot predict, so a forecast containing one
 reports `pauses-for-content` and says it cannot be used as an approval.
 
@@ -320,13 +324,13 @@ unchanged.
 Heuristic candidates still block a final prediction until explicitly accepted:
 
 ```bash
-vlab rebase-forecast main hard-feature --accept-candidates
+cst rebase-forecast main hard-feature --accept-candidates
 ```
 
 Apply the current named branch after reviewing the plan or a complete forecast:
 
 ```bash
-vlab rebase main --use-forecast rebase_forecast_...
+cst rebase main --use-forecast rebase_forecast_...
 ```
 
 Execution rebuilds the plan and rejects a stale forecast before moving the
@@ -338,14 +342,14 @@ disappearing.
 If a conflict pauses the queue, ordinary editing and `git add` remain usable:
 
 ```bash
-vlab rebase --status
+cst rebase --status
 # resolve and stage files
-vlab rebase --continue
+cst rebase --continue
 ```
 
-Use `vlab rebase --continue --fork` when the resolution deliberately changes
+Use `cst rebase --continue --fork` when the resolution deliberately changes
 intent. That creates a new Change ID with `Derived-From` provenance. Use
-`vlab rebase --abort` to restore the exact original branch tip, including after
+`cst rebase --abort` to restore the exact original branch tip, including after
 earlier queue entries replayed cleanly. Application and summary receipts remain
 private until the complete queue and any predicted final tree are verified.
 
@@ -355,9 +359,9 @@ By default the source set is everything the branch has that `onto` does not.
 `--from <base>` names the exclusive lower bound instead:
 
 ```bash
-vlab rebase-plan main --from HEAD~2
-vlab rebase-forecast main --from HEAD~2
-vlab rebase main --from HEAD~2
+cst rebase-plan main --from HEAD~2
+cst rebase-forecast main --from HEAD~2
+cst rebase main --from HEAD~2
 ```
 
 Without `--from` nothing changes: the base is the physical merge base and the
@@ -384,13 +388,13 @@ replayed, never what is restored. See
 ### Carrying your own uncommitted work through the rebase
 
 A rebase rewrites the branch you are standing on, so the draft in that worktree is
-normally in the way: `vlab rebase` refuses a dirty worktree. `--target-checkpoint`
+normally in the way: `cst rebase` refuses a dirty worktree. `--target-checkpoint`
 on the forecast carries it instead:
 
 ```bash
-vlab workspace checkpoint --label "mid-refactor"
-vlab rebase-forecast main --target-checkpoint
-vlab rebase main --use-forecast <id>
+cst workspace checkpoint --label "mid-refactor"
+cst rebase-forecast main --target-checkpoint
+cst rebase main --use-forecast <id>
 ```
 
 This is the same overlay contract the reconciliation side uses, applied to the
@@ -417,7 +421,7 @@ The lab can simulate the complete proven-new queue before touching the
 current worktree:
 
 ```bash
-vlab forecast feature
+cst forecast feature
 git status --short
 ```
 
@@ -447,7 +451,7 @@ the causal merge plan. After reviewing it, explicitly authorize its exact
 resolution IDs as a batch:
 
 ```bash
-vlab reconcile feature --use-forecast forecast_...
+cst reconcile feature --use-forecast forecast_...
 ```
 
 Heuristic patch-equivalence remains a separate trust decision. A forecast with
@@ -457,7 +461,7 @@ tree; review them and regenerate with `--accept-candidates` if appropriate.
 Application rechecks every conflict signature and resolution ID. If branch or
 causal metadata changed, the command stops before starting. A complete forecast
 also pins the predicted result tree; a mismatch prevents receipt publication
-and can be safely rolled back with `vlab reconcile --abort`.
+and can be safely rolled back with `cst reconcile --abort`.
 
 Forecasts operate on committed heads. Dirty files are left untouched and their
 count is reported rather than silently included. Run the prepared experiment
@@ -469,27 +473,27 @@ npm run demo:forecast
 
 ## Resumable conflict reconciliation
 
-When a proven-new change conflicts, `vlab reconcile` leaves a durable operation in the current worktree instead of losing causal context:
+When a proven-new change conflicts, `cst reconcile` leaves a durable operation in the current worktree instead of losing causal context:
 
 ```bash
-vlab reconcile feature
-vlab reconcile --status
+cst reconcile feature
+cst reconcile --status
 
 # Resolve and stage conflicted files.
 git add <resolved-files>
-vlab reconcile --continue
+cst reconcile --continue
 ```
 
 The completed application receipt links the source commit and Change ID to the context-specific result commit and records the conflicted paths. If the resolution changes the logical intent rather than adapting it to the target context, fork the identity explicitly:
 
 ```bash
-vlab reconcile --continue --fork
+cst reconcile --continue --fork
 ```
 
 Abort restores the exact target commit from which the complete reconciliation began, including when earlier changes in the queue applied cleanly:
 
 ```bash
-vlab reconcile --abort
+cst reconcile --abort
 ```
 
 Pending state is stored under the current worktree's private Git directory. Two agents can therefore pause independent reconciliations in separate worktrees without overwriting each other's operation state. Completed receipts remain shared repository metadata.
@@ -510,32 +514,32 @@ all three inputs are identical.
 When reconciliation pauses, inspect any matches:
 
 ```bash
-vlab resolve status
+cst resolve status
 ```
 
 No suggestion is applied automatically. Choose one explicitly, inspect the
 staged result, and continue:
 
 ```bash
-vlab resolve apply shared.txt
+cst resolve apply shared.txt
 git diff --cached -- shared.txt
-vlab reconcile --continue
+cst reconcile --continue
 ```
 
-For several unambiguous conflicts, use `vlab resolve apply --all`. If the same
+For several unambiguous conflicts, use `cst resolve apply --all`. If the same
 signature has more than one known result, select one with
 `--resolution <id>`. To decline prior results while keeping the decision in the
 receipt, run:
 
 ```bash
-vlab resolve reject shared.txt
+cst resolve reject shared.txt
 # Resolve shared.txt manually, then:
 git add shared.txt
-vlab reconcile --continue
+cst reconcile --continue
 ```
 
 The application receipt distinguishes `created`, `accepted`, `modified`, and
-`rejected` outcomes. `vlab resolve list` shows the repository-shared catalog.
+`rejected` outcomes. `cst resolve list` shows the repository-shared catalog.
 An exact result is still never selected implicitly: it is batch-applied only
 when `--use-forecast` names the reviewed, pinned forecast.
 Run the prepared two-conflict experiment, whose second occurrence is in a
@@ -548,11 +552,11 @@ npm run demo:resolution
 ## AI-oriented workspaces
 
 ```bash
-vlab workspace create agent-auth --from main --owner agent-7 --focus service:auth
-vlab workspace list
+cst workspace create agent-auth --from main --owner agent-7 --focus service:auth
+cst workspace list
 cd ../vlab-playground.workspaces/agent-auth
 echo draft > agent-plan.md
-vlab workspace checkpoint --label "agent handoff"
+cst workspace checkpoint --label "agent handoff"
 ```
 
 `--owner` and `--focus` are free-text labels recorded on the workspace
@@ -567,18 +571,18 @@ From the original or another linked worktree, move or temporarily dematerialize
 a workspace without changing its identity:
 
 ```bash
-vlab workspace move agent-auth ../vlab-playground.workspaces/agent-auth-2
-vlab workspace archive agent-auth
-vlab workspace restore agent-auth --path ../vlab-playground.workspaces/agent-auth-3
-vlab workspace repair agent-auth --path ../vlab-playground.workspaces/agent-auth-3
-vlab workspace prune --dry-run
+cst workspace move agent-auth ../vlab-playground.workspaces/agent-auth-2
+cst workspace archive agent-auth
+cst workspace restore agent-auth --path ../vlab-playground.workspaces/agent-auth-3
+cst workspace repair agent-auth --path ../vlab-playground.workspaces/agent-auth-3
+cst workspace prune --dry-run
 ```
 
 Archive refuses tracked or untracked changes, ignored files, and unfinished
 reconciliation or rebase journals, even when the worktree is clean. A journal's
 presence produces `operation-in-progress`; malformed and newer-version journals
-are preserved too. In that workspace, inspect `vlab reconcile --status` or
-`vlab rebase --status`, then continue a resolved conflict or abort the operation.
+are preserved too. In that workspace, inspect `cst reconcile --status` or
+`cst rebase --status`, then continue a resolved conflict or abort the operation.
 Clean interrupted publication and forecast mismatches require abort before retrying.
 If this build cannot read a journal, preserve it and recover with the writing build.
 
@@ -608,9 +612,9 @@ lock does not make Git mutations and registry publication one atomic operation.
 Compare two workspace branches without disturbing either worktree:
 
 ```bash
-vlab workspace forecast agent-auth agent-payments
-vlab workspace forecast agent-auth agent-payments --source-checkpoint
-vlab workspace forecast agent-auth agent-payments --target-checkpoint
+cst workspace forecast agent-auth agent-payments
+cst workspace forecast agent-auth agent-payments --source-checkpoint
+cst workspace forecast agent-auth agent-payments --target-checkpoint
 ```
 
 The ordering is `target <= source`: this previews applying the committed head
@@ -623,8 +627,8 @@ its printed reconciliation command should be run.
 ### Carrying the target's own uncommitted work
 
 `--target-checkpoint` carries the *target's* draft through the application and
-puts it back afterwards. It is available on `vlab forecast` too, with identical
-semantics, and on [`vlab rebase-forecast`](#carrying-your-own-uncommitted-work-through-the-rebase),
+puts it back afterwards. It is available on `cst forecast` too, with identical
+semantics, and on [`cst rebase-forecast`](#carrying-your-own-uncommitted-work-through-the-rebase),
 where the overlaid worktree is the branch being rewritten.
 
 An overlay is uncommitted context, never a committed draft. It changes no
@@ -677,8 +681,8 @@ Return a typed error when authorization fails.
 Then index it:
 
 ```bash
-vlab spec index docs/checkout.md
-vlab spec show docs/checkout.md
+cst spec index docs/checkout.md
+cst spec show docs/checkout.md
 ```
 
 The exact Markdown remains canonical. The tracked
@@ -691,7 +695,7 @@ exceptional legacy ID overrides.
 
 The v4 writer excludes headings and `REQ-*:` declarations inside supported
 backtick and tilde fences. Historical v1/v2/v3 manifests retain their old view
-until `vlab spec index` migrates them, preserving verified real entity IDs.
+until `cst spec index` migrates them, preserving verified real entity IDs.
 Indexing refuses migration if the original source cannot be recovered. The
 [fence and migration contract](docs/adr/0026-version-fence-aware-markdown-boundaries.md)
 specifies the supported syntax and recovery.
@@ -708,7 +712,7 @@ IDs first; unchanged documents are neither opened nor hashed. Index every
 tracked or non-ignored Markdown document in one pass:
 
 ```bash
-vlab spec index --all
+cst spec index --all
 ```
 
 `--force`, on either form, re-parses the Markdown and re-derives the manifest
@@ -736,27 +740,27 @@ automatically discovers these decisions, records their exact input signature
 and result hashes, and can apply them only through the reviewed forecast:
 
 ```bash
-vlab forecast feature
-vlab reconcile feature --use-forecast forecast_...
+cst forecast feature
+cst reconcile feature --use-forecast forecast_...
 ```
 
 To inspect the semantic merge independently of reconciliation:
 
 ```bash
-vlab spec merge-plan docs/checkout.md <base> <target> <source>
+cst spec merge-plan docs/checkout.md <base> <target> <source>
 ```
 
 Without a forecast, reconciliation pauses before changing conflicted spec
 bytes. Inspect and explicitly stage a clean deterministic suggestion:
 
 ```bash
-vlab spec status
-vlab spec resolve --all
+cst spec status
+cst spec resolve --all
 git diff --cached -- docs/checkout.md .vcs-lab/specs/docs/checkout.md.json
-vlab reconcile --continue
+cst reconcile --continue
 ```
 
-If you edit the staged suggestion, re-run `vlab spec index`, stage both the
+If you edit the staged suggestion, re-run `cst spec index`, stage both the
 Markdown and sidecar, and continue. The application receipt records the
 semantic decision as `accepted` or `modified`; a stale sidecar cannot be
 committed through reconciliation.
@@ -769,33 +773,33 @@ npm run demo:spec
 
 ## Commands
 
-Run `vlab --help` for the current command list. The most useful commands are:
+Run `cst --help` for the current command list. The most useful commands are:
 
 | Command | Experiment |
 | --- | --- |
-| `vlab commit` | Stable logical change identity |
-| `vlab merge --compact` | First-parent compression without causal loss |
-| `vlab merge --hard-squash` | Git-compatible strict squash plus sideband receipt |
-| `vlab compact-merge`, `vlab hard-squash` | The same two landings as standalone commands |
-| `vlab merge-plan` | Proven coverage versus heuristic similarity |
-| `vlab proof-bundle`, `vlab verify-proof` | Portable coverage evidence and its independent verification |
-| `vlab rebase-plan` | Read-only causal omission/review/replay planning for a linear rebase |
-| `vlab rebase-forecast` | Non-mutating simulation and private pinning of a causal rebase plan |
-| `vlab rebase` | Supervised current-branch replay with stale checks, continue/fork/abort recovery, and completed receipts |
-| `vlab forecast` | Non-mutating reconciliation simulation and pinned approval |
-| `vlab reconcile` | Apply only proven-new changes with resumable conflicts |
-| `vlab resolve ...` | Inspect, apply, reject, and audit exact resolution suggestions |
-| `vlab cherry-pick` | Preserve or deliberately fork a Change ID; a change the target already covers is a no-op unless `--repeat` is given |
-| `vlab graph` | Branch history plus causal relationships, without metadata-ref noise |
-| `vlab workspace ...` | Worktree-backed lifecycle, checkpoints, and committed/checkpoint forecasts |
-| `vlab spec ...` | Incremental indexing, block merge planning, explicit resolution, and corpus benchmarks |
-| `vlab receipts` | Inspect causal records as text or JSON |
-| `vlab provenance` | Read declared authorship provenance, carried across rewrites |
-| `vlab audit identity` | Repository-wide Change-ID collision and duplicate-origin audit |
-| `vlab metadata ...` | Inventory, validate, transfer, and benchmark accepted metadata facts and scan paths |
-| `vlab doctor --benchmark` | Sample ordinary Git latency and persistent object-session reuse |
+| `cst commit` | Stable logical change identity |
+| `cst merge --compact` | First-parent compression without causal loss |
+| `cst merge --hard-squash` | Git-compatible strict squash plus sideband receipt |
+| `cst compact-merge`, `cst hard-squash` | The same two landings as standalone commands |
+| `cst merge-plan` | Proven coverage versus heuristic similarity |
+| `cst proof-bundle`, `cst verify-proof` | Portable coverage evidence and its independent verification |
+| `cst rebase-plan` | Read-only causal omission/review/replay planning for a linear rebase |
+| `cst rebase-forecast` | Non-mutating simulation and private pinning of a causal rebase plan |
+| `cst rebase` | Supervised current-branch replay with stale checks, continue/fork/abort recovery, and completed receipts |
+| `cst forecast` | Non-mutating reconciliation simulation and pinned approval |
+| `cst reconcile` | Apply only proven-new changes with resumable conflicts |
+| `cst resolve ...` | Inspect, apply, reject, and audit exact resolution suggestions |
+| `cst cherry-pick` | Preserve or deliberately fork a Change ID; a change the target already covers is a no-op unless `--repeat` is given |
+| `cst graph` | Branch history plus causal relationships, without metadata-ref noise |
+| `cst workspace ...` | Worktree-backed lifecycle, checkpoints, and committed/checkpoint forecasts |
+| `cst spec ...` | Incremental indexing, block merge planning, explicit resolution, and corpus benchmarks |
+| `cst receipts` | Inspect causal records as text or JSON |
+| `cst provenance` | Read declared authorship provenance, carried across rewrites |
+| `cst audit identity` | Repository-wide Change-ID collision and duplicate-origin audit |
+| `cst metadata ...` | Inventory, validate, transfer, and benchmark accepted metadata facts and scan paths |
+| `cst doctor --benchmark` | Sample ordinary Git latency and persistent object-session reuse |
 
-For ordinary Git commits without a `Change-Id`, `vlab cherry-pick` recognizes
+For ordinary Git commits without a `Change-Id`, `cst cherry-pick` recognizes
 exact target ancestry and validated, reachable identity-preserving application
 records. A covered pick returns a no-op without starting Git's sequencer;
 `--repeat` explicitly reapplies it. Forks and patch similarity alone do not
@@ -806,9 +810,9 @@ establish coverage for the original change.
 Inspect every metadata scope without changing the repository:
 
 ```bash
-vlab metadata status
-vlab metadata validate --json
-vlab metadata validate --strict
+cst metadata status
+cst metadata validate --json
+cst metadata validate --strict
 ```
 
 The inventory covers causal note attachments and record schemas, referenced
@@ -838,8 +842,8 @@ a low-level same-origin read.
 For notes created by an older version, preview and apply an explicit backfill:
 
 ```bash
-vlab metadata retain --dry-run --json
-vlab metadata retain --apply --json
+cst metadata retain --dry-run --json
+cst metadata retain --apply --json
 ```
 
 Backfill retains still-valid facts and reports quarantined records, including
@@ -851,11 +855,11 @@ Create an offline envelope, clone the ordinary project content, preview the
 exact destination actions, then apply them:
 
 ```bash
-vlab metadata export ../project-metadata
+cst metadata export ../project-metadata
 git clone /path/to/project ../project-copy
 cd ../project-copy
-vlab metadata import ../project-metadata --dry-run
-vlab metadata import ../project-metadata --apply
+cst metadata import ../project-metadata --dry-run
+cst metadata import ../project-metadata --apply
 ```
 
 An envelope directory contains `manifest.json` and, when portable facts exist,
@@ -897,25 +901,25 @@ The default import still refuses a whole envelope over one conflict. Park mode
 applies the rest instead and sets the conflict aside:
 
 ```bash
-vlab metadata import ../project-metadata --apply --park-conflicts
+cst metadata import ../project-metadata --apply --park-conflicts
 ```
 
 Each conflicting incoming record becomes the blob of one ref under
 `refs/vcs-lab/quarantine/<source-lineage>/<record-id>`, inspectable with
-`git cat-file -p`, listed by `vlab metadata status` beside the local digests it
+`git cat-file -p`, listed by `cst metadata status` beside the local digests it
 disputes, and excluded from every reader and from export. The namespace is local:
 nothing fetches or pushes it.
 
 A successful park exits 0, and the report names what was parked. Park mode exists
 so one disputed record cannot stop an exchange, so it does not signal failure for
 having done its job; read `summary.parkRecords` and the `parked` list, or
-`vlab metadata status`, to act on a dispute.
+`cst metadata status`, to act on a dispute.
 
 A person then decides, once:
 
 ```bash
-vlab metadata dispose <record-id> --keep-local --reason "the peer altered it"
-vlab metadata dispose <record-id> --replace-local
+cst metadata dispose <record-id> --keep-local --reason "the peer altered it"
+cst metadata dispose <record-id> --replace-local
 ```
 
 `--keep-local` removes the parked copy and returns the local record to service.
@@ -934,17 +938,17 @@ dropping every record on that attachment. See
 
 ## Verifying a plan without the repository
 
-`vlab proof-bundle <source>` emits a `vcs-lab.proof-bundle/v2` document and
-`vlab verify-proof <file>` checks it. The bundle carries the classification, the
+`cst proof-bundle <source>` emits a `vcs-lab.proof-bundle/v2` document and
+`cst verify-proof <file>` checks it. The bundle carries the classification, the
 evidence it was derived from, and — since v2 — Git's own bindings for what it
 claims: the raw commit objects of the source range, a commit path from the target
 head for every covered change, an inclusion proof from the notes tip to each
 receipt it relies on, and the anchors those proofs terminate at.
 
 ```bash
-vlab proof-bundle feature > proof.json
-vlab verify-proof proof.json --offline
-vlab verify-proof proof.json --offline --anchors-from https://github.com/you/project.git
+cst proof-bundle feature > proof.json
+cst verify-proof proof.json --offline
+cst verify-proof proof.json --offline --anchors-from https://github.com/you/project.git
 ```
 
 The verifier recomputes every carried object's id from its bytes. That is the
@@ -984,13 +988,13 @@ only. See
 ## What this build can exchange
 
 Two builds decide what they may exchange by comparing documents, not by asking a
-server. `vlab capabilities` prints what this build reads and writes, projected
+server. `cst capabilities` prints what this build reads and writes, projected
 from the same registries the rest of the tool enforces, so the statement cannot
 drift from the behavior:
 
 ```bash
-vlab capabilities
-vlab capabilities --json
+cst capabilities
+cst capabilities --json
 ```
 
 Outside a repository the document is build-scoped; inside one it adds the object
@@ -1000,8 +1004,8 @@ Negotiation is a pure function of two such documents, so every conclusion a
 gateway would enable is already available offline:
 
 ```bash
-vlab capabilities --against ../peer-capabilities.json
-vlab capabilities --against ../project-metadata      # an envelope directory
+cst capabilities --against ../peer-capabilities.json
+cst capabilities --against ../project-metadata      # an envelope directory
 ```
 
 The report separates an exchange that is *smaller* from one that is
@@ -1043,8 +1047,8 @@ change nothing about what negotiation concludes. See
 - Reusable resolution blobs: `refs/vcs-lab/resolutions/<signature>/<result-blob>`
 - Portable spec manifests: `.vcs-lab/specs/**/*.json`
 
-The supported transfer path is `vlab metadata export/import`. For a low-level
-same-origin read, fetch the notes and shared vlab namespaces together:
+The supported transfer path is `cst metadata export/import`. For a low-level
+same-origin read, fetch the notes and shared cst namespaces together:
 
 ```bash
 git fetch origin 'refs/notes/vcs-lab:refs/notes/vcs-lab' 'refs/vcs-lab/*:refs/vcs-lab/*'
@@ -1073,15 +1077,15 @@ Git-tree and worker fallbacks if graceful EOF does not complete.
 Get both the ordinary-process baseline and the persistent-session probe with:
 
 ```bash
-vlab doctor --benchmark --samples 10 --warmup 2
+cst doctor --benchmark --samples 10 --warmup 2
 ```
 
 Measure repository/shared-metadata volume without reading or changing the
 caller repository:
 
 ```bash
-vlab metadata benchmark --json
-vlab metadata benchmark --history 500 --workspaces 20 --notes 500 --resolutions 100 --samples 5 --budget-ms 1500 --json
+cst metadata benchmark --json
+cst metadata benchmark --history 500 --workspaces 20 --notes 500 --resolutions 100 --samples 5 --budget-ms 1500 --json
 ```
 
 The default disposable profile contains 250 reachable commits, 12 registered
@@ -1090,7 +1094,7 @@ measures history, stock Git worktree discovery, the registry, complete
 workspace status, notes, resolutions, and complete metadata status. Setup cost
 is separate, every sample must return the same semantic result, and JSON omits
 fixture paths, object IDs, file content, and commit messages. Documentation
-volume is covered by `vlab spec benchmark`.
+volume is covered by `cst spec benchmark`.
 
 On the clean-commit Windows host run, registry parsing took a 0.31 ms median
 with no Git processes and the 300-target note catalog took 172.67 ms with two.
@@ -1111,7 +1115,7 @@ more hosts rather than an index.
 For command-by-command timings, enable tracing directly on one invocation:
 
 ```bash
-vlab forecast feature --trace-git
+cst forecast feature --trace-git
 ```
 
 `--git-session` forces the persistent path and `--no-git-session` forces the
@@ -1144,13 +1148,13 @@ to a file; both are off by default and never change session behaviour.
 Compare the read engines operation by operation in any repository with:
 
 ```bash
-vlab doctor --differential
+cst doctor --differential
 ```
 
 The report runs each of the 39 cataloged read operations of `src/engine.js`
 through the Git engine and the native engine against the current repository
 and lists per-operation result digests, process counts, and fallbacks
-(ADR-0019); the plain `vlab doctor` output names the selected read and
+(ADR-0019); the plain `cst doctor` output names the selected read and
 forecast engines.
 
 Run an equality-checked comparison over a 12-change forecast with:
@@ -1228,7 +1232,7 @@ Measure indexing and raw/estimated-compressed metadata size without changing the
 current repository:
 
 ```bash
-vlab spec benchmark --documents 25 --blocks 40
+cst spec benchmark --documents 25 --blocks 40
 ```
 
 The benchmark creates and removes a disposable repository. It reports cold,

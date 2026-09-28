@@ -415,7 +415,7 @@ export function verifyAgainstRepository(bundle, cwd = process.cwd()) {
   // repository at all. Lineage is derived from the root commits, so it also
   // catches the case where the two repositories do not even share an object
   // format.
-  // The relation is the one `vlab metadata import` applies: a fork (a shared
+  // The relation is the one `cst metadata import` applies: a fork (a shared
   // root plus further roots) holds every object the comparison needs and is
   // verified like the same repository; only an unrelated or incompatible
   // lineage means the bundle will never be about this repository (issue #89).

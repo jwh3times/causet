@@ -9,10 +9,10 @@ import { assertWithinBound } from "./schemas.js";
 /**
  * A fresh directory under the OS temporary root, returned in canonical form.
  * Windows may spell the temporary root as an 8.3 alias (`RUNNER~1`) while Git
- * reports every path it touches in long form, and vlab compares the two —
+ * reports every path it touches in long form, and cst compares the two —
  * a specification inside a forecast worktree, a workspace path in the
  * registry. Resolving once here keeps every temporary repository, worktree,
- * and corpus vlab creates on the same spelling Git uses.
+ * and corpus cst creates on the same spelling Git uses.
  */
 export function temporaryDirectory(prefix) {
   return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));

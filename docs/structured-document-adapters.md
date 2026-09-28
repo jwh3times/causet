@@ -169,13 +169,13 @@ are materialized from source. Ordinary entities need no per-entity stored entry;
 legacy exceptions can make the override map grow.
 
 Indexing uses Git index-blob identity for unchanged tracked documents and
-normalized source hashes for other cache checks. `vlab spec index --force`
+normalized source hashes for other cache checks. `cst spec index --force`
 rebuilds when a cache would otherwise keep the manifest. Source alone can recover
 content and ordinary derived structure, but losing the manifest can lose
 artifact identity and exceptional IDs. Content recoverability does not imply
 identity recoverability.
 
-`vlab spec benchmark` measures source/manifest bytes, compression, sparse versus
+`cst spec benchmark` measures source/manifest bytes, compression, sparse versus
 expanded storage, and cold/warm indexing. It supplies reproducible storage
 evidence; it does not by itself qualify another format or corpus.
 

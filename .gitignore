@@ -4,4 +4,7 @@ node_modules/
 native/target/
 native/prebuilds/
 causal-vcs-lab-*.bundle
+causet-*.bundle
+causet-*.zip
+causet-*.tgz
 causal-vcs-lab-*.zip

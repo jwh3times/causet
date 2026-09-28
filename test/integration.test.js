@@ -15,10 +15,17 @@ import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+test("cst is the command and vlab stays an alias for the same entry point", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
+  assert.equal(manifest.name, "causet");
+  assert.equal(manifest.bin.cst, "./bin/vlab.js");
+  assert.equal(manifest.bin.vlab, manifest.bin.cst);
+});
+
 test("CLI reports the package version", () => {
   assert.equal(
     exec(vlabCommand, [...vlabPrefix(), "--version"], projectRoot),
-    `vcs-lab ${VERSION}`,
+    `causet ${VERSION}`,
   );
 });
 
@@ -2326,7 +2333,7 @@ test("conflicted reconciliation resumes across processes and records contextual 
   const attempt = vlabResult(repo, "reconcile", "feature");
   assert.notEqual(attempt.status, 0);
   assert.match(attempt.stderr, /reconciliation paused/i);
-  assert.match(attempt.stderr, /vlab reconcile --continue/);
+  assert.match(attempt.stderr, /cst reconcile --continue/);
 
   const status = JSON.parse(vlab(repo, "reconcile", "--status", "--json"));
   assert.equal(status.active, true);

@@ -367,8 +367,8 @@ garbage-collects underneath a paused operation, because "the tip is restored, th
 draft is reported lost, and the worktree is clean" is a promise worth testing
 rather than assuming.
 
-Five rebase cases repeat that structure against `vlab rebase-forecast` and
-`vlab rebase`, with `rebase:before-journal-advance` as the interruption, and add
+Five rebase cases repeat that structure against `cst rebase-forecast` and
+`cst rebase`, with `rebase:before-journal-advance` as the interruption, and add
 the one property a rebase has that a reconciliation does not. The scenario is
 built so that all four trees differ — the source tree before the rebase, the
 rewritten result, the overlay, and the re-materialized worktree — and asserts it.
@@ -378,7 +378,7 @@ by writing the checkpoint tree back was confirmed to fail this suite, refused by
 the prediction check before anything was published.
 
 Two further cases cover both applications together. The first is the human
-result: `vlab reconcile` and `vlab rebase` must state what became of a carried
+result: `cst reconcile` and `cst rebase` must state what became of a carried
 overlay, and must say nothing about overlays when there was none. An overlay is
 reported and never published, so that line is the only place a reader learns the
 draft is back.
@@ -386,7 +386,7 @@ draft is back.
 The second is the recovery ADR-0028 names, and it was written because that
 recovery did not work. A re-materialization mismatch leaves the merged draft in
 the worktree with no pending cherry-pick, which is exactly where abort's clean
-check runs — so both `vlab reconcile --abort` and `vlab rebase --abort` refused
+check runs — so both `cst reconcile --abort` and `cst rebase --abort` refused
 with `dirty-worktree` the recovery their own refusal had just told the user to
 run. Reaching that state needs the stored forecast's pinned overlay tree to be
 corrupted, because every input a real mismatch could come from is refused before
@@ -621,7 +621,7 @@ Use targeted Node test-name patterns during development, but complete the
 ordinary, both forced-session, both forced-forecast-engine, and native-engine runs
 before treating a cross-cutting, forecast, or read-path change as qualified.
 `npm run demo:git-session` additionally compares the three forecast modes on
-one queue, and `vlab doctor --differential` compares the read engines
+one queue, and `cst doctor --differential` compares the read engines
 operation by operation in any repository.
 
 ## Benchmark regression check
@@ -637,7 +637,7 @@ deterministic and any growth is a real change in what a workspace writes.
 
 Since the `reduced-local-v3` profile it also measures the **publication loop**
 (issue #15): a six-change reconciliation with declared provenance, recording
-every Git process the whole `vlab reconcile` invocation starts and how many
+every Git process the whole `cst reconcile` invocation starts and how many
 records it publishes. That is the one stretch whose work scales with the number
 of changes, and until v3 nothing covered it — a per-application `git notes list`
 was added there and passed the entire suite, every suite mode, and this
@@ -947,7 +947,7 @@ node scripts/measure-real-repository.mjs --repo <clean-disposable-clone> --host 
 ```
 
 Clone without local object sharing (`git clone --no-local <source> <clone>`),
-then fetch the source's notes and vlab refs into the clone before measuring:
+then fetch the source's notes and cst refs into the clone before measuring:
 `git -C <clone> fetch origin 'refs/notes/*:refs/notes/*' 'refs/vcs-lab/*:refs/vcs-lab/*'`.
 Use public-safe repository content for public evidence. A clone carries history
 and these refs, but not the source's workspace registry, private forecasts, or

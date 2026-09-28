@@ -50,7 +50,7 @@ gh pr list --repo jwh3times/vcs-lab --state open --author @me
 git rev-parse --verify --quiet refs/notes/vcs-lab; git ls-remote origin refs/notes/vcs-lab
 ```
 
-A branch landed with `vlab merge --compact` and never reset onto `main` still
+A branch landed with `cst merge --compact` and never reset onto `main` still
 lists as unmerged; list it anyway with what you observed, and let the owner
 judge.
 

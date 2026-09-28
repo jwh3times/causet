@@ -214,7 +214,7 @@ const GIT_EQUIVALENTS = {
     },
   },
   workspaceCreateCone: {
-    // The same three commands vlab issues in `addWorktree`, so the gap this
+    // The same three commands cst issues in `addWorktree`, so the gap this
     // floor exposes is vlab's own work rather than a different checkout.
     equivalent:
       "git worktree add --no-checkout --detach <path> main, git sparse-checkout set --cone <dir>, git checkout",
@@ -709,7 +709,7 @@ export function benchmarkRepositoryScale(options = {}, fixtureCallback = null) {
         resolutionVolume: true,
         documentationVolume: {
           companionSchema: "vcs-lab.spec-benchmark/v3",
-          command: "vlab spec benchmark --documents <n> --blocks <n> --json",
+          command: "cst spec benchmark --documents <n> --blocks <n> --json",
         },
       },
       samples: sampleCount,

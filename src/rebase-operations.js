@@ -200,7 +200,7 @@ function markMismatch(operation, message, cwd, details = null) {
     code: "stale-forecast",
     details:
       details ??
-      "Run 'vlab rebase --abort', then generate and review a new forecast.",
+      "Run 'cst rebase --abort', then generate and review a new forecast.",
   });
 }
 
@@ -619,7 +619,7 @@ function absorbOutstanding(operation, cwd) {
           `Absorbing ${item.commit.slice(0, 12)} failed without a conflicted path.`,
           {
             code: "conflict-blocked",
-            details: [applied.output, "Run 'vlab rebase --abort'."]
+            details: [applied.output, "Run 'cst rebase --abort'."]
               .filter(Boolean).join("\n"),
           },
         );
@@ -645,10 +645,10 @@ function absorbOutstanding(operation, cwd) {
               applied.output,
               `Conflicted paths: ${paths.join(", ")}`,
               candidates
-                ? `${candidates} exact prior resolution candidate${candidates === 1 ? "" : "s"} found. Run 'vlab resolve status'.`
+                ? `${candidates} exact prior resolution candidate${candidates === 1 ? "" : "s"} found. Run 'cst resolve status'.`
                 : "No exact prior resolution was found.",
-              "Resolve and stage the files, then run 'vlab rebase --continue'.",
-              "The surviving commit keeps its own identity either way; 'vlab rebase --abort' restores the original tip.",
+              "Resolve and stage the files, then run 'cst rebase --continue'.",
+              "The surviving commit keeps its own identity either way; 'cst rebase --abort' restores the original tip.",
             ].filter(Boolean).join("\n"),
           },
         );
@@ -737,15 +737,15 @@ function interactivePause(operation, change, waiting, cwd) {
   operation.state = waiting;
   writeRebaseState(operation, cwd);
   const instruction = waiting === "awaiting-message"
-    ? "Supply the new message with: vlab rebase --continue -m \"<message>\""
-    : "Change the files, stage them, then run: vlab rebase --continue";
+    ? "Supply the new message with: cst rebase --continue -m \"<message>\""
+    : "Change the files, stage them, then run: cst rebase --continue";
   return new CliError(
     `Causal rebase paused at ${change.shortCommit ?? change.commit.slice(0, 12)} for ${waiting === "awaiting-message" ? "a message" : "content"}.`,
     {
       code: "interactive-paused",
       details: [
         instruction,
-        "The identity is kept either way; run 'vlab rebase --abort' to restore the original tip.",
+        "The identity is kept either way; run 'cst rebase --abort' to restore the original tip.",
       ].join("\n"),
     },
   );
@@ -764,7 +764,7 @@ function conflictError(operation, result) {
         // 'cherry-pick --skip', the out-of-band path the next command
         // refuses) follows as context rather than as the first thing read.
         details: [
-          "No change was silently skipped. Run 'vlab rebase --abort'.",
+          "No change was silently skipped. Run 'cst rebase --abort'.",
           "Git did not report conflict paths; the replay may have become unexpectedly empty.",
           result.output ? `Git reported:\n${result.output}` : null,
         ]
@@ -785,10 +785,10 @@ function conflictError(operation, result) {
         result.output,
         `Conflicted paths: ${paths.join(", ")}`,
         candidates
-          ? `${candidates} exact prior resolution candidate${candidates === 1 ? "" : "s"} found. Run 'vlab resolve status'.`
+          ? `${candidates} exact prior resolution candidate${candidates === 1 ? "" : "s"} found. Run 'cst resolve status'.`
           : "No exact prior resolution was found.",
-        "Resolve and stage the files, then run 'vlab rebase --continue'.",
-        "Run 'vlab rebase --abort' to restore the original branch tip.",
+        "Resolve and stage the files, then run 'cst rebase --continue'.",
+        "Run 'cst rebase --abort' to restore the original branch tip.",
       ].join("\n"),
     },
   );
@@ -834,7 +834,7 @@ function finalizeRebase(operation, cwd) {
         cwd,
         [
           restored.conflict.details,
-          "Nothing was published. Run 'vlab rebase --abort' and forecast again.",
+          "Nothing was published. Run 'cst rebase --abort' and forecast again.",
         ].join("\n"),
       );
     }
@@ -855,7 +855,7 @@ function finalizeRebase(operation, cwd) {
         [
           `Forecast overlay tree: ${predicted}`,
           `Actual overlay tree:   ${restored.tree}`,
-          "Nothing was published. Run 'vlab rebase --abort' and forecast again.",
+          "Nothing was published. Run 'cst rebase --abort' and forecast again.",
         ].join("\n"),
       );
     }
@@ -1133,7 +1133,7 @@ function runRebaseQueue(operation, cwd, phaseStarted = performance.now()) {
             code: "conflict-blocked",
             details: [
               `Both parents resolved to the same line (${parents[0].commit.slice(0, 12)}).`,
-              "Nothing was dropped. Run 'vlab rebase --abort'.",
+              "Nothing was dropped. Run 'cst rebase --abort'.",
             ].join("\n"),
           },
         );
@@ -1320,7 +1320,7 @@ function startRebaseInSession(ontoRef, options, cwd) {
       {
         code: "approval-required",
         details:
-          "Review 'vlab rebase-plan' and rerun with --accept-candidates, or use a complete reviewed rebase forecast.",
+          "Review 'cst rebase-plan' and rerun with --accept-candidates, or use a complete reviewed rebase forecast.",
       },
     );
   }
@@ -1448,7 +1448,7 @@ function completeInteractiveStep(operation, options, cwd) {
     if (!options.message) {
       throw new CliError("This rebase is paused for a new message.", {
         code: "usage-missing-argument",
-        details: "Supply it with: vlab rebase --continue -m \"<message>\"",
+        details: "Supply it with: cst rebase --continue -m \"<message>\"",
       });
     }
     const message = rewordedMessage(options.message, change.changeId);
@@ -1474,7 +1474,7 @@ function completeInteractiveStep(operation, options, cwd) {
         details: [
           `Tree at the pause: ${operation.current.treeBeforeEdit}`,
           `Tree now:          ${after}`,
-          "A reword changes a message and nothing else. Run 'vlab rebase --abort'.",
+          "A reword changes a message and nothing else. Run 'cst rebase --abort'.",
         ].join("\n"),
       });
     }

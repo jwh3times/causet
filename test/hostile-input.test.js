@@ -120,7 +120,7 @@ function assertRefusedCleanly(repo, label, args, expected) {
   const result = vlabResult(repo, ...args);
   const output = `${result.stdout}${result.stderr}`;
   assert.notEqual(result.status, 0, `${label}: expected a non-zero exit`);
-  assert.match(result.stderr, /^vlab: /m, `${label}: expected a vlab diagnostic`);
+  assert.match(result.stderr, /^cst: /m, `${label}: expected a cst diagnostic`);
   for (const fragment of RUNTIME_ERROR_FRAGMENTS) {
     assert.ok(
       !output.includes(fragment),

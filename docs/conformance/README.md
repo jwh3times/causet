@@ -28,7 +28,7 @@ at all.
 | `text-only` | Has no `--json` output at all | Checked for the reverse violation: no state automation needs may be text-only |
 
 `--json` is parsed per command, not globally, so it must follow the command
-word: `vlab receipts --json`, never `vlab --json receipts`.
+word: `cst receipts --json`, never `cst --json receipts`.
 
 ## Match rules
 
@@ -56,7 +56,7 @@ them:
   repository, once plain and once with `--json`.
 - `readback` — the command mutates, so the test runs it once in human mode and
   then re-derives the same record from the same repository with a read command
-  (`vlab receipts --json`, for instance). Values stay comparable because both
+  (`cst receipts --json`, for instance). Values stay comparable because both
   come from one repository; identity values are random per repository, so
   comparing across two repositories would not work.
 
@@ -79,15 +79,15 @@ from them.
 
 ### State that is text-only
 
-- `vlab graph` renders an ASCII history graph and a folded view of causal
+- `cst graph` renders an ASCII history graph and a folded view of causal
   edges. The graph is a presentation of Git history that `git log --graph`
   already provides, and every causal edge it draws comes from records
-  `vlab receipts --json` returns in full. What has no JSON form is the folding
+  `cst receipts --json` returns in full. What has no JSON form is the folding
   itself — the correlation of a reconciliation record with the application
   that consumed it — which is presentation, not state.
-- `vlab init` and `vlab branch` print an acknowledgement. The state they
+- `cst init` and `cst branch` print an acknowledgement. The state they
   create is a Git ref, readable with Git.
-- `vlab help` prints the command inventory. Automation cannot enumerate
+- `cst help` prints the command inventory. Automation cannot enumerate
   commands from JSON; this is a known limitation, not a state gap.
 
 ### Members the human text prints only when they say something
@@ -101,15 +101,15 @@ a reader learns to skip past.
 
 `targetOverlay`, `predictedOverlayTree`, and `targetOverlayConflict` on either
 forecast family are the same again: the overlay block prints only when a caller
-asked for one with `--target-checkpoint`. Neither `vlab forecast` nor
-`vlab rebase-forecast` has a fixture of its own here at all — a pre-existing gap,
+asked for one with `--target-checkpoint`. Neither `cst forecast` nor
+`cst rebase-forecast` has a fixture of its own here at all — a pre-existing gap,
 since both are paired commands — and the fixture stage has no registered workspace
 or checkpoint, so an overlay could not be exercised in it even if one were added.
 What pins the rendering is `test/target-overlay.test.js`, which asserts that both
 human forecasts state the overlay, its tree, and that it will be re-materialized
 uncommitted, because that is what makes the approval which follows an informed
 one. The same suite pins the one overlay line the *result* renderers print, on
-`vlab reconcile` and `vlab rebase` alike, naming the checkpoint and the tree the
+`cst reconcile` and `cst rebase` alike, naming the checkpoint and the tree the
 worktree was left holding.
 
 `range` and `excludedByRange` on the rebase plan and receipt are the same shape:
@@ -140,7 +140,7 @@ record, and the fixtures pin them:
   `not signed or authorized` instead of reading `trust`.
 
 `formatRebaseForecast` also gained the `same state` line its reconciliation
-counterpart already had, and `vlab doctor` gained `version`: `vlab version` is
+counterpart already had, and `cst doctor` gained `version`: `cst version` is
 text-only, so the build identity a peer needs to apply the compatibility rules
 of [ADR-0020](../adr/0020-freeze-per-family-compatibility-and-resource-bounds.md)
 had no machine-readable home.
