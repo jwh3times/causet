@@ -75,7 +75,8 @@ npm link
 cst --help
 ```
 
-The command is `cst` and the package is `causet` (ADR-0038). `vlab`, the command's old name,
+The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038), installed with
+`npm install -g @holland-vip/causet`. `vlab`, the command's old name,
 still works as an alias for the same program during the transition, and prints identical
 output.
 

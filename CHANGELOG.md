@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.1
+
+- Publish as `@holland-vip/causet` (ADR-0038, second amendment). npm refused
+  the unscoped name `causet` as too similar to `case` and `faucet`, so v0.19.0
+  was never published. Install with `npm install -g @holland-vip/causet`; the
+  command is still `cst`, with the `vlab` alias. `package.json` gains
+  `repository`, `homepage` and `bugs`, which npm provenance requires, and
+  `publishConfig.access: public`.
+
 ## 0.19.0
 
 - Amend ADR-0038 (issue #139): the npm organization name `causet` is

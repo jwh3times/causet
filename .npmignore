@@ -2,6 +2,7 @@ node_modules/
 *.log
 .DS_Store
 causet*.tgz
+holland-vip-causet-*.tgz
 causal-vcs-lab*.tgz
 causal-vcs-lab*.zip
 causal-vcs-lab-*.bundle

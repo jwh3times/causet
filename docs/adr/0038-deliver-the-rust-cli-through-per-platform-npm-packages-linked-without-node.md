@@ -1,6 +1,6 @@
 # ADR-0038: Deliver the Rust CLI through per-platform npm packages, linked without Node
 
-- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes)
+- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name)
 - **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers
@@ -353,3 +353,26 @@ Decided by the owner on 2026-09-28:
   tokens are disallowed.
 - **No name is published before it has real content.** Scoped platform names need no early claim,
   because only `holland-vip` can publish under `@holland-vip/`.
+
+## Amendment 2026-09-28 (second): the main package is `@holland-vip/causet`
+
+npm refused the first publish of `causet` with
+`E403 … Package name too similar to existing packages case,faucet`. This is npm's typosquatting
+check. It applies only to unscoped names and cannot be detected before a publish: the name was
+unregistered, and `npm publish --dry-run` passed.
+
+Decided by the owner on 2026-09-28:
+
+- **The main package is `@holland-vip/causet`,** installed with
+  `npm install -g @holland-vip/causet`. It sits under the same organization scope as the
+  platform packages, so no similarity or squatting rule applies.
+- **The product name `causet` and the command `cst` do not change.** npm's `bin` field sets the
+  command whatever the package is called, so `cst` (and the `vlab` alias) are installed exactly
+  as before.
+- **If the `causet` organization is ever obtained,** the package can move to `@causet/causet`, with
+  the old name deprecated and pointing to the new one.
+- `package.json` gains `repository`, `homepage` and `bugs`, which npm provenance needs for
+  trusted publishing (#150), and `publishConfig.access: public`, so a scoped publish cannot
+  default to private.
+- **Released as v0.19.1.** v0.19.0 was tagged with the name `causet` and was never published.
+  Publishing it under another name would have made the published package differ from its tag.
