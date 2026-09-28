@@ -1,6 +1,6 @@
 {
   "schema": "vcs-lab.conformance-fixtures/v1",
-  "description": "Human/JSON parity contract for the vlab CLI (FR-GIT-06; ADR-0015 phase 0b, issue #11 item 5). Each command entry names the JSON members its human rendering must present and the members it deliberately does not. test/conformance.test.js runs every entry against the real CLI; see README.md for the match rules and the scenario stages.",
+  "description": "Human/JSON parity contract for the cst CLI (FR-GIT-06; ADR-0015 phase 0b, issue #11 item 5). Each command entry names the JSON members its human rendering must present and the members it deliberately does not. test/conformance.test.js runs every entry against the real CLI; see README.md for the match rules and the scenario stages.",
   "commands": [
     {
       "name": "metadata-retain-preview",
@@ -301,7 +301,7 @@
         },
         {
           "pointer": "/0/reconciliationOperation",
-          "reason": "The worktree-private operation id is an internal join key; the operation itself is reported by 'vlab reconcile --status'."
+          "reason": "The worktree-private operation id is an internal join key; the operation itself is reported by 'cst reconcile --status'."
         }
       ]
     },
@@ -525,7 +525,7 @@
         },
         {
           "pointer": "/scopes/sharedPortable/notes/ref",
-          "reason": "The notes ref is fixed for the tool; 'vlab doctor' reports it for automation."
+          "reason": "The notes ref is fixed for the tool; 'cst doctor' reports it for automation."
         },
         {
           "pointer": "/repository/lineage/algorithm",
@@ -926,7 +926,7 @@
         },
         {
           "pointer": "/repository/objectFormat",
-          "reason": "The object format is reported by vlab doctor and metadata status; the audit line names the repository, not its storage format."
+          "reason": "The object format is reported by cst doctor and metadata status; the audit line names the repository, not its storage format."
         },
         {
           "pointer": "/scanned/causalRecords",
@@ -1046,13 +1046,13 @@
       "argv": [
         "version"
       ],
-      "reason": "An acknowledgement line. The build identity has its machine form in 'vlab doctor'."
+      "reason": "An acknowledgement line. The build identity has its machine form in 'cst doctor'."
     },
     {
       "argv": [
         "graph"
       ],
-      "reason": "An ASCII presentation of Git history plus a folded view of causal edges. The history is git log --graph; every edge comes from records 'vlab receipts --json' returns in full."
+      "reason": "An ASCII presentation of Git history plus a folded view of causal edges. The history is git log --graph; every edge comes from records 'cst receipts --json' returns in full."
     },
     {
       "argv": [

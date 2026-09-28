@@ -1,6 +1,6 @@
 # Logical identity protocol
 
-`vcs-lab.logical-id/v1` is the frozen specification of the identifiers vcs-lab
+`vcs-lab.logical-id/v1` is the frozen specification of the identifiers causet
 mints: their namespace, their entropy, and what happens when two repositories
 disagree about one (FR-ID-07). It exists because logical identity is about to
 be read by things other than the tool that wrote it — the portable proof
@@ -28,7 +28,7 @@ by the fixed 21-character suffix rather than by the first underscore.
 
 ## 2. Namespaces
 
-The set is closed. An identifier in an unlisted namespace is not a vcs-lab
+The set is closed. An identifier in an unlisted namespace is not a causet
 logical identifier, which is what lets a reader tell one from an arbitrary
 string that happens to contain an underscore.
 
@@ -214,7 +214,7 @@ Recover only the actors explicitly supplied to the original invocation, includin
 `VLAB_AGENT`; do not infer missing attribution from the content or Git author.
 
 There is no public provenance-declaration CLI for an existing commit. A maintainer
-with a compatible vcs-lab source checkout can use the existing declaration API.
+with a compatible causet source checkout can use the existing declaration API.
 From that source checkout, run the following in Bash/Git Bash, replacing the two
 arguments and the example actors with the original declaration. Use the full
 commit ID inspected above. This updates only its note, preserves other records,
@@ -246,7 +246,7 @@ the evidence for human review instead of inventing or overwriting a claim.
 
 A `vcs-lab.provenance/v1` actor is free text: `--authored-by`, `--generated-by`,
 `--reviewed-by`, and `VLAB_AGENT` record exactly the string they are given.
-Provenance is declared and never inferred (FR-TRUST-04), so vcs-lab never
+Provenance is declared and never inferred (FR-TRUST-04), so causet never
 normalizes a name when it reads one, and anything that groups work by actor
 compares the strings exactly. One actor spelled two ways is therefore two actors
 to every consumer. This repository's own history shows it: `codex` and

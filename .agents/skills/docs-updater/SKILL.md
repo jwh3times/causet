@@ -1,6 +1,6 @@
 ---
 name: docs-updater
-description: Update vcs-lab README, durable documentation, and wiki guidance after implemented changes; capture required human actions as public issue/wiki follow-ups on the private board, with sensitive vulnerabilities in draft security advisories. Use when asked to update docs or reconcile documentation with completed work.
+description: Update causet README, durable documentation, and wiki guidance after implemented changes; capture required human actions as public issue/wiki follow-ups on the private board, with sensitive vulnerabilities in draft security advisories. Use when asked to update docs or reconcile documentation with completed work.
 ---
 
 # Docs updater

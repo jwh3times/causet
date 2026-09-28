@@ -1,7 +1,7 @@
 # Canonical JSON profile
 
 `vcs-lab.canonical-json/v1` is the frozen byte-exact serialization used for
-every new hash or signature over structured vcs-lab data (ADR-0015 phase 0b,
+every new hash or signature over structured causet data (ADR-0015 phase 0b,
 issue #11 item 3). It is [RFC 8785][jcs] (the JSON Canonicalization Scheme)
 restricted to a value space that every planned implementation — Node today,
 Rust behind the phase 1 engine seam — serializes byte-identically without

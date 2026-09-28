@@ -1,7 +1,7 @@
 {
   "name": "@holland-vip/causet",
   "version": "0.19.1",
-  "description": "A Git-backed laboratory for causal reconciliation, validated metadata portability, sparse specifications, reusable resolutions, and AI workspaces.",
+  "description": "Git-backed causal source control: records how changes move between Git histories, with verifiable receipts, declared provenance, and portable metadata.",
   "type": "module",
   "repository": {
     "type": "git",

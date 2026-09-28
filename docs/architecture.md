@@ -1,4 +1,4 @@
-# vcs-lab architecture reference
+# causet architecture reference
 
 ## Document status
 
@@ -22,10 +22,10 @@ superseded explicitly rather than silently ignored.
 
 ## 1. Architectural intent
 
-`vcs-lab` is a compatibility-layer experiment, not an independent object
+causet is a compatibility-layer experiment, not an independent object
 database. Git is responsible for content-addressed storage, snapshots,
 ordinary ancestry, refs, worktrees, staging, merges, cherry-picks, and recovery
-mechanics. `vcs-lab` adds:
+mechanics. causet adds:
 
 - stable logical change identity;
 - causal landing and application records;
@@ -61,7 +61,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
                          |
                          v
                   +--------------+
-                  |  vlab CLI    |
+                  |  cst CLI     |
                   | src/cli.js   |
                   +------+-------+
                          |
@@ -607,7 +607,7 @@ target-before ----- squash-commit       source-head
 The flow uses `git merge --squash` (with rerere disabled, as in the compact
 landing), commits one parent, and attaches the exact absorbed range as a
 receipt. If the merge conflicts before commit, the command
-publishes no receipt. Stock Git cannot infer the sideband edge; `vlab` can.
+publishes no receipt. Stock Git cannot infer the sideband edge; `cst` can.
 
 ## 9. Forecast architecture
 
@@ -717,7 +717,7 @@ paused/running/forecast-mismatch --abort--> starting commit restored
 4. Create a private journal containing the complete queue, starting commit,
    exact plan, approvals, timing accumulator, and current index.
 5. Cherry-pick queue entries one at a time with Git's rerere disabled
-   (`-c rerere.enabled=false`): a conflict is resolved only by vlab's approved
+   (`-c rerere.enabled=false`): a conflict is resolved only by causet's approved
    memory, a deterministic spec merge, or the user, never by `.git/rr-cache`
    (ADR-0018).
 
@@ -744,7 +744,7 @@ It leaves Git's cherry-pick state intact and exits with recovery instructions.
 
 The user or forecast stages a resolution. Continue verifies the operation and
 staged semantic manifests, invokes `git cherry-pick --continue` (again with
-rerere disabled, so the resolution is recorded in vlab's catalog and never in
+rerere disabled, so the resolution is recorded in causet's catalog and never in
 `.git/rr-cache`), classifies the relation as contextual application or
 contextual fork, records exact outcomes, and resumes the remaining queue.
 

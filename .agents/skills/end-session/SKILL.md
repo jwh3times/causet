@@ -1,6 +1,6 @@
 ---
 name: end-session
-description: End a vcs-lab work session cleanly — capture what was learned into memory, record required human follow-ups in public issues/wiki and the private board, with sensitive vulnerabilities in draft advisories; bring GitHub issues and durable records (ADRs, product gates, changelog debt, retained evidence) up to date, and clean the local checkout of disposable fixtures, stray worktrees, and runtime state. Use when the user says "end session", "wrap up", "done for the day", or asks to clean things up before stopping.
+description: End a causet work session cleanly — capture what was learned into memory, record required human follow-ups in public issues/wiki and the private board, with sensitive vulnerabilities in draft advisories; bring GitHub issues and durable records (ADRs, product gates, changelog debt, retained evidence) up to date, and clean the local checkout of disposable fixtures, stray worktrees, and runtime state. Use when the user says "end session", "wrap up", "done for the day", or asks to clean things up before stopping.
 ---
 
 # End session
@@ -45,7 +45,7 @@ memory lane applies only to an agent that has a persistent memory directory.
   of the requested handoff under `docs/human-followups.md`. Verify destinations
   before publishing. Source documentation changes normally belong to the work
   commits; record outstanding debt when they are outside the authorized scope.
-- **Never run destructive experiments in this checkout.** `vlab` commands
+- **Never run destructive experiments in this checkout.** `cst` commands
   mutate the refs, notes, and workspace registry of whatever repository is the
   working directory. Experiments belong in disposable repositories under the
   session scratchpad or `os.tmpdir()`, never in the checkout itself.
@@ -210,10 +210,10 @@ Show findings before acting. Work through:
   `git clean -nd` (dry run). Show the list and get a yes before `git clean -fd`.
   Never `git clean -x`: the ignored set includes `node_modules/`, `*.log`, and
   packed `causet-*` or `causal-vcs-lab-*` `.bundle` / `.zip` artifacts the user may be keeping.
-- **Repository state that `vlab` or an agent left in this checkout.** The real
+- **Repository state that `cst` or an agent left in this checkout.** The real
   checkout should normally have one worktree, no `vlab/ws/*` branches, no
   `.git/vcs-lab/` runtime directory, and no `refs/vcs-lab/*` or
-  `refs/notes/vcs-lab` unless the user deliberately dogfoods `vlab` here.
+  `refs/notes/vcs-lab` unless the user deliberately dogfoods `cst` here.
   Inspect before touching anything:
 
   ```bash
@@ -224,7 +224,7 @@ Show findings before acting. Work through:
   ls -d "$(dirname "$PWD")"/*.workspaces 2>/dev/null
   ```
 
-  Anything an agent created by running `vlab` with the wrong working directory
+  Anything an agent created by running `cst` with the wrong working directory
   is listed with its timestamp and removed only after a yes
   (`git worktree remove --force <path>`, `git branch -D <branch>`,
   `git worktree prune`, deleting `.git/vcs-lab/`). Anything the user created on
@@ -243,7 +243,7 @@ Show findings before acting. Work through:
   ls -d "$(node -e 'console.log(require("os").tmpdir())')"/vcs-lab-* 2>/dev/null
   ```
 
-- **Lingering processes.** The release gate requires that no VCS Lab Node or
+- **Lingering processes.** The release gate requires that no causet Node or
   Git process survives a run:
 
   ```bash
@@ -293,7 +293,7 @@ follow-ups are documented when only local drafts exist.
 - Infer authority for source commits, releases, or unrelated publication from
   cleanup alone. Existing user shipping instructions and the required issue/wiki or draft-advisory
   follow-up documentation remain applicable.
-- Run `vlab` or any state-changing Git command against this checkout as an
+- Run `cst` or any state-changing Git command against this checkout as an
   experiment; use disposable repositories.
 - Delete uncommitted or untracked files, branches, worktrees, or temp
   fixtures without showing the list first.

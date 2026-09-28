@@ -1,6 +1,6 @@
-# vcs-lab
+# causet
 
-`vcs-lab` is a local prototype with a dependency-free Git engine for experimenting with the source-control ideas discussed in this project:
+causet (command `cst`) is a local prototype with a dependency-free Git engine for experimenting with the source-control ideas discussed in this project:
 
 - Git remains a real compatibility and storage layer.
 - logical changes keep a stable `Change-Id` across rebase and cherry-pick;
@@ -83,7 +83,7 @@ output.
 Alternatively, run it without installing:
 
 ```bash
-node /path/to/vcs-lab/bin/vlab.js --help
+node /path/to/checkout/bin/vlab.js --help
 ```
 
 On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are on `PATH`.
@@ -91,8 +91,8 @@ On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are o
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causet-0.19.1.bundle vcs-lab
-cd vcs-lab
+git clone /path/to/causet-0.19.1.bundle causet
+cd causet
 git remote remove origin
 npm link
 npm test
@@ -200,7 +200,7 @@ git log --graph --oneline --decorate --branches --tags --remotes
 
 ### Failure output
 
-Every command's failure has a machine-readable form. Without `--json` a failure prints `vlab: <message>` on stderr, as it always has. With `--json` it prints a `vcs-lab.error/v1` envelope on stdout instead, and leaves stderr empty:
+Every command's failure has a machine-readable form. Without `--json` a failure prints `cst: <message>` on stderr, as it always has. With `--json` it prints a `vcs-lab.error/v1` envelope on stdout instead, and leaves stderr empty:
 
 ```json
 {
@@ -236,7 +236,7 @@ partial completion. Keep that commit and follow the
 [provenance repair procedure](docs/identity/README.md#7-repairing-a-declared-provenance-publication)
 instead of blindly repeating the commit.
 
-After a hard squash, `git blame` attributes every absorbed line to the landing commit and the original authorship is gone. The landing receipt already names the absorbed commits, so vcs-lab carries their declared provenance onto the landing as the union of their actors, marked `carried` and naming its sources.
+After a hard squash, `git blame` attributes every absorbed line to the landing commit and the original authorship is gone. The landing receipt already names the absorbed commits, so causet carries their declared provenance onto the landing as the union of their actors, marked `carried` and naming its sources.
 
 Provenance is **declared, never inferred**. Nothing examines content to guess who produced it, no existing trailer is read as a role, and a commit with no declaration reports nothing rather than falling back to the Git author. The record is an unauthenticated claim by whoever ran the command, not detection and not proof; signing it is a separate, unimplemented layer (FR-TRUST-02).
 
@@ -832,7 +832,7 @@ or deleting a note does not release objects. Retained receipts still prove
 coverage only when their attachments are reachable from the selected target.
 See [ADR-0025](docs/adr/0025-retain-the-object-closure-of-published-causal-facts.md).
 
-An ordinary clone fetches branch refs, not causal notes or their shared vlab
+An ordinary clone fetches branch refs, not causal notes or their shared causet
 refs. A clone that fetches `refs/notes/vcs-lab` without `refs/vcs-lab/*` can
 therefore see a valid record but not the retention carrier that keeps its
 attachment readable; `metadata validate` then reports `missing-attachment`
@@ -933,7 +933,7 @@ may decide differently, and the disagreement between them is real.
 
 Git's own `git notes merge` is not a supported way to combine causal notes on
 either side of this: the manual strategy stops in a conflicted worktree, and
-`-s union` concatenates the containers into something vcs-lab reads as malformed,
+`-s union` concatenates the containers into something causet reads as malformed,
 dropping every record on that attachment. See
 [ADR-0030](docs/adr/0030-define-conflict-policy-for-competing-causal-facts.md).
 
