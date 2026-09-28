@@ -279,7 +279,7 @@ export function rewordedMessage(text, changeId) {
   if (!body.trim()) {
     throw new CliError("A reworded message cannot be empty.", {
       code: "usage-invalid-option-value",
-      details: "Supply the new message with: vlab rebase --continue -m \"<message>\"",
+      details: "Supply the new message with: cst rebase --continue -m \"<message>\"",
     });
   }
   return `${body}\n\nChange-Id: ${changeId}\n`;

@@ -137,7 +137,7 @@ function retainedResolutions(refs, cwd) {
   // ADR-0027 read and must not grow by every receipt in the repository. A
   // resolution record copied onto some other commit already fails the
   // ref/commit/signature checks below; the residual case, a duplicated id on
-  // a commit no resolution ref names, is reported by `vlab metadata status`
+  // a commit no resolution ref names, is reported by `cst metadata status`
   // and is recorded on issue #87.
   const accepted = acceptedCausalRecords(records, cwd, {
     conflictingIds: duplicatedRecordIds(records),

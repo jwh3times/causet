@@ -210,7 +210,7 @@ Show findings before acting. Work through:
 - **Untracked strays**: `git status --porcelain --untracked-files=all` and
   `git clean -nd` (dry run). Show the list and get a yes before `git clean -fd`.
   Never `git clean -x`: the ignored set includes `node_modules/`, `*.log`, and
-  packed `causal-vcs-lab-*.bundle` / `.zip` artifacts the user may be keeping.
+  packed `causet-*` or `causal-vcs-lab-*` `.bundle` / `.zip` artifacts the user may be keeping.
 - **Repository state that `vlab` or an agent left in this checkout.** The real
   checkout should normally have one worktree, no `vlab/ws/*` branches, no
   `.git/vcs-lab/` runtime directory, and no `refs/vcs-lab/*` or

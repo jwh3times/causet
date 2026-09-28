@@ -101,68 +101,68 @@ import { disposeConflict } from "./dispositions.js";
 import { capabilityDocument, negotiateAgainst } from "./capabilities.js";
 import { benchmarkRepositoryScale } from "./scale-benchmark.js";
 
-const HELP = `vcs-lab — Git-backed experiments for causal source control
+const HELP = `causet — Git-backed causal source control
 
 Usage:
-  vlab init
-  vlab commit -m <message> [--all] [--allow-empty]
-  vlab branch <name> [from]
-  vlab merge <source> [--compact | --hard-squash] [-m <message>]
-  vlab compact-merge <source> [-m <message>]
-  vlab hard-squash <source> [-m <message>]
-  vlab merge-plan <source> [--json]
-  vlab proof-bundle <source>
-  vlab verify-proof <file> [--offline] [--anchors-from <remote>] [--json]
-  vlab rebase-plan <onto> [<source>] [--from <base>] [--json]
-  vlab rebase-forecast <onto> [<source>] [--from <base>] [--target-checkpoint] [--accept-candidates] [--json]
-  vlab rebase <onto> [--from <base>] [--accept-candidates] [--use-forecast <id>] [--json]
-  vlab rebase --status [--json]
-  vlab rebase --continue [--fork] [--json]
-  vlab rebase --abort [--json]
-  vlab forecast <source> [--target-checkpoint] [--accept-candidates] [--json]
-  vlab reconcile <source> [--accept-candidates] [--use-forecast <id>] [--json]
-  vlab reconcile --status [--json]
-  vlab reconcile --continue [--fork] [--json]
-  vlab reconcile --abort [--json]
-  vlab resolve status [--json]
-  vlab resolve apply [path] [--all] [--resolution <id>] [--json]
-  vlab resolve reject [path] [--all] [--resolution <id>] [--json]
-  vlab resolve list [--json]
-  vlab cherry-pick <commit-or-change-id> [--fork] [--repeat] [--json]
-  vlab graph
-  vlab commit ... [--authored-by <actor>] [--generated-by <actor>]
+  cst init
+  cst commit -m <message> [--all] [--allow-empty]
+  cst branch <name> [from]
+  cst merge <source> [--compact | --hard-squash] [-m <message>]
+  cst compact-merge <source> [-m <message>]
+  cst hard-squash <source> [-m <message>]
+  cst merge-plan <source> [--json]
+  cst proof-bundle <source>
+  cst verify-proof <file> [--offline] [--anchors-from <remote>] [--json]
+  cst rebase-plan <onto> [<source>] [--from <base>] [--json]
+  cst rebase-forecast <onto> [<source>] [--from <base>] [--target-checkpoint] [--accept-candidates] [--json]
+  cst rebase <onto> [--from <base>] [--accept-candidates] [--use-forecast <id>] [--json]
+  cst rebase --status [--json]
+  cst rebase --continue [--fork] [--json]
+  cst rebase --abort [--json]
+  cst forecast <source> [--target-checkpoint] [--accept-candidates] [--json]
+  cst reconcile <source> [--accept-candidates] [--use-forecast <id>] [--json]
+  cst reconcile --status [--json]
+  cst reconcile --continue [--fork] [--json]
+  cst reconcile --abort [--json]
+  cst resolve status [--json]
+  cst resolve apply [path] [--all] [--resolution <id>] [--json]
+  cst resolve reject [path] [--all] [--resolution <id>] [--json]
+  cst resolve list [--json]
+  cst cherry-pick <commit-or-change-id> [--fork] [--repeat] [--json]
+  cst graph
+  cst commit ... [--authored-by <actor>] [--generated-by <actor>]
                  [--reviewed-by <actor>]     declare provenance (repeatable)
-  vlab provenance [<rev>] [--all] [--json]
-  vlab receipts [--json]
-  vlab audit identity [--json]
-  vlab metadata status [--json]
-  vlab metadata validate [--strict] [--json]
-  vlab metadata retain --dry-run|--apply [--json]
-  vlab metadata export <directory> [--json]
-  vlab metadata import <directory> --dry-run [--park-conflicts] [--json]
-  vlab metadata import <directory> --apply [--park-conflicts] [--json]
-  vlab metadata dispose <record-id> --keep-local|--replace-local [--reason <text>] [--json]
-  vlab capabilities [--json]                     what this build reads and writes
-  vlab capabilities --against <document|envelope-directory> [--json]
-  vlab metadata benchmark [--history <n>] [--workspaces <n>] [--notes <n>] [--resolutions <n>] [--areas <n>] [--files-per-area <n>] [--samples <n>] [--budget-ms <n>] [--json]
-  vlab workspace create <name> [--from <ref>] [--path <directory>] [--owner <name>] [--focus <text>] [--cone <dir,dir>] [--json]
-  vlab workspace list
-  vlab workspace checkpoint [--label <text>] [--json]
-  vlab workspace move <name> <directory> [--json]
-  vlab workspace archive <name> [--json]
-  vlab workspace restore <name> [--path <directory>] [--json]
-  vlab workspace repair <name> --path <directory> [--json]
-  vlab workspace prune [--dry-run|--apply] [--json]
-  vlab workspace forecast <target> <source> [--source-checkpoint] [--target-checkpoint] [--accept-candidates] [--json]
-  vlab spec index <markdown-file> [--force] [--json]
-  vlab spec index --all [--force] [--json]
-  vlab spec show <markdown-file>
-  vlab spec merge-plan <markdown-file> <base> <ours> <theirs> [--json]
-  vlab spec status [--json]
-  vlab spec resolve [markdown-file] [--all] [--json]
-  vlab spec benchmark [--documents <n>] [--blocks <n>]
-  vlab doctor [--benchmark] [--samples <n>] [--warmup <n>] [--differential]
-  vlab version
+  cst provenance [<rev>] [--all] [--json]
+  cst receipts [--json]
+  cst audit identity [--json]
+  cst metadata status [--json]
+  cst metadata validate [--strict] [--json]
+  cst metadata retain --dry-run|--apply [--json]
+  cst metadata export <directory> [--json]
+  cst metadata import <directory> --dry-run [--park-conflicts] [--json]
+  cst metadata import <directory> --apply [--park-conflicts] [--json]
+  cst metadata dispose <record-id> --keep-local|--replace-local [--reason <text>] [--json]
+  cst capabilities [--json]                     what this build reads and writes
+  cst capabilities --against <document|envelope-directory> [--json]
+  cst metadata benchmark [--history <n>] [--workspaces <n>] [--notes <n>] [--resolutions <n>] [--areas <n>] [--files-per-area <n>] [--samples <n>] [--budget-ms <n>] [--json]
+  cst workspace create <name> [--from <ref>] [--path <directory>] [--owner <name>] [--focus <text>] [--cone <dir,dir>] [--json]
+  cst workspace list
+  cst workspace checkpoint [--label <text>] [--json]
+  cst workspace move <name> <directory> [--json]
+  cst workspace archive <name> [--json]
+  cst workspace restore <name> [--path <directory>] [--json]
+  cst workspace repair <name> --path <directory> [--json]
+  cst workspace prune [--dry-run|--apply] [--json]
+  cst workspace forecast <target> <source> [--source-checkpoint] [--target-checkpoint] [--accept-candidates] [--json]
+  cst spec index <markdown-file> [--force] [--json]
+  cst spec index --all [--force] [--json]
+  cst spec show <markdown-file>
+  cst spec merge-plan <markdown-file> <base> <ours> <theirs> [--json]
+  cst spec status [--json]
+  cst spec resolve [markdown-file] [--all] [--json]
+  cst spec benchmark [--documents <n>] [--blocks <n>]
+  cst doctor [--benchmark] [--samples <n>] [--warmup <n>] [--differential]
+  cst version
 
 Plan legend: '=' proven covered/omit, '?' heuristic review, '+' new/replay.
 
@@ -397,7 +397,7 @@ function formatMetadataTransfer(result) {
       `parked       ${result.summary.parkRecords} conflicting record${result.summary.parkRecords === 1 ? "" : "s"} under refs/vcs-lab/quarantine`,
     );
     for (const entry of result.records.filter((item) => item.action === "park")) {
-      lines.push(`  ! ${entry.id} disputes the local copy; resolve it with vlab metadata dispose`);
+      lines.push(`  ! ${entry.id} disputes the local copy; resolve it with cst metadata dispose`);
     }
   }
   if (result.summary.disposedRecords) {
@@ -424,7 +424,7 @@ function formatDisposition(result) {
     `reason       ${entry.reason ?? "(none given)"}`,
     result.record.inService
       ? "The record is in service again; the decision is local and is never exported."
-      : `The dispute is resolved, but the record is still quarantined: ${result.record.diagnostics.join(", ") || "see vlab metadata status"}.`,
+      : `The dispute is resolved, but the record is still quarantined: ${result.record.diagnostics.join(", ") || "see cst metadata status"}.`,
   ].join("\n");
 }
 
@@ -611,7 +611,7 @@ function formatSpecMergeStatus(status) {
     }
   }
   if (status.plans.some((plan) => plan.status === "clean")) {
-    lines.push("", "Apply deterministic suggestions with: vlab spec resolve --all");
+    lines.push("", "Apply deterministic suggestions with: cst spec resolve --all");
   }
   return lines.join("\n");
 }
@@ -620,7 +620,7 @@ function formatSpecMergeAction(result) {
   return [
     `Applied ${result.applied.length} deterministic spec merge${result.applied.length === 1 ? "" : "s"}.`,
     ...result.applied.map((item) => `  ${item.path}`),
-    "Inspect the staged Markdown and sidecars, then run: vlab reconcile --continue",
+    "Inspect the staged Markdown and sidecars, then run: cst reconcile --continue",
   ].join("\n");
 }
 
@@ -982,13 +982,13 @@ function formatForecast(forecast) {
   if (forecast.candidateDecisionRequired) {
     const reviewCommand = forecast.workspaceComparison
       ? [
-          "vlab workspace forecast",
+          "cst workspace forecast",
           forecast.workspaceComparison.target.name,
           forecast.workspaceComparison.source.name,
           forecast.scope === "source-checkpoint" ? "--source-checkpoint" : null,
           "--accept-candidates",
         ].filter(Boolean).join(" ")
-      : `vlab forecast ${forecast.sourceRef} --accept-candidates`;
+      : `cst forecast ${forecast.sourceRef} --accept-candidates`;
     lines.push(
       "Review the heuristic candidates, then regenerate with:",
       `  ${reviewCommand}`,
@@ -1002,7 +1002,7 @@ function formatForecast(forecast) {
   }
   lines.push(
     "Start the pinned reconciliation with:",
-    `  vlab reconcile ${forecast.sourceRef} --use-forecast ${forecast.id}`,
+    `  cst reconcile ${forecast.sourceRef} --use-forecast ${forecast.id}`,
   );
   return lines.join("\n");
 }
@@ -1024,7 +1024,7 @@ function formatResolutionStatus(status) {
     }
   }
   if (status.conflicts.some((conflict) => conflict.candidates.length)) {
-    lines.push("", "Apply a suggestion with: vlab resolve apply --all");
+    lines.push("", "Apply a suggestion with: cst resolve apply --all");
   }
   return lines.join("\n");
 }
@@ -1035,7 +1035,7 @@ function formatResolutionAction(result, action) {
     `${action === "applied" ? "Applied" : "Rejected"} ${items.length} resolution suggestion${items.length === 1 ? "" : "s"}.`,
     ...items.map((item) => `  ${item.path}`),
     action === "applied"
-      ? "Continue with: vlab reconcile --continue"
+      ? "Continue with: cst reconcile --continue"
       : "Resolve the files manually, stage them, then continue reconciliation.",
   ].join("\n");
 }
@@ -1166,11 +1166,11 @@ function formatReconciliationStatus(status) {
   lines.push(
     "",
     status.state === "conflicted"
-      ? "Resolve and stage the conflicts, then run: vlab reconcile --continue"
+      ? "Resolve and stage the conflicts, then run: cst reconcile --continue"
       : status.state === "forecast-mismatch"
         ? "The applied tree diverged from its forecast and cannot be published."
         : "The operation is resumable in this worktree.",
-    "Abort and restore the starting commit with: vlab reconcile --abort",
+    "Abort and restore the starting commit with: cst reconcile --abort",
   );
   return lines.join("\n");
 }
@@ -1203,11 +1203,11 @@ function formatRebaseStatus(status) {
   lines.push(
     "",
     status.state === "conflicted"
-      ? "Resolve and stage the conflicts, then run: vlab rebase --continue"
+      ? "Resolve and stage the conflicts, then run: cst rebase --continue"
       : ["forecast-mismatch", "identity-mismatch", "blocked"].includes(status.state)
         ? "The operation is blocked and cannot publish receipts."
         : "The operation is resumable in this worktree.",
-    "Abort and restore the original branch tip with: vlab rebase --abort",
+    "Abort and restore the original branch tip with: cst rebase --abort",
   );
   return lines.join("\n");
 }
@@ -1266,7 +1266,7 @@ export async function main(rawArgs) {
     return;
   }
   if (command === "version" || command === "--version" || command === "-V") {
-    console.log(`vcs-lab ${VERSION}`);
+    console.log(`causet ${VERSION}`);
     return;
   }
 
@@ -1283,7 +1283,7 @@ export async function main(rawArgs) {
       return;
     }
     case "commit": {
-      const message = requireValue(options.message, "vlab commit -m <message>");
+      const message = requireValue(options.message, "cst commit -m <message>");
       const result = createCommit(message, {
         all: options.all,
         allowEmpty: options.allowEmpty,
@@ -1293,7 +1293,7 @@ export async function main(rawArgs) {
       return;
     }
     case "branch": {
-      const name = requireValue(positionals[0], "vlab branch <name> [from]");
+      const name = requireValue(positionals[0], "cst branch <name> [from]");
       const from = positionals[1] ?? "HEAD";
       runGit(["switch", "-c", name, from]);
       print(`Created and switched to ${name} from ${from}`);
@@ -1302,7 +1302,7 @@ export async function main(rawArgs) {
     case "merge":
     case "compact-merge":
     case "hard-squash": {
-      const source = requireValue(positionals[0], `vlab ${command} <source>`);
+      const source = requireValue(positionals[0], `cst ${command} <source>`);
       let mode = command === "hard-squash" || options.hardSquash ? "hard-squash" : "compact";
       if (options.compact) mode = "compact";
       const receipt = land(source, mode, { message: options.message });
@@ -1310,7 +1310,7 @@ export async function main(rawArgs) {
       return;
     }
     case "proof-bundle": {
-      const source = requireValue(positionals[0], "vlab proof-bundle <source>");
+      const source = requireValue(positionals[0], "cst proof-bundle <source>");
       // Always JSON: the bundle exists to be handed to another tool, and a
       // human rendering of it would be the very prose a verifier must not
       // trust (FR-PLAN-08).
@@ -1318,7 +1318,7 @@ export async function main(rawArgs) {
       return;
     }
     case "verify-proof": {
-      const file = requireValue(positionals[0], "vlab verify-proof <file>");
+      const file = requireValue(positionals[0], "cst verify-proof <file>");
       const bundlePath = path.resolve(file);
       let raw;
       try {
@@ -1369,7 +1369,7 @@ export async function main(rawArgs) {
       return;
     }
     case "merge-plan": {
-      const source = requireValue(positionals[0], "vlab merge-plan <source>");
+      const source = requireValue(positionals[0], "cst merge-plan <source>");
       const plan = buildMergePlan(source);
       print(options.json ? plan : formatMergePlan(plan), options.json);
       return;
@@ -1377,10 +1377,10 @@ export async function main(rawArgs) {
     case "rebase-plan": {
       const onto = requireValue(
         positionals[0],
-        "vlab rebase-plan <onto> [<source>]",
+        "cst rebase-plan <onto> [<source>]",
       );
       if (positionals.length > 2) {
-        throw new CliError("Usage: vlab rebase-plan <onto> [<source>]",
+        throw new CliError("Usage: cst rebase-plan <onto> [<source>]",
           { code: "usage-missing-argument" });
       }
       const interactive = {
@@ -1399,11 +1399,11 @@ export async function main(rawArgs) {
     case "rebase-forecast": {
       const onto = requireValue(
         positionals[0],
-        "vlab rebase-forecast <onto> [<source>]",
+        "cst rebase-forecast <onto> [<source>]",
       );
       if (positionals.length > 2) {
         throw new CliError(
-          "Usage: vlab rebase-forecast <onto> [<source>]",
+          "Usage: cst rebase-forecast <onto> [<source>]",
             { code: "usage-missing-argument" },
         );
       }
@@ -1445,9 +1445,9 @@ export async function main(rawArgs) {
         print(result, options.json);
         return;
       }
-      const onto = requireValue(positionals[0], "vlab rebase <onto>");
+      const onto = requireValue(positionals[0], "cst rebase <onto>");
       if (positionals.length > 1) {
-        throw new CliError("Usage: vlab rebase <onto>",
+        throw new CliError("Usage: cst rebase <onto>",
           { code: "usage-missing-argument" });
       }
       const result = startRebase(onto, {
@@ -1465,7 +1465,7 @@ export async function main(rawArgs) {
       return;
     }
     case "forecast": {
-      const source = requireValue(positionals[0], "vlab forecast <source>");
+      const source = requireValue(positionals[0], "cst forecast <source>");
       const forecast = forecastReconciliation(source, {
         targetCheckpoint: options.targetCheckpoint,
         acceptCandidates: options.acceptCandidates,
@@ -1494,7 +1494,7 @@ export async function main(rawArgs) {
         print(result, options.json);
         return;
       }
-      const source = requireValue(positionals[0], "vlab reconcile <source>");
+      const source = requireValue(positionals[0], "cst reconcile <source>");
       const result = reconcile(source, {
         acceptCandidates: options.acceptCandidates,
         forecastId: options.useForecast,
@@ -1536,7 +1536,7 @@ export async function main(rawArgs) {
         { code: "usage-unknown-command" });
     }
     case "cherry-pick": {
-      const value = requireValue(positionals[0], "vlab cherry-pick <commit-or-change-id>");
+      const value = requireValue(positionals[0], "cst cherry-pick <commit-or-change-id>");
       const result = cherryPick(value, { fork: options.fork, repeat: options.repeat });
       print(result, options.json);
       return;
@@ -1616,13 +1616,13 @@ export async function main(rawArgs) {
         return;
       }
       if (subcommand === "export") {
-        const destination = requireValue(positionals[1], "vlab metadata export <directory>");
+        const destination = requireValue(positionals[1], "cst metadata export <directory>");
         const result = exportMetadata(destination);
         print(options.json ? result : formatMetadataTransfer(result), options.json);
         return;
       }
       if (subcommand === "import") {
-        const source = requireValue(positionals[1], "vlab metadata import <directory> --dry-run|--apply");
+        const source = requireValue(positionals[1], "cst metadata import <directory> --dry-run|--apply");
         const result = importMetadata(source, {
           dryRun: options.dryRun,
           apply: options.apply,
@@ -1635,7 +1635,7 @@ export async function main(rawArgs) {
       if (subcommand === "dispose") {
         const recordId = requireValue(
           positionals[1],
-          "vlab metadata dispose <record-id> --keep-local|--replace-local",
+          "cst metadata dispose <record-id> --keep-local|--replace-local",
         );
         if (Boolean(options.keepLocal) === Boolean(options.replaceLocal)) {
           throw new CliError(
@@ -1670,7 +1670,7 @@ export async function main(rawArgs) {
     case "workspace": {
       const subcommand = positionals[0];
       if (subcommand === "create") {
-        const name = requireValue(positionals[1], "vlab workspace create <name>");
+        const name = requireValue(positionals[1], "cst workspace create <name>");
         const workspace = createWorkspace(name, options);
         print(workspace, options.json);
         return;
@@ -1685,29 +1685,29 @@ export async function main(rawArgs) {
         return;
       }
       if (subcommand === "move") {
-        const name = requireValue(positionals[1], "vlab workspace move <name> <directory>");
+        const name = requireValue(positionals[1], "cst workspace move <name> <directory>");
         const destination = requireValue(
           positionals[2],
-          "vlab workspace move <name> <directory>",
+          "cst workspace move <name> <directory>",
         );
         print(moveWorkspace(name, destination), options.json);
         return;
       }
       if (subcommand === "archive") {
-        const name = requireValue(positionals[1], "vlab workspace archive <name>");
+        const name = requireValue(positionals[1], "cst workspace archive <name>");
         print(archiveWorkspace(name), options.json);
         return;
       }
       if (subcommand === "restore") {
-        const name = requireValue(positionals[1], "vlab workspace restore <name>");
+        const name = requireValue(positionals[1], "cst workspace restore <name>");
         print(restoreWorkspace(name, { path: options.path }), options.json);
         return;
       }
       if (subcommand === "repair") {
-        const name = requireValue(positionals[1], "vlab workspace repair <name> --path <directory>");
+        const name = requireValue(positionals[1], "cst workspace repair <name> --path <directory>");
         const repairPath = requireValue(
           options.path,
-          "vlab workspace repair <name> --path <directory>",
+          "cst workspace repair <name> --path <directory>",
         );
         print(repairWorkspace(name, repairPath), options.json);
         return;
@@ -1722,11 +1722,11 @@ export async function main(rawArgs) {
       if (subcommand === "forecast") {
         const target = requireValue(
           positionals[1],
-          "vlab workspace forecast <target> <source>",
+          "cst workspace forecast <target> <source>",
         );
         const source = requireValue(
           positionals[2],
-          "vlab workspace forecast <target> <source>",
+          "cst workspace forecast <target> <source>",
         );
         const forecast = forecastWorkspaces(target, source, {
           acceptCandidates: options.acceptCandidates,
@@ -1749,24 +1749,24 @@ export async function main(rawArgs) {
           print(options.json ? result : formatSpecBatch(result), options.json);
           return;
         }
-        const file = requireValue(positionals[1], "vlab spec index <file>");
+        const file = requireValue(positionals[1], "cst spec index <file>");
         const result = indexSpec(file, process.cwd(), { force: options.force });
         print(options.json ? result : formatSpecResult(result), options.json);
         return;
       }
       if (subcommand === "show") {
-        const file = requireValue(positionals[1], "vlab spec show <file>");
+        const file = requireValue(positionals[1], "cst spec show <file>");
         print(readSpecManifest(file), true);
         return;
       }
       if (subcommand === "merge-plan") {
         const file = requireValue(
           positionals[1],
-          "vlab spec merge-plan <file> <base> <ours> <theirs>",
+          "cst spec merge-plan <file> <base> <ours> <theirs>",
         );
-        const base = requireValue(positionals[2], "vlab spec merge-plan <file> <base> <ours> <theirs>");
-        const ours = requireValue(positionals[3], "vlab spec merge-plan <file> <base> <ours> <theirs>");
-        const theirs = requireValue(positionals[4], "vlab spec merge-plan <file> <base> <ours> <theirs>");
+        const base = requireValue(positionals[2], "cst spec merge-plan <file> <base> <ours> <theirs>");
+        const ours = requireValue(positionals[3], "cst spec merge-plan <file> <base> <ours> <theirs>");
+        const theirs = requireValue(positionals[4], "cst spec merge-plan <file> <base> <ours> <theirs>");
         const result = planSpecMerge(file, base, ours, theirs);
         print(options.json ? result : formatSpecMergePlan(result), options.json);
         return;
@@ -1811,11 +1811,11 @@ export async function main(rawArgs) {
     }
     case "doctor": {
       // A diagnostic must not change what it diagnoses: the doctor reads the
-      // repository context and never runs `vlab init`'s configuration writes.
+      // repository context and never runs `cst init`'s configuration writes.
       const context = repoContext();
       print({
         ok: true,
-        // `vlab version` is text-only, so the doctor is the machine-readable
+        // `cst version` is text-only, so the doctor is the machine-readable
         // home for the build identity a peer needs to apply the per-family
         // compatibility rules of ADR-0020 (FR-GIT-06; issue #11 item 5).
         version: VERSION,

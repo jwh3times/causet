@@ -1,9 +1,10 @@
 {
-  "name": "causal-vcs-lab",
+  "name": "causet",
   "version": "0.18.0",
   "description": "A Git-backed laboratory for causal reconciliation, validated metadata portability, sparse specifications, reusable resolutions, and AI workspaces.",
   "type": "module",
   "bin": {
+    "cst": "./bin/vlab.js",
     "vlab": "./bin/vlab.js"
   },
   "scripts": {

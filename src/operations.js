@@ -250,7 +250,7 @@ function requireReconciliationBranch(operation, cwd) {
     {
       code: "out-of-band-change",
       details: [
-        "The journal predates the branch record, so vlab cannot prove this worktree is still on the branch the reconciliation started on.",
+        "The journal predates the branch record, so cst cannot prove this worktree is still on the branch the reconciliation started on.",
         `Restore it by hand if needed: git reset --hard ${operation.targetBefore} on that branch, then remove the journal file.`,
       ].join("\n"),
     },
@@ -330,7 +330,7 @@ function finalizeReconciliation(operation, cwd) {
         details: [
           `Forecast tree: ${predictedTree}`,
           `Actual tree:   ${resultTree}`,
-          "Run 'vlab reconcile --abort' and generate a new forecast.",
+          "Run 'cst reconcile --abort' and generate a new forecast.",
         ].join("\n"),
       },
     );
@@ -354,7 +354,7 @@ function finalizeReconciliation(operation, cwd) {
           code: "stale-forecast",
           details: [
             restored.conflict.details,
-            "Nothing was published. Run 'vlab reconcile --abort' and forecast again.",
+            "Nothing was published. Run 'cst reconcile --abort' and forecast again.",
           ].join("\n"),
         },
       );
@@ -379,7 +379,7 @@ function finalizeReconciliation(operation, cwd) {
           details: [
             `Forecast overlay tree: ${predicted}`,
             `Actual overlay tree:   ${actual}`,
-            "Nothing was published. Run 'vlab reconcile --abort' and forecast again.",
+            "Nothing was published. Run 'cst reconcile --abort' and forecast again.",
           ].join("\n"),
         },
       );
@@ -482,7 +482,7 @@ function conflictError(operation, result, cwd) {
     0,
   );
   const suggestion = suggestionCount
-    ? `${suggestionCount} prior resolution candidate${suggestionCount === 1 ? "" : "s"} found. Run 'vlab resolve status'.`
+    ? `${suggestionCount} prior resolution candidate${suggestionCount === 1 ? "" : "s"} found. Run 'cst resolve status'.`
     : "No exact prior resolution was found.";
   let specSuggestion = null;
   try {
@@ -490,7 +490,7 @@ function conflictError(operation, result, cwd) {
       (plan) => plan.status === "clean",
     );
     if (semantic.length) {
-      specSuggestion = `${semantic.length} deterministic spec merge${semantic.length === 1 ? "" : "s"} available. Run 'vlab spec status'.`;
+      specSuggestion = `${semantic.length} deterministic spec merge${semantic.length === 1 ? "" : "s"} available. Run 'cst spec status'.`;
     }
   } catch {
     // An ordinary conflict remains actionable even if semantic metadata is stale.
@@ -504,8 +504,8 @@ function conflictError(operation, result, cwd) {
         pathSummary,
         suggestion,
         specSuggestion,
-        "Resolve and stage the files, then run 'vlab reconcile --continue'.",
-        "Run 'vlab reconcile --status' for details or 'vlab reconcile --abort' to restore the starting state.",
+        "Resolve and stage the files, then run 'cst reconcile --continue'.",
+        "Run 'cst reconcile --status' for details or 'cst reconcile --abort' to restore the starting state.",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -842,7 +842,7 @@ function reconcileInSession(sourceRef, options, cwd) {
       {
         code: "approval-required",
         details:
-          "Review 'vlab merge-plan' and rerun with --accept-candidates to treat them as already applied.",
+          "Review 'cst merge-plan' and rerun with --accept-candidates to treat them as already applied.",
       },
     );
   }
@@ -958,12 +958,12 @@ function continueReconciliationInSession(options, cwd) {
       {
         code: "out-of-band-change",
         details:
-          "If Git was continued manually, abort this pending vlab operation and start a new reconciliation plan.",
+          "If Git was continued manually, abort this pending cst operation and start a new reconciliation plan.",
       },
     );
   }
   if (gitHead !== operation.current.sourceCommit) {
-    throw new CliError("Git's pending cherry-pick does not match the vlab operation.",
+    throw new CliError("Git's pending cherry-pick does not match the cst operation.",
       { code: "out-of-band-change" });
   }
 
@@ -1075,7 +1075,7 @@ function createCommitWithProvenance(message, options, cwd) {
     failure.details = [
       failure.message,
       failure.details,
-      `Keep this commit and inspect it with 'git show ${commit}' and 'vlab provenance ${commit}'.`,
+      `Keep this commit and inspect it with 'git show ${commit}' and 'cst provenance ${commit}'.`,
       "Do not retry commit as though it failed before creation. After fixing the notes write failure, use the provenance repair procedure in docs/identity/README.md to attach the original declaration to this exact commit.",
     ].filter(Boolean).join("\n");
     failure.message = `Commit '${commit}' was created, but declared provenance could not be published.`;

@@ -66,7 +66,8 @@ or build step.
   `npm run demo:clean -- --apply` removes them (`-- --all` also sweeps fixtures
   an interrupted test or benchmark run left behind).
 - `node ./bin/vlab.js --help` runs the CLI directly without installing it.
-- `npm link` optionally exposes `vlab` in the local shell.
+- `npm link` optionally exposes the `cst` command in the local shell. `vlab` is the
+  same command under its old name and remains an alias during the rename (ADR-0038).
 
 ## Coding Style & Naming Conventions
 

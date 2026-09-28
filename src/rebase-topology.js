@@ -128,7 +128,7 @@ export function analyzeRebaseTopology(rangeBase, sourceHead, ontoHead, cwd = pro
     sourceHead,
     ontoHead,
     // Reported in the order they appear in the range, which is the order a
-    // reader meets them in `vlab rebase-plan`.
+    // reader meets them in `cst rebase-plan`.
     mergeCommits,
     unsupportedMerges,
     steps,

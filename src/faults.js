@@ -62,7 +62,7 @@ const GATE_POLL_MS = 20;
  */
 export function faultPoint(name) {
   if (process.env.VLAB_TEST_FAULT === name) {
-    process.stderr.write(`vlab: fault injected at ${name}\n`);
+    process.stderr.write(`cst: fault injected at ${name}\n`);
     process.exit(FAULT_EXIT_CODE);
   }
 }
@@ -78,7 +78,7 @@ export function gatePoint(name) {
   if (process.env.VLAB_TEST_GATE !== name) return;
   const file = process.env.VLAB_TEST_GATE_FILE;
   if (!file) {
-    process.stderr.write(`vlab: gate ${name} requested without VLAB_TEST_GATE_FILE\n`);
+    process.stderr.write(`cst: gate ${name} requested without VLAB_TEST_GATE_FILE\n`);
     process.exit(GATE_EXIT_CODE);
   }
   fs.writeFileSync(`${file}.reached`, `${process.pid}\n`);
@@ -86,7 +86,7 @@ export function gatePoint(name) {
   const cell = new Int32Array(new SharedArrayBuffer(4));
   while (!fs.existsSync(file)) {
     if (Date.now() > deadline) {
-      process.stderr.write(`vlab: gate ${name} was never released\n`);
+      process.stderr.write(`cst: gate ${name} was never released\n`);
       process.exit(GATE_EXIT_CODE);
     }
     Atomics.wait(cell, 0, 0, GATE_POLL_MS);

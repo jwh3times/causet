@@ -646,7 +646,7 @@ export function readSpecManifest(file, cwd = process.cwd()) {
   }
   const storedManifest = readJson(manifestPath, null);
   if (!storedManifest) {
-    throw new CliError(`No manifest exists for '${file}'. Run 'vlab spec index ${file}'.`,
+    throw new CliError(`No manifest exists for '${file}'. Run 'cst spec index ${file}'.`,
       { code: "not-found" });
   }
   const absolute = path.join(context.root, relative);
@@ -656,7 +656,7 @@ export function readSpecManifest(file, cwd = process.cwd()) {
   if (sha256(raw) !== storedManifest.sourceHash) {
     throw new CliError(`Spec manifest for '${file}' is stale.`, {
       code: "stale-manifest",
-      details: `Re-index it with: vlab spec index ${file}`,
+      details: `Re-index it with: cst spec index ${file}`,
     });
   }
   return { manifestPath, manifest: materializeManifest(raw, storedManifest) };
@@ -727,7 +727,7 @@ function revisionStageFromObjects(file, revision, sourceObject, manifestObject) 
   if (manifestRaw === null) {
     throw new CliError(
       `No committed spec manifest exists for '${file}' at ${revision}.`,
-      { code: "not-found", details: `Index and commit it with: vlab spec index ${file}` },
+      { code: "not-found", details: `Index and commit it with: cst spec index ${file}` },
     );
   }
   assertWithinBound(
@@ -754,7 +754,7 @@ function revisionStageFromObjects(file, revision, sourceObject, manifestObject) 
   if (!compatibleHashes.includes(storedManifest.sourceHash)) {
     throw new CliError(`Spec manifest for '${file}' is stale at ${revision}.`, {
       code: "stale-manifest",
-      details: `Re-index and commit it with: vlab spec index ${file}`,
+      details: `Re-index and commit it with: cst spec index ${file}`,
     });
   }
   const manifest = materializeManifest(raw, storedManifest);
@@ -1253,7 +1253,7 @@ export function captureSpecMergeOutcomes(merges, cwd = process.cwd()) {
       ) {
         throw new CliError(`Staged manifest for '${merge.path}' is stale.`, {
           code: "stale-manifest",
-          details: `Run 'vlab spec index ${merge.path}', stage both files, and continue again.`,
+          details: `Run 'cst spec index ${merge.path}', stage both files, and continue again.`,
         });
       }
       const parsed = materializeManifest(markdown, storedManifest);

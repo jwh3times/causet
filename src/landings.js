@@ -93,7 +93,7 @@ export function land(sourceRef, mode, options = {}) {
   // claim about the landing as a whole, not about any line in it.
   // The carried record is its own note record, not a member of the receipt:
   // the receipt is a `vcs-lab.landing/v1` document and must stay exactly that.
-  // `vlab provenance <rev>` is where the result is read back.
+  // `cst provenance <rev>` is where the result is read back.
   carryProvenanceSafely(inputs.absorbedCommits, landingCommit, null, cwd);
   return receipt;
 }

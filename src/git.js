@@ -218,7 +218,7 @@ const READ_ONLY_GIT_COMMANDS = new Set([
  */
 export function gitCommandMutates(args, command = gitCommandName(args)) {
   if (READ_ONLY_GIT_COMMANDS.has(command)) {
-    // `symbolic-ref <name> <ref>` writes; vlab only ever reads one name.
+    // `symbolic-ref <name> <ref>` writes; cst only ever reads one name.
     return command === "symbolic-ref" &&
       args.filter((item) => !item.startsWith("-")).length > 2;
   }
@@ -1360,7 +1360,7 @@ export function findCommitsByChangeId(changeId, cwd = process.cwd()) {
   return bearers.map((bearer) => bearer.commit);
 }
 
-/** The decorated `git log --graph` text of every ref, for `vlab graph`. */
+/** The decorated `git log --graph` text of every ref, for `cst graph`. */
 /**
  * Every path a tree holds, recursively. A tree listing is a repository read like
  * any other, so it belongs in the catalog rather than in a domain module's own

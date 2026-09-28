@@ -123,7 +123,7 @@ export function disposeConflict(recordId, options = {}) {
 /**
  * Every local note record carrying `recordId`, with the digest the snapshot
  * computes for it. Read through the snapshot rather than the notes directly, so
- * a disposition sees the same records `vlab metadata status` reported.
+ * a disposition sees the same records `cst metadata status` reported.
  */
 function localCopies(recordId, cwd) {
   return metadataSnapshot({ cwd }).scopes.sharedPortable.notes.records

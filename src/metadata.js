@@ -932,7 +932,7 @@ export function duplicatedRecordIds(records) {
  * function rather than only the reachable ones: the conflict rule is a
  * whole-tree property, and one batched read costs no extra process.
  * Malformed containers yield no records here exactly as they yield none to
- * the snapshot; their diagnostics belong to `vlab metadata status`.
+ * the snapshot; their diagnostics belong to `cst metadata status`.
  */
 export function readCausalRecordCatalog(cwd = process.cwd()) {
   const context = repoContext(cwd);

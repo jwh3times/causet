@@ -132,7 +132,7 @@ export function readParkedRecord(recordId, cwd = process.cwd()) {
   if (matches.length === 0) {
     throw new CliError(`No parked record '${recordId}' is in quarantine.`, {
       code: "not-found",
-      details: `List what is parked with: vlab metadata status --json`,
+      details: `List what is parked with: cst metadata status --json`,
     });
   }
   if (matches.length > 1) {
@@ -214,7 +214,7 @@ export function stageParkedRecord(payload, cwd) {
 
 /**
  * Reading the registry must not create anything: `metadataSnapshot` reports it,
- * and a `vlab metadata status` that made a directory in a repository it was only
+ * and a `cst metadata status` that made a directory in a repository it was only
  * asked to inspect would be a mutation nobody asked for. Only `saveDispositions`
  * creates the runtime directory.
  */

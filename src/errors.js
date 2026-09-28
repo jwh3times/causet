@@ -65,7 +65,7 @@ export const ERROR_CODES = Object.freeze({
   "stale-forecast": "A forecast no longer matches the repository it was pinned to. Regenerate and re-approve it.",
   "stale-overlay": "The worktree changed since its target overlay was captured. Capture a new checkpoint and forecast again; nothing was re-captured for you.",
   "stale-input": "An input changed while the operation was running. Retry from a quiet repository.",
-  "stale-manifest": "A specification manifest no longer matches the Markdown it describes. Re-index it with vlab spec index, then stage or commit the result.",
+  "stale-manifest": "A specification manifest no longer matches the Markdown it describes. Re-index it with cst spec index, then stage or commit the result.",
 
   // --- Conflicts and decisions that need a person --------------------------
   "conflict-paused": "The operation paused on a conflict and is resumable. Resolve the paths, then continue.",

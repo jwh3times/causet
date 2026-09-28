@@ -43,9 +43,9 @@ and against the inputs selected into the result.
 
 The Markdown runner in
 [test-support/semantic-conformance.js](../../test-support/semantic-conformance.js)
-creates committed stages through `vlab spec index` and observes materialized
-entities through `vlab spec show`. It constructs malformed, stale, future-version,
-and legacy metadata only as fixture inputs. It invokes `vlab spec merge-plan`
+creates committed stages through `cst spec index` and observes materialized
+entities through `cst spec show`. It constructs malformed, stale, future-version,
+and legacy metadata only as fixture inputs. It invokes `cst spec merge-plan`
 twice on identical ordered revisions, requiring identical output and unchanged
 HEAD/worktree state. Indexing must preserve the original document bytes and
 write sparse manifests. Production parser and merge internals are not imported.

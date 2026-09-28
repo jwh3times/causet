@@ -52,7 +52,7 @@ export function rebaseForecastForPlan(id, plan, cwd = process.cwd()) {
   // an approval" so the two failures do not share one message (ADR-0020).
   assertReadableSchema(forecast?.schema, `Rebase forecast '${id}'`, {
     family: "vcs-lab.rebase-forecast",
-    recovery: "Generate a new rebase forecast with: vlab rebase-forecast",
+    recovery: "Generate a new rebase forecast with: cst rebase-forecast",
   });
   assertCurrentSpecDecisions(forecast);
   if (
@@ -479,7 +479,7 @@ export function formatRebaseForecast(forecast) {
   } else if (forecast.candidateDecisionRequired) {
     lines.push(
       "Review the heuristic candidates, then regenerate with:",
-      `  vlab rebase-forecast ${forecast.ontoRef} ${forecast.sourceRef} --accept-candidates`,
+      `  cst rebase-forecast ${forecast.ontoRef} ${forecast.sourceRef} --accept-candidates`,
     );
   } else {
     lines.push("The forecast is pinned for the future rebase application slice.");

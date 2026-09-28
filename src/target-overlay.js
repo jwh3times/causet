@@ -48,7 +48,7 @@ export function resolveTargetOverlay(cwd = process.cwd()) {
       {
         code: "precondition-not-met",
         details:
-          "Create one with 'vlab workspace create', or forecast without " +
+          "Create one with 'cst workspace create', or forecast without " +
           "--target-checkpoint to ignore uncommitted work as before.",
       },
     );
@@ -60,7 +60,7 @@ export function resolveTargetOverlay(cwd = process.cwd()) {
       {
         code: "precondition-not-met",
         details:
-          "Capture one with 'vlab workspace checkpoint'. Uncommitted work is never " +
+          "Capture one with 'cst workspace checkpoint'. Uncommitted work is never " +
           "captured on your behalf, because an overlay is state you approved.",
       },
     );
@@ -187,7 +187,7 @@ export function assertOverlayCurrent(overlay, cwd = process.cwd()) {
         details: [
           `Overlay checkpoint tree: ${overlay.tree}`,
           `Live worktree tree:      ${live}`,
-          "Capture a new checkpoint with 'vlab workspace checkpoint' and forecast again.",
+          "Capture a new checkpoint with 'cst workspace checkpoint' and forecast again.",
           "Nothing was changed, and no work was re-captured on your behalf.",
         ].join("\n"),
       },

@@ -87,7 +87,7 @@ export function nativeEngine() {
   return nativeEngineCache;
 }
 
-/** The selection and availability of every read engine, for `vlab doctor`. */
+/** The selection and availability of every read engine, for `cst doctor`. */
 export function describeReadEngines() {
   const native = nativeEngine();
   return {
@@ -214,7 +214,7 @@ export function gitAtLeast(required, cwd = process.cwd()) {
   return true;
 }
 
-// Differential comparison of the engines, for `vlab doctor --differential`.
+// Differential comparison of the engines, for `cst doctor --differential`.
 
 function canonicalValue(value) {
   if (Buffer.isBuffer(value)) return { bytes: value.length, sha256: sha256(value) };

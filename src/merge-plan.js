@@ -322,7 +322,7 @@ export function formatMergePlan(plan) {
   if (plan.quarantinedFacts?.length) {
     lines.push(
       `quarantined  ${plan.quarantinedFacts.length} reachable fact${plan.quarantinedFacts.length === 1 ? "" : "s"} excluded: ${plan.quarantinedFacts.join(", ")}`,
-      "Coverage was computed on reduced evidence; resolve with vlab metadata dispose.",
+      "Coverage was computed on reduced evidence; resolve with cst metadata dispose.",
     );
   }
   if (plan.counts["candidate-equivalent"] > 0) {

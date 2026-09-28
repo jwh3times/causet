@@ -99,7 +99,7 @@ receipts, and it is why `docs/product.md` §15 gates trust decisions on this
 specification rather than on the identifiers themselves.
 
 What defends against a deliberate collision is detection, not entropy:
-`vlab audit identity` (FR-ID-06) reports commits that share a `Change-Id`
+`cst audit identity` (FR-ID-06) reports commits that share a `Change-Id`
 without any identity-preserving application record linking them, which is
 precisely the shape a forged or copied trailer takes.
 
@@ -126,7 +126,7 @@ commit, and ancestry proves what ancestry proves. Neither is affected by an
 amendment, because neither reasons from the name.
 
 That makes the disagreement case the interesting one. When
-`vlab metadata import` merges records from an envelope, each incoming record
+`cst metadata import` merges records from an envelope, each incoming record
 is matched against the destination **by identifier**, and the outcome is
 decided by comparing digests:
 
@@ -136,7 +136,7 @@ decided by comparing digests:
 | Same identifier, same digest | `noop` — the import is idempotent |
 | Same identifier, **different digest** | `conflict` |
 
-A conflict makes the whole import inapplicable: `vlab metadata import
+A conflict makes the whole import inapplicable: `cst metadata import
 --dry-run` reports it, `summary.applicable` is false, and the command exits
 non-zero without moving a ref. Note merging refuses the same way rather than
 picking a winner.
@@ -154,7 +154,7 @@ arrangement as the canonical JSON profile.
 
 ## 5. Naming a commit by its logical change
 
-A `ch_*` argument to `vlab cherry-pick` names a logical change, and after an
+A `ch_*` argument to `cst cherry-pick` names a logical change, and after an
 identity-preserving pick or rebase more than one reachable commit carries the
 trailer. Every bearer is an exact copy under FR-ID-02, so the tree an
 application produces is the same whichever is chosen; what has to be
@@ -166,7 +166,7 @@ provenance carried from it. The rule:
    application record names as its applied commit: a `vcs-lab.application`
    or `vcs-lab.rebase-application` record whose origin and applied
    `Change-Id` are the same. These records are the identity model
-   `vlab audit identity` (FR-ID-06) checks, so the resolver and the audit
+   `cst audit identity` (FR-ID-06) checks, so the resolver and the audit
    agree about which commit is the origin.
 2. **The earliest bearer.** When the records single out no bearer, because
    none exist (a plain `git cherry-pick` copies the trailer and records
@@ -200,14 +200,14 @@ boundary of §3, so it should only be done for a measured reason.
 
 ## 7. Repairing a declared provenance publication
 
-An attributed `vlab commit` acquires the notes lock before Git creates the commit.
+An attributed `cst commit` acquires the notes lock before Git creates the commit.
 A `notes-locked` refusal therefore needs only a retry after the holder releases
 its claim. Git commit and note publication are separate writes, however: a later
 write failure or abrupt process exit can leave the commit without its declaration.
 A caught publication error identifies the retained commit; after an interruption,
 inspect Git history to identify it. Do not blindly retry commit or reset history.
 
-Inspect `git show <commit>` and `vlab provenance <commit> --json` in the affected
+Inspect `git show <commit>` and `cst provenance <commit> --json` in the affected
 repository, and resolve the original notes-write failure. Preserve existing notes;
 do not overwrite an unreadable container or remove a lock whose writer is active.
 Recover only the actors explicitly supplied to the original invocation, including
@@ -237,7 +237,7 @@ withNotesLock(repo, () => {
 ' "/absolute/path/to/affected-repository" "full-commit-id"
 ```
 
-Run `vlab provenance <commit> --json` again in the affected repository and verify
+Run `cst provenance <commit> --json` again in the affected repository and verify
 the declared actors. The commit ID and branch history remain unchanged. If the
 original declaration is unavailable or existing provenance disagrees, preserve
 the evidence for human review instead of inventing or overwriting a claim.
@@ -266,7 +266,7 @@ format. Spell every actor the same way every time:
 - **An agent harness** sets `VLAB_AGENT` once to the machine actor's name, so
   the spelling comes from configuration rather than from each command.
 
-`vlab audit identity` reports a `near-duplicate-actor-names` warning for actor
+`cst audit identity` reports a `near-duplicate-actor-names` warning for actor
 names that look like one actor spelled differently: the same words ignoring case
 and punctuation (`Claude-Opus-5`, `claude-opus-5`), or one name's words a subset
 of the other's with at least one extra word that is not a number (`codex`,

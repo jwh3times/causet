@@ -217,7 +217,7 @@ test("human output and exit codes are unchanged by the envelope", () => {
   const json = run(repo, "merge-plan", "does-not-exist", "--json");
 
   assert.equal(human.stdout, "", "the human path still writes its failure to stderr");
-  assert.match(human.stderr, /^vlab: /m);
+  assert.match(human.stderr, /^cst: /m);
   assert.equal(
     human.status,
     json.status,
@@ -241,7 +241,7 @@ test("a pre-dispatch failure keeps prose, because no output mode is known yet", 
   const globalFlag = run(repo, "--git-session", "--no-git-session", "receipts", "--json");
   assert.notEqual(globalFlag.status, 0);
   assert.equal(globalFlag.stdout, "", "no envelope: the mode was not known yet");
-  assert.match(globalFlag.stderr, /^vlab: Choose only one of/m);
+  assert.match(globalFlag.stderr, /^cst: Choose only one of/m);
 
   const unknownCommand = run(repo, "no-such-command", "--json");
   assert.notEqual(unknownCommand.status, 0);
