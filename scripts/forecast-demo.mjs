@@ -2,10 +2,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli = path.join(projectRoot, "bin", "vlab.js");
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-forecast-demo-"));
 
 function run(command, args, { quiet = false } = {}) {
@@ -23,7 +21,7 @@ function git(...args) {
 }
 
 function vlab(...args) {
-  return run(process.execPath, [cli, ...args]);
+  return run(vlabCommand, [...vlabPrefix(), ...args]);
 }
 
 function write(relative, content) {
@@ -31,7 +29,7 @@ function write(relative, content) {
 }
 
 function expectConflict(source) {
-  const attempt = spawnSync(process.execPath, [cli, "reconcile", source], {
+  const attempt = spawnSync(vlabCommand, [...vlabPrefix(), "reconcile", source], {
     cwd: repo,
     encoding: "utf8",
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },

@@ -4,10 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const cli = fileURLToPath(new URL("../bin/vlab.js", import.meta.url));
 
 function exec(command, args, cwd, options = {}) {
   return execFileSync(command, args, {
@@ -21,7 +20,7 @@ function exec(command, args, cwd, options = {}) {
 const git = (cwd, ...args) => exec("git", args, cwd);
 
 function run(cwd, ...args) {
-  return spawnSync(process.execPath, [cli, ...args], {
+  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),
@@ -93,7 +92,7 @@ function draftAndCheckpoint(workspace, { tracked = "draft in progress\n", untrac
   write(workspace, "target-only.txt", tracked);
   if (untracked) write(workspace, "scratch.txt", "scratch\n");
   return JSON.parse(
-    exec(process.execPath, [cli, "workspace", "checkpoint", "--label", "draft", "--json"], workspace),
+    exec(vlabCommand, [...vlabPrefix(), "workspace", "checkpoint", "--label", "draft", "--json"], workspace),
   );
 }
 
@@ -199,7 +198,7 @@ test("an overlay that does not merge with the incoming change blocks the forecas
   draftAndCheckpoint(workspace, { tracked: undefined, untracked: false });
   write(workspace, "shared.txt", "draft edits the shared file\n");
   const checkpoint = JSON.parse(
-    exec(process.execPath, [cli, "workspace", "checkpoint", "--label", "conflicting", "--json"], workspace),
+    exec(vlabCommand, [...vlabPrefix(), "workspace", "checkpoint", "--label", "conflicting", "--json"], workspace),
   );
   assert.ok(checkpoint.id);
 
@@ -299,8 +298,8 @@ test("an overlay whose base head moved is refused as a stale forecast", (t) => {
  */
 function pausedWithOverlay(workspace, forecastId) {
   const interrupted = spawnSync(
-    process.execPath,
-    [cli, "reconcile", "feature", "--use-forecast", forecastId, "--json"],
+    vlabCommand,
+    [...vlabPrefix(), "reconcile", "feature", "--use-forecast", forecastId, "--json"],
     {
       cwd: workspace,
       encoding: "utf8",
@@ -310,7 +309,7 @@ function pausedWithOverlay(workspace, forecastId) {
   assert.notEqual(interrupted.status, 0, "the fault must stop the operation");
   assert.match(interrupted.stderr, /fault injected at reconcile:before-journal-advance/);
   const status = JSON.parse(
-    exec(process.execPath, [cli, "reconcile", "--status", "--json"], workspace),
+    exec(vlabCommand, [...vlabPrefix(), "reconcile", "--status", "--json"], workspace),
   );
   assert.equal(status.active, true, "the journal still advertises the operation");
   return status;
@@ -427,7 +426,7 @@ function rebaseDraft(workspace, tracked = "feature work, still drafting\n") {
   write(workspace, "feature-only.txt", tracked);
   write(workspace, "scratch.txt", "scratch\n");
   return JSON.parse(
-    exec(process.execPath, [cli, "workspace", "checkpoint", "--label", "draft", "--json"], workspace),
+    exec(vlabCommand, [...vlabPrefix(), "workspace", "checkpoint", "--label", "draft", "--json"], workspace),
   );
 }
 
@@ -577,8 +576,8 @@ test("aborting a rebase restores the original tip and the captured worktree", (t
   // `before-publish` the overlay has already been put back, which is the
   // contract's own ordering, so nothing would be left to restore.
   const interrupted = spawnSync(
-    process.execPath,
-    [cli, "rebase", "main", "--use-forecast", forecast.id, "--json"],
+    vlabCommand,
+    [...vlabPrefix(), "rebase", "main", "--use-forecast", forecast.id, "--json"],
     {
       cwd: workspace,
       encoding: "utf8",
@@ -614,7 +613,7 @@ test("an overlay that does not merge with the rewritten tip blocks the rebase fo
   const { workspace } = rebasable(t);
   // The draft edits the same file `main` advanced, in the same place.
   write(workspace, "shared.txt", "the draft edits the shared file\n");
-  exec(process.execPath, [cli, "workspace", "checkpoint", "--label", "conflicting", "--json"], workspace);
+  exec(vlabCommand, [...vlabPrefix(), "workspace", "checkpoint", "--label", "conflicting", "--json"], workspace);
 
   const blocked = run(workspace, "rebase-forecast", "main", "--target-checkpoint", "--json");
   const forecast = JSON.parse(blocked.stdout);
@@ -763,8 +762,8 @@ test("abort recovers from a re-materialization mismatch on both applications", (
     guarded.workspace, "rebase-forecast", "main", "--target-checkpoint",
   );
   const interrupted = spawnSync(
-    process.execPath,
-    [cli, "rebase", "main", "--use-forecast", guardedForecast.id, "--json"],
+    vlabCommand,
+    [...vlabPrefix(), "rebase", "main", "--use-forecast", guardedForecast.id, "--json"],
     {
       cwd: guarded.workspace,
       encoding: "utf8",

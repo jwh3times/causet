@@ -173,6 +173,37 @@ supported profile, parser fuzz target, optional packaging, and ADR-0027's separa
 latency gate. Git transport tests explicitly select Git; native oracle tests
 assert executed operations and zero Git processes for supported inputs.
 
+**Running the suites against another CLI implementation.** Every CLI launch in
+the suites, the demos, `scripts/benchmark-regression.mjs`, and the whole-command
+part of `scripts/measure-real-repository.mjs` goes through
+`test-support/vlab-command.js`. By default that is this checkout's JavaScript
+CLI (`node bin/vlab.js`). `VLAB_CLI=<path>` selects another implementation, such
+as a Rust build of the CLI (ADR-0037, #140):
+- a `.js`, `.mjs` or `.cjs` path runs under the current Node;
+- any other path is executed directly;
+- a path that does not exist stops the run.
+
+```bash
+VLAB_CLI=path/to/vlab npm test
+VLAB_CLI=path/to/vlab VLAB_ENGINE=native npm test   # combines with every mode
+```
+
+Some tests exercise the JavaScript modules directly and never launch the CLI;
+they cannot say anything about another implementation. Rather than a
+hand-maintained list, the suite counts CLI invocations per test. When
+`VLAB_CLI` is set, each test that made none is reported with a diagnostic line,
+`did not invoke the CLI under test (…); module-level test`. With
+`VLAB_CLI_REPORT=<file>` set as well, it also appends one JSON line per such
+test to that file, so a whole run can be counted. Those tests still run and
+still pass or fail against the JavaScript modules, but a `VLAB_CLI` run's
+evidence for the selected CLI is the tests *not* in that report.
+
+With `VLAB_CLI` pointing at `bin/vlab.js` explicitly, every mode passes exactly
+as it does with `VLAB_CLI` unset; that run proves the indirection adds nothing.
+Once a Rust CLI exists, `VLAB_CLI=<rust vlab>` in all six modes is the
+qualification a ported command needs before it stops delegating (ADR-0037
+decision 4).
+
 The suite includes `test/schema-catalog.test.js`, which keeps the published
 JSON Schema catalog in `docs/schemas/` in agreement with the executable
 validators in `src/schemas.js`: every schema identifier used in `src/` must

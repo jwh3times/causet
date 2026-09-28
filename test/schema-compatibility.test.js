@@ -21,9 +21,9 @@ import {
 import { appendNote, readNote } from "../src/notes.js";
 import { forecastForPlan } from "../src/forecasts.js";
 import { testEnv } from "../test-support/git-environment.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli = path.join(projectRoot, "bin", "vlab.js");
 
 const compatibilityDoc = fs.readFileSync(
   path.join(projectRoot, "docs", "schemas", "compatibility.md"),
@@ -256,7 +256,7 @@ function git(cwd, ...args) {
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(process.execPath, [cli, ...args], {
+  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),
@@ -274,9 +274,9 @@ function repository(t) {
   git(repo, "config", "user.email", "vcs-lab-compatibility@example.invalid");
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
-  exec(process.execPath, [cli, "init"], repo);
+  exec(vlabCommand, [...vlabPrefix(), "init"], repo);
   git(repo, "add", "-A");
-  exec(process.execPath, [cli, "commit", "-m", "base"], repo);
+  exec(vlabCommand, [...vlabPrefix(), "commit", "-m", "base"], repo);
   return repo;
 }
 

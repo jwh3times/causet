@@ -7,10 +7,10 @@ import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { RECORD_FAMILIES, schemaClassification, validateNoteRecord } from "../src/schemas.js";
 import { testEnv } from "../test-support/git-environment.js";
+import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schemasDir = path.join(projectRoot, "docs", "schemas");
-const cli = path.join(projectRoot, "bin", "vlab.js");
 
 // vcs-lab.forecast/v1 is accepted when reading stored forecasts but never
 // written; the catalog lists it as superseded without a document.
@@ -278,7 +278,7 @@ function git(cwd, ...args) {
 }
 
 function vlab(cwd, ...args) {
-  return exec(process.execPath, [cli, ...args], cwd);
+  return exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
 }
 
 function vlabJson(cwd, ...args) {
@@ -286,7 +286,7 @@ function vlabJson(cwd, ...args) {
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(process.execPath, [cli, ...args], {
+  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),
