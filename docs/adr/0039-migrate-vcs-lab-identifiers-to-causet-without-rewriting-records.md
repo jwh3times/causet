@@ -1,6 +1,7 @@
 # ADR-0039: Migrate `vcs-lab` identifiers to `causet` without rewriting any record
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Decided:** 2026-09-28
 - **Date:** 2026-09-28
 - **Owners:** Repository maintainers
 - **Implementation:** [#159](https://github.com/jwh3times/vcs-lab/issues/159)
@@ -283,7 +284,7 @@ During the window, every user-facing `VLAB_X` is read as a fallback for `CAUSET_
 - **Rename existing workspace branches.** They are the user's branches, possibly checked out, and
   the registry records their actual names. Only new workspaces use `causet/ws/`.
 
-## What the owner must decide
+## What the owner decided
 
 1. **The name table in §1,** in particular `CAUSET_*` for variables and `causet/ws/` for new
    workspace branches.
@@ -296,6 +297,10 @@ During the window, every user-facing `VLAB_X` is read as a fallback for `CAUSET_
 7. **The sequencing in §7:** accepted before #145, and the owner renames the repository after the
    code migration.
 8. **The window end in §8:** at least two minor releases after `cst migrate` ships.
+
+## Owner decision (2026-09-28)
+
+The owner accepted all eight decisions as written.
 
 ## Implementation map
 

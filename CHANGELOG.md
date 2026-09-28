@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- Propose migrating the persisted `vcs-lab` identifiers to `causet` (issue
-  #159, ADR-0039, Proposed). Existing records keep their `vcs-lab.*` ids
-  forever, because rewriting them would change hashed bytes, so classification
-  reads `vcs-lab.` as a permanent alias of `causet.` while writers emit only
+- Accept migrating the persisted `vcs-lab` identifiers to `causet` (issue
+  #159, ADR-0039). Existing records keep their `vcs-lab.*` ids forever,
+  because rewriting them would change hashed bytes, so classification reads
+  `vcs-lab.` as a permanent alias of `causet.` while writers emit only
   `causet.*`. A `cst migrate` command creates `refs/notes/causet` and
   `refs/causet/*` at the same objects, moves runtime directories, repoints the
   notes configuration and stages the spec-manifest move, and never deletes
