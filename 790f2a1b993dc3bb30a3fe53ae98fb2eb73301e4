@@ -1,0 +1,27 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mulib3dd7067f858d0f8",
+      "mode": "compact",
+      "sourceRef": "release-v0.19.1",
+      "sourceHead": "3c812ace18db605caf4e9e4c529723dda098baee",
+      "sourceSubject": "chore: release v0.19.1",
+      "targetBefore": "ce67874ea64bbd47ba2b99402bae657ee4e292e5",
+      "landingCommit": "790f2a1b993dc3bb30a3fe53ae98fb2eb73301e4",
+      "base": "ce67874ea64bbd47ba2b99402bae657ee4e292e5",
+      "absorbedCommits": [
+        "07b3e1b00df09fded843a90d9fca88e858455807",
+        "3c812ace18db605caf4e9e4c529723dda098baee"
+      ],
+      "absorbedChanges": [
+        "ch_0mulhnl79d5da27fa8bcd",
+        "ch_0mulhnmrhadcf14d27422"
+      ],
+      "resultTree": "2a8538cf897e88c0bb38fc407b6124a9a3924593",
+      "createdAt": "2026-09-28T17:13:40.635Z"
+    }
+  ]
+}
