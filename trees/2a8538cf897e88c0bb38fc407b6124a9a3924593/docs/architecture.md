@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Architecture baseline | v0.19.0 release |
+| Architecture baseline | v0.19.1 release |
 | Status | Current implementation reference |
 | Last updated | 2026-09-28 |
 | Runtime | Node.js 20+ (ES modules), Git 2.40+ (merge-tree forecast engine: Git 2.49+) |
