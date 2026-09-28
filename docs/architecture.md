@@ -1,4 +1,4 @@
-# vcs-lab architecture reference
+# causet architecture reference
 
 ## Document status
 
@@ -22,10 +22,10 @@ superseded explicitly rather than silently ignored.
 
 ## 1. Architectural intent
 
-`vcs-lab` is a compatibility-layer experiment, not an independent object
+causet is a compatibility-layer experiment, not an independent object
 database. Git is responsible for content-addressed storage, snapshots,
 ordinary ancestry, refs, worktrees, staging, merges, cherry-picks, and recovery
-mechanics. `vcs-lab` adds:
+mechanics. causet adds:
 
 - stable logical change identity;
 - causal landing and application records;
@@ -61,7 +61,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
                          |
                          v
                   +--------------+
-                  |  vlab CLI    |
+                  |  cst CLI     |
                   | src/cli.js   |
                   +------+-------+
                          |
@@ -127,7 +127,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
 | `src/engine.js` | The read-side engine seam: the catalog of 44 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
 | `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021) | None |
-| `src/faults.js` | Test-only deterministic fault injection: `VLAB_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `VLAB_TEST_GATE` holds a process at a named point until a test releases it | None |
+| `src/faults.js` | Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it | None |
 | `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
 | `src/git-carriers.js` | Copy-on-write notes trees, typed dependency closure, bounded carrier parents, and checked ref commands | Engine, Git writes, schemas |
 | `src/git-session-worker.js` | Owns asynchronous `git cat-file --batch-command` stream for a synchronous caller | Worker threads, Git |
@@ -607,7 +607,7 @@ target-before ----- squash-commit       source-head
 The flow uses `git merge --squash` (with rerere disabled, as in the compact
 landing), commits one parent, and attaches the exact absorbed range as a
 receipt. If the merge conflicts before commit, the command
-publishes no receipt. Stock Git cannot infer the sideband edge; `vlab` can.
+publishes no receipt. Stock Git cannot infer the sideband edge; `cst` can.
 
 ## 9. Forecast architecture
 
@@ -717,7 +717,7 @@ paused/running/forecast-mismatch --abort--> starting commit restored
 4. Create a private journal containing the complete queue, starting commit,
    exact plan, approvals, timing accumulator, and current index.
 5. Cherry-pick queue entries one at a time with Git's rerere disabled
-   (`-c rerere.enabled=false`): a conflict is resolved only by vlab's approved
+   (`-c rerere.enabled=false`): a conflict is resolved only by causet's approved
    memory, a deterministic spec merge, or the user, never by `.git/rr-cache`
    (ADR-0018).
 
@@ -744,7 +744,7 @@ It leaves Git's cherry-pick state intact and exits with recovery instructions.
 
 The user or forecast stages a resolution. Continue verifies the operation and
 staged semantic manifests, invokes `git cherry-pick --continue` (again with
-rerere disabled, so the resolution is recorded in vlab's catalog and never in
+rerere disabled, so the resolution is recorded in causet's catalog and never in
 `.git/rr-cache`), classifies the relation as contextual application or
 contextual fork, records exact outcomes, and resumes the remaining queue.
 
@@ -1089,8 +1089,8 @@ Without an active session the ordinary listing command is used directly.
 Opt-in lifecycle diagnostics record session/worker creation, request posting,
 shared-memory waits, Git request/response events, fallback, and shutdown.
 `VLAB_GIT_SESSION_DIAGNOSTICS=1` writes one JSON line per event to stderr from
-the main thread (`[vlab session]`, which also covers the merge-tree session
-below) and from the object-session worker (`[vlab session-worker]`), and
+the main thread (`[cst session]`, which also covers the merge-tree session
+below) and from the object-session worker (`[cst session-worker]`), and
 `VLAB_GIT_SESSION_DIAGNOSTICS_FILE=<path>` additionally appends the same lines
 to that file, with a failed append ignored so diagnostics can never change
 session behaviour. They are disabled during normal operation and are intended
@@ -1494,7 +1494,7 @@ whose holder is on this host and no longer running, or a minute-old lock
 whose holder cannot be checked, is abandoned; a running holder's lock is
 waited for five seconds and then refused with `notes-locked`. The
 failure-boundary suite proves the window is closed by parking one publisher
-inside it with `VLAB_TEST_GATE` while another runs.
+inside it with `CAUSET_TEST_GATE` while another runs.
 
 `refs/vcs-lab/retention` retains each published attachment and the typed closure
 specified by `referencedObjectsForRecord`. Its previous tip remains an ancestor
@@ -1799,7 +1799,7 @@ per-entity process amplification.
 [ADR-0014](adr/0014-split-the-native-implementation-gate-into-engine-and-store-gates.md)
 and [ADR-0015](adr/0015-adopt-a-phased-native-core-program-with-rust.md) set
 the next increments: first Git-native wins with no new language, then a schema
-catalog and a read-side engine seam, then a Rust `vlab-core` behind that seam
+catalog and a read-side engine seam, then a Rust `causet-core` behind that seam
 under Gate A with a kill switch and sunset. The first increment is delivered
 on both platforms: [ADR-0016](adr/0016-simulate-clean-forecast-steps-with-a-merge-tree-session.md)
 simulates clean forecast steps through one `git merge-tree` session (the

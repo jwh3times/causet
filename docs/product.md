@@ -1,10 +1,10 @@
-# Product Requirements Document: vcs-lab
+# Product Requirements Document: causet
 
 ## Document control
 
 | Field | Value |
 | --- | --- |
-| Product | `vcs-lab` / causal source-control laboratory |
+| Product | causet (command `cst`; formerly vcs-lab) / causal source-control laboratory |
 | Document version | 1.0 |
 | Product baseline | v0.19.1 release |
 | Status | Active product baseline |
@@ -26,7 +26,7 @@ authority is:
 
 ## 1. Executive summary
 
-`vcs-lab` is a Git-compatible laboratory for a modern source-control model. It
+causet is a Git-compatible laboratory for a modern source-control model. It
 keeps Git's object model, repositories, branches, commits, worktrees, and
 interoperable command-line behavior while testing additional causal and
 semantic information that Git does not preserve reliably through squash,
@@ -44,7 +44,7 @@ ancestry. A useful modern system must distinguish:
 
 The prototype must remain useful with ordinary Git at every step. It may add
 metadata and stronger planning, but it must not make a repository unreadable,
-unrecoverable, or unworkable when `vlab` is absent. A native store, service, or
+unrecoverable, or unworkable when `cst` is absent. A native store, service, or
 wire protocol is justified only after local experiments establish that the
 semantics are correct and valuable.
 
@@ -152,7 +152,7 @@ format while retaining the same observable contracts.
 
 - A Git user can try the system in an existing local repository without
   migrating repository contents.
-- A user who stops using `vlab` retains an ordinary, usable Git repository.
+- A user who stops using `cst` retains an ordinary, usable Git repository.
 - Every important operation has human-readable output and machine-readable JSON
   where automation needs it.
 - The tool behaves predictably on Windows, macOS, and Linux, with special
@@ -255,7 +255,7 @@ ADR that explains why.
 
 Every increment inherits these, whichever horizon or phase it belongs to. Six
 consequences are worth restating because they are what a review actually checks:
-Git remains valid, inspectable, and recoverable without `vlab` (GP-01); exact
+Git remains valid, inspectable, and recoverable without `cst` (GP-01); exact
 proof stays distinct from heuristic similarity and from trust (GP-03, GP-11);
 broad mutation is forecastable, pinned, resumable, or exactly abortable (GP-05,
 GP-10); worktree-private state never leaks across linked worktrees, and
@@ -297,7 +297,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 | FR-GIT-01 | P0 | The tool shall operate inside a normal Git repository without converting existing Git objects. | Implemented | `cst init` leaves an existing clean worktree clean. |
 | FR-GIT-02 | P0 | Commits, landings, applications, and checkpoints shall be valid Git objects inspectable with stock Git. | Implemented | `git fsck`, `git log`, `git show`, and `git cat-file` can inspect produced objects. |
 | FR-GIT-03 | P0 | Users shall retain stock Git recovery paths during conflicts. | Implemented | Paused operations expose Git cherry-pick state and document continue/abort behavior. |
-| FR-GIT-04 | P1 | Ordinary branches and linked worktrees shall remain usable alongside `vlab`. | Implemented | Git can switch, fetch, and inspect branches without `vlab`. |
+| FR-GIT-04 | P1 | Ordinary branches and linked worktrees shall remain usable alongside `cst`. | Implemented | Git can switch, fetch, and inspect branches without `cst`. |
 | FR-GIT-05 | P1 | Repository initialization shall configure causal-note display and rewrite behavior without modifying tracked files. | Implemented | Integration test verifies clean status after initialization. |
 | FR-GIT-06 | P1 | Human-readable output shall have a JSON equivalent for state needed by automation. | Complete | Core plans, receipts, forecasts, workspaces, specs, and operations support JSON; the versioned CLI output/schema catalog in `docs/schemas/` maps every `--json` command to its contract; and `docs/conformance/` pins per-command human/JSON parity field by field, enumerating the commands that have no human rendering and the state that is deliberately text-only. The suite fails when a renderer drops a required member or starts printing one declared JSON-only. The failure path is covered too (ADR-0021): a `--json` refusal prints `vcs-lab.error/v1` on stdout with a classification code from the closed vocabulary in `docs/schemas/errors.md`, and `docs/conformance/` pins the code each declared failure reports. |
 | FR-GIT-07 | P1 | The CLI shall accept explicit compatibility/performance controls without changing domain semantics. | Implemented | `--git-session`, `--no-git-session`, and `--forecast-engine` produce equality-checked forecasts; `--engine` selects the read engine behind the equality-tested seam of ADR-0019 and every fallback is reported. |
@@ -367,7 +367,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 | --- | --- | --- | --- | --- |
 | FR-RES-01 | P0 | Exact textual conflicts shall be keyed by ordered base, target, and source blob identities. | Implemented | Signature algorithm is `ordered-three-way-blobs/v1`. |
 | FR-RES-02 | P0 | The exact signature shall be path-independent so a rename does not prevent reuse. | Implemented | Cross-path/worktree reuse test passes. |
-| FR-RES-03 | P0 | A prior result shall not be applied automatically without an explicit action or pinned forecast approval. | Implemented | `resolve apply` or `--use-forecast` is required; Git rerere is disabled inside vlab's cherry-picks and landing merges (ADR-0018). |
+| FR-RES-03 | P0 | A prior result shall not be applied automatically without an explicit action or pinned forecast approval. | Implemented | `resolve apply` or `--use-forecast` is required; Git rerere is disabled inside causet's cherry-picks and landing merges (ADR-0018). |
 | FR-RES-04 | P0 | Ambiguous result variants shall require an explicit resolution ID. | Implemented | Multiple candidates cannot be silently selected. |
 | FR-RES-05 | P1 | A result blob shall be retained against normal garbage collection. | Implemented | Hidden resolution ref points to a commit containing the blob. |
 | FR-RES-06 | P1 | Receipts shall distinguish created, accepted, modified, and rejected decisions. | Implemented | Application and resolution records preserve outcome. |
@@ -519,7 +519,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 3. Git performs a conventional two-parent merge.
 4. First-parent history shows one landing unit.
 5. The landing receipt explains absorbed changes.
-6. A future Git merge still understands ancestry without `vlab`.
+6. A future Git merge still understands ancestry without `cst`.
 
 **Success:** compact history does not destroy causal reachability.
 
@@ -884,7 +884,7 @@ only when trials demonstrate all of:
    actual agent sessions.
 
 **Evidence plan.** The user-value and workload conditions are satisfied by
-dogfooding: the maintainer's coding agents use `vlab` on this repository and
+dogfooding: the maintainer's coding agents use `cst` on this repository and
 other real repositories, with telemetry retained as CI artifacts or issue
 attachments and summarized in ADRs when it supports a decision. One known gap
 in that telemetry is tracked by
@@ -934,13 +934,13 @@ not open automatically, and phases 5 and 6 remain Gate B questions under
 | --- | --- | --- | --- | --- |
 | 0a Git-native wins | none | `git merge-tree` forecast simulation, the post-batching benchmark rerun, and the commit-graph, multi-pack-index, fsmonitor, and sparse-cone measurements | Met 2026-08-30 (ADR-0016 with Windows and Linux evidence, the ADR-0013 rerun, and the Linux benchmark baseline) and completed 2026-08-31 by ADR-0022 and the v2 benchmark profile | Flag only; complete outcome on its own. |
 | 0b Contract freeze and engine seam | none | The read-side engine seam, the schema catalog, the canonical-JSON profile, the per-family compatibility contract, and the human/JSON conformance fixtures | Met 2026-08-31 and released in v0.11.0: the seam of ADR-0019, `docs/schemas/`, `docs/canonical-json/`, ADR-0020's `docs/schemas/compatibility.md`, and `docs/conformance/` | Pure refactor. |
-| 1 Native read engine in Rust | Gate A; first increment accepted under ADR-0027, dependency review before code | Repository context, batched object reads, peeling, history walks, merge-base, ancestry, refs, notes reads, and worktree-scoped status through `vlab-core` behind the seam; per-operation backend matrix in its ADR; bounded jj-lib spike | Suite green in native mode on Linux and Windows with identical JSON; zero Git processes for history, registry, note-catalog, resolution-catalog, and per-workspace status in the scale benchmark; the Gate A named budget met; `git fsck` clean; no lingering processes | Engine selector or uninstall the binding; kill switch and two-release sunset. |
+| 1 Native read engine in Rust | Gate A; first increment accepted under ADR-0027, dependency review before code | Repository context, batched object reads, peeling, history walks, merge-base, ancestry, refs, notes reads, and worktree-scoped status through `causet-core` behind the seam; per-operation backend matrix in its ADR; bounded jj-lib spike | Suite green in native mode on Linux and Windows with identical JSON; zero Git processes for history, registry, note-catalog, resolution-catalog, and per-workspace status in the scale benchmark; the Gate A named budget met; `git fsck` clean; no lingering processes | Engine selector or uninstall the binding; kill switch and two-release sunset. |
 | 2 Native planning and status | Gate A; remains gated on its own scope decision | Merge-plan and rebase-plan construction, receipt reachability, Change-ID extraction, the advisory `git-patch-id-heuristic` proof (a stable patch-id proof, if wanted, gets its own ADR), spec blob-identity checks; the FR-ID-06 audit and the FR-PLAN-08 proof bundle and verifier (both delivered in v0.12.0 over the Git engine; this phase re-implements them behind the seam) | Plan fingerprints byte-identical across engines on the suite plus at least 1,000 generated histories; status semantics preserved at zero processes | Per-operation fallback. |
 | 3 Derived catalog | Gate A, still gated, plus the incremental-catalog row below (an already-batched path over a representative budget, per ADR-0013) | Deletable fact segments with per-record digests, rebuildable indexes, `builtFrom` stamps, reindex command, approval facts, advisory leases in a mutable side file; caches outside synced folders; notes and refs remain canonical | 5,000-fact benchmark under budget with zero processes on both hosts; deleting the catalog yields identical output; torn-tail and stale-catalog recovery pass; writer-lock waits under 10 ms at 16 concurrent agents | Delete the directory. |
 | 4 In-memory forecasts and native mutation | Gate A; remains gated on its own scope decision | Ref transactions and object writes for checkpoints and retained resolutions; virtual three-way merge applying exact-resolution memory and Markdown section merge, with `git merge-tree` as co-oracle | Predicted-tree equality on the suite plus at least 1,000 generated three-way cases; divergence always surfaces as a blocker; FR-REC-06 apply-time check retained | Flag; droppable after 0a evidence. |
 | 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/vcs-lab/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/vcs-lab/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
 | 6 Gateway; service only if the row below fires | Gate B | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/vcs-lab/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/vcs-lab/issues/37)), actor trust ([#38](https://github.com/jwh3times/vcs-lab/issues/38)), then landing policy ([#39](https://github.com/jwh3times/vcs-lab/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
-| CLI port (a track beside phases 1–6) | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/vcs-lab/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `vlab` that runs without Node.js ([#152](https://github.com/jwh3times/vcs-lab/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
+| CLI port (a track beside phases 1–6) | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/vcs-lab/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `cst` that runs without Node.js ([#152](https://github.com/jwh3times/vcs-lab/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
 
 ### Decision rows: what evidence permits which next step
 
@@ -1078,7 +1078,7 @@ recorded in an ADR when it changes a durable decision.
     invalidating old plans, and how is an append-only fact log pruned?
     ([#40](https://github.com/jwh3times/vcs-lab/issues/40))
 11. At what granularity can authorship provenance be anchored so that it
-    survives the rewrites vcs-lab already supports — commit, logical change,
+    survives the rewrites causet already supports — commit, logical change,
     heading section, or hunk — and what anchor remains stable when a squash
     landing collapses many commits into one tree?
     ([#34](https://github.com/jwh3times/vcs-lab/issues/34))

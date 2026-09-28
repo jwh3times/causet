@@ -40,7 +40,7 @@
  *   attempted to acquire an already-held lock.
  *
  * Each hook costs one environment read per named point and is inert unless
- * `VLAB_TEST_FAULT` or `VLAB_TEST_GATE` names that point exactly, so neither
+ * `CAUSET_TEST_FAULT` or `CAUSET_TEST_GATE` names that point exactly, so neither
  * can fire in ordinary use. They are test-only scaffolding in the same spirit
  * as the session-failure switches in `src/git.js`.
  */
@@ -56,29 +56,29 @@ const GATE_TIMEOUT_MS = 30_000;
 const GATE_POLL_MS = 20;
 
 /**
- * Stop the process here if `VLAB_TEST_FAULT` names this point. Call sites read
+ * Stop the process here if `CAUSET_TEST_FAULT` names this point. Call sites read
  * as a statement of where an interruption is survivable, so keep the names
  * stable: the tests reference them.
  */
 export function faultPoint(name) {
-  if (process.env.VLAB_TEST_FAULT === name) {
+  if (process.env.CAUSET_TEST_FAULT === name) {
     process.stderr.write(`cst: fault injected at ${name}\n`);
     process.exit(FAULT_EXIT_CODE);
   }
 }
 
 /**
- * Hold the process here until a test releases it, if `VLAB_TEST_GATE` names
- * this point. The protocol is two files named by `VLAB_TEST_GATE_FILE`: the
+ * Hold the process here until a test releases it, if `CAUSET_TEST_GATE` names
+ * this point. The protocol is two files named by `CAUSET_TEST_GATE_FILE`: the
  * gated process creates `<file>.reached` on arrival, so the test knows it is
  * inside, and proceeds once `<file>` exists. A gate nobody releases exits
  * with `GATE_EXIT_CODE` after thirty seconds rather than hanging the suite.
  */
 export function gatePoint(name) {
-  if (process.env.VLAB_TEST_GATE !== name) return;
-  const file = process.env.VLAB_TEST_GATE_FILE;
+  if (process.env.CAUSET_TEST_GATE !== name) return;
+  const file = process.env.CAUSET_TEST_GATE_FILE;
   if (!file) {
-    process.stderr.write(`cst: gate ${name} requested without VLAB_TEST_GATE_FILE\n`);
+    process.stderr.write(`cst: gate ${name} requested without CAUSET_TEST_GATE_FILE\n`);
     process.exit(GATE_EXIT_CODE);
   }
   fs.writeFileSync(`${file}.reached`, `${process.pid}\n`);

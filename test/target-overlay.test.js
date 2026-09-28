@@ -303,7 +303,7 @@ function pausedWithOverlay(workspace, forecastId) {
     {
       cwd: workspace,
       encoding: "utf8",
-      env: testEnv({ VLAB_TEST_FAULT: "reconcile:before-journal-advance" }),
+      env: testEnv({ CAUSET_TEST_FAULT: "reconcile:before-journal-advance" }),
     },
   );
   assert.notEqual(interrupted.status, 0, "the fault must stop the operation");
@@ -581,7 +581,7 @@ test("aborting a rebase restores the original tip and the captured worktree", (t
     {
       cwd: workspace,
       encoding: "utf8",
-      env: testEnv({ VLAB_TEST_FAULT: "rebase:before-journal-advance" }),
+      env: testEnv({ CAUSET_TEST_FAULT: "rebase:before-journal-advance" }),
     },
   );
   assert.notEqual(interrupted.status, 0, "the fault must stop the operation");
@@ -767,7 +767,7 @@ test("abort recovers from a re-materialization mismatch on both applications", (
     {
       cwd: guarded.workspace,
       encoding: "utf8",
-      env: testEnv({ VLAB_TEST_FAULT: "rebase:before-journal-advance" }),
+      env: testEnv({ CAUSET_TEST_FAULT: "rebase:before-journal-advance" }),
     },
   );
   assert.notEqual(interrupted.status, 0);

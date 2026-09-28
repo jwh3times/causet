@@ -18,7 +18,7 @@ let nextSessionId = 1;
  * response carries only headers; a `contents` response carries the objects
  * base64-encoded, so it gets a far larger buffer.
  *
- * Test hook: `VLAB_TEST_SESSION_BUFFER_BYTES` shrinks the buffer so the
+ * Test hook: `CAUSET_TEST_SESSION_BUFFER_BYTES` shrinks the buffer so the
  * overflow path can be exercised with a small fixture. Overflowing the real
  * content buffer needs a blob of roughly 48 MiB, which is too large to build
  * on every suite run, and the behaviour worth pinning is the fallback rather
@@ -26,7 +26,7 @@ let nextSessionId = 1;
  * integer, so it cannot shrink a buffer in ordinary use.
  */
 function sessionResponseBytes(command) {
-  const override = Number(process.env.VLAB_TEST_SESSION_BUFFER_BYTES);
+  const override = Number(process.env.CAUSET_TEST_SESSION_BUFFER_BYTES);
   if (Number.isInteger(override) && override > 0) return override;
   return command === "info" ? SESSION_INFO_BUFFER_BYTES : SESSION_CONTENT_BUFFER_BYTES;
 }
@@ -88,7 +88,7 @@ export function withReadEngine(engine, callback) {
 
 function sessionDiagnostic(event, details = {}) {
   if (process.env.VLAB_GIT_SESSION_DIAGNOSTICS !== "1") return;
-  const line = `[vlab session] ${JSON.stringify({
+  const line = `[cst session] ${JSON.stringify({
     at: new Date().toISOString(),
     pid: process.pid,
     event,
@@ -151,7 +151,7 @@ function recordDirectRead(command) {
   }
   if (process.env.VLAB_TRACE === "1") {
     process.stderr.write(
-      `[vlab trace] git ${command} was read outside the engine seam\n`,
+      `[cst trace] git ${command} was read outside the engine seam\n`,
     );
   }
 }
@@ -185,7 +185,7 @@ function traceGitMetric(item) {
         : "reused persistent process"
       : "new process";
   process.stderr.write(
-    `[vlab trace] ${item.durationMs.toFixed(1)}ms git ${item.command} (${detail})\n`,
+    `[cst trace] ${item.durationMs.toFixed(1)}ms git ${item.command} (${detail})\n`,
   );
 }
 
@@ -417,7 +417,7 @@ class GitObjectSession {
     this.closed = false;
     this.failed = false;
     this.worker = null;
-    this.gitCommand = process.env.VLAB_TEST_GIT_SESSION_FAILURE === "1"
+    this.gitCommand = process.env.CAUSET_TEST_GIT_SESSION_FAILURE === "1"
       ? "vlab-intentionally-missing-git"
       : "git";
     sessionDiagnostic("session-created", {
@@ -744,7 +744,7 @@ function queryObjectSession(cwd, command, expressions) {
     session.disable();
     if (process.env.VLAB_TRACE === "1") {
       process.stderr.write(
-        `[vlab trace] Git object session unavailable; using ordinary processes (${error.message})\n`,
+        `[cst trace] Git object session unavailable; using ordinary processes (${error.message})\n`,
       );
     }
     return null;
@@ -1842,12 +1842,12 @@ export class MergeTreeSession {
     this.worker = null;
     this.closed = false;
     this.processCounted = false;
-    this.gitCommand = process.env.VLAB_TEST_MERGE_TREE_SESSION_FAILURE === "1"
+    this.gitCommand = process.env.CAUSET_TEST_MERGE_TREE_SESSION_FAILURE === "1"
       ? "vlab-intentionally-missing-git"
       : "git";
     // Test hook: pretend the session process reported this Git version
     // instead of the one its trace2 version event names.
-    this.spoofGitVersion = process.env.VLAB_TEST_MERGE_TREE_GIT_VERSION || null;
+    this.spoofGitVersion = process.env.CAUSET_TEST_MERGE_TREE_GIT_VERSION || null;
     /** The Git version the session process reported, once known. */
     this.gitVersion = null;
   }

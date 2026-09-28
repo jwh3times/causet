@@ -41,7 +41,7 @@ function measure(...flags) {
   ]);
   const trace = result.stderr
     .split(/\r?\n/)
-    .filter((line) => line.startsWith("[vlab trace]"));
+    .filter((line) => line.startsWith("[cst trace]"));
   return {
     forecast: JSON.parse(result.stdout),
     wallMs: Number((performance.now() - started).toFixed(2)),

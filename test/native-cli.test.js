@@ -56,7 +56,7 @@ function runRust(args, env = {}) {
 }
 
 // Trace timings are the one volatile part of a delegated command's output.
-const withoutTimings = (text) => text.replace(/^(\[vlab trace\]) [\d.]+ms /gm, "$1 <ms> ");
+const withoutTimings = (text) => text.replace(/^(\[cst trace\]) [\d.]+ms /gm, "$1 <ms> ");
 
 function assertSame(args, env = {}, rustEnv = { VLAB_DELEGATE: "never" }) {
   const expected = runOracle(args, env);

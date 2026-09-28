@@ -1,6 +1,6 @@
-# vcs-lab
+# causet
 
-vcs-lab records causal facts about how changes move between Git histories and
+causet records causal facts about how changes move between Git histories and
 uses them to plan, forecast, land, and verify that movement. This glossary holds
 the terms accepted decisions have settled; it grows as terms are resolved.
 

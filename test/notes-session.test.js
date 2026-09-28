@@ -129,11 +129,11 @@ test("missing notes refs and unavailable session responses retain Git behavior",
   f.publish(f.tree([]));
   assert.deepEqual(f.listing().entries, []);
   f.publish(f.tree([{ name: "a".repeat(f.width) }, { name: "opaque".repeat(100) }]));
-  const previous = process.env.VLAB_TEST_SESSION_BUFFER_BYTES;
-  process.env.VLAB_TEST_SESSION_BUFFER_BYTES = "512";
+  const previous = process.env.CAUSET_TEST_SESSION_BUFFER_BYTES;
+  process.env.CAUSET_TEST_SESSION_BUFFER_BYTES = "512";
   t.after(() => {
-    if (previous === undefined) delete process.env.VLAB_TEST_SESSION_BUFFER_BYTES;
-    else process.env.VLAB_TEST_SESSION_BUFFER_BYTES = previous;
+    if (previous === undefined) delete process.env.CAUSET_TEST_SESSION_BUFFER_BYTES;
+    else process.env.CAUSET_TEST_SESSION_BUFFER_BYTES = previous;
   });
   const actual = f.listing();
   assert.deepEqual(actual.entries, f.oracle());

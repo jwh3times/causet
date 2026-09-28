@@ -7,7 +7,7 @@ contract for FR-SPEC-13, grounded in
 [extension rules](architecture.md#20-extension-rules). It does not define a
 plugin API or change the current Markdown algorithms.
 
-Canonical documents must remain usable without vcs-lab. Derived metadata must
+Canonical documents must remain usable without causet. Derived metadata must
 not become the only way to recover their content. A deterministic merge may
 select only outcomes its published rules justify; ambiguity must be visible
 and block automatic application.

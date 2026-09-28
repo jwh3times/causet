@@ -139,7 +139,7 @@ test("missing and broken optional bindings preserve Git functionality", (t) => {
   const script = `import { describeReadEngines, repoContext } from ${JSON.stringify(moduleUrl)};
     console.log(JSON.stringify({ engine: describeReadEngines(), context: repoContext() }));`;
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-    cwd: root, encoding: "utf8", env: testEnv({ VLAB_ENGINE: "native", VLAB_TEST_NATIVE_BINDING: "missing" }),
+    cwd: root, encoding: "utf8", env: testEnv({ VLAB_ENGINE: "native", CAUSET_TEST_NATIVE_BINDING: "missing" }),
   });
   assert.equal(result.status, 0, result.stderr);
   const parsed = JSON.parse(result.stdout);

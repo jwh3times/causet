@@ -54,7 +54,7 @@ shortening only the linked worktree path does not solve this limit.
 When Git fails to create that path at or above 260 characters, publication
 reports `path-length-exceeded`, the measured lock-path length, and the required
 reduction. Use a shorter Git directory path or enable long paths locally with
-`git config core.longpaths true`. VLab does not change this setting for you.
+`git config core.longpaths true`. causet does not change this setting for you.
 A failed publication can leave an operation journal; use the operation's
 `--abort` to restore its starting commit, then retry after addressing the path.
 Existing lock files and permission failures retain `git-command-failed`.
@@ -184,8 +184,8 @@ as a Rust build of the CLI (ADR-0037, #140):
 - a path that does not exist stops the run.
 
 ```bash
-VLAB_CLI=path/to/vlab npm test
-VLAB_CLI=path/to/vlab VLAB_ENGINE=native npm test   # combines with every mode
+VLAB_CLI=path/to/cst npm test
+VLAB_CLI=path/to/cst VLAB_ENGINE=native npm test   # combines with every mode
 ```
 
 Some tests exercise the JavaScript modules directly and never launch the CLI;
@@ -239,12 +239,12 @@ similarity. Application-evidence cases include unknown schemas/relations,
 missing or wrong-type objects, mismatched attachments and identities, and forks.
 `test/hostile-input.test.js` drives malformed notes, envelopes, tracked
 manifests, identifiers, and object expressions through the real CLI and holds
-each to one property: a non-zero exit, a `vlab:` domain diagnostic rather than
+each to one property: a non-zero exit, a `cst:` domain diagnostic rather than
 a leaked JavaScript runtime error, and **no ref moved**. The runtime-error
-check matters because the error boundary prints any failure as `vlab: <message>`,
+check matters because the error boundary prints any failure as `cst: <message>`,
 so an exit code alone cannot tell a refusal from a crash.
 `test/failure-boundary.test.js` interrupts the mutating paths of both
-reconciliation and causal rebase at named fault points with `VLAB_TEST_FAULT`
+reconciliation and causal rebase at named fault points with `CAUSET_TEST_FAULT`
 and asserts what survives: the journal is always recoverable, no record is
 ever duplicated, `--continue` refuses rather than republishing, and an abort
 restores the head — or, for a rebase, the branch ref that had already moved —
@@ -257,13 +257,13 @@ direction and is pinned as such. **Abort cleanup**, where the history has been
 restored but the journal has not yet been cleared, so abort must be idempotent
 or the operation could neither continue nor be abandoned. The same file also
 covers out-of-band Git: a `cherry-pick --continue`, `--skip`, or `--abort`
-driven behind vlab's back during a paused operation must leave the resume
-refusing, publishing nothing, and still recoverable through vlab's own abort.
+driven behind causet's back during a paused operation must leave the resume
+refusing, publishing nothing, and still recoverable through causet's own abort.
 The same file proves the notes lock closes the publication race:
-`VLAB_TEST_GATE=notes:after-read` parks one publisher between reading a
+`CAUSET_TEST_GATE=notes:after-read` parks one publisher between reading a
 commit's note container and writing it back (the gated process creates
-`<VLAB_TEST_GATE_FILE>.reached` on arrival and proceeds once
-`<VLAB_TEST_GATE_FILE>` exists), a second publisher must wait rather than
+`<CAUSET_TEST_GATE_FILE>.reached` on arrival and proceeds once
+`<CAUSET_TEST_GATE_FILE>` exists), a second publisher must wait rather than
 complete, and both records are present afterwards; with the lock removed the
 same test shows the second record lost. A lock left by a process that is gone,
 or a minute-old lock from a host that cannot be checked, is abandoned, while a
@@ -309,7 +309,7 @@ budgets, and proves that a listing plus its note blobs uses one Git process.
 
 `test/integration.test.js` also pins the object session's response-buffer bound. Overflowing
 the real 64 MiB content buffer needs a blob of roughly 48 MiB, far too large to
-build on every suite run, so `VLAB_TEST_SESSION_BUFFER_BYTES` shrinks the
+build on every suite run, so `CAUSET_TEST_SESSION_BUFFER_BYTES` shrinks the
 buffer to meet a small fixture. What is asserted is not the threshold but the
 behaviour at it: an overflowing response is replaced by a `response-too-large`
 envelope, the session is disabled for the rest of the invocation — hence
@@ -320,16 +320,16 @@ fallback that returned different data would be worse than one that failed. The
 override is inert unless it parses as a positive integer, which is itself
 asserted, since it shrinks a safety bound.
 Two more test-only switches in `src/git.js` force the fallback paths without a
-broken Git. `VLAB_TEST_GIT_SESSION_FAILURE=1` makes the object session spawn a
+broken Git. `CAUSET_TEST_GIT_SESSION_FAILURE=1` makes the object session spawn a
 nonexistent Git command, so its worker fails to start and the command completes
 through ordinary processes; the suite asserts that the plan is identical and
-that the trace announces the fallback. `VLAB_TEST_MERGE_TREE_SESSION_FAILURE=1`
+that the trace announces the fallback. `CAUSET_TEST_MERGE_TREE_SESSION_FAILURE=1`
 does the same to the merge-tree session, so a forecast records one merge-tree
 fallback and reruns the whole queue in the worktree simulator with identical
-trees. `VLAB_TEST_MERGE_TREE_GIT_VERSION=<version>` makes the merge-tree
+trees. `CAUSET_TEST_MERGE_TREE_GIT_VERSION=<version>` makes the merge-tree
 session report that Git version instead of the one its trace2 event names,
 which is how the `git-too-old` fallback is exercised on a host whose Git is new
-enough. Like `VLAB_TEST_FAULT` and `VLAB_TEST_GATE`, each is inert unless it is
+enough. Like `CAUSET_TEST_FAULT` and `CAUSET_TEST_GATE`, each is inert unless it is
 set exactly.
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan `src/` for every `new CliError` and fail
@@ -502,7 +502,7 @@ survives a restated hash.
 
 The property the suite establishes is that it is Git's hashes, not the tool's
 prose, that catch these. Every carried object is re-hashed with `git hash-object`
-in the test itself rather than through vcs-lab, so a bug in the producer and a
+in the test itself rather than through causet, so a bug in the producer and a
 matching bug in the verifier cannot agree with each other. Each of ADR-0031's
 adversarial shapes then has its own case, and the two the ADR did not list but the
 implementation makes possible — rewriting a carried object and forging a receipt
@@ -559,7 +559,7 @@ never up the lattice, and the plan names the excluded identifier in
 `quarantinedFacts` in both renderings. The default import still refuses the
 whole envelope and moves no ref; `--park-conflicts` applies the rest, and the
 parked blob is read back with plain `git cat-file` to prove the store is
-inspectable without vcs-lab. After parking, the *local* copy stops proving
+inspectable without causet. After parking, the *local* copy stops proving
 coverage too and leaves the export, which is the half of "contributes nothing on
 both sides" that is easy to implement in only one direction. A disposition
 returns the record to service with no code change in between, and re-importing
@@ -666,12 +666,12 @@ Each scale phase also measures a **raw-Git floor**: the plain-Git commands a
 reader would run to obtain the corresponding Git data, timed in the same process
 and the same way as the phase itself (issue #42). Both sides therefore exclude Node
 start-up and module load, which is what makes the ratio between them the
-maintainer's stated criterion -- `vlab` no worse than 110% of the equivalent
+maintainer's stated criterion -- `cst` no worse than 110% of the equivalent
 plain-Git work -- rather than an approximation of it. Each floor publishes the
 commands it ran, because which commands count as "equivalent" is a judgement
 rather than a fact and belongs in review. `workspaceRegistry` reports no floor:
 Git has no workspace registry, and an invented denominator would be worse than
-none. A floor does not reproduce vlab's domain validation or registry/checkpoint
+none. A floor does not reproduce causet's domain validation or registry/checkpoint
 work. Native-versus-Git-engine semantic equality must be tested separately from
 the latency ratio; [ADR-0027](adr/0027-bound-native-read-engine-entry-by-the-resolution-catalog-budget.md)
 defines the accepted bounded rule without adding an implicit allowance.
@@ -782,7 +782,7 @@ unique and every reference must resolve to a definition.
 
 ## Repository-machinery suites
 
-Seven suites check the repository's own machinery rather than `vlab` behavior.
+Seven suites check the repository's own machinery rather than `cst` behavior.
 They are cheap, they run in every mode with the rest, and they are listed here
 because a suite no document names is a suite nobody maintains.
 
@@ -811,7 +811,7 @@ A release candidate is eligible only when:
 4. all maintained demos complete;
 5. metadata validation reports no unexpected errors;
 6. expected-failure cases leave protected refs and worktrees unchanged;
-7. no VCS Lab Node or Git process remains after completion;
+7. no causet Node or Git process remains after completion;
 8. version constants, package metadata, changelog, and release tag agree; and
 9. the packed artifact passes an install and smoke test outside the source
    checkout; and
@@ -913,7 +913,7 @@ classes; larger runners are charged even in public repositories.
 ### Performance checkpoints for the Rust CLI
 
 `scripts/perf-checkpoint.mjs` is Part A of the performance checkpoints of the
-Rust CLI program (#136, #151; ADR-0037 decision 7). It times whole `vlab`
+Rust CLI program (#136, #151; ADR-0037 decision 7). It times whole `cst`
 processes, including startup, per implementation, against a plain-Git floor,
 on three fixtures it builds and removes itself:
 - a real clone pinned to a release and its notes;
@@ -926,7 +926,7 @@ engines and implementations, and counts Git processes from `VLAB_TRACE`
 lines. It emits JSON evidence and a Markdown summary:
 
 ```sh
-node scripts/perf-checkpoint.mjs --host lab-windows-a --checkpoint <n>   --output <new-file.json> --markdown <new-file.md> [--impl rust=<vlab-executable>]
+node scripts/perf-checkpoint.mjs --host lab-windows-a --checkpoint <n>   --output <new-file.json> --markdown <new-file.md> [--impl rust=<cst-executable>]
 ```
 
 `.github/workflows/perf.yml` runs the same harness on GitHub-hosted Windows
@@ -937,7 +937,7 @@ comparable between runs. The job contributes what survives that: byte
 equality, exit status, Git process counts, and comparisons made within one
 run (native against the Git engine, each command against its Git floor, and
 the Rust CLI against the JavaScript CLI, which the job adds automatically once
-the workspace builds a `vlab` binary). It posts the summary to the job page
+the workspace builds a `cst` binary). It posts the summary to the job page
 and keeps the JSON as an artifact for 90 days. It fails only when the harness
 cannot measure, never on a timing.
 

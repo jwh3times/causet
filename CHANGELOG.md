@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Rename the Rust crates to `causet-core`, `causet-binding` and `causet-cli`,
+  and the optional prebuild to `native/prebuilds/<platform>-<arch>/causet-core.node`
+  (issue #159, ADR-0039 §7 step 2). Rebuild with `npm run build:native`; a
+  `vlab-core.node` left from an earlier build is no longer loaded.
+- Rename the stderr diagnostic prefixes `[vlab trace]`, `[vlab session]` and
+  `[vlab session-worker]` to `[cst trace]`, `[cst session]` and
+  `[cst session-worker]` (issue #159, ADR-0039 §1). Anything that parses
+  `--trace-git` output must match the new prefix. `scripts/perf-checkpoint.mjs`
+  accepts both, so earlier builds stay measurable; the change alters the
+  harness's `scriptSha256`, so compare checkpoints within one run.
+- Rename the suite-internal fault and test hooks from `VLAB_TEST_*` to
+  `CAUSET_TEST_*`, with no fallback (issue #159, ADR-0039 §1). Only the suites
+  set them.
+- Name the product causet, and the command `cst`, throughout the README,
+  `docs/` and the agent skills (issue #159, ADR-0039 §7 step 2). The npm
+  `description` replaces the experiment's tagline. Identifiers are unchanged
+  until the migration: the `vcs-lab.*` record ids, `refs/notes/vcs-lab`,
+  `refs/vcs-lab/*`, runtime paths, `VLAB_*`, and links to the repository and
+  its project board.
+
 - Add the Rust CLI skeleton (issue #141, ADR-0037 decision 4). The `native/`
   workspace now builds `cst`, a hybrid executable that is not yet packaged.
   - **It answers natively** help, `--version`, the global flag and
