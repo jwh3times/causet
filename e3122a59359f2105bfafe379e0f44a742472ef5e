@@ -1,0 +1,27 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mulennju52d708e53500",
+      "mode": "compact",
+      "sourceRef": "jwh3times/cst-rename",
+      "sourceHead": "8ad138713c6fdbcd810129226e6433a6b9a7e9a9",
+      "sourceSubject": "Merge main into jwh3times/cst-rename",
+      "targetBefore": "e6a16f7f23edbc79d8667e53726e3e82194bbf8e",
+      "landingCommit": "e3122a59359f2105bfafe379e0f44a742472ef5e",
+      "base": "e6a16f7f23edbc79d8667e53726e3e82194bbf8e",
+      "absorbedCommits": [
+        "d2ff9b997ef19d027af1c3246e3737199415c64f",
+        "8ad138713c6fdbcd810129226e6433a6b9a7e9a9"
+      ],
+      "absorbedChanges": [
+        "ch_0mulatcyy4e60afece94f",
+        "git:8ad138713c6fdbcd810129226e6433a6b9a7e9a9"
+      ],
+      "resultTree": "e5b282654a1f8aad761b89e8ec4e1722314df2f9",
+      "createdAt": "2026-09-28T15:31:28.200Z"
+    }
+  ]
+}
