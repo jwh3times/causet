@@ -1,0 +1,25 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mulp1qkr4e5710ba4ac5",
+      "mode": "compact",
+      "sourceRef": "jwh3times/rust-cli-skeleton",
+      "sourceHead": "b390a9518b95053c6963c69bbe6988af18d7b032",
+      "sourceSubject": "feat: add the Rust CLI skeleton that delegates unported commands",
+      "targetBefore": "790f2a1b993dc3bb30a3fe53ae98fb2eb73301e4",
+      "landingCommit": "1e61159e017ce08b41fda79ccad2aa0d14fd8865",
+      "base": "790f2a1b993dc3bb30a3fe53ae98fb2eb73301e4",
+      "absorbedCommits": [
+        "b390a9518b95053c6963c69bbe6988af18d7b032"
+      ],
+      "absorbedChanges": [
+        "ch_0mullzi9c1d82447e809b"
+      ],
+      "resultTree": "4f35454fa60971bcce76f46776d5268f9268c7a9",
+      "createdAt": "2026-09-28T20:22:21.450Z"
+    }
+  ]
+}
