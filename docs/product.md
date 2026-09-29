@@ -705,7 +705,7 @@ Themes here are directional; a version number is not a promise until its scope
 is accepted in an issue, plan, or ADR.
 
 Future work is tracked on the
-[vcs-lab project board](https://github.com/users/jwh3times/projects/7): one
+[causet project board](https://github.com/users/jwh3times/projects/7): one
 issue per increment, each carrying a Status, the Gate that must clear before it
 can start, and an Area. The board replaced `docs/roadmap.md` on 2026-09-04, so
 there is no parallel Markdown backlog to keep in sync, and the changelog stays
@@ -770,41 +770,41 @@ manifest. It is not a signing or authorization layer.
 Each links to the issue that carries it; the board is where its status lives.
 
 - Native private draft stacks beyond the conservative worktree-backed
-  implementation ([#40](https://github.com/jwh3times/vcs-lab/issues/40),
+  implementation ([#40](https://github.com/jwh3times/causet/issues/40),
   Gate B). Target-checkpoint forecasts
-  ([#26](https://github.com/jwh3times/vcs-lab/issues/26)) landed in v0.15.0, and
+  ([#26](https://github.com/jwh3times/causet/issues/26)) landed in v0.15.0, and
   carrying a draft through a causal *rebase* the same way
-  ([#28](https://github.com/jwh3times/vcs-lab/issues/28)) followed it, inheriting
+  ([#28](https://github.com/jwh3times/causet/issues/28)) followed it, inheriting
   the ADR-0028 contract unchanged.
 - Broader causal rebase forms. Merge preservation
-  ([#29](https://github.com/jwh3times/vcs-lab/issues/29),
+  ([#29](https://github.com/jwh3times/causet/issues/29),
   [ADR-0034](adr/0034-recreate-merges-as-joins-that-claim-nothing.md) accepted)
   landed in v0.17.0 for the accepted v1 topology: two parents, both in the
   rebased range or ancestors of the new base. Octopus merges stay deferred —
   the order an octopus resolved in is not recoverable from its result, so its
   recreation cannot be forecast — and will need their own decision. Interactive
-  editing ([#30](https://github.com/jwh3times/vcs-lab/issues/30),
+  editing ([#30](https://github.com/jwh3times/causet/issues/30),
   [ADR-0035](adr/0035-make-interactive-rewrites-declare-what-they-do-to-identity.md)
   accepted) landed in v0.17.0 with all four actions, including `edit` and the
   deliberate weakening of ADR-0004 it carries. Explicit linear
-  ranges ([#27](https://github.com/jwh3times/vcs-lab/issues/27)) landed in
+  ranges ([#27](https://github.com/jwh3times/causet/issues/27)) landed in
   v0.15.0 and checkpoint/draft overlays
-  ([#28](https://github.com/jwh3times/vcs-lab/issues/28)) after it; a range whose
+  ([#28](https://github.com/jwh3times/causet/issues/28)) after it; a range whose
   tip is mid-branch is still refused, because re-parenting what follows it
   belongs to #30.
 - Rerun the accepted repository-scale schema on larger fixtures and real
   repositories now that workspace-status and resolution-catalog scans are
   batched (the Windows rerun is recorded in ADR-0013); consider incremental
   catalogs only if already-batched scans remain over a representative budget
-  ([#42](https://github.com/jwh3times/vcs-lab/issues/42)).
+  ([#42](https://github.com/jwh3times/causet/issues/42)).
 - A repository-local service only if cross-command process and scan costs remain
   material after batching — see the decision rows below.
 - Protocol capability negotiation and optional remote gateway
-  ([#36](https://github.com/jwh3times/vcs-lab/issues/36),
-  [#37](https://github.com/jwh3times/vcs-lab/issues/37)).
+  ([#36](https://github.com/jwh3times/causet/issues/36),
+  [#37](https://github.com/jwh3times/causet/issues/37)).
 - Signed receipt envelopes and trusted landing policy
-  ([#38](https://github.com/jwh3times/vcs-lab/issues/38),
-  [#39](https://github.com/jwh3times/vcs-lab/issues/39)).
+  ([#38](https://github.com/jwh3times/causet/issues/38),
+  [#39](https://github.com/jwh3times/causet/issues/39)).
 - Additional deterministic structured-document adapters, behind a shared
   [conformance suite](semantic-conformance/README.md) and an
   [adapter contract](structured-document-adapters.md), both delivered.
@@ -813,9 +813,9 @@ Each links to the issue that carries it; the board is where its status lives.
   needs explicit body/context and migration rules and must preserve the fence
   contract in [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md).
 - Lower-confidence resolution only as a visibly separate tier
-  ([#35](https://github.com/jwh3times/vcs-lab/issues/35)), and sub-commit
+  ([#35](https://github.com/jwh3times/causet/issues/35)), and sub-commit
   authorship anchoring
-  ([#34](https://github.com/jwh3times/vcs-lab/issues/34)).
+  ([#34](https://github.com/jwh3times/causet/issues/34)).
 - Git-native wins before native code: `git merge-tree` forecast simulation
   (delivered by ADR-0016 with Windows and Linux evidence; the default on
   Windows since 2026-08-30), sparse cones (delivered in v0.12.0 as
@@ -848,7 +848,7 @@ existing contracts a second time may begin when all of:
    [ADR-0027](adr/0027-bound-native-read-engine-entry-by-the-resolution-catalog-budget.md)
    (Accepted) names the post-#73 resolution-catalog miss on `lab-windows-a`.
    The maintainer accepted its host/workload, comparison rule, bounded scope,
-   and stop conditions in [#18](https://github.com/jwh3times/vcs-lab/issues/18).
+   and stop conditions in [#18](https://github.com/jwh3times/causet/issues/18).
    Dependency review remains required before native code begins. ADR-0024's
    historical closure proposal is superseded for this first increment only;
    its absolute-budget conclusion does not settle the later ratio criterion.
@@ -861,10 +861,10 @@ removed from the package if it has not met its named budget within two minor
 releases after the engine first ships (ADR-0014).
 
 [ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) applies
-Gate A to the Rust CLI port ([#136](https://github.com/jwh3times/vcs-lab/issues/136)). For
+Gate A to the Rust CLI port ([#136](https://github.com/jwh3times/causet/issues/136)). For
 that program only, it waives item 3 and the two-release sunset. Its only stop rule is
 byte-identical parity. Performance is reported at checkpoints, on the wiki's
-[Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing) page,
+[Performance testing](https://github.com/jwh3times/causet/wiki/Performance-testing) page,
 and never gates the program.
 
 **Gate B: semantics-changing native store, protocol, or draft stacks.** Begins
@@ -888,12 +888,12 @@ dogfooding: the maintainer's coding agents use `cst` on this repository and
 other real repositories, with telemetry retained as CI artifacts or issue
 attachments and summarized in ADRs when it supports a decision. One known gap
 in that telemetry is tracked by
-[issue #17](https://github.com/jwh3times/vcs-lab/issues/17): a reconciliation
+[issue #17](https://github.com/jwh3times/causet/issues/17): a reconciliation
 or rebase receipt's `timings.git` block covers the application phase only and
 excludes the receipt's own publication cost.
 
 **Evidence table.** Assembled under
-[issue #41](https://github.com/jwh3times/vcs-lab/issues/41). Every condition is
+[issue #41](https://github.com/jwh3times/causet/issues/41). Every condition is
 supported by mechanical checks, partial workload observations, or an explicit
 gap; **no condition is fully demonstrated**, so the decision row permitting
 phase 5 does not fire. Git-backed portability and the bounded native read result
@@ -903,15 +903,15 @@ preference, sustained improvement, or reproduction rate.
 
 | Condition | Evidence in hand, by schema and run | Missing before the condition is met |
 | --- | --- | --- |
-| 1. Users prefer compact landing and use receipts to recover squash causality | `causet.landing/v1` and `causet.provenance/v1`. The owner adopted the [#19 pilot](https://github.com/jwh3times/vcs-lab/issues/19), which records actual compact landings, reviewed-tree equality, absorbed source commits, carried provenance, and atomic publication | Sustained user preference and an observed receipt-assisted recovery of squash causality. Successful two-parent compact delivery alone does not demonstrate recovery of lost ancestry |
-| 2. Stable logical IDs materially improve rewrite and cherry-pick workflows | `causet.application/v1`, `causet.identity-audit/v1`. Integration tests cover preservation, forks, coverage suppression, and collisions. The [#19 pilot](https://github.com/jwh3times/vcs-lab/issues/19) records an actual review-workspace replay preserving the source Change-Id | Demonstrated avoided work or another material benefit across a representative rewrite/cherry-pick workload; one preserved ID does not establish that benefit |
-| 3. Forecasts reproduce predicted trees reliably | `causet.forecast/v2`, `causet.rebase-forecast/v2`, `causet.reconciliation/v6`. Engine/oracle agreement, stale refusal, and apply-time tree checks remain in integration tests. The [#19 pilot](https://github.com/jwh3times/vcs-lab/issues/19) records a clean forecast and pinned application of actual maintained work with matching predicted/applied trees | A reproduction rate over real conflicted histories. One clean review-workspace application and bounded fixtures do not establish a corpus rate |
-| 4. Worktree workspace and checkpoint behavior improves parallel-agent operation | `causet.workspaces/v1`, `causet.checkpoint/v1`. Lifecycle and isolation checks remain in the integration suite. The [#19 pilot](https://github.com/jwh3times/vcs-lab/issues/19) now includes actual evidence/documentation work in a `cst workspace`, with checkpoint and forecast observations recorded on the issue | Comparative outcomes from concurrent agent work, including handoff/recovery and avoided interference. One agent using a workspace establishes use, not an improvement in parallel operation |
+| 1. Users prefer compact landing and use receipts to recover squash causality | `causet.landing/v1` and `causet.provenance/v1`. The owner adopted the [#19 pilot](https://github.com/jwh3times/causet/issues/19), which records actual compact landings, reviewed-tree equality, absorbed source commits, carried provenance, and atomic publication | Sustained user preference and an observed receipt-assisted recovery of squash causality. Successful two-parent compact delivery alone does not demonstrate recovery of lost ancestry |
+| 2. Stable logical IDs materially improve rewrite and cherry-pick workflows | `causet.application/v1`, `causet.identity-audit/v1`. Integration tests cover preservation, forks, coverage suppression, and collisions. The [#19 pilot](https://github.com/jwh3times/causet/issues/19) records an actual review-workspace replay preserving the source Change-Id | Demonstrated avoided work or another material benefit across a representative rewrite/cherry-pick workload; one preserved ID does not establish that benefit |
+| 3. Forecasts reproduce predicted trees reliably | `causet.forecast/v2`, `causet.rebase-forecast/v2`, `causet.reconciliation/v6`. Engine/oracle agreement, stale refusal, and apply-time tree checks remain in integration tests. The [#19 pilot](https://github.com/jwh3times/causet/issues/19) records a clean forecast and pinned application of actual maintained work with matching predicted/applied trees | A reproduction rate over real conflicted histories. One clean review-workspace application and bounded fixtures do not establish a corpus rate |
+| 4. Worktree workspace and checkpoint behavior improves parallel-agent operation | `causet.workspaces/v1`, `causet.checkpoint/v1`. Lifecycle and isolation checks remain in the integration suite. The [#19 pilot](https://github.com/jwh3times/causet/issues/19) now includes actual evidence/documentation work in a `cst workspace`, with checkpoint and forecast observations recorded on the issue | Comparative outcomes from concurrent agent work, including handoff/recovery and avoided interference. One agent using a workspace establishes use, not an improvement in parallel operation |
 | 5. Exact resolution reuse avoids repeated work without unsafe automation | `causet.resolution/v1`. Exact resolutions suggested and reused across worktrees, heuristic candidates requiring explicit acceptance, Git rerere never resolving inside a cst operation, and modified or rejected suggestions audited as variants (`test/integration.test.js`) | A reuse rate from real conflicts. The resolution catalog is empty in this repository |
 | 6. Stable specification entities and deterministic merge help real corpora | `causet.spec-manifest/v4`, `causet.spec-merge-plan/v2`. Block IDs stable across edits and moves, verified migration, deterministic independent-block merges, same-block refusal, and CRLF stability have integration and conformance coverage | Demonstrated benefit on real indexed specifications. The current pilot repository snapshot has no tracked spec manifests; generated-corpus benchmarks and conformance fixtures do not supply that outcome |
-| 7. Metadata portability requirements cannot be met cleanly with Git refs/notes | Evidence points the other way. `causet.metadata-envelope/v1` round-trips accepted facts between clones idempotently over `refs/notes/causet` and `refs/causet/resolutions/*`, carries a retention ref naming an annotated tag, and quarantines invalid claims from coverage (`test/integration.test.js`) | One named portability requirement that refs and notes fail to meet. The live candidate is lineage without a shared root commit ([#43](https://github.com/jwh3times/vcs-lab/issues/43)); until such a case is demonstrated this condition is evidenced against |
-| 8. Measured storage, process, or filesystem overhead is material enough to justify a new subsystem | ADR-0022 rejected the measured Git maintenance caches. The optional native read increment [#83](https://github.com/jwh3times/vcs-lab/issues/83) passed ADR-0027's bounded catalog target while retaining Git storage and publication. [#42](https://github.com/jwh3times/vcs-lab/issues/42) records real-repository comparisons separately from the synthetic `hosts.lab-windows-a` baseline. The [#14](https://github.com/jwh3times/vcs-lab/issues/14) synced OneDrive probe, with sync confirmed by the owner, passed the per-host regression check at 1.14 to 1.67 times the unsynced medians with identical process counts | A demonstrated need for a new subsystem, representative budget ratification, and identified POSIX workload measurements. [#68](https://github.com/jwh3times/vcs-lab/issues/68) limits current release latency qualification to Windows; it does not waive this investment gate |
-| 9. Real agent-workload evidence from at least two hosts and one real repository | Partial Windows evidence: [#19](https://github.com/jwh3times/vcs-lab/issues/19) records actual source/landing IDs, carried provenance, validated receipts, and whole-invocation timings in this repository. [#42](https://github.com/jwh3times/vcs-lab/issues/42) distinguishes read measurements on a real clone from actual workflow outcomes | A participating POSIX host and sustained sessions covering the §13.3 metrics. Hosted functional CI and repeated synthetic demonstrations do not supply that participation |
+| 7. Metadata portability requirements cannot be met cleanly with Git refs/notes | Evidence points the other way. `causet.metadata-envelope/v1` round-trips accepted facts between clones idempotently over `refs/notes/causet` and `refs/causet/resolutions/*`, carries a retention ref naming an annotated tag, and quarantines invalid claims from coverage (`test/integration.test.js`) | One named portability requirement that refs and notes fail to meet. The live candidate is lineage without a shared root commit ([#43](https://github.com/jwh3times/causet/issues/43)); until such a case is demonstrated this condition is evidenced against |
+| 8. Measured storage, process, or filesystem overhead is material enough to justify a new subsystem | ADR-0022 rejected the measured Git maintenance caches. The optional native read increment [#83](https://github.com/jwh3times/causet/issues/83) passed ADR-0027's bounded catalog target while retaining Git storage and publication. [#42](https://github.com/jwh3times/causet/issues/42) records real-repository comparisons separately from the synthetic `hosts.lab-windows-a` baseline. The [#14](https://github.com/jwh3times/causet/issues/14) synced OneDrive probe, with sync confirmed by the owner, passed the per-host regression check at 1.14 to 1.67 times the unsynced medians with identical process counts | A demonstrated need for a new subsystem, representative budget ratification, and identified POSIX workload measurements. [#68](https://github.com/jwh3times/causet/issues/68) limits current release latency qualification to Windows; it does not waive this investment gate |
+| 9. Real agent-workload evidence from at least two hosts and one real repository | Partial Windows evidence: [#19](https://github.com/jwh3times/causet/issues/19) records actual source/landing IDs, carried provenance, validated receipts, and whole-invocation timings in this repository. [#42](https://github.com/jwh3times/causet/issues/42) distinguishes read measurements on a real clone from actual workflow outcomes | A participating POSIX host and sustained sessions covering the §13.3 metrics. Hosted functional CI and repeated synthetic demonstrations do not supply that participation |
 
 ### Native-core phase sequence
 
@@ -924,7 +924,7 @@ service, or wire protocol is approved before its phase and gate.
 is superseded for the bounded first increment by
 [ADR-0027](adr/0027-bound-native-read-engine-entry-by-the-resolution-catalog-budget.md)
 (Accepted): a bounded first phase-1 read increment with a named ratio budget.
-Implementation proceeds through [#83](https://github.com/jwh3times/vcs-lab/issues/83),
+Implementation proceeds through [#83](https://github.com/jwh3times/causet/issues/83),
 starting with dependency review; the broader phase-1
 exit criteria below are not satisfied by that first increment. Phases 2–4 do
 not open automatically, and phases 5 and 6 remain Gate B questions under
@@ -938,9 +938,9 @@ not open automatically, and phases 5 and 6 remain Gate B questions under
 | 2 Native planning and status | Gate A; remains gated on its own scope decision | Merge-plan and rebase-plan construction, receipt reachability, Change-ID extraction, the advisory `git-patch-id-heuristic` proof (a stable patch-id proof, if wanted, gets its own ADR), spec blob-identity checks; the FR-ID-06 audit and the FR-PLAN-08 proof bundle and verifier (both delivered in v0.12.0 over the Git engine; this phase re-implements them behind the seam) | Plan fingerprints byte-identical across engines on the suite plus at least 1,000 generated histories; status semantics preserved at zero processes | Per-operation fallback. |
 | 3 Derived catalog | Gate A, still gated, plus the incremental-catalog row below (an already-batched path over a representative budget, per ADR-0013) | Deletable fact segments with per-record digests, rebuildable indexes, `builtFrom` stamps, reindex command, approval facts, advisory leases in a mutable side file; caches outside synced folders; notes and refs remain canonical | 5,000-fact benchmark under budget with zero processes on both hosts; deleting the catalog yields identical output; torn-tail and stale-catalog recovery pass; writer-lock waits under 10 ms at 16 concurrent agents | Delete the directory. |
 | 4 In-memory forecasts and native mutation | Gate A; remains gated on its own scope decision | Ref transactions and object writes for checkpoints and retained resolutions; virtual three-way merge applying exact-resolution memory and Markdown section merge, with `git merge-tree` as co-oracle | Predicted-tree equality on the suite plus at least 1,000 generated three-way cases; divergence always surfaces as a blocker; FR-REC-06 apply-time check retained | Flag; droppable after 0a evidence. |
-| 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/vcs-lab/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/vcs-lab/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
-| 6 Gateway; service only if the row below fires | Gate B | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/vcs-lab/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/vcs-lab/issues/37)), actor trust ([#38](https://github.com/jwh3times/vcs-lab/issues/38)), then landing policy ([#39](https://github.com/jwh3times/vcs-lab/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
-| CLI port (a track beside phases 1–6) | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/vcs-lab/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `cst` that runs without Node.js ([#152](https://github.com/jwh3times/vcs-lab/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
+| 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/causet/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/causet/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
+| 6 Gateway; service only if the row below fires | Gate B | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/causet/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/causet/issues/37)), actor trust ([#38](https://github.com/jwh3times/causet/issues/38)), then landing policy ([#39](https://github.com/jwh3times/causet/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
+| CLI port (a track beside phases 1–6) | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/causet/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `cst` that runs without Node.js ([#152](https://github.com/jwh3times/causet/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
 
 ### Decision rows: what evidence permits which next step
 
@@ -956,7 +956,7 @@ a catalog or a service.
 
 The bounded Gate A budget in ADR-0027 is accepted; broader representative
 budgets have not been ratified. Ratifying those budgets remains part of
-[issue #42](https://github.com/jwh3times/vcs-lab/issues/42).
+[issue #42](https://github.com/jwh3times/causet/issues/42).
 
 Efficiency claims follow ADR-0014's definition: elapsed time per operation and
 bytes stored and transferred, per host, against plain Git's best mode and any
@@ -975,17 +975,17 @@ acceptance signals.
 | Requirement | Current state | Tracked by |
 | --- | --- | --- |
 | FR-GIT-06 | Complete | Delivered: the `docs/schemas/` catalog and the `causet.error/v1` failure envelope |
-| FR-ID-06, FR-ID-07 | Delivered in v0.12.0 | `cst audit identity` and `causet.logical-id/v1`. Whether FR-ID-07 also needs an operation log and a second carrier of `ch_*` in commit headers is a Gate B question inside [#40](https://github.com/jwh3times/vcs-lab/issues/40) |
-| FR-ID-08, FR-TRUST-04 | Delivered in v0.12.0 for commit granularity | Sub-commit anchoring is [#34](https://github.com/jwh3times/vcs-lab/issues/34), which is open product question 11 |
-| FR-LAND-10 | Deferred | [#39](https://github.com/jwh3times/vcs-lab/issues/39) |
-| FR-PLAN-08 | Delivered; the remote half landed in v0.15.0 | [ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md) is built in [#36](https://github.com/jwh3times/vcs-lab/issues/36). What remains unavailable to a remote verifier is absence — that a change is genuinely new, and that a candidate's patch really matches — which needs objects the bundle deliberately does not carry |
-| FR-RES-07 | Planned; contract accepted | [#35](https://github.com/jwh3times/vcs-lab/issues/35); [ADR-0036](adr/0036-keep-suggested-resolutions-outside-the-resolution-family.md) is accepted as the shape the tier must take — a private family the exact-reuse path cannot read — but whether to build it at all is deliberately still open, so the requirement stays Planned |
-| FR-WS-08 | Deferred | [#40](https://github.com/jwh3times/vcs-lab/issues/40), under Gate B |
-| FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/vcs-lab/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
-| FR-SPEC-13 | Gated; no additional format selected | [#111](https://github.com/jwh3times/vcs-lab/issues/111), whose first deliverable is the selection and the argument for it. The groundwork is delivered: [#31](https://github.com/jwh3times/vcs-lab/issues/31) built the shared conformance suite and [#33](https://github.com/jwh3times/vcs-lab/issues/33) the adapter contract, and [#32](https://github.com/jwh3times/vcs-lab/issues/32) recorded why requirement-level merge stayed out. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |
-| FR-PERF-09 | Evidence gate | [#42](https://github.com/jwh3times/vcs-lab/issues/42); bounded native read scope accepted in ADR-0027 ([#18](https://github.com/jwh3times/vcs-lab/issues/18)) |
-| FR-PROTO-06 | Offline half implemented; gateway deferred | [#37](https://github.com/jwh3times/vcs-lab/issues/37); [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md) is accepted and built. What is deferred is the server, not the contract: `cst capabilities --against` already reaches every conclusion negotiation defines |
-| FR-TRUST-02, FR-TRUST-03 | Deferred | [#38](https://github.com/jwh3times/vcs-lab/issues/38) and [#39](https://github.com/jwh3times/vcs-lab/issues/39) |
+| FR-ID-06, FR-ID-07 | Delivered in v0.12.0 | `cst audit identity` and `causet.logical-id/v1`. Whether FR-ID-07 also needs an operation log and a second carrier of `ch_*` in commit headers is a Gate B question inside [#40](https://github.com/jwh3times/causet/issues/40) |
+| FR-ID-08, FR-TRUST-04 | Delivered in v0.12.0 for commit granularity | Sub-commit anchoring is [#34](https://github.com/jwh3times/causet/issues/34), which is open product question 11 |
+| FR-LAND-10 | Deferred | [#39](https://github.com/jwh3times/causet/issues/39) |
+| FR-PLAN-08 | Delivered; the remote half landed in v0.15.0 | [ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md) is built in [#36](https://github.com/jwh3times/causet/issues/36). What remains unavailable to a remote verifier is absence — that a change is genuinely new, and that a candidate's patch really matches — which needs objects the bundle deliberately does not carry |
+| FR-RES-07 | Planned; contract accepted | [#35](https://github.com/jwh3times/causet/issues/35); [ADR-0036](adr/0036-keep-suggested-resolutions-outside-the-resolution-family.md) is accepted as the shape the tier must take — a private family the exact-reuse path cannot read — but whether to build it at all is deliberately still open, so the requirement stays Planned |
+| FR-WS-08 | Deferred | [#40](https://github.com/jwh3times/causet/issues/40), under Gate B |
+| FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/causet/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/causet/issues/18)) |
+| FR-SPEC-13 | Gated; no additional format selected | [#111](https://github.com/jwh3times/causet/issues/111), whose first deliverable is the selection and the argument for it. The groundwork is delivered: [#31](https://github.com/jwh3times/causet/issues/31) built the shared conformance suite and [#33](https://github.com/jwh3times/causet/issues/33) the adapter contract, and [#32](https://github.com/jwh3times/causet/issues/32) recorded why requirement-level merge stayed out. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |
+| FR-PERF-09 | Evidence gate | [#42](https://github.com/jwh3times/causet/issues/42); bounded native read scope accepted in ADR-0027 ([#18](https://github.com/jwh3times/causet/issues/18)) |
+| FR-PROTO-06 | Offline half implemented; gateway deferred | [#37](https://github.com/jwh3times/causet/issues/37); [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md) is accepted and built. What is deferred is the server, not the contract: `cst capabilities --against` already reaches every conclusion negotiation defines |
+| FR-TRUST-02, FR-TRUST-03 | Deferred | [#38](https://github.com/jwh3times/causet/issues/38) and [#39](https://github.com/jwh3times/causet/issues/39) |
 
 The following requirements are implemented but need continued real-world and
 cross-platform evidence rather than new semantics: FR-GIT-08, FR-LAND-09,
@@ -1018,23 +1018,23 @@ recorded in an ADR when it changes a durable decision.
 1. Should a future lineage version support deliberate history-filtered imports,
    and what proof can replace the shared-root rule without enabling unrelated
    metadata injection?
-   ([#43](https://github.com/jwh3times/vcs-lab/issues/43)). A declared,
+   ([#43](https://github.com/jwh3times/causet/issues/43)). A declared,
    locally accepted lineage bridge is accepted in
    [ADR-0029](adr/0029-require-a-declared-lineage-bridge-for-imports-without-a-shared-root.md);
-   implementation waits for envelope v2 ([#40](https://github.com/jwh3times/vcs-lab/issues/40)).
+   implementation waits for envelope v2 ([#40](https://github.com/jwh3times/causet/issues/40)).
 2. Which causal claims are safe to merge automatically when two metadata
    sources disagree?
-   ([#44](https://github.com/jwh3times/vcs-lab/issues/44)). A per-family
+   ([#44](https://github.com/jwh3times/causet/issues/44)). A per-family
    conflict policy is accepted in
    [ADR-0030](adr/0030-define-conflict-policy-for-competing-causal-facts.md)
-   and built in [#102](https://github.com/jwh3times/vcs-lab/issues/102): none
+   and built in [#102](https://github.com/jwh3times/causet/issues/102): none
    are merged when identities collide. A record identifier naming different
    content is used by no reader on either side, the conclusion drawn without it
    says so, the conflicting incoming copy parks under
    `refs/causet/quarantine`, and a person disposes of it once. What remains
    open is the transport that would run in park mode
-   ([#37](https://github.com/jwh3times/vcs-lab/issues/37),
-   [#40](https://github.com/jwh3times/vcs-lab/issues/40)) and which copy is
+   ([#37](https://github.com/jwh3times/causet/issues/37),
+   [#40](https://github.com/jwh3times/causet/issues/40)) and which copy is
    *true*, which is question 4.
 3. Should logical Change IDs be repository-scoped, globally namespaced, or
    issuer-qualified? **Answered in v0.12.0** by the frozen
@@ -1044,48 +1044,48 @@ recorded in an ADR when it changes a durable decision.
    trust question (question 4) rather than an identity one.
 4. What is the minimum trust model for a shared team: signed developer records,
    a landing-service attestation, or both?
-   ([#38](https://github.com/jwh3times/vcs-lab/issues/38))
+   ([#38](https://github.com/jwh3times/causet/issues/38))
 5. Does the accepted target-context application model for causal rebase remain
    intuitive once forecast, conflict recovery, and application are exercised?
-   ([#27](https://github.com/jwh3times/vcs-lab/issues/27)). An explicit
+   ([#27](https://github.com/jwh3times/causet/issues/27)). An explicit
    range named by its base is accepted in
    [ADR-0032](adr/0032-generalize-causal-rebase-to-explicit-linear-ranges.md).
    **Answered 2026-09-17** for linear v1: the owner's walkthrough matched every
    prediction, so the model is judged understandable.
 6. Should the accepted immutable source-checkpoint model expand to a captured
    target overlay, and what approval/application semantics should that require?
-   ([#26](https://github.com/jwh3times/vcs-lab/issues/26)). A target overlay
+   ([#26](https://github.com/jwh3times/causet/issues/26)). A target overlay
    carried as pinned uncommitted context is accepted in
    [ADR-0028](adr/0028-define-target-checkpoint-forecast-semantics.md), built for
    reconciliation in #26 and for causal rebase in
-   [#28](https://github.com/jwh3times/vcs-lab/issues/28). What is still open is
+   [#28](https://github.com/jwh3times/causet/issues/28). What is still open is
    only the live-bytes half the ADR rejected, which needs no further answer
    unless the rejection is reopened.
 7. At what measured thresholds does a long-lived repository service outperform
    invocation-scoped Git plumbing enough to justify lifecycle and security
    costs? (§15 decision rows;
-   [#42](https://github.com/jwh3times/vcs-lab/issues/42))
+   [#42](https://github.com/jwh3times/causet/issues/42))
 8. Should portable spec identity remain a tracked sidecar, move into Git object
    metadata, or become a native structured object after the experiment?
-   ([#33](https://github.com/jwh3times/vcs-lab/issues/33))
+   ([#33](https://github.com/jwh3times/causet/issues/33))
 9. Which document formats have stable enough semantic boundaries for safe
    deterministic adapters?
-   ([#111](https://github.com/jwh3times/vcs-lab/issues/111); the suite and the
+   ([#111](https://github.com/jwh3times/causet/issues/111); the suite and the
    contract a candidate must satisfy were delivered by
-   [#31](https://github.com/jwh3times/vcs-lab/issues/31) and
-   [#33](https://github.com/jwh3times/vcs-lab/issues/33))
+   [#31](https://github.com/jwh3times/causet/issues/31) and
+   [#33](https://github.com/jwh3times/causet/issues/33))
 10. How much causal history can be compacted without weakening audit or
     invalidating old plans, and how is an append-only fact log pruned?
-    ([#40](https://github.com/jwh3times/vcs-lab/issues/40))
+    ([#40](https://github.com/jwh3times/causet/issues/40))
 11. At what granularity can authorship provenance be anchored so that it
     survives the rewrites causet already supports — commit, logical change,
     heading section, or hunk — and what anchor remains stable when a squash
     landing collapses many commits into one tree?
-    ([#34](https://github.com/jwh3times/vcs-lab/issues/34))
+    ([#34](https://github.com/jwh3times/causet/issues/34))
 12. Should authorship provenance ever be authenticated by the producing agent
     or its host, or does it remain a declared claim like a receipt, defended by
     audit rather than by signature?
-    ([#38](https://github.com/jwh3times/vcs-lab/issues/38))
+    ([#38](https://github.com/jwh3times/causet/issues/38))
 
 ## 18. Definition of product success
 

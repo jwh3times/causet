@@ -197,7 +197,7 @@ including resolution of applicable known defects, before acceptance.
 
 ## Requirement-level merge evaluation
 
-The evaluation in [#32](https://github.com/jwh3times/vcs-lab/issues/32) recommends
+The evaluation in [#32](https://github.com/jwh3times/causet/issues/32) recommends
 retaining the current section-level merge contract. Requirement-level merging
 is a possible future version, but its byte ownership, enclosing-section rules,
 and migration are not specified sufficiently to select an implementation.

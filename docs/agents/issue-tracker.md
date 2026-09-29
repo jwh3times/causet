@@ -1,8 +1,8 @@
 # Issue tracker: GitHub
 
 Issues and implementation specs live in GitHub Issues in
-`jwh3times/vcs-lab`. Use the `gh` CLI with explicit
-`--repo jwh3times/vcs-lab` arguments.
+`jwh3times/causet`. Use the `gh` CLI with explicit
+`--repo jwh3times/causet` arguments.
 
 Follow the Work Tracking rules in [AGENTS.md](../../AGENTS.md).
 Track future work on project 7, owned by `jwh3times`, with its
@@ -10,13 +10,13 @@ prerequisite gate recorded. Dated progress belongs on the issue.
 
 ## Operations
 
-- Create: `gh issue create --repo jwh3times/vcs-lab --title "..." --body-file <path>`
-- Read: `gh issue view <number> --repo jwh3times/vcs-lab --comments`
-- List: `gh issue list --repo jwh3times/vcs-lab --state open --json number,title,body,labels`
-- Comment: `gh issue comment <number> --repo jwh3times/vcs-lab --body-file <path>`
-- Label: `gh issue edit <number> --repo jwh3times/vcs-lab --add-label "..."`
-- Remove label: `gh issue edit <number> --repo jwh3times/vcs-lab --remove-label "..."`
-- Close: `gh issue close <number> --repo jwh3times/vcs-lab`
+- Create: `gh issue create --repo jwh3times/causet --title "..." --body-file <path>`
+- Read: `gh issue view <number> --repo jwh3times/causet --comments`
+- List: `gh issue list --repo jwh3times/causet --state open --json number,title,body,labels`
+- Comment: `gh issue comment <number> --repo jwh3times/causet --body-file <path>`
+- Label: `gh issue edit <number> --repo jwh3times/causet --add-label "..."`
+- Remove label: `gh issue edit <number> --repo jwh3times/causet --remove-label "..."`
+- Close: `gh issue close <number> --repo jwh3times/causet`
 
 Use a temporary UTF-8 file for multiline bodies.
 Run authenticated GitHub commands and remote Git operations outside

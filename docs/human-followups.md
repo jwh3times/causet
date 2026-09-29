@@ -2,8 +2,8 @@
 
 Every required human action left by agent-completed work must have a follow-up
 record and executable instructions. For ordinary work, use a **public issue and
-public wiki in `jwh3times/vcs-lab`**, with tracking on the **private
-[vcs-lab project board](https://github.com/users/jwh3times/projects/7)**. Sensitive
+public wiki in `jwh3times/causet`**, with tracking on the **private
+[causet project board](https://github.com/users/jwh3times/projects/7)**. Sensitive
 vulnerability details belong in a **draft repository security advisory** until
 publication is authorized. A final-answer reminder, label, local draft, or
 board card alone does not fulfill the handoff.
@@ -20,13 +20,13 @@ The configured destinations are:
 
 | Record | Destination and visibility |
 | --- | --- |
-| Ordinary follow-up | [Repository issues](https://github.com/jwh3times/vcs-lab/issues), public |
-| Execution instructions | [Repository wiki](https://github.com/jwh3times/vcs-lab/wiki), public; indexed on `human-todo` |
+| Ordinary follow-up | [Repository issues](https://github.com/jwh3times/causet/issues), public |
+| Execution instructions | [Repository wiki](https://github.com/jwh3times/causet/wiki), public; indexed on `human-todo` |
 | Planning and tracking | [Project 7](https://github.com/users/jwh3times/projects/7), private |
-| Sensitive vulnerability discussion and instructions | Draft advisory under [repository security advisories](https://github.com/jwh3times/vcs-lab/security/advisories), restricted to authorized collaborators |
+| Sensitive vulnerability discussion and instructions | Draft advisory under [repository security advisories](https://github.com/jwh3times/causet/security/advisories), restricted to authorized collaborators |
 
 This configuration is intentional: public issues and wiki do not need a separate
-private repository. Use explicit `gh --repo jwh3times/vcs-lab` arguments and
+private repository. Use explicit `gh --repo jwh3times/causet` arguments and
 project owner `jwh3times` / number `7`. Verify the destinations and keep the board
 private; do not change visibility merely to perform a handoff. A private board
 does not make linked public issues or wiki pages private.

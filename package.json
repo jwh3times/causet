@@ -5,11 +5,11 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jwh3times/vcs-lab.git"
+    "url": "git+https://github.com/jwh3times/causet.git"
   },
-  "homepage": "https://github.com/jwh3times/vcs-lab#readme",
+  "homepage": "https://github.com/jwh3times/causet#readme",
   "bugs": {
-    "url": "https://github.com/jwh3times/vcs-lab/issues"
+    "url": "https://github.com/jwh3times/causet/issues"
   },
   "publishConfig": {
     "access": "public"

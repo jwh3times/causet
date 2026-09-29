@@ -25,7 +25,7 @@ issues/PRs so the documentation describes the delivered contract.
 Before reporting documentation complete, apply
 [the required human follow-up policy](../../../docs/human-followups.md) to every
 human action left by the completed work. Create or reuse a public follow-up
-issue in `jwh3times/vcs-lab`, label it `human-action-required`, track it on private
+issue in `jwh3times/causet`, label it `human-action-required`, track it on private
 project 7, and publish a linked numbered procedure in the public wiki with an
 entry on `human-todo`. Sensitive vulnerability details and procedures belong in
 a draft repository security advisory with access-appropriate private board

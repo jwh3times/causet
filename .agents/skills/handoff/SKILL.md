@@ -46,7 +46,7 @@ git log --oneline origin/main..main            # local main not pushed
 git log --oneline origin/main..HEAD            # current branch commits main lacks
 git branch -vv --no-merged origin/main         # local branches main lacks
 git branch -r --no-merged origin/main          # pushed branches main lacks
-gh pr list --repo jwh3times/vcs-lab --state open --author @me
+gh pr list --repo jwh3times/causet --state open --author @me
 git for-each-ref refs/notes/causet refs/notes/vcs-lab; git ls-remote origin refs/notes/causet refs/notes/vcs-lab
 ```
 

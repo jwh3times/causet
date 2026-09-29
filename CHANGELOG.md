@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The repository is now `jwh3times/causet` and the project board is "causet"
+  (#168, ADR-0039 §7 step 5). Links throughout the README, `docs/`, the skills
+  and `package.json` (`repository`, `homepage`, `bugs`, which npm provenance
+  checks) point at the new name; GitHub redirects the old one. Update a
+  clone's remote with
+  `git remote set-url origin https://github.com/jwh3times/causet.git`.
+
 - **Keep metadata under the causet names, and add `cst migrate`** (issue #159,
   ADR-0039 §1, §3, §4).
   - **New repositories** use `refs/notes/causet`, `refs/causet/*`, the
