@@ -1,0 +1,31 @@
+{
+  "schema": "vcs-lab.note/v1",
+  "records": [
+    {
+      "schema": "vcs-lab.landing/v1",
+      "type": "landing",
+      "id": "land_0mum2ltpb8818d67f71be",
+      "mode": "compact",
+      "sourceRef": "jwh3times/causet-migration",
+      "sourceHead": "728530f72556a711632d2a315ef46169684583f2",
+      "sourceSubject": "feat: write causet.* identifiers and read vcs-lab.* ones as an alias",
+      "targetBefore": "6d5fa6ecc773fd7358a75bc680baac7d8e1304ee",
+      "landingCommit": "51321b79ba7961f5fd7b9ae156e336a788cd906b",
+      "base": "6d5fa6ecc773fd7358a75bc680baac7d8e1304ee",
+      "absorbedCommits": [
+        "4e2f52ecab98ca21217fe24523c02bbbfdb0bbc5",
+        "c4f1e79a89810f2a005ebacb2f07b54967fc2f07",
+        "a60c42b3a00b6050d955adf526df80de9fc7dce6",
+        "728530f72556a711632d2a315ef46169684583f2"
+      ],
+      "absorbedChanges": [
+        "ch_0mulyqrks8173eb5af626",
+        "ch_0mulywk151f9529fe1bfd",
+        "ch_0mulyxdmo62e91e5e75ef",
+        "ch_0mulzqqkl9a8129884dd6"
+      ],
+      "resultTree": "14d24e9bd533d312eac4b949d6fc6589831aa3bd",
+      "createdAt": "2026-09-29T02:41:53.629Z"
+    }
+  ]
+}
