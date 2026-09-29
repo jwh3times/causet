@@ -51,7 +51,7 @@ export function rebaseForecastForPlan(id, plan, cwd = process.cwd()) {
   // Separate "this build cannot read that version" from "this forecast is not
   // an approval" so the two failures do not share one message (ADR-0020).
   assertReadableSchema(forecast?.schema, `Rebase forecast '${id}'`, {
-    family: "vcs-lab.rebase-forecast",
+    family: "causet.rebase-forecast",
     recovery: "Generate a new rebase forecast with: cst rebase-forecast",
   });
   assertCurrentSpecDecisions(forecast);
@@ -291,7 +291,7 @@ function forecastRebaseInSession(ontoRef, sourceRef, options, cwd) {
     ...simulationResult
   } = simulation;
   const forecast = {
-    schema: "vcs-lab.rebase-forecast/v3",
+    schema: "causet.rebase-forecast/v3",
     id: newId("rebase_forecast"),
     mode: plan.mode,
     sourceRef: plan.sourceRef,

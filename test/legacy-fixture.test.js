@@ -117,3 +117,39 @@ test("the legacy fixture really carries only vcs-lab identifiers", () => {
   assert.ok(schemas.size >= 5, [...schemas].join(", "));
   for (const schema of schemas) assert.match(schema, /^vcs-lab\./);
 });
+
+test("a peer's capability document from v0.19.1 negotiates a full exchange", () => {
+  const root = restore();
+  const document = path.join(root, "old-capabilities.json");
+  fs.writeFileSync(document, fixture.capabilities);
+  const result = cst(path.join(root, "repo"), ["capabilities", "--against", document, "--json"]);
+  assert.equal(result.status, 0, result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.summary.fullyCompatible, true, JSON.stringify(report.summary));
+});
+
+test("a pending operation journal under a legacy identifier is still resumable", () => {
+  // A journal is private and carries no hash, so the only thing an older build
+  // writes differently is the schema string; this rewrites exactly that.
+  const root = restore();
+  const repo = path.join(root, "repo");
+  git(repo, "switch", "-q", "-c", "clash", fixture.head);
+  fs.writeFileSync(path.join(repo, "work-clash.txt"), "clash source\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-q", "-m", "clash source");
+  git(repo, "switch", "-q", "main");
+  fs.writeFileSync(path.join(repo, "work-clash.txt"), "clash target\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-q", "-m", "clash target");
+  const paused = cst(repo, ["reconcile", "clash", "--json"]);
+  assert.notEqual(paused.status, 0, "the reconciliation should pause on the conflict");
+  const journal = path.join(repo, ".git", "vcs-lab", "reconciliation.json");
+  const state = JSON.parse(fs.readFileSync(journal, "utf8"));
+  assert.match(state.schema, /^causet\.reconciliation-operation\//);
+  fs.writeFileSync(journal, `${JSON.stringify({ ...state, schema: state.schema.replace(/^causet\./, "vcs-lab.") }, null, 2)}\n`);
+  const status = cst(repo, ["reconcile", "--status", "--json"]);
+  assert.equal(status.status, 0, status.stderr);
+  const aborted = cst(repo, ["reconcile", "--abort", "--json"]);
+  assert.equal(aborted.status, 0, aborted.stderr);
+  assert.equal(fs.existsSync(journal), false);
+});

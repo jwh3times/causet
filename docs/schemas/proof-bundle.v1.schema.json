@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.proof-bundle/v1",
+  "$id": "causet.proof-bundle/v1",
   "title": "Portable coverage proof bundle",
   "description": "A merge plan together with the evidence its coverage classification was derived from, so a third party can recompute the classification instead of trusting it (FR-PLAN-08). Produced by 'vlab proof-bundle <source>' and checked by 'vlab verify-proof'. The bundle is emitted to stdout and is not persisted by vcs-lab. Still read by this build and never written since v0.15.0; a verifier reports only the self-consistent tier for it, because it carries no Git bindings (ADR-0031).",
-  "x-vcs-lab-scope": "envelope",
+  "x-causet-scope": "envelope",
   "type": "object",
   "required": [
     "schema",
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.proof-bundle/v1"
+      "enum": ["causet.proof-bundle/v1", "vcs-lab.proof-bundle/v1"]
     },
     "repository": {
       "type": "object",

@@ -141,7 +141,7 @@ Automatic semantic choices are pinned by forecasts and checked on application.
 | Parser | `stable-markdown-blocks/v2` |
 | Entity IDs | `artifact-semantic-key-sha256/v1` |
 | Merge and its rendering rules | `stable-markdown-three-way/v2` |
-| Persisted manifest | Read v1, v2, v3, v4; write `vcs-lab.spec-manifest/v4` |
+| Persisted manifest | Read v1, v2, v3, v4; write `causet.spec-manifest/v4` |
 
 Legacy manifests retain their old parser on read. Explicit indexing verifies
 the prior source and migrates to sparse v4, preserving surviving real declaration

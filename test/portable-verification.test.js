@@ -121,7 +121,7 @@ test("a bundle carries Git's own bindings for the range it describes", (t) => {
   const { repo, parent } = scenario(t);
   const { bundle } = bundleFor(repo, parent);
 
-  assert.equal(bundle.schema, "vcs-lab.proof-bundle/v2");
+  assert.equal(bundle.schema, "causet.proof-bundle/v2");
 
   // The v1 members are unchanged: v2 is a strict superset, and the
   // repository-backed comparison still reads exactly what it always read.
@@ -191,7 +191,7 @@ test("an honest bundle reaches the bound tier offline, and says what it cannot r
   const { status, report } = offline(repo, file);
 
   assert.equal(status, 0);
-  assert.equal(report.bundleSchema, "vcs-lab.proof-bundle/v2");
+  assert.equal(report.bundleSchema, "causet.proof-bundle/v2");
   assert.equal(report.integrity.intact, true);
   assert.equal(report.classification.agrees, true);
   assert.equal(report.binding.checked, true);
@@ -398,12 +398,12 @@ test("a v1 bundle still verifies, at the self-consistent tier only", (t) => {
     objects, sourceInventory, reachability, receiptInclusion, anchors, ...v1
   } = bundle;
   void objects; void sourceInventory; void reachability; void receiptInclusion; void anchors;
-  v1.schema = "vcs-lab.proof-bundle/v1";
+  v1.schema = "causet.proof-bundle/v1";
   const file = resign(path.join(parent, "v1.json"), v1);
 
   const { status, report } = offline(repo, file);
   assert.equal(status, 0, "a v2 verifier accepts a v1 document");
-  assert.equal(report.bundleSchema, "vcs-lab.proof-bundle/v1");
+  assert.equal(report.bundleSchema, "causet.proof-bundle/v1");
   assert.equal(report.tier, "self-consistent");
   assert.equal(report.binding.checked, false);
   assert.equal(report.binding.reason, "not-carried");

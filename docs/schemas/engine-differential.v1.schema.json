@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.engine-differential/v1",
+  "$id": "causet.engine-differential/v1",
   "title": "Engine differential report",
   "description": "Operation-by-operation comparison of the read engines, returned as the differential member of vlab doctor --differential (CLI output; src/engine.js runDifferential). The probes must cover the read-operation catalog exactly.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": ["schema", "engines", "oracle", "operations", "counts", "equal"],
   "properties": {
-    "schema": { "const": "vcs-lab.engine-differential/v1" },
+    "schema": { "enum": ["causet.engine-differential/v1", "vcs-lab.engine-differential/v1"] },
     "engines": {
       "type": "array",
       "items": { "enum": ["git", "native"] }

@@ -107,7 +107,7 @@ test("a declared action replaces replay for its commit and nothing else", (t) =>
     "--fixup", `${second.commit}=${first.commit}`,
   );
 
-  assert.equal(plan.schema, "vcs-lab.rebase-plan/v3");
+  assert.equal(plan.schema, "causet.rebase-plan/v3");
   assert.deepEqual(
     plan.changes.map((change) => [change.commit, change.action]),
     [[first.commit, "reword"], [second.commit, "fixup"], [third.commit, "replay"]],
@@ -186,7 +186,7 @@ test("reword pauses, composes its own trailer, and keeps the identity", (t) => {
   assert.notEqual(conflicting.status, 0);
 
   const result = vlabJson(repo, "rebase", "--continue", "-m", "feat: a clearer subject");
-  assert.equal(result.receipt.schema, "vcs-lab.rebase/v3");
+  assert.equal(result.receipt.schema, "causet.rebase/v3");
 
   const rewritten = git(repo, "rev-list", "main..HEAD").split(/\s+/).at(-1);
   assert.equal(trailerCount(repo, rewritten), 1, "exactly one identity survives");

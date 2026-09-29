@@ -261,7 +261,7 @@ test("the ADR-0020 refusals are readable without matching English", () => {
   fs.mkdirSync(path.dirname(journal), { recursive: true });
   fs.writeFileSync(
     journal,
-    JSON.stringify({ schema: "vcs-lab.reconciliation-operation/v99", id: "reconcile_op_x" }),
+    JSON.stringify({ schema: "causet.reconciliation-operation/v99", id: "reconcile_op_x" }),
   );
   const unknownVersion = run(repo, "reconcile", "--status", "--json");
   assert.notEqual(unknownVersion.status, 0);

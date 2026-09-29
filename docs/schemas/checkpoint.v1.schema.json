@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.checkpoint/v1",
+  "$id": "causet.checkpoint/v1",
   "title": "Workspace checkpoint result",
   "description": "Result of vlab workspace checkpoint (CLI output; src/workspaces.js checkpointWorkspace). The checkpoint itself persists as a commit under refs/vcs-lab/checkpoints/<workspace id> with identity trailers; this record is the command's JSON projection of it.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema", "id", "shortId", "workspaceId", "workspaceName", "tree",
@@ -11,7 +11,7 @@
     "ref", "label", "createdAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.checkpoint/v1" },
+    "schema": { "enum": ["causet.checkpoint/v1", "vcs-lab.checkpoint/v1"] },
     "id": {
       "$ref": "#/$defs/oid",
       "description": "The checkpoint commit OID."

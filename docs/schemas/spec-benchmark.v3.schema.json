@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.spec-benchmark/v3",
+  "$id": "causet.spec-benchmark/v3",
   "title": "Spec index benchmark",
   "description": "Generated-corpus measurements of vlab spec benchmark --json (CLI output; src/specs.js benchmarkSpecIndex).",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema", "manifestSchema", "documents", "blocksPerDocument",
@@ -16,8 +16,8 @@
     "unchanged", "oneBlockChanged"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.spec-benchmark/v3" },
-    "manifestSchema": { "const": "vcs-lab.spec-manifest/v4" },
+    "schema": { "enum": ["causet.spec-benchmark/v3", "vcs-lab.spec-benchmark/v3"] },
+    "manifestSchema": { "enum": ["causet.spec-manifest/v4", "vcs-lab.spec-manifest/v4"] },
     "documents": { "type": "integer", "minimum": 1 },
     "blocksPerDocument": { "type": "integer", "minimum": 1 },
     "semanticEntities": { "type": "integer", "minimum": 0 },

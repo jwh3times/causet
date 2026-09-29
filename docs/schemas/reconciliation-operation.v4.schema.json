@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.reconciliation-operation/v4",
+  "$id": "causet.reconciliation-operation/v4",
   "title": "Reconciliation operation journal",
   "description": "Private resumable reconciliation journal, stored worktree-private at .git/vcs-lab/reconciliation.json while an operation is in progress (src/operations.js startOperation).",
-  "x-vcs-lab-scope": "worktree-private",
+  "x-causet-scope": "worktree-private",
   "type": "object",
   "required": [
     "schema",
@@ -27,7 +27,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.reconciliation-operation/v4"
+      "enum": ["causet.reconciliation-operation/v4", "vcs-lab.reconciliation-operation/v4"]
     },
     "id": {
       "type": "string",
@@ -107,7 +107,7 @@
       }
     },
     "plan": {
-      "$ref": "vcs-lab.merge-plan/v1"
+      "$ref": "causet.merge-plan/v1"
     },
     "queue": {
       "type": "array",
@@ -128,7 +128,7 @@
     "applied": {
       "type": "array",
       "items": {
-        "$ref": "vcs-lab.application/v4"
+        "$ref": "causet.application/v4"
       }
     },
     "current": {

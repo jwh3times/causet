@@ -222,7 +222,7 @@ function buildMergePlanInSession(targetRef, sourceRef, cwd, options = {}) {
   );
 
   return {
-    schema: "vcs-lab.merge-plan/v1",
+    schema: "causet.merge-plan/v1",
     targetHead,
     sourceRef,
     sourceHead,

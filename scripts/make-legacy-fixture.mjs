@@ -179,6 +179,8 @@ const fixture = {
   state: files,
   envelope,
   proofBundle: fs.readFileSync(path.join(root, "proof-bundle.json"), "utf8"),
+  // The build's own capability document, as an older peer would present it.
+  capabilities: ok(repo, "capabilities", "--json"),
   expected: expected.map((entry) => ({
     args: entry.args.map(placeholder),
     status: entry.status,

@@ -92,7 +92,7 @@ from them.
 
 ### Members the human text prints only when they say something
 
-`quarantinedFacts` is on `vcs-lab.merge-plan/v1`, `vcs-lab.rebase-plan/v1`, the
+`quarantinedFacts` is on `causet.merge-plan/v1`, `causet.rebase-plan/v1`, the
 two forecast families, and the reconciliation and rebase receipts. The plan
 renderers print a `quarantined` line, and the sentence that says coverage rested
 on reduced evidence, only when the list is non-empty — an empty list is the

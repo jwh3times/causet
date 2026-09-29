@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.metadata-envelope/v1",
+  "$id": "causet.metadata-envelope/v1",
   "title": "Metadata envelope manifest",
   "description": "Portable manifest for sanitized notes and resolution refs, written as manifest.json beside an optional objects.bundle payload (src/metadata-envelope.js buildEnvelopeManifest). Bounded on read: the manifest at most 16 MiB, the payload at most 2 GiB and at most 1,000,000 record entries; integrity.manifestHash is the SHA-256 of the canonical-JSON manifest without its integrity member.",
-  "x-vcs-lab-scope": "envelope",
+  "x-causet-scope": "envelope",
   "type": "object",
   "required": [
     "schema", "producer", "repository", "capabilities", "includedNamespaces",
     "excludedScopes", "refs", "records", "payload", "trust", "integrity"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.metadata-envelope/v1" },
+    "schema": { "enum": ["causet.metadata-envelope/v1", "vcs-lab.metadata-envelope/v1"] },
     "producer": {
       "type": "object",
       "required": ["name", "version"],

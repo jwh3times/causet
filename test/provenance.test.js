@@ -219,7 +219,7 @@ test("provenance survives a hard squash, which is where Git loses it", () => {
 
   // The receipt itself stays exactly a landing document: the carried record is
   // its own note record, not a member smuggled into another family's schema.
-  assert.equal(receipt.schema, "vcs-lab.landing/v1");
+  assert.equal(receipt.schema, "causet.landing/v1");
   assert.equal(receipt.provenance, undefined);
 });
 
@@ -298,14 +298,14 @@ test("a carried record is a valid note record and passes strict metadata validat
     "it is accepted by the note contract rather than quarantined",
   );
   assert.equal(
-    validation.scopes.sharedPortable.notes.bySchema["vcs-lab.provenance/v1"],
+    validation.scopes.sharedPortable.notes.bySchema["causet.provenance/v1"],
     2,
     "the validator counts both the declaration and the record carried onto the landing",
   );
 
   const records = JSON.parse(vlab(repo, "receipts", "--json"));
   const provenanceRecords = records.filter(
-    (record) => record.schema === "vcs-lab.provenance/v1",
+    (record) => record.schema === "causet.provenance/v1",
   );
   assert.deepEqual(
     provenanceRecords.map((record) => record.origin).sort(),

@@ -26,6 +26,7 @@ import {
   METADATA_VALIDATION_SCHEMA,
   NOTE_CONTAINER_SCHEMA,
   RESOURCE_BOUNDS,
+  canonicalSchema,
   isStructurallyValidNoteRecord,
   referencedObjectsForRecord,
   resolutionSignatureFor,
@@ -125,7 +126,7 @@ export function repositoryLineage(cwd = process.cwd()) {
 
 /**
  * The lineage id a stated identity must carry. The identity is hashed under
- * the frozen canonical JSON profile (vcs-lab.canonical-json/v1); for this
+ * the frozen canonical JSON profile (causet.canonical-json/v1); for this
  * float-free shape the bytes are identical to the legacy serializer's, so
  * lineage IDs are unchanged. A claimed lineage whose id does not equal this
  * value has been altered after it was produced.
@@ -207,7 +208,7 @@ function parseNoteObject(object, entry, diagnostics) {
     );
     return null;
   }
-  if (parsed.schema !== NOTE_CONTAINER_SCHEMA) {
+  if (canonicalSchema(parsed.schema) !== NOTE_CONTAINER_SCHEMA) {
     addDiagnostic(
       diagnostics,
       "unknown-schema",
@@ -587,8 +588,8 @@ function validateSharedLocal(context, diagnostics, localDigests) {
           }))
           .sort((left, right) => String(left.id).localeCompare(String(right.id))),
       };
-      if (parsed?.schema !== "vcs-lab.workspaces/v1" || !Array.isArray(parsed?.workspaces)) {
-        addDiagnostic(diagnostics, "malformed-record", "error", "shared-local", workspacePath, "Workspace registry does not match vcs-lab.workspaces/v1.");
+      if (canonicalSchema(parsed?.schema) !== "causet.workspaces/v1" || !Array.isArray(parsed?.workspaces)) {
+        addDiagnostic(diagnostics, "malformed-record", "error", "shared-local", workspacePath, "Workspace registry does not match causet.workspaces/v1.");
       }
       for (const workspace of registry.workspaces) {
         if (!["active", "archived"].includes(workspace.lifecycle)) {

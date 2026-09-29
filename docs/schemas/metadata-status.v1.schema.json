@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.metadata-status/v1",
+  "$id": "causet.metadata-status/v1",
   "title": "Metadata status inventory",
-  "description": "Deterministic repository metadata inventory of vlab metadata status --json (CLI output; src/metadata.js metadataStatus). vcs-lab.metadata-validation/v1 shares this shape and adds strict.",
-  "x-vcs-lab-scope": "cli-output",
+  "description": "Deterministic repository metadata inventory of vlab metadata status --json (CLI output; src/metadata.js metadataStatus). causet.metadata-validation/v1 shares this shape and adds strict.",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -15,7 +15,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.metadata-status/v1"
+      "enum": ["causet.metadata-status/v1", "vcs-lab.metadata-status/v1"]
     },
     "repository": {
       "$ref": "#/$defs/repository"

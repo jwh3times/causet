@@ -11,13 +11,13 @@ import {
 } from "./engine.js";
 import { CliError } from "./errors.js";
 import { gatePoint, faultPoint } from "./faults.js";
-import { RESOURCE_BOUNDS, withinBound } from "./schemas.js";
+import { canonicalSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
 import { ensureLabRuntime } from "./store.js";
 import { buildNoteCommit, buildRetentionCommit, checkedRefUpdate, recordDependencies, RETENTION_REF } from "./git-carriers.js";
 
 export const NOTES_REF = "vcs-lab";
 
-const NOTE_SCHEMA = "vcs-lab.note/v1";
+const NOTE_SCHEMA = "causet.note/v1";
 
 const NOTES_LOCK_NAME = "notes.lock";
 /** How long a writer waits for another's turn on the notes ref before refusing. */
@@ -47,13 +47,13 @@ function emptyNote() {
  * `readNote`, `readNotes`, `listNoteRecords`, and `appendNote` so the
  * resolution catalog, receipts, and note rewriting cannot disagree about a
  * note's shape. Notes are shared-portable and arrive by fetch from clones that
- * may run another vcs-lab build, so every disposition here is non-fatal on read
+ * may run another causet build, so every disposition here is non-fatal on read
  * (ADR-0020):
  *
- * - `accept`: a versioned `vcs-lab.note/v1` container within its bounds.
+ * - `accept`: a versioned `causet.note/v1` container within its bounds.
  * - `legacy`: unparsable text, preserved as one opaque record so a rewrite
  *   cannot lose it.
- * - `foreign`: valid JSON that is not a `vcs-lab.note/v1` container (a future
+ * - `foreign`: valid JSON that is not a `causet.note/v1` container (a future
  *   container version, or a bare array of records, which `metadata validate`
  *   rejects as malformed). It yields no records and must not be rewritten.
  * - `oversize`: over `noteContainerBytes` or `noteContainerRecords`. It is
@@ -75,7 +75,7 @@ function classifyNoteText(text) {
       disposition: "legacy",
     };
   }
-  if (parsed?.schema !== NOTE_SCHEMA || !Array.isArray(parsed.records)) {
+  if (canonicalSchema(parsed?.schema) !== NOTE_SCHEMA || !Array.isArray(parsed.records)) {
     return { note: emptyNote(), disposition: "foreign" };
   }
   if (!withinBound("noteContainerRecords", parsed.records.length)) {
@@ -126,7 +126,7 @@ export function readNotes(objects, cwd = process.cwd()) {
  * publishes that tree and its object retention together. The lock serializes
  * cooperating writers; checking both previous tips also refuses races with
  * foreign writers instead of replacing their newer notes or retention.
- * `withNotesLock` serializes every vcs-lab writer of the ref on one lock file
+ * `withNotesLock` serializes every causet writer of the ref on one lock file
  * in the shared runtime directory, created exclusively the way Git creates
  * its own `.lock` files. It costs no Git process.
  *
@@ -277,7 +277,7 @@ export function appendNote(commit, record, cwd = process.cwd(), options = {}) {
 /**
  * Replace the record `recordId` names on `commit` with `replacement`, leaving
  * every other record in the container untouched. This is the `replace-local`
- * half of a conflict disposition (ADR-0030): the only case in which vcs-lab
+ * half of a conflict disposition (ADR-0030): the only case in which causet
  * rewrites the content of a record it already published, and only because a
  * person has explicitly decided that the peer's copy is the true one.
  */
@@ -317,7 +317,7 @@ function rewriteNote(commit, transform, retain, cwd, options = {}) {
         {
           code: "wrong-record-family",
           details:
-            "vcs-lab will not overwrite a note container it cannot read. Inspect it " +
+            "causet will not overwrite a note container it cannot read. Inspect it " +
             `with: git notes --ref=${NOTES_REF} show ${commit}`,
         },
       );

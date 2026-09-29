@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 
-export const LOGICAL_ID_PROFILE = "vcs-lab.logical-id/v1";
+export const LOGICAL_ID_PROFILE = "causet.logical-id/v1";
 
 /**
  * Every namespace `newId` mints, and what an identifier in it names. The set
- * is closed: an identifier in an unlisted namespace is not a vcs-lab logical
+ * is closed: an identifier in an unlisted namespace is not a causet logical
  * identifier, which is what lets a reader tell one apart from an arbitrary
  * string that happens to contain an underscore (FR-ID-07).
  */

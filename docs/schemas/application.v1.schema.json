@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.application/v1",
+  "$id": "causet.application/v1",
   "title": "Direct application receipt",
   "description": "Direct cherry-pick application record, attached to the applied commit (shared-portable note record; src/operations.js cherryPick).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema", "type", "id", "originCommit", "originChangeId", "appliedCommit",
     "appliedChangeId", "targetBefore", "relation", "createdAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.application/v1" },
+    "schema": { "enum": ["causet.application/v1", "vcs-lab.application/v1"] },
     "type": { "const": "application" },
     "id": { "type": "string", "minLength": 4 },
     "originCommit": { "$ref": "#/$defs/oid" },

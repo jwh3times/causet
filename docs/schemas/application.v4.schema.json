@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.application/v4",
+  "$id": "causet.application/v4",
   "title": "Reconciliation application receipt",
   "description": "Per-change reconciliation application record with conflict, exact-resolution, and semantic spec-merge decisions, attached to the applied commit (shared-portable note record; src/operations.js).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema", "type", "id", "reconciliationOperation", "originCommit",
@@ -12,13 +12,13 @@
     "resolutions", "semanticMerges", "createdAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.application/v4" },
+    "schema": { "enum": ["causet.application/v4", "vcs-lab.application/v4"] },
     "type": { "const": "application" },
     "id": { "type": "string", "minLength": 4 },
     "reconciliationOperation": {
       "type": "string",
       "minLength": 1,
-      "description": "ID of the private vcs-lab.reconciliation-operation/v4 journal that produced this application."
+      "description": "ID of the private causet.reconciliation-operation/v4 journal that produced this application."
     },
     "originCommit": { "$ref": "#/$defs/oid" },
     "originChangeId": { "type": "string", "minLength": 1 },

@@ -270,7 +270,7 @@ function applicationRecord(operation, change, relation, cwd) {
     );
   }
   return {
-    schema: "vcs-lab.rebase-application/v1",
+    schema: "causet.rebase-application/v1",
     type: "rebase-application",
     id: newId("rebase_apply"),
     rebaseOperation: operation.id,
@@ -332,7 +332,7 @@ function recordSuccessfulApplication(operation, relation, cwd) {
   if (operation.current?.absorption) {
     const outcome = absorptionOutcome(operation);
     operation.absorptions.push({
-      schema: "vcs-lab.interactive-absorption/v1",
+      schema: "causet.interactive-absorption/v1",
       type: "interactive-absorption",
       id: newId("absorb"),
       action: outcome.action,
@@ -895,7 +895,7 @@ function finalizeRebase(operation, cwd) {
     semanticMerges: application.semanticMerges,
   }));
   const receipt = {
-    schema: "vcs-lab.rebase/v3",
+    schema: "causet.rebase/v3",
     type: "rebase",
     id: newId("rebase"),
     operationId: operation.id,
@@ -1210,7 +1210,7 @@ function startOperation(branch, ontoRef, plan, options, cwd) {
   const context = repoContext(cwd);
   const forecast = options.forecast;
   return {
-    schema: "vcs-lab.rebase-operation/v3",
+    schema: "causet.rebase-operation/v3",
     id: newId("rebase_op"),
     state: "prepared",
     worktree: context.root,
@@ -1508,7 +1508,7 @@ function completeInteractiveStep(operation, options, cwd) {
   // because nothing diverged (ADR-0035).
   if (treeAfter !== treeBefore) {
     operation.amendments.push({
-      schema: "vcs-lab.amendment/v1",
+      schema: "causet.amendment/v1",
       type: "amendment",
       id: newId("amend"),
       changeId: change.changeId,

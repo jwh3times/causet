@@ -9,7 +9,11 @@ import {
   EXCHANGED_SCOPES,
   EXCHANGE_FEATURES,
   RECORD_FAMILIES,
+  LEGACY_SCHEMA_NAMESPACE,
   RESOURCE_BOUNDS,
+  SCHEMA_NAMESPACE,
+  canonicalSchema,
+  schemaClassification,
   schemaCompatibility,
   withinBound,
 } from "../src/schemas.js";
@@ -226,11 +230,44 @@ test("every family resolves its own versions and disposes of the rest by scope",
 });
 
 test("an unregistered family and a malformed identifier are never readable", () => {
-  for (const schema of ["vcs-lab.not-a-family/v1", "vcs-lab.landing", "", null, undefined, 7]) {
+  for (const schema of ["causet.not-a-family/v1", "causet.landing", "", null, undefined, 7]) {
     const compatibility = schemaCompatibility(schema);
     assert.equal(compatibility.readable, false, `'${String(schema)}' must not be readable`);
     assert.equal(compatibility.disposition, "unknown-family", `'${String(schema)}' disposition`);
   }
+});
+
+test("the legacy spelling of every family resolves exactly as the family does (ADR-0039 §2)", () => {
+  for (const [family, policy] of RECORD_FAMILIES) {
+    assert.ok(family.startsWith(SCHEMA_NAMESPACE), `${family} is not a causet.* family`);
+    const legacyFamily = `${LEGACY_SCHEMA_NAMESPACE}${family.slice(SCHEMA_NAMESPACE.length)}`;
+    for (const version of [...policy.registered, Math.max(...policy.registered) + 1]) {
+      const current = `${family}/v${version}`;
+      const legacy = `${legacyFamily}/v${version}`;
+      assert.equal(canonicalSchema(legacy), current);
+      assert.deepEqual(schemaCompatibility(legacy), schemaCompatibility(current), legacy);
+      assert.deepEqual(
+        { ...schemaClassification(legacy), legacyName: false },
+        schemaClassification(current),
+        legacy,
+      );
+      assert.equal(schemaClassification(legacy).legacyName, true);
+    }
+  }
+  // Only the namespace is aliased: anything else is left exactly as given.
+  for (const other of ["vcs-lab", "vcs-labs.landing/v1", "xvcs-lab.landing/v1", "causet.landing/v1", null]) {
+    assert.equal(canonicalSchema(other), other);
+  }
+});
+
+test("no writer emits a legacy vcs-lab.* identifier (ADR-0039 §2)", () => {
+  const offenders = [];
+  for (const file of fs.readdirSync(path.join(projectRoot, "src"))) {
+    if (!file.endsWith(".js")) continue;
+    const text = fs.readFileSync(path.join(projectRoot, "src", file), "utf8");
+    for (const match of text.matchAll(/\bvcs-lab\.[a-z][a-z-]*/g)) offenders.push(`src/${file}: ${match[0]}`);
+  }
+  assert.deepEqual(offenders, []);
 });
 
 test("bounds are checked at the boundary and an unknown bound name throws", () => {
@@ -289,7 +326,7 @@ test("a journal this build cannot read is refused rather than resumed", (t) => {
   fs.mkdirSync(labDir(repo), { recursive: true });
   const journal = path.join(labDir(repo), "reconciliation.json");
   fs.writeFileSync(journal, `${JSON.stringify({
-    schema: "vcs-lab.reconciliation-operation/v99",
+    schema: "causet.reconciliation-operation/v99",
     id: "op_future",
     state: "conflicted",
     queue: [],
@@ -303,14 +340,14 @@ test("a journal this build cannot read is refused rather than resumed", (t) => {
   // what automation branches on, the message is what a person acts on.
   const refusedJournal = JSON.parse(status.stdout);
   assert.equal(refusedJournal.code, "unknown-schema-version");
-  assert.match(refusedJournal.message, /unsupported schema "vcs-lab\.reconciliation-operation\/v99"/);
+  assert.match(refusedJournal.message, /unsupported schema "causet\.reconciliation-operation\/v99"/);
   assert.match(refusedJournal.details, /reads v4 of that family/);
 
   // Refusing must not consume or rewrite the journal.
   assert.equal(
     fs.readFileSync(journal, "utf8"),
     `${JSON.stringify({
-      schema: "vcs-lab.reconciliation-operation/v99",
+      schema: "causet.reconciliation-operation/v99",
       id: "op_future",
       state: "conflicted",
       queue: [],
@@ -321,22 +358,22 @@ test("a journal this build cannot read is refused rather than resumed", (t) => {
 
   // A journal of the wrong family in the right file is refused too.
   fs.writeFileSync(journal, `${JSON.stringify({
-    schema: "vcs-lab.rebase-operation/v1",
+    schema: "causet.rebase-operation/v1",
     id: "op_wrong",
   }, null, 2)}\n`);
   const crossed = vlabResult(repo, "reconcile", "--status", "--json");
   assert.notEqual(crossed.status, 0);
   const crossedRefusal = JSON.parse(crossed.stdout);
   assert.equal(crossedRefusal.code, "wrong-record-family");
-  assert.match(crossedRefusal.message, /not a vcs-lab\.reconciliation-operation record/);
+  assert.match(crossedRefusal.message, /not a causet\.reconciliation-operation record/);
 });
 
 test("a workspace registry this build cannot read is refused rather than rewritten", (t) => {
   const repo = repository(t);
   const registry = path.join(labDir(repo), "workspaces.json");
   const body = `${JSON.stringify({
-    schema: "vcs-lab.workspaces/v2",
-    workspaces: [{ schema: "vcs-lab.workspace/v2", id: "ws_future", name: "future" }],
+    schema: "causet.workspaces/v2",
+    workspaces: [{ schema: "causet.workspace/v2", id: "ws_future", name: "future" }],
   }, null, 2)}\n`;
   fs.mkdirSync(path.dirname(registry), { recursive: true });
   fs.writeFileSync(registry, body);
@@ -345,7 +382,7 @@ test("a workspace registry this build cannot read is refused rather than rewritt
   assert.notEqual(list.status, 0, "a future registry version must not be consumed");
   const refusedRegistry = JSON.parse(list.stdout);
   assert.equal(refusedRegistry.code, "unknown-schema-version");
-  assert.match(refusedRegistry.message, /unsupported schema "vcs-lab\.workspaces\/v2"/);
+  assert.match(refusedRegistry.message, /unsupported schema "causet\.workspaces\/v2"/);
   assert.equal(fs.readFileSync(registry, "utf8"), body, "the registry must be left intact");
 });
 
@@ -369,12 +406,12 @@ test("a forecast version this build cannot read is refused with a version-aware 
   const id = "forecast_future1";
   fs.writeFileSync(
     path.join(forecasts, `${id}.json`),
-    `${JSON.stringify({ schema: "vcs-lab.forecast/v9", id, steps: 42 }, null, 2)}\n`,
+    `${JSON.stringify({ schema: "causet.forecast/v9", id, steps: 42 }, null, 2)}\n`,
   );
   assert.throws(
     () => forecastForPlan(id, {}, repo),
     (error) => {
-      assert.match(error.message, /unsupported schema "vcs-lab\.forecast\/v9"/);
+      assert.match(error.message, /unsupported schema "causet\.forecast\/v9"/);
       assert.match(error.details, /reads v1, v2 of that family/);
       return true;
     },
@@ -385,7 +422,7 @@ test("a forecast version this build cannot read is refused with a version-aware 
   const legacy = "forecast_legacy1";
   fs.writeFileSync(
     path.join(forecasts, `${legacy}.json`),
-    `${JSON.stringify({ schema: "vcs-lab.forecast/v1", id: legacy }, null, 2)}\n`,
+    `${JSON.stringify({ schema: "causet.forecast/v1", id: legacy }, null, 2)}\n`,
   );
   assert.throws(
     () => forecastForPlan(legacy, { targetHead: "x", sourceHead: "y", changes: [] }, repo),
@@ -400,8 +437,8 @@ test("publishing a receipt never overwrites a note container this build cannot r
   const repo = repository(t);
   const head = git(repo, "rev-parse", "HEAD");
   const foreign = `${JSON.stringify({
-    schema: "vcs-lab.note/v2",
-    records: [{ schema: "vcs-lab.landing/v9", type: "landing", id: "rec_future" }],
+    schema: "causet.note/v2",
+    records: [{ schema: "causet.landing/v9", type: "landing", id: "rec_future" }],
   }, null, 2)}\n`;
   execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", head], {
     cwd: repo,
@@ -413,8 +450,8 @@ test("publishing a receipt never overwrites a note container this build cannot r
   // The container yields no records, and its bytes survive a refused append.
   assert.deepEqual(readNote(head, repo).records, [], "a foreign container must yield no records");
   assert.throws(
-    () => appendNote(head, { schema: "vcs-lab.landing/v1", type: "landing", id: "rec_new" }, repo),
-    /is not a vcs-lab\.note\/v1 container/,
+    () => appendNote(head, { schema: "causet.landing/v1", type: "landing", id: "rec_new" }, repo),
+    /is not a causet\.note\/v1 container/,
   );
   assert.equal(
     git(repo, "notes", "--ref=vcs-lab", "show", head),
@@ -429,7 +466,7 @@ test("an oversize note is quarantined unparsed and reported by metadata status",
   const filler = "x".repeat(RESOURCE_BOUNDS.noteContainerBytes);
   execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", head], {
     cwd: repo,
-    input: `${JSON.stringify({ schema: "vcs-lab.note/v1", records: [], filler })}\n`,
+    input: `${JSON.stringify({ schema: "causet.note/v1", records: [], filler })}\n`,
     encoding: "utf8",
     env: testEnv(),
   });
@@ -446,7 +483,7 @@ test("an oversize note is quarantined unparsed and reported by metadata status",
   assert.match(oversize[0].message, /noteContainerBytes/);
 
   assert.throws(
-    () => appendNote(head, { schema: "vcs-lab.landing/v1", type: "landing", id: "rec_new" }, repo),
+    () => appendNote(head, { schema: "causet.landing/v1", type: "landing", id: "rec_new" }, repo),
     /exceeds a published note-container resource bound/,
   );
 });

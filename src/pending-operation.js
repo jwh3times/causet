@@ -1,4 +1,5 @@
 import { CliError } from "./errors.js";
+import { canonicalSchema } from "./schemas.js";
 import {
   readReconciliationState,
   writeReconciliationState,
@@ -18,10 +19,10 @@ export function readPendingOperation(cwd = process.cwd()) {
 }
 
 export function writePendingOperation(operation, cwd = process.cwd()) {
-  if (operation?.schema === "vcs-lab.reconciliation-operation/v4") {
+  if (canonicalSchema(operation?.schema) === "causet.reconciliation-operation/v4") {
     return writeReconciliationState(operation, cwd);
   }
-  if (operation?.schema === "vcs-lab.rebase-operation/v3") {
+  if (canonicalSchema(operation?.schema) === "causet.rebase-operation/v3") {
     return writeRebaseState(operation, cwd);
   }
   throw new CliError(

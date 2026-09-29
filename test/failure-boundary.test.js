@@ -800,7 +800,7 @@ function publisher(repo, commit, recordId, env = {}) {
   const script = [
     `import { appendNote } from ${JSON.stringify(notes)};`,
     `appendNote(${JSON.stringify(commit)}, {`,
-    `  schema: "vcs-lab.provenance/v1", type: "provenance", id: ${JSON.stringify(recordId)},`,
+    `  schema: "causet.provenance/v1", type: "provenance", id: ${JSON.stringify(recordId)},`,
     `  commit: ${JSON.stringify(commit)}, changeId: null, origin: "declared", carriedFrom: [],`,
     '  actors: [{ role: "generated", actor: "concurrent test" }],',
     "  createdAt: new Date().toISOString(),",
@@ -1227,7 +1227,7 @@ test("archive refuses malformed and unknown journals by presence in the target w
   fs.mkdirSync(runtime, { recursive: true });
   for (const filename of ["reconciliation.json", "rebase.json"]) {
     const journal = path.join(runtime, filename);
-    for (const bytes of ["null\n", "partial {", '{"schema":"vcs-lab.operation/v999"}\n']) {
+    for (const bytes of ["null\n", "partial {", '{"schema":"causet.operation/v999"}\n']) {
       fs.writeFileSync(journal, bytes);
       assert.equal(refusal(vlabResult(repo, ["workspace", "archive", "worker", "--json"])).code,
         "operation-in-progress");

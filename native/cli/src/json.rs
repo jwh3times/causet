@@ -3,7 +3,7 @@
 
 use crate::front::Failure;
 
-pub const ERROR_ENVELOPE_SCHEMA: &str = "vcs-lab.error/v1";
+pub const ERROR_ENVELOPE_SCHEMA: &str = "causet.error/v1";
 
 /// A JSON string literal as `JSON.stringify` writes one: only `"`, `\` and
 /// control characters are escaped, and everything else, U+2028 included, is
@@ -59,7 +59,7 @@ mod tests {
     };
     assert_eq!(
       envelope(&failure),
-      "{\n  \"schema\": \"vcs-lab.error/v1\",\n  \"code\": \"usage-unknown-command\",\n  \"message\": \"x\",\n  \"details\": \"\",\n  \"exitCode\": 1\n}"
+      "{\n  \"schema\": \"causet.error/v1\",\n  \"code\": \"usage-unknown-command\",\n  \"message\": \"x\",\n  \"details\": \"\",\n  \"exitCode\": 1\n}"
     );
   }
 }

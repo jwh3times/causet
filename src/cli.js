@@ -373,7 +373,7 @@ function formatMetadataStatus(result, title = "Metadata status") {
 }
 
 function formatMetadataTransfer(result) {
-  if (result.schema === "vcs-lab.metadata-export/v1") {
+  if (result.schema === "causet.metadata-export/v1") {
     return [
       "Metadata exported",
       `path         ${result.path}`,

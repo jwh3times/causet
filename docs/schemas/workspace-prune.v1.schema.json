@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.workspace-prune/v1",
+  "$id": "causet.workspace-prune/v1",
   "title": "Workspace prune result",
   "description": "Preview or applied stale-path prune result of vlab workspace prune (CLI output; src/workspaces.js pruneWorkspaces).",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": ["schema", "dryRun", "applied", "changed", "count", "candidates"],
   "properties": {
-    "schema": { "const": "vcs-lab.workspace-prune/v1" },
+    "schema": { "enum": ["causet.workspace-prune/v1", "vcs-lab.workspace-prune/v1"] },
     "dryRun": { "type": "boolean" },
     "applied": { "type": "boolean" },
     "changed": { "type": "boolean" },

@@ -1,6 +1,6 @@
 # Receipt timing scope
 
-`vcs-lab.reconciliation/v6` and `vcs-lab.rebase/v1` retain their existing
+`causet.reconciliation/v6` and `causet.rebase/v1` retain their existing
 `timings` meaning: measurements accumulated before the receipt is published.
 They do not report the cost of the entire command. This clarifies the existing
 records without changing accepted values, writer behavior, or schema versions.

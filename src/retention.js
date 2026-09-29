@@ -29,7 +29,7 @@ function retainSnapshot(options, cwd) {
     throw new CliError("Causal metadata changed during retention inspection; retry.", { code: "stale-input" });
   }
   const result = {
-    schema: "vcs-lab.metadata-retention/v1", mode: options.apply ? "apply" : "preview",
+    schema: "causet.metadata-retention/v1", mode: options.apply ? "apply" : "preview",
     notesTip, retentionBefore, retentionAfter: retentionBefore,
     eligibleRecords: snapshot.portableRecords.length,
     quarantinedRecords: snapshot.scopes.sharedPortable.notes.quarantinedCount,

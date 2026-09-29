@@ -232,7 +232,7 @@ function buildRebasePlanInSession(ontoRef, requestedSourceRef, cwd, options = {}
   );
   const supported = topology.supported;
   const plan = {
-    schema: "vcs-lab.rebase-plan/v3",
+    schema: "causet.rebase-plan/v3",
     // A fact about the range, not a caller choice. ADR-0034 left the naming to
     // implementation: there is no flattening form to keep a name, because the
     // form this replaces refused merges rather than flattening them, so a range

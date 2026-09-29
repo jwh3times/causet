@@ -74,7 +74,7 @@ export function runMarkdownCase(t, entry, profile) {
 
   const before = { head: git("rev-parse", "HEAD"), status: git("status", "--porcelain=v1") };
   const plan = vlab("spec", "merge-plan", source, revisions.base, revisions.ours, revisions.theirs);
-  assert.equal(plan.schema, "vcs-lab.spec-merge-plan/v2");
+  assert.equal(plan.schema, "causet.spec-merge-plan/v2");
   assert.equal(plan.algorithm, profile.merge);
   assert.deepEqual(vlab("spec", "merge-plan", source, revisions.base, revisions.ours, revisions.theirs), plan,
     "repeated planning of identical ordered inputs is deterministic");
@@ -98,7 +98,7 @@ export function runMarkdownCase(t, entry, profile) {
         .filter((prior) => prior.semanticKey === block.semanticKey);
       assert.ok(candidates.some((prior) => prior.id === block.id), `result preserves identity: ${block.semanticKey}`);
     }
-    assert.equal(plan.result.manifest.schema, "vcs-lab.spec-manifest/v4");
+    assert.equal(plan.result.manifest.schema, "causet.spec-manifest/v4");
   }
   return {
     entities: Object.fromEntries(Object.entries(views).map(([stage, view]) =>

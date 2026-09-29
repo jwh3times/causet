@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.proof-bundle/v2",
+  "$id": "causet.proof-bundle/v2",
   "title": "Portable proof bundle, bound to Git objects",
   "description": "A proof bundle that carries Git's own bindings for what it claims: the raw commit objects of the source range, reachability paths for every positive coverage claim, receipt inclusion proofs against the notes tip, and the anchors those proofs terminate at. A strict superset of v1, whose members and repository-backed comparison are unchanged (src/proof-bundle.js, src/proof-binding.js; ADR-0031).",
-  "x-vcs-lab-scope": "envelope",
+  "x-causet-scope": "envelope",
   "type": "object",
   "required": [
     "schema",
@@ -24,7 +24,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.proof-bundle/v2"
+      "enum": ["causet.proof-bundle/v2", "vcs-lab.proof-bundle/v2"]
     },
     "repository": {
       "type": "object",

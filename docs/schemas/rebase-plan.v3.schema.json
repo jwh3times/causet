@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.rebase-plan/v3",
+  "$id": "causet.rebase-plan/v3",
   "title": "Causal rebase plan",
   "description": "Read-only causal rebase selection, preserved topology, and constraints (CLI output of vlab rebase-plan --json; embedded as the plan of rebase forecasts and journals; src/rebase-plan.js). A strict superset of v1: v2 adds `topology` and `recreatedMerges`, admits `merge-preserving` as a mode, and redefines `constraints.supported` to mean \"every merge in range is a supported shape\" rather than \"the range is linear\" (ADR-0034). v3 adds the declared interactive program of ADR-0035 \u2014 `reword`, `edit`, `squash`, and `fixup` as plan actions, each with its own identity rule \u2014 and is a strict superset of v2.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -33,7 +33,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.rebase-plan/v3"
+      "enum": ["causet.rebase-plan/v3", "vcs-lab.rebase-plan/v3"]
     },
     "mode": {
       "enum": [

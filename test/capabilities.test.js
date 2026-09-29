@@ -101,8 +101,8 @@ test("the document states what the registries hold, and nothing about local stat
   const parent = outsideRepository(t);
   const document = vlabJson(parent, "capabilities");
 
-  assert.equal(document.schema, "vcs-lab.capabilities/v1");
-  assert.equal(document.producer.name, "causal-vcs-lab");
+  assert.equal(document.schema, "causet.capabilities/v1");
+  assert.equal(document.producer.name, "causet");
   assert.match(document.producer.version, /^\d+\.\d+\.\d+/);
 
   // Exactly the exchanged families: every record that crosses a repository
@@ -125,7 +125,7 @@ test("the document states what the registries hold, and nothing about local stat
 
   // The capability family advertises itself, or a client cannot ask for a
   // version this build writes.
-  const own = familyOf(document, "vcs-lab.capabilities");
+  const own = familyOf(document, "causet.capabilities");
   assert.deepEqual(own.written, [1]);
   assert.equal(own.scope, "advertisement");
 
@@ -141,12 +141,12 @@ test("the document states what the registries hold, and nothing about local stat
 
   // A multi-version family is advertised as such, which is why filtering is
   // per record rather than per family.
-  const application = familyOf(document, "vcs-lab.application");
+  const application = familyOf(document, "causet.application");
   assert.deepEqual(application.written, [1, 4]);
 
-  assert.equal(document.profiles.canonicalJson, "vcs-lab.canonical-json/v1");
-  assert.equal(document.profiles.logicalId, "vcs-lab.logical-id/v1");
-  assert.equal(document.profiles.errorEnvelope, "vcs-lab.error/v1");
+  assert.equal(document.profiles.canonicalJson, "causet.canonical-json/v1");
+  assert.equal(document.profiles.logicalId, "causet.logical-id/v1");
+  assert.equal(document.profiles.errorEnvelope, "causet.error/v1");
   assert.equal(document.algorithms.lineage, "git-root-commits-sha256/v1");
   assert.equal(document.algorithms.resolutionSignature, "ordered-three-way-blobs/v1");
   assert.equal(document.algorithms.integrity, "sha256");
@@ -194,7 +194,7 @@ test("inside a repository the document is repository-scoped and changes nothing"
 
   // The human rendering presents the same state.
   const text = vlab(repo, "capabilities");
-  assert.match(text, /vcs-lab\.capabilities\/v1/);
+  assert.match(text, /causet\.capabilities\/v1/);
   assert.match(text, /families/);
   assert.match(text, new RegExp(document.repository.lineage.id.slice(0, 12)));
 });
@@ -208,7 +208,7 @@ test("two identical builds can exchange everything", (t) => {
   const own = vlabJson(repo, "capabilities");
   const report = vlabJson(repo, "capabilities", "--against", peerFile(parent, own));
 
-  assert.equal(report.schema, "vcs-lab.capability-report/v1");
+  assert.equal(report.schema, "causet.capability-report/v1");
   assert.equal(report.peer.source, "document");
   assert.equal(report.summary.exchangeable, true);
   assert.deepEqual(report.summary.blockers, []);
@@ -230,7 +230,7 @@ test("a peer that cannot read a version we write reduces the exchange, and says 
   const own = vlabJson(repo, "capabilities");
   // The peer is an older build that never learned reconciliation v6.
   const peer = peerLike(own, (copy) => {
-    const entry = copy.families.find((item) => item.family === "vcs-lab.reconciliation");
+    const entry = copy.families.find((item) => item.family === "causet.reconciliation");
     entry.written = [];
     entry.readable = [];
   });
@@ -238,7 +238,7 @@ test("a peer that cannot read a version we write reduces the exchange, and says 
   assert.notEqual(result.status, 0, "a reduced exchange is reported as not fully compatible");
   const report = JSON.parse(result.stdout);
 
-  const reconciliation = familyOf(report, "vcs-lab.reconciliation");
+  const reconciliation = familyOf(report, "causet.reconciliation");
   assert.equal(reconciliation.status, "blocked");
   assert.deepEqual(reconciliation.unreadableByPeer, [6]);
   assert.equal(reconciliation.selectedForSend, null);
@@ -247,7 +247,7 @@ test("a peer that cannot read a version we write reduces the exchange, and says 
 
   // Nothing else is affected: the rest of the exchange still proceeds, which is
   // the point of filtering per record rather than refusing the exchange.
-  assert.equal(familyOf(report, "vcs-lab.landing").status, "compatible");
+  assert.equal(familyOf(report, "causet.landing").status, "compatible");
   assert.equal(report.summary.blockedFamilies, 1);
   assert.equal(report.summary.exchangeable, true,
     "one family a peer cannot read does not make the exchange impossible");
@@ -256,16 +256,16 @@ test("a peer that cannot read a version we write reduces the exchange, and says 
 test("a peer reading only an older version of a multi-version family is reduced, not blocked", (t) => {
   const { repo, parent } = repository(t);
   const own = vlabJson(repo, "capabilities");
-  // `vcs-lab.application` writes v1 and v4; this peer reads only v1.
+  // `causet.application` writes v1 and v4; this peer reads only v1.
   const peer = peerLike(own, (copy) => {
-    const entry = copy.families.find((item) => item.family === "vcs-lab.application");
+    const entry = copy.families.find((item) => item.family === "causet.application");
     entry.written = [1];
     entry.readable = [1];
   });
   const report = JSON.parse(
     run(repo, "capabilities", "--against", peerFile(parent, peer), "--json").stdout,
   );
-  const application = familyOf(report, "vcs-lab.application");
+  const application = familyOf(report, "causet.application");
   assert.equal(application.status, "reduced");
   assert.deepEqual(application.unreadableByPeer, [4]);
   assert.equal(application.selectedForSend, 1,
@@ -279,7 +279,7 @@ test("a profile or algorithm mismatch refuses the exchange with no-common-versio
   const own = vlabJson(repo, "capabilities");
 
   const profile = peerLike(own, (copy) => {
-    copy.profiles.canonicalJson = "vcs-lab.canonical-json/v2";
+    copy.profiles.canonicalJson = "causet.canonical-json/v2";
   });
   const first = refusal(repo, "capabilities", "--against", peerFile(parent, profile, "profile.json"));
   assert.equal(first.code, "no-common-version");
@@ -297,13 +297,13 @@ test("a peer that reads no capability version we write refuses before any report
   const { repo, parent } = repository(t);
   const own = vlabJson(repo, "capabilities");
   const peer = peerLike(own, (copy) => {
-    const entry = copy.families.find((item) => item.family === "vcs-lab.capabilities");
+    const entry = copy.families.find((item) => item.family === "causet.capabilities");
     entry.written = [2];
     entry.readable = [2];
   });
   const envelope = refusal(repo, "capabilities", "--against", peerFile(parent, peer));
   assert.equal(envelope.code, "no-common-version");
-  assert.match(envelope.message, /vcs-lab\.capabilities/);
+  assert.match(envelope.message, /causet\.capabilities/);
 });
 
 test("a different object format or an unrelated lineage is a repository mismatch", (t) => {
@@ -362,7 +362,7 @@ test("an envelope states its repository and features, and the report says what i
 
   const report = vlabJson(repo, "capabilities", "--against", envelopeDir);
   assert.equal(report.peer.source, "envelope");
-  assert.equal(report.peer.producer.name, "causal-vcs-lab");
+  assert.equal(report.peer.producer.name, "causet");
   assert.equal(report.repository.lineageRelation, "same");
   assert.deepEqual(report.features.peerOnly, []);
   assert.deepEqual(report.features.localOnly, []);
@@ -389,14 +389,14 @@ test("a capability document this build cannot read is refused, not guessed at", 
   const own = vlabJson(repo, "capabilities");
 
   const future = peerLike(own, (copy) => {
-    copy.schema = "vcs-lab.capabilities/v2";
+    copy.schema = "causet.capabilities/v2";
   });
   const version = refusal(repo, "capabilities", "--against", peerFile(parent, future, "future.json"));
   assert.equal(version.code, "unknown-schema-version");
-  assert.match(version.message, /vcs-lab\.capabilities\/v2/);
+  assert.match(version.message, /causet\.capabilities\/v2/);
 
   const foreign = peerLike(own, (copy) => {
-    copy.schema = "vcs-lab.metadata-envelope/v1";
+    copy.schema = "causet.metadata-envelope/v1";
   });
   const family = refusal(repo, "capabilities", "--against", peerFile(parent, foreign, "foreign.json"));
   assert.equal(family.code, "wrong-record-family");

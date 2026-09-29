@@ -158,7 +158,7 @@ git show -s --format=%P HEAD
 
 The first-parent log contains one landing unit, while the commit has a real second parent. Stock Git can safely merge the branches later.
 
-`cst compact-merge <source>` is the same landing as `cst merge <source> --compact`, and `cst hard-squash <source>` the same as `cst merge <source> --hard-squash`; `cst merge` without a mode flag lands compactly. All three print their `vcs-lab.landing/v1` receipt as JSON whatever the flags.
+`cst compact-merge <source>` is the same landing as `cst merge <source> --compact`, and `cst hard-squash <source>` the same as `cst merge <source> --hard-squash`; `cst merge` without a mode flag lands compactly. All three print their `causet.landing/v1` receipt as JSON whatever the flags.
 
 ### Strict hard squash and causal reconciliation
 
@@ -205,13 +205,13 @@ git log --graph --oneline --decorate --branches --tags --remotes
 
 ### Failure output
 
-Every command's failure has a machine-readable form. Without `--json` a failure prints `cst: <message>` on stderr, as it always has. With `--json` it prints a `vcs-lab.error/v1` envelope on stdout instead, and leaves stderr empty:
+Every command's failure has a machine-readable form. Without `--json` a failure prints `cst: <message>` on stderr, as it always has. With `--json` it prints a `causet.error/v1` envelope on stdout instead, and leaves stderr empty:
 
 ```json
 {
-  "schema": "vcs-lab.error/v1",
+  "schema": "causet.error/v1",
   "code": "unknown-schema-version",
-  "message": "The reconciliation journal carries unsupported schema \"vcs-lab.reconciliation-operation/v99\".",
+  "message": "The reconciliation journal carries unsupported schema \"causet.reconciliation-operation/v99\".",
   "details": "This build reads v4 of that family.",
   "exitCode": 1
 }
@@ -263,9 +263,9 @@ cst verify-proof proof.json
 cst verify-proof proof.json --offline
 ```
 
-`cst proof-bundle` always prints JSON (`vcs-lab.proof-bundle/v1`): the merge plan with the target commits and change IDs, the reachable accepted receipts and what each absorbs, and the advisory patch-equivalent set, hashed under the canonical JSON profile. `cst verify-proof` re-derives every classification from that evidence with its own copy of the proof lattice and reports three checks separately: `integrity` catches editing, `classification` catches a claim that does not follow from the stated evidence even when the hash was restated, and `repository` checks evidence, the complete ordered source inventory, commit identities and subjects, counts, lineage, and physical/effective bases against the current repository. Duplicate commits and inconsistent counts also fail offline checks. `--offline` skips the repository check: success establishes internal consistency, while evidence truth, source completeness, commit identities, and bases remain unchecked; a bundle from an unrelated repository is reported as `different-repository`. The command exits non-zero when the bundle does not verify.
+`cst proof-bundle` always prints JSON (`causet.proof-bundle/v1`): the merge plan with the target commits and change IDs, the reachable accepted receipts and what each absorbs, and the advisory patch-equivalent set, hashed under the canonical JSON profile. `cst verify-proof` re-derives every classification from that evidence with its own copy of the proof lattice and reports three checks separately: `integrity` catches editing, `classification` catches a claim that does not follow from the stated evidence even when the hash was restated, and `repository` checks evidence, the complete ordered source inventory, commit identities and subjects, counts, lineage, and physical/effective bases against the current repository. Duplicate commits and inconsistent counts also fail offline checks. `--offline` skips the repository check: success establishes internal consistency, while evidence truth, source completeness, commit identities, and bases remain unchecked; a bundle from an unrelated repository is reported as `different-repository`. The command exits non-zero when the bundle does not verify.
 
-`cst audit identity` scans every commit reachable from any ref and every causal record. It reports commits carrying more than one `Change-Id` trailer, commits sharing a `Change-Id` with no identity-preserving application record linking them, applied commits with more than one claimed origin, and records that break the identity invariants, and it exits non-zero when it reports errors (`--json` emits `vcs-lab.identity-audit/v1`). It also warns, without failing, when provenance actor names look like one actor spelled two ways, such as `codex` and `OpenAI Codex`; the [actor naming convention](docs/identity/README.md#8-naming-a-provenance-actor) says how to spell them. A `Change-Id` is a line of text anyone with repository access can write, so identifiers coordinate work rather than authenticate it and the audit is the defence ([docs/identity](docs/identity/README.md)).
+`cst audit identity` scans every commit reachable from any ref and every causal record. It reports commits carrying more than one `Change-Id` trailer, commits sharing a `Change-Id` with no identity-preserving application record linking them, applied commits with more than one claimed origin, and records that break the identity invariants, and it exits non-zero when it reports errors (`--json` emits `causet.identity-audit/v1`). It also warns, without failing, when provenance actor names look like one actor spelled two ways, such as `codex` and `OpenAI Codex`; the [actor naming convention](docs/identity/README.md#8-naming-a-provenance-actor) says how to spell them. A `Change-Id` is a line of text anyone with repository access can write, so identifiers coordinate work rather than authenticate it and the audit is the defence ([docs/identity](docs/identity/README.md)).
 
 ## Planning and forecasting a causal rebase
 
@@ -319,7 +319,7 @@ action whose result a forecast cannot predict, so a forecast containing one
 reports `pauses-for-content` and says it cannot be used as an approval.
 
 `rebase-forecast` saves a worktree-private
-`vcs-lab.rebase-forecast/v3` artifact. It simulates only the ordered replay
+`causet.rebase-forecast/v3` artifact. It simulates only the ordered replay
 queue in a disposable detached worktree, records every target-before and
 result tree, pins the plan fingerprint and candidate policy, and reports a
 complete predicted tree or a fail-closed conflict/unsupported reason. Dirty
@@ -944,7 +944,7 @@ dropping every record on that attachment. See
 
 ## Verifying a plan without the repository
 
-`cst proof-bundle <source>` emits a `vcs-lab.proof-bundle/v2` document and
+`cst proof-bundle <source>` emits a `causet.proof-bundle/v2` document and
 `cst verify-proof <file>` checks it. The bundle carries the classification, the
 evidence it was derived from, and — since v2 — Git's own bindings for what it
 claims: the raw commit objects of the source range, a commit path from the target

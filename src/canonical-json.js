@@ -11,7 +11,7 @@
  * and the shared cross-implementation test vectors live in
  * docs/canonical-json/.
  */
-export const CANONICAL_JSON_PROFILE = "vcs-lab.canonical-json/v1";
+export const CANONICAL_JSON_PROFILE = "causet.canonical-json/v1";
 
 /**
  * The canonical bytes a document's own hash and any future detached signature

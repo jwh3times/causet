@@ -1,5 +1,5 @@
 {
-  "schema": "vcs-lab.conformance-fixtures/v1",
+  "schema": "causet.conformance-fixtures/v1",
   "description": "Human/JSON parity contract for the cst CLI (FR-GIT-06; ADR-0015 phase 0b, issue #11 item 5). Each command entry names the JSON members its human rendering must present and the members it deliberately does not. test/conformance.test.js runs every entry against the real CLI; see README.md for the match rules and the scenario stages.",
   "commands": [
     {

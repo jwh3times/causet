@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.metadata-import-preview/v1",
+  "$id": "causet.metadata-import-preview/v1",
   "title": "Metadata import preview",
-  "description": "Exact dry-run record/ref/object actions of vlab metadata import --dry-run --json (CLI output; src/metadata-transfer.js). vcs-lab.metadata-import/v1 extends this shape.",
-  "x-vcs-lab-scope": "cli-output",
+  "description": "Exact dry-run record/ref/object actions of vlab metadata import --dry-run --json (CLI output; src/metadata-transfer.js). causet.metadata-import/v1 extends this shape.",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -18,7 +18,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.metadata-import-preview/v1"
+      "enum": ["causet.metadata-import-preview/v1", "vcs-lab.metadata-import-preview/v1"]
     },
     "path": {
       "type": "string",

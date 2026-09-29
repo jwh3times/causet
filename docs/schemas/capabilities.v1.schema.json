@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.capabilities/v1",
+  "$id": "causet.capabilities/v1",
   "title": "Capability document",
   "description": "What a build reads and writes, stated so another party can decide what may be exchanged without asking anything else. Every member except repository and integrity is projected from a runtime registry rather than maintained by hand (advertisement scope; src/capabilities.js; ADR-0033).",
-  "x-vcs-lab-scope": "advertisement",
+  "x-causet-scope": "advertisement",
   "type": "object",
   "required": [
     "schema", "producer", "families", "profiles", "algorithms",
     "objectFormats", "features", "bounds", "integrity"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.capabilities/v1" },
+    "schema": { "enum": ["causet.capabilities/v1", "vcs-lab.capabilities/v1"] },
     "producer": {
       "type": "object",
       "required": ["name", "version"],

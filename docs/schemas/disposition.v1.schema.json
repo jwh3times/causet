@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.disposition/v1",
+  "$id": "causet.disposition/v1",
   "title": "Conflict disposition",
   "description": "One person's decision about one parked conflict, stored as an entry of <common Git dir>/vcs-lab/dispositions.json (shared-local; src/dispositions.js; ADR-0030).",
-  "x-vcs-lab-scope": "shared-local",
+  "x-causet-scope": "shared-local",
   "type": "object",
   "required": [
     "schema", "id", "recordId", "outcome", "keptDigest", "rejectedDigests",
     "decidedAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.disposition/v1" },
+    "schema": { "enum": ["causet.disposition/v1", "vcs-lab.disposition/v1"] },
     "id": { "type": "string", "minLength": 4 },
     "recordId": { "type": "string", "minLength": 4 },
     "outcome": {

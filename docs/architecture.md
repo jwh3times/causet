@@ -121,19 +121,19 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | File | Responsibility | Important dependencies |
 | --- | --- | --- |
 | `bin/vlab.js` | Minimal executable entry point and error/exit boundary | `src/cli.js` |
-| `src/canonical-json.js` | The frozen `vcs-lab.canonical-json/v1` profile: RFC 8785 restricted to UTF-16-code-unit-sorted members and safe integers, refusing what it cannot serialize byte-identically | None |
-| `src/capabilities.js` | The `vcs-lab.capabilities/v1` document projected from the runtime registries, and negotiation as a pure function of two such documents (ADR-0033) | `src/schemas.js`, `src/metadata.js`, `src/metadata-envelope.js`, `src/canonical-json.js` |
+| `src/canonical-json.js` | The frozen `causet.canonical-json/v1` profile: RFC 8785 restricted to UTF-16-code-unit-sorted members and safe integers, refusing what it cannot serialize byte-identically | None |
+| `src/capabilities.js` | The `causet.capabilities/v1` document projected from the runtime registries, and negotiation as a pure function of two such documents (ADR-0033) | `src/schemas.js`, `src/metadata.js`, `src/metadata-envelope.js`, `src/canonical-json.js` |
 | `src/cli.js` | Argument parsing, command dispatch, human and JSON presentation, benchmarks | All domain modules |
 | `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
 | `src/engine.js` | The read-side engine seam: the catalog of 44 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
 | `src/environment.js` | The user-facing environment variables: `CAUSET_*` with the `VLAB_*` fallback of the migration window, and the legacy names in use (ADR-0039 §5) | None |
-| `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021) | None |
+| `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `causet.error/v1` failure envelope (ADR-0021) | None |
 | `src/faults.js` | Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it | None |
 | `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
 | `src/git-carriers.js` | Copy-on-write notes trees, typed dependency closure, bounded carrier parents, and checked ref commands | Engine, Git writes, schemas |
 | `src/git-session-worker.js` | Owns asynchronous `git cat-file --batch-command` stream for a synchronous caller | Worker threads, Git |
 | `src/git.js` | The Git engine: safe synchronous Git adapter, the Git implementation of every read operation, repository context, object and merge-tree sessions, engine selectors, the read-bypass rule, metrics | Git executable, workers |
-| `src/identity-audit.js` | Repository-wide logical identity audit (`vcs-lab.identity-audit/v1`): union-find over identity-preserving application edges, multi-trailer, multi-origin, and invariant findings, plus the near-duplicate provenance actor warning | Engine, notes |
+| `src/identity-audit.js` | Repository-wide logical identity audit (`causet.identity-audit/v1`): union-find over identity-preserving application edges, multi-trailer, multi-origin, and invariant findings, plus the near-duplicate provenance actor warning | Engine, notes |
 | `src/ids.js` | Unique protocol IDs, SHA-256, Git blob hashing, slugs | Node crypto |
 | `src/landings.js` | Compact and hard-squash landing mechanics and receipts | Git adapter, notes |
 | `src/merge-plan.js` | Coverage proof lattice, effective base, patch candidates, plan formatting | Git adapter, notes |
@@ -147,7 +147,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/pending-operation.js` | Safe reconciliation/rebase journal routing for shared conflict tools | Reconciliation and rebase state |
 | `src/proof-binding.js` | The Git bindings a proof bundle carries so a verifier without the repository can check it: the bound source inventory, reachability paths, receipt inclusion proofs, and the object-id recomputation that makes them proofs (ADR-0031) | `src/engine.js`, `src/git.js`, `src/schemas.js` |
 | `src/proof-bundle.js` | Portable coverage proof bundles and their independent verifier, which applies its own copy of the lattice (`PROOF_RULES`) and compares the evidence with the repository | Merge plan, canonical JSON, metadata, engine |
-| `src/provenance.js` | Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `CAUSET_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
+| `src/provenance.js` | Declared authorship provenance (`causet.provenance/v1`): the closed role vocabulary, `CAUSET_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
 | `src/quarantine.js` | The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/vcs-lab/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030) | `src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js` |
 | `src/rebase-forecast.js` | Rebase simulation orchestration, caller invariants, candidate pinning, the carried caller overlay and its second predicted tree, and private forecast presentation | Rebase plan, forecast simulator, target overlays, semantic version guards, Git adapter |
 | `src/rebase-interactive.js` | Declared interactive actions: their parsing, the shapes ADR-0035 refuses, the surviving-identity message rules, and the single-trailer check | Errors |
@@ -301,53 +301,53 @@ use at the current development baseline:
 <!-- generated:schemas:start -->
 | Family | Readable versions | Written versions | Store | Scope |
 | --- | --- | --- | --- | --- |
-| `vcs-lab.amendment` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.application` | v1, v4 | v1, v4 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.capabilities` | v1 | v1 | `produced on demand by cst capabilities; served by a gateway` | `advertisement` |
-| `vcs-lab.disposition` | v1 | v1 | `entries of <common dir>/vcs-lab/dispositions.json` | `shared-local` |
-| `vcs-lab.dispositions` | v1 | v1 | `<common dir>/vcs-lab/dispositions.json` | `shared-local` |
-| `vcs-lab.forecast` | v1, v2 | v2 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
-| `vcs-lab.interactive-absorption` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.landing` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.metadata-envelope` | v1 | v1 | `manifest.json of a metadata export directory` | `envelope` |
-| `vcs-lab.note` | v1 | v1 | `refs/notes/vcs-lab note blobs` | `note-container` |
-| `vcs-lab.proof-bundle` | v1, v2 | v2 | `a file handed to cst verify-proof` | `envelope` |
-| `vcs-lab.provenance` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.quarantined-record` | v1 | v1 | `refs/vcs-lab/quarantine/<lineage>/<record id> blobs` | `shared-local` |
-| `vcs-lab.rebase` | v1, v2, v3 | v3 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.rebase-application` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.rebase-forecast` | v3 | v3 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
-| `vcs-lab.rebase-operation` | v3 | v3 | `<git dir>/vcs-lab/rebase.json` | `private` |
-| `vcs-lab.reconciliation` | v6 | v6 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.reconciliation-operation` | v4 | v4 | `<git dir>/vcs-lab/reconciliation.json` | `private` |
-| `vcs-lab.resolution` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `vcs-lab.spec-manifest` | v1, v2, v3, v4 | v4 | `.vcs-lab/specs/**` | `tracked` |
-| `vcs-lab.workspace` | v1 | v1 | `entries of <common dir>/vcs-lab/workspaces.json` | `shared-local` |
-| `vcs-lab.workspaces` | v1 | v1 | `<common dir>/vcs-lab/workspaces.json` | `shared-local` |
+| `causet.amendment` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.application` | v1, v4 | v1, v4 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.capabilities` | v1 | v1 | `produced on demand by cst capabilities; served by a gateway` | `advertisement` |
+| `causet.disposition` | v1 | v1 | `entries of <common dir>/vcs-lab/dispositions.json` | `shared-local` |
+| `causet.dispositions` | v1 | v1 | `<common dir>/vcs-lab/dispositions.json` | `shared-local` |
+| `causet.forecast` | v1, v2 | v2 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
+| `causet.interactive-absorption` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.landing` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.metadata-envelope` | v1 | v1 | `manifest.json of a metadata export directory` | `envelope` |
+| `causet.note` | v1 | v1 | `refs/notes/vcs-lab note blobs` | `note-container` |
+| `causet.proof-bundle` | v1, v2 | v2 | `a file handed to cst verify-proof` | `envelope` |
+| `causet.provenance` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.quarantined-record` | v1 | v1 | `refs/vcs-lab/quarantine/<lineage>/<record id> blobs` | `shared-local` |
+| `causet.rebase` | v1, v2, v3 | v3 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.rebase-application` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.rebase-forecast` | v3 | v3 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
+| `causet.rebase-operation` | v3 | v3 | `<git dir>/vcs-lab/rebase.json` | `private` |
+| `causet.reconciliation` | v6 | v6 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.reconciliation-operation` | v4 | v4 | `<git dir>/vcs-lab/reconciliation.json` | `private` |
+| `causet.resolution` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.spec-manifest` | v1, v2, v3, v4 | v4 | `.vcs-lab/specs/**` | `tracked` |
+| `causet.workspace` | v1 | v1 | `entries of <common dir>/vcs-lab/workspaces.json` | `shared-local` |
+| `causet.workspaces` | v1 | v1 | `<common dir>/vcs-lab/workspaces.json` | `shared-local` |
 <!-- generated:schemas:end -->
 
 Command and automation output shapes (outside the persisted-family registry):
 
 | Schema | Purpose | Primary owner |
 | --- | --- | --- |
-| `vcs-lab.merge-plan/v1` | Source/target coverage plan | `merge-plan.js` |
-| `vcs-lab.proof-bundle/v1` | Merge plan plus the evidence its classification rests on, for an independent verifier | `proof-bundle.js` |
-| `vcs-lab.proof-verification/v1` | Integrity, classification, and repository verification result of a proof bundle | `proof-bundle.js` |
-| `vcs-lab.rebase-plan/v3` | Read-only causal rebase selection, preserved merge topology, shape constraints, and the declared interactive program | `rebase-plan.js` |
-| `vcs-lab.checkpoint/v1` | Checkpoint command result | `workspaces.js` |
-| `vcs-lab.workspace-prune/v1` | Preview/apply stale-path prune result | `workspaces.js` |
-| `vcs-lab.spec-merge-plan/v2` | Deterministic three-way semantic plan | `specs.js` |
-| `vcs-lab.spec-benchmark/v3` | Generated corpus measurements | `specs.js` |
-| `vcs-lab.repository-scale-benchmark/v1` | Disposable repository/shared-metadata volume, scan, raw-Git floor, process-amplification, and decision measurements | `scale-benchmark.js` |
-| `vcs-lab.metadata-status/v1` | Deterministic repository metadata inventory | `metadata.js` |
-| `vcs-lab.metadata-validation/v1` | Inventory plus strict/non-strict validity result | `metadata.js` |
-| `vcs-lab.metadata-export/v1` | Export result and process/storage metrics | `metadata-transfer.js` |
-| `vcs-lab.metadata-import-preview/v1` | Exact dry-run record/ref/object actions | `metadata-transfer.js` |
-| `vcs-lab.metadata-import/v1` | Applied/idempotent import result | `metadata-transfer.js` |
-| `vcs-lab.metadata-retention/v1` | Historical retention preview/apply counts, refs, and diagnostics | `retention.js` |
-| `vcs-lab.engine-differential/v1` | Operation-by-operation read-engine comparison | `engine.js` |
-| `vcs-lab.identity-audit/v1` | Repository-wide identity collision and duplicate-origin audit | `identity-audit.js` |
-| `vcs-lab.error/v1` | Failure envelope printed on stdout under `--json`, with a code from the closed vocabulary in `docs/schemas/errors.md` (ADR-0021) | `errors.js` |
+| `causet.merge-plan/v1` | Source/target coverage plan | `merge-plan.js` |
+| `causet.proof-bundle/v1` | Merge plan plus the evidence its classification rests on, for an independent verifier | `proof-bundle.js` |
+| `causet.proof-verification/v1` | Integrity, classification, and repository verification result of a proof bundle | `proof-bundle.js` |
+| `causet.rebase-plan/v3` | Read-only causal rebase selection, preserved merge topology, shape constraints, and the declared interactive program | `rebase-plan.js` |
+| `causet.checkpoint/v1` | Checkpoint command result | `workspaces.js` |
+| `causet.workspace-prune/v1` | Preview/apply stale-path prune result | `workspaces.js` |
+| `causet.spec-merge-plan/v2` | Deterministic three-way semantic plan | `specs.js` |
+| `causet.spec-benchmark/v3` | Generated corpus measurements | `specs.js` |
+| `causet.repository-scale-benchmark/v1` | Disposable repository/shared-metadata volume, scan, raw-Git floor, process-amplification, and decision measurements | `scale-benchmark.js` |
+| `causet.metadata-status/v1` | Deterministic repository metadata inventory | `metadata.js` |
+| `causet.metadata-validation/v1` | Inventory plus strict/non-strict validity result | `metadata.js` |
+| `causet.metadata-export/v1` | Export result and process/storage metrics | `metadata-transfer.js` |
+| `causet.metadata-import-preview/v1` | Exact dry-run record/ref/object actions | `metadata-transfer.js` |
+| `causet.metadata-import/v1` | Applied/idempotent import result | `metadata-transfer.js` |
+| `causet.metadata-retention/v1` | Historical retention preview/apply counts, refs, and diagnostics | `retention.js` |
+| `causet.engine-differential/v1` | Operation-by-operation read-engine comparison | `engine.js` |
+| `causet.identity-audit/v1` | Repository-wide identity collision and duplicate-origin audit | `identity-audit.js` |
+| `causet.error/v1` | Failure envelope printed on stdout under `--json`, with a code from the closed vocabulary in `docs/schemas/errors.md` (ADR-0021) | `errors.js` |
 
 The executable JavaScript validators and named object shapes in
 `src/schemas.js` are the runtime authority. Every family above, and the CLI's
@@ -356,7 +356,7 @@ documents in the [schema catalog](schemas/README.md);
 `test/schema-catalog.test.js` fails the suite when a document and its
 validator disagree. Repository-lineage IDs and the envelope manifest hash
 are computed under the frozen canonical JSON profile
-`vcs-lab.canonical-json/v1` (`src/canonical-json.js`, specified with shared
+`causet.canonical-json/v1` (`src/canonical-json.js`, specified with shared
 test vectors in the [canonical JSON profile](canonical-json/README.md));
 record digests keep their frozen legacy serialization for byte stability.
 Human-readable and `--json` output of the same command are held to the
@@ -419,7 +419,7 @@ unchanged (see the [compatibility contract](schemas/compatibility.md)).
 
 ### 7.1.1 Portable proof bundles
 
-`cst proof-bundle <source>` emits `vcs-lab.proof-bundle/v1`: the plan plus the
+`cst proof-bundle <source>` emits `causet.proof-bundle/v1`: the plan plus the
 evidence the lattice was evaluated against, so a third party can recompute the
 classification rather than trust it (FR-PLAN-08). Each covered change becomes
 traceable to the receipt that covered it, which the plan's bare `proof` string
@@ -466,7 +466,7 @@ unrelated target. Note contents are read in a batch after the reachability walk.
 
 `buildMergePlanBetween(ontoRef, sourceRef)` exposes the same proof lattice for
 an explicit target without switching `HEAD`. `buildRebasePlan` wraps that
-classification as `vcs-lab.rebase-plan/v3`:
+classification as `causet.rebase-plan/v3`:
 
 - covered changes become `omit` actions with exact proofs;
 - candidate-equivalent changes become `review` and cannot enter the replay
@@ -514,7 +514,7 @@ no notion of a second parent, so a merge-preserving program falls back to the
 worktree oracle and records the fallback. Each attempted step records its target-before
 tree, conflict evidence when present, and result tree when complete.
 
-`vcs-lab.rebase-forecast/v3` pins source/onto heads and trees, the full plan and
+`causet.rebase-forecast/v3` pins source/onto heads and trees, the full plan and
 fingerprint, explicit candidate policy/omissions, automated resolution/spec
 decisions, step trees, and the predicted final tree. Caller evidence includes
 the exact branch, HEAD/tree, plus SHA-256 digests of index entries, porcelain
@@ -536,11 +536,11 @@ folds in the change that stopped rather than re-applying what came before it.
 identity and reads no repository: the plan hands it a resolver so every
 expression is resolved through the session already open. Two note record
 families carry what the identity-bearing actions produce. A
-`vcs-lab.amendment/v1` records that an identity's content diverged under an
+`causet.amendment/v1` records that an identity's content diverged under an
 `edit`, and `src/merge-plan.js` reads it to downgrade a bare `Change-Id` match
 from `covered` to `candidate-equivalent` — the single change to the coverage
 lattice, and one that only ever weakens a conclusion. A
-`vcs-lab.interactive-absorption/v1` records which identities a surviving commit
+`causet.interactive-absorption/v1` records which identities a surviving commit
 took in, reusing the landing absorption model so coverage for an absorbed change
 comes from the record rather than from a second trailer on the commit.
 
@@ -548,7 +548,7 @@ comes from the record rather than from a second trailer on the commit.
 
 `startRebase` operates only on the current named branch with a clean worktree.
 It rebuilds the exact plan, rejects stale or incomplete forecast approval before
-mutation, writes `vcs-lab.rebase-operation/v3`, resets the branch to `ontoHead`,
+mutation, writes `causet.rebase-operation/v3`, resets the branch to `ontoHead`,
 and cherry-picks only the ordered replay queue. Every forecasted step must
 reproduce its target-before tree, decision kind, result tree, and final predicted
 tree. Heuristic candidates require an explicit accepted policy.
@@ -561,7 +561,7 @@ Unexpected empty applications and out-of-band Git-state mismatches fail closed.
 
 Provisional applications stay only in the worktree journal. After the complete
 queue and predicted tree verify, finalization publishes one
-`vcs-lab.rebase-application/v1` record per replay and one `vcs-lab.rebase/v1`
+`causet.rebase-application/v1` record per replay and one `causet.rebase/v1`
 summary at the new tip. Abort delegates active cherry-pick cleanup to Git, then
 hard-resets the exact original source tip and clears the journal without shared
 receipts. Linked worktrees therefore share completed facts but cannot overwrite
@@ -1168,7 +1168,7 @@ object-session invalidation.
 `cst doctor --differential` runs every cataloged operation through each
 engine against the current repository, comparing result digests, process
 counts, and fallbacks operation by operation
-(`vcs-lab.engine-differential/v1`). Each probe uses only input shapes the
+(`causet.engine-differential/v1`). Each probe uses only input shapes the
 native binding implements, such as OID-rooted object expressions, because an
 input it refuses falls back to Git and would put Git's answer on both sides;
 with a binding present, every operation it implements is compared natively.
@@ -1246,7 +1246,7 @@ about which facts exist:
    that attachment.
 4. **A person disposes, once.** `cst metadata dispose <record id>
    --keep-local|--replace-local` removes the parked copy and records a
-   `vcs-lab.disposition/v1` entry naming the digest kept and the digests
+   `causet.disposition/v1` entry naming the digest kept and the digests
    rejected, so a later exchange carrying a rejected digest is reported as
    already disposed rather than parked again. The registry is shared-local and
    never travels, because two clones may decide differently and that
@@ -1358,7 +1358,7 @@ which lets a verifier recompute the classification — but `changes` was the
 sender's word, and #46 showed that a bundle could omit, inject, or misidentify
 source changes, restate its hash, and still report `ok` offline.
 
-`vcs-lab.proof-bundle/v2` is a strict superset of v1 that carries Git's own
+`causet.proof-bundle/v2` is a strict superset of v1 that carries Git's own
 bindings: the raw commit objects of `physicalBase..sourceHead`, a commit path
 from the target head for every positive coverage claim, an inclusion proof from
 the notes tip to each receipt's note blob, and the anchors those proofs terminate
@@ -1396,7 +1396,7 @@ remains the only check that establishes absence.
 
 [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md)
 settles how two builds decide what they may exchange. A build states what it
-reads and writes in a `vcs-lab.capabilities/v1` document projected from
+reads and writes in a `causet.capabilities/v1` document projected from
 `RECORD_FAMILIES`, `RESOURCE_BOUNDS`, and the profile and algorithm constants,
 so the document cannot disagree with the build that emits it; the projection is
 checked against the registries by `test/schema-compatibility.test.js`, which
@@ -1416,7 +1416,7 @@ The comparison distinguishes an exchange that is **smaller** from one that is
   wrote it and compatibility §3 forbids re-encoding it, so records the peer
   cannot read are filtered out and named in `unreadableByPeer` with the
   disposition the peer's own document states. Everything else still moves.
-  `vcs-lab.application` is why this is per record and not per family: v1 and v4
+  `causet.application` is why this is per record and not per family: v1 and v4
   are both current, written by different commands.
 - Impossible: a profile, algorithm, object-format, or lineage disagreement, or a
   peer that reads no capability version this build writes. There is no set of
@@ -1437,7 +1437,7 @@ writing repository configuration.
 
 ### 15.2.1 Logical identity is not authentication
 
-Logical identifiers are specified by `vcs-lab.logical-id/v1`
+Logical identifiers are specified by `causet.logical-id/v1`
 ([docs/identity](identity/README.md)): a closed namespace set, a millisecond
 clock that partitions rather than orders, and 48 random bits. Accidental
 collision is negligible at that entropy; deliberate collision is trivial and
@@ -1565,7 +1565,7 @@ lock without rewriting history.
 | Two publishers write the notes ref at once | Serialized on the notes lock (§15.4); a lock whose holder is gone is abandoned, a running holder's is waited for and then refused with `notes-locked`. |
 | Temporary forecast worktree cleanup encounters in-progress Git state | Abort it best-effort, remove worktree, prune metadata. |
 | JSON state write is interrupted | Temporary file avoids replacing last complete record. |
-| Any failure under `--json` | Print a `vcs-lab.error/v1` envelope on stdout with a code from the closed vocabulary in `docs/schemas/errors.md`; stderr stays empty and the exit code is unchanged (ADR-0021). |
+| Any failure under `--json` | Print a `causet.error/v1` envelope on stdout with a code from the closed vocabulary in `docs/schemas/errors.md`; stderr stays empty and the exit code is unchanged (ADR-0021). |
 
 Crash consistency between a successful Git mutation and a journal write is
 fault-injected at the named points of §15.4 (`src/faults.js`,

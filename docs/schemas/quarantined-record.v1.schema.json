@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.quarantined-record/v1",
+  "$id": "causet.quarantined-record/v1",
   "title": "Parked conflicting record",
   "description": "One incoming causal record parked because its identifier names different content locally, stored as the blob a refs/vcs-lab/quarantine/<source lineage>/<record id> ref points at (shared-local; src/quarantine.js; ADR-0030).",
-  "x-vcs-lab-scope": "shared-local",
+  "x-causet-scope": "shared-local",
   "type": "object",
   "required": [
     "schema",
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.quarantined-record/v1"
+      "enum": ["causet.quarantined-record/v1", "vcs-lab.quarantined-record/v1"]
     },
     "recordId": {
       "type": "string",

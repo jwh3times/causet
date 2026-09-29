@@ -2,9 +2,9 @@ import { newId } from "./ids.js";
 import { appendNote, readNotes } from "./notes.js";
 import { CliError } from "./errors.js";
 import { environmentValue } from "./environment.js";
-import { RESOURCE_BOUNDS, withinBound } from "./schemas.js";
+import { canonicalSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
 
-export const PROVENANCE_SCHEMA = "vcs-lab.provenance/v1";
+export const PROVENANCE_SCHEMA = "causet.provenance/v1";
 
 /**
  * The closed role vocabulary (FR-ID-08). A closed set is the point: an open
@@ -149,7 +149,7 @@ export function provenanceFor(commits, cwd = process.cwd()) {
   const notes = readNotes(unique, cwd);
   for (const commit of unique) {
     const records = (notes.get(commit)?.records ?? []).filter(
-      (record) => record?.schema === PROVENANCE_SCHEMA,
+      (record) => canonicalSchema(record?.schema) === PROVENANCE_SCHEMA,
     );
     if (records.length > 0) found.set(commit, records);
   }

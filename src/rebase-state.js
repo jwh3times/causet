@@ -17,9 +17,9 @@ export function readRebaseState(cwd = process.cwd()) {
   const state = readJson(statePath, null);
   if (state === null) return null;
   assertReadableSchema(state?.schema, `The rebase journal at '${statePath}'`, {
-    family: "vcs-lab.rebase-operation",
+    family: "causet.rebase-operation",
     recovery:
-      "Recover it with the vcs-lab build that wrote it, or remove the file to discard the operation.",
+      "Recover it with the causet build that wrote it, or remove the file to discard the operation.",
   });
   return state;
 }

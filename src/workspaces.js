@@ -45,19 +45,19 @@ function workspaceFile(cwd) {
 /**
  * Read the shared-local workspace registry. A registry whose schema this build
  * does not read is refused rather than used (ADR-0020): the registry is the
- * only record of which worktrees vcs-lab materialized, and `saveWorkspaces`
+ * only record of which worktrees causet materialized, and `saveWorkspaces`
  * rewrites the whole file, so consuming a version we do not understand would
  * silently drop its members.
  */
 export function readWorkspaces(cwd = process.cwd()) {
   const registryPath = workspaceFile(cwd);
   const registry = readJson(registryPath, {
-    schema: "vcs-lab.workspaces/v1",
+    schema: "causet.workspaces/v1",
     workspaces: [],
   });
   assertReadableSchema(registry?.schema, `The workspace registry at '${registryPath}'`, {
-    family: "vcs-lab.workspaces",
-    recovery: "Read it with the vcs-lab build that wrote it.",
+    family: "causet.workspaces",
+    recovery: "Read it with the causet build that wrote it.",
   });
   if (!Array.isArray(registry.workspaces)) {
     throw new CliError(`The workspace registry at '${registryPath}' has no workspace list.`,
@@ -65,8 +65,8 @@ export function readWorkspaces(cwd = process.cwd()) {
   }
   for (const workspace of registry.workspaces) {
     assertReadableSchema(workspace?.schema, `A workspace entry in '${registryPath}'`, {
-      family: "vcs-lab.workspace",
-      recovery: "Read it with the vcs-lab build that wrote it.",
+      family: "causet.workspace",
+      recovery: "Read it with the causet build that wrote it.",
     });
   }
   return registry;
@@ -294,7 +294,7 @@ function createWorkspaceLocked(name, options) {
   addWorktree(context, workspacePath, ["-b", branch, workspacePath, baseSnapshot], cone);
 
   const workspace = {
-    schema: "vcs-lab.workspace/v1",
+    schema: "causet.workspace/v1",
     id: newId("ws"),
     name,
     path: workspacePath,
@@ -388,7 +388,7 @@ export function checkpointWorkspace(label, options = {}) {
     }
     runGit(["update-ref", ref, checkpoint], { cwd: context.root });
     return {
-      schema: "vcs-lab.checkpoint/v1",
+      schema: "causet.checkpoint/v1",
       id: checkpoint,
       shortId: checkpoint.slice(0, 12),
       workspaceId: workspace.id,
@@ -687,7 +687,7 @@ function pruneWorkspacesLocked(options) {
       !fs.existsSync(workspace.path),
     );
   const result = {
-    schema: "vcs-lab.workspace-prune/v1",
+    schema: "causet.workspace-prune/v1",
     dryRun: !options.apply,
     applied: Boolean(options.apply),
     changed: false,
