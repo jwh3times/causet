@@ -4,7 +4,7 @@
  *
  * `test/fixtures/legacy-0.19.1/` was produced by `scripts/make-legacy-fixture.mjs`
  * with v0.19.1, whose records all carry `vcs-lab.*` identifiers: every ref in a
- * bundle, the shared-local and private state a bundle cannot carry, an exported
+ * base64 bundle, the shared-local and private state a bundle cannot carry, an exported
  * envelope, a proof bundle, and that build's own read outputs. Records keep
  * those identifiers forever, so this build must read them as the `causet.*`
  * families they alias. The comparison ignores only what cannot be the same: the
@@ -56,7 +56,9 @@ function restore() {
   git(repo, "config", "user.name", "Legacy Fixture");
   git(repo, "config", "user.email", "legacy@example.invalid");
   git(repo, "config", "core.autocrlf", "false");
-  git(repo, "fetch", "-q", "--update-head-ok", path.join(source, "repo.bundle"), "+refs/*:refs/*");
+  const bundle = path.join(root, "repo.bundle");
+  fs.writeFileSync(bundle, Buffer.from(fixture.bundle, "base64"));
+  git(repo, "fetch", "-q", "--update-head-ok", bundle, "+refs/*:refs/*");
   git(repo, "reset", "-q", "--hard", fixture.head);
   // What `cst init` configured in the fixture's repository.
   git(repo, "config", "notes.displayRef", "refs/notes/vcs-lab");

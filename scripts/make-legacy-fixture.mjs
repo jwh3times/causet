@@ -152,7 +152,9 @@ const placeholder = (text) => text
   .split(root.replaceAll("\\", "/")).join("<ROOT>");
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
-git(repo, "bundle", "create", path.join(out, "repo.bundle"), "--all");
+// Everything is text: the repository forbids binary files (test/repository-hygiene.test.js).
+const bundleFile = path.join(root, "repo.bundle");
+git(repo, "bundle", "create", bundleFile, "--all");
 const state = path.join(repo, ".git", "vcs-lab");
 const files = {};
 for (const entry of fs.readdirSync(state, { recursive: true, withFileTypes: true })) {
@@ -173,6 +175,7 @@ const fixture = {
   head: git(repo, "rev-parse", "HEAD"),
   workspace: { name: "agent", branch: git(workspace, "branch", "--show-current"), path: "<ROOT>/ws-agent" },
   forecastId: forecast.id,
+  bundle: fs.readFileSync(bundleFile).toString("base64"),
   state: files,
   envelope,
   proofBundle: fs.readFileSync(path.join(root, "proof-bundle.json"), "utf8"),
