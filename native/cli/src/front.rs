@@ -313,7 +313,7 @@ fn usage_check(command: &str, parsed: &Parsed, help: &str) -> Option<Failure> {
       .any(|key| parsed.truthy(key))
   };
   match command {
-    "init" | "graph" | "provenance" | "receipts" | "capabilities" | "doctor" => None,
+    "init" | "graph" | "provenance" | "receipts" | "capabilities" | "doctor" | "migrate" => None,
     "commit" => require(parsed.truthy("message"), "cst commit -m <message>"),
     "branch" => require(p(0), "cst branch <name> [from]"),
     "merge" | "compact-merge" | "hard-squash" => require(p(0), &format!("cst {command} <source>")),

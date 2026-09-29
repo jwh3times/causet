@@ -12,6 +12,7 @@ import {
 } from "./pending-operation.js";
 import { CliError } from "./errors.js";
 import { assertWithinBound, canonicalSchema } from "./schemas.js";
+import { CURRENT_NAMES, LEGACY_NAMES, names } from "./locations.js";
 
 export const SPEC_PARSER = "stable-markdown-blocks/v2";
 export const SPEC_MERGE_ALGORITHM = "stable-markdown-three-way/v2";
@@ -324,15 +325,16 @@ function readStoredManifest(file) {
   return readJson(file, null);
 }
 
-function manifestRelativePath(source) {
-  return `.vcs-lab/specs/${source}.json`;
+function manifestRelativePath(source, cwd) {
+  return `${names(cwd).specsDir}/${source}.json`;
 }
 
 export function specFilesForConflictPaths(paths) {
   const files = new Set();
   for (const file of paths) {
     if (/\.md$/i.test(file)) files.add(file);
-    const match = file.match(/^\.vcs-lab\/specs\/(.+\.md)\.json$/i);
+    // Either manifest directory: history from before a migration keeps its paths.
+    const match = file.match(/^\.(?:causet|vcs-lab)\/specs\/(.+\.md)\.json$/i);
     if (match) files.add(match[1]);
   }
   return [...files].sort();
@@ -349,7 +351,7 @@ function relativeSpecPath(file, context, cwd) {
 }
 
 function manifestPathFromRelative(relative, context) {
-  return path.join(context.root, ".vcs-lab", "specs", `${relative}.json`);
+  return path.join(context.root, ...names(context.root).specsDir.split("/"), `${relative}.json`);
 }
 
 export function manifestPathFor(file, cwd = process.cwd()) {
@@ -770,18 +772,20 @@ function revisionStageFromObjects(file, revision, sourceObject, manifestObject) 
 }
 
 function revisionStages(file, revisions, cwd) {
-  const manifestFile = manifestRelativePath(file);
+  // A revision committed before a migration keeps its manifest under the former
+  // directory, so both are read in the same batch and the current one wins.
   const expressions = revisions.flatMap((revision) => [
     `${revision}:${file}`,
-    `${revision}:${manifestFile}`,
+    `${revision}:${CURRENT_NAMES.specsDir}/${file}.json`,
+    `${revision}:${LEGACY_NAMES.specsDir}/${file}.json`,
   ]);
   const objects = readGitObjects(expressions, cwd);
   return revisions.map((revision, index) =>
     revisionStageFromObjects(
       file,
       revision,
-      objects[index * 2],
-      objects[index * 2 + 1],
+      objects[index * 3],
+      objects[index * 3 + 1] ?? objects[index * 3 + 2],
     ),
   );
 }
@@ -987,7 +991,7 @@ export function planSpecMerge(
     throw new CliError("Semantic spec merge currently supports Markdown files only.",
       { code: "unsupported-feature" });
   }
-  const manifestFile = manifestRelativePath(relative);
+  const manifestFile = manifestRelativePath(relative, cwd);
   let base;
   let ours;
   let theirs;

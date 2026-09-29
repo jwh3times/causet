@@ -34,16 +34,16 @@ function fixture(t, format = "sha1") {
   const tree = entries => git(["mktree", "--missing"], entries.map(entry =>
     `${entry.mode ?? "100644"} ${entry.type ?? "blob"} ${entry.oid ?? blob}\t${entry.name}\n`,
   ).join(""));
-  const publish = oid => git(["update-ref", "refs/notes/vcs-lab",
+  const publish = oid => git(["update-ref", "refs/notes/causet",
     git(["commit-tree", oid, "-m", "Notes fixture"])]);
-  const oracle = (ref = "vcs-lab") => {
+  const oracle = (ref = "causet") => {
     const output = git(["notes", `--ref=${ref}`, "list"]);
     return output ? output.split(/\r?\n/).map(line => {
       const [note, target] = line.split(" ");
       return { note, target };
     }) : [];
   };
-  const listing = (ref = "vcs-lab") => withGitObjectSession(cwd, () => {
+  const listing = (ref = "causet") => withGitObjectSession(cwd, () => {
     const collector = beginGitMetrics("notes-listing");
     try {
       return { entries: listNoteEntries(ref, cwd), metrics: endGitMetrics(collector) };
@@ -76,7 +76,7 @@ for (const format of ["sha1", "sha256"]) {
       { name: "not-a-note" },
     ]);
     f.publish(root);
-    for (const ref of ["vcs-lab", "notes/vcs-lab", "refs/notes/vcs-lab"]) {
+    for (const ref of ["causet", "notes/causet", "refs/notes/causet"]) {
       const actual = f.listing(ref);
       assert.deepEqual(actual.entries, f.oracle(ref));
       assert.equal(actual.entries.length, 4);
@@ -109,9 +109,9 @@ test("notes sessions reread moved refs and retain ordinary listing when disabled
   const f = fixture(t);
   f.publish(f.tree([{ name: "1".repeat(f.width) }]));
   withGitObjectSession(f.cwd, () => {
-    assert.equal(listNoteEntries("vcs-lab", f.cwd)[0].target, "1".repeat(f.width));
+    assert.equal(listNoteEntries("causet", f.cwd)[0].target, "1".repeat(f.width));
     f.publish(f.tree([{ name: "2".repeat(f.width) }]));
-    assert.equal(listNoteEntries("vcs-lab", f.cwd)[0].target, "2".repeat(f.width));
+    assert.equal(listNoteEntries("causet", f.cwd)[0].target, "2".repeat(f.width));
   });
   process.env.CAUSET_GIT_SESSION = "0";
   const actual = f.listing();
@@ -158,7 +158,7 @@ test("a missing notes subtree preserves Git's failure result instead of a partia
     { name: "1".repeat(f.width) },
     { name: "ab", mode: "040000", type: "tree", oid: "f".repeat(f.width) },
   ]));
-  const oracle = spawnSync("git", ["notes", "--ref=vcs-lab", "list"], {
+  const oracle = spawnSync("git", ["notes", "--ref=causet", "list"], {
     cwd: f.cwd, env: testEnv(), encoding: "utf8", windowsHide: true,
   });
   assert.notEqual(oracle.status, 0);
@@ -187,7 +187,7 @@ test("listing notes and reading their blobs share one Git process", t => {
   f.publish(f.tree([{ name: "a".repeat(f.width) }]));
   const collector = beginGitMetrics("notes-with-blobs");
   withGitObjectSession(f.cwd, () => {
-    const entries = listNoteEntries("vcs-lab", f.cwd);
+    const entries = listNoteEntries("causet", f.cwd);
     const [blob] = readGitObjects(entries.map(entry => entry.note), f.cwd);
     assert.equal(blob.content.toString(), "note\n");
   });

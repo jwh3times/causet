@@ -482,7 +482,7 @@ test("aborting a merge-preserving rebase restores the source exactly", (t) => {
   assert.equal(git(repo, "rev-parse", "HEAD^{tree}"), originalTree);
   assert.equal(git(repo, "status", "--porcelain=v1"), "");
   // The operation's own anchor refs are released once the tip is back.
-  assert.equal(git(repo, "for-each-ref", "--format=%(refname)", "refs/vcs-lab/rebase/"), "");
+  assert.equal(git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/rebase/"), "");
 });
 
 // ---------------------------------------------------------------------------
@@ -528,7 +528,7 @@ test("a join's spec merge is planned from the parents it is joining", (t) => {
   write(repo, "docs/spec.md", "# Alpha\n\nours alpha\n\n# Beta\n\ntheirs beta\n");
   // Git leaves conflict markers in the manifest too; it is derived, so it is
   // rebuilt from the resolved Markdown rather than merged by hand.
-  fs.rmSync(path.join(repo, ".vcs-lab/specs/docs/spec.md.json"), { force: true });
+  fs.rmSync(path.join(repo, ".causet/specs/docs/spec.md.json"), { force: true });
   vlab(repo, "spec", "index", "docs/spec.md", "--json");
   git(repo, "add", "-A");
   git(repo, "-c", "core.editor=true", "commit", "--no-edit");

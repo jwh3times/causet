@@ -2,11 +2,11 @@ import { runGit, withGitObjectSession } from "./git.js";
 import { commitMessage, refTarget, repoContext } from "./engine.js";
 import { metadataSnapshot } from "./metadata.js";
 import { withNotesLock } from "./notes.js";
-import { buildRetentionCommit, checkedRefUpdate, recordDependencies, RETENTION_REF } from "./git-carriers.js";
+import { buildRetentionCommit, checkedRefUpdate, recordDependencies, retentionRef } from "./git-carriers.js";
+import { names } from "./locations.js";
 import { CliError } from "./errors.js";
 import { faultPoint, gatePoint } from "./faults.js";
 
-const NOTES_REF = "refs/notes/vcs-lab";
 
 export function retainMetadata(options = {}) {
   if (Boolean(options.dryRun) === Boolean(options.apply)) {
@@ -18,6 +18,8 @@ export function retainMetadata(options = {}) {
 }
 
 function retainSnapshot(options, cwd) {
+  const NOTES_REF = names(cwd).notesRef;
+  const RETENTION_REF = retentionRef(cwd);
   const notesTip = refTarget(NOTES_REF, cwd);
   const retentionBefore = refTarget(RETENTION_REF, cwd);
   const snapshot = metadataSnapshot({ cwd, portableOnly: true });
@@ -39,7 +41,7 @@ function retainSnapshot(options, cwd) {
   for (const type of dependencies.values()) result.objects[`${type}s`] += 1;
   if (options.apply && wouldChange) {
     const next = buildRetentionCommit(dependencies, retentionBefore, cwd, {
-      message: `Backfill vcs-lab object retention\n\n${marker}`,
+      message: `Backfill causet object retention\n\n${marker}`,
     });
     gatePoint("retention:backfill-before-publish");
     faultPoint("retention:before-publish");

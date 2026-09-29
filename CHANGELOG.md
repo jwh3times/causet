@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- **Keep metadata under the causet names, and add `cst migrate`** (issue #159,
+  ADR-0039 §1, §3, §4).
+  - **New repositories** use `refs/notes/causet`, `refs/causet/*`, the
+    `causet/` runtime directories and `.causet/specs/` from their first write,
+    and new workspaces use `causet/ws/<name>` branches.
+  - **Repositories with metadata from an earlier build keep working
+    unchanged** under `refs/notes/vcs-lab`, `refs/vcs-lab/*`, `vcs-lab/` and
+    `.vcs-lab/specs/`. `cst metadata status` reports them with the new
+    info-level diagnostic `unmigrated-repository`, and `cst doctor` gains
+    `migration` (`unmigrated`, `migrated` or `mixed`).
+  - **`cst migrate [--dry-run] [--json]`** creates each new ref at its former
+    ref's object in one transaction, repoints `notes.displayRef` and
+    `notes.rewriteRef`, moves the runtime directories of every worktree, and
+    stages `git mv .vcs-lab/specs .causet/specs` for you to commit.
+    - It never deletes anything, and never commits.
+    - It refuses while a reconciliation, rebase, export or import is in
+      progress.
+    - It records what it migrated in `<common dir>/causet/migration.json`
+      (`causet.migration/v1`).
+    - A former ref that advances afterwards is reported as the
+      `legacy-ref-advanced` warning. Running `cst migrate` again fast-forwards
+      the new ref, and refuses if both moved.
+  - **Old records stay readable.** Records keep naming the refs they were
+    written with, and every join translates them. Envelope import applies a
+    manifest's `refs/notes/vcs-lab` or `refs/vcs-lab/resolutions/*` entries
+    under the destination's own names. The README gives both fetch refspecs.
+  - **Windows path limit:** the resolution-ref Windows path budget gains one
+    character, so a 114-character repository root now fits.
+  - **One extra process:** an empty `cst resolve list` now pays one repository
+    context probe (`rev-parse`) to learn which refs to scan.
+
 - **Write `causet.*` identifiers, and read `vcs-lab.*` ones forever** (issue
   #159, ADR-0039 §2). Every record, receipt, envelope, proof bundle, journal and
   JSON output this build writes names its family `causet.<family>/vN`: for

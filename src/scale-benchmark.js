@@ -1,3 +1,4 @@
+import { names, refFamily } from "./locations.js";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -143,13 +144,13 @@ function batchReadObjects(repo, oids) {
 }
 
 function noteBlobOids(repo) {
-  const listed = runGit(["notes", "--ref=vcs-lab", "list"], { cwd: repo, rawProbe: true }).stdout;
+  const listed = runGit(["notes", `--ref=${names(repo).notesName}`, "list"], { cwd: repo, rawProbe: true }).stdout;
   return listed.split("\n").filter(Boolean).map((line) => line.split(" ")[0]);
 }
 
 function resolutionBlobOids(repo) {
   const listed = runGit(
-    ["for-each-ref", "--format=%(objectname)", "refs/vcs-lab/resolutions/"],
+    ["for-each-ref", "--format=%(objectname)", `${refFamily("resolutions", repo)}/`],
     { cwd: repo, rawProbe: true },
   ).stdout;
   return listed.split("\n").filter(Boolean);
@@ -188,12 +189,12 @@ const GIT_EQUIVALENTS = {
     },
   },
   noteCatalog: {
-    equivalent: "git notes --ref=vcs-lab list, then git cat-file --batch over the note blobs",
+    equivalent: "git notes --ref=causet list, then git cat-file --batch over the note blobs",
     run: (repo) => batchReadObjects(repo, noteBlobOids(repo)),
   },
   resolutionCatalog: {
     equivalent:
-      "git for-each-ref refs/vcs-lab/resolutions/, then git cat-file --batch over the result blobs",
+      "git for-each-ref refs/causet/resolutions/, then git cat-file --batch over the result blobs",
     run: (repo) => batchReadObjects(repo, resolutionBlobOids(repo)),
   },
   metadataStatus: {

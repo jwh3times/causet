@@ -13,9 +13,9 @@ import { CliError } from "./errors.js";
 import { gatePoint, faultPoint } from "./faults.js";
 import { canonicalSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
 import { ensureLabRuntime } from "./store.js";
-import { buildNoteCommit, buildRetentionCommit, checkedRefUpdate, recordDependencies, RETENTION_REF } from "./git-carriers.js";
+import { buildNoteCommit, buildRetentionCommit, checkedRefUpdate, recordDependencies, retentionRef } from "./git-carriers.js";
+import { names } from "./locations.js";
 
-export const NOTES_REF = "vcs-lab";
 
 const NOTE_SCHEMA = "causet.note/v1";
 
@@ -89,7 +89,7 @@ function parseNoteText(text) {
 }
 
 export function readNote(commit, cwd = process.cwd()) {
-  const text = readNoteText(NOTES_REF, commit, cwd);
+  const text = readNoteText(names(cwd).notesName, commit, cwd);
   if (text === null) return emptyNote();
   return parseNoteText(text);
 }
@@ -307,9 +307,11 @@ export function replaceNoteRecord(commit, recordId, replacement, cwd = process.c
  */
 function rewriteNote(commit, transform, retain, cwd, options = {}) {
   return withNotesLock(cwd, () => {
-    const previousNotes = refTarget(`refs/notes/${NOTES_REF}`, cwd);
-    const previousRetention = refTarget(RETENTION_REF, cwd);
-    const text = readNoteText(NOTES_REF, commit, cwd);
+    const { notesName, notesRef } = names(cwd);
+    const retention = retentionRef(cwd);
+    const previousNotes = refTarget(notesRef, cwd);
+    const previousRetention = refTarget(retention, cwd);
+    const text = readNoteText(notesName, commit, cwd);
     const { note, disposition } = classifyNoteText(text === null ? "" : text);
     if (disposition === "foreign") {
       throw new CliError(
@@ -318,7 +320,7 @@ function rewriteNote(commit, transform, retain, cwd, options = {}) {
           code: "wrong-record-family",
           details:
             "causet will not overwrite a note container it cannot read. Inspect it " +
-            `with: git notes --ref=${NOTES_REF} show ${commit}`,
+            `with: git notes --ref=${notesName} show ${commit}`,
         },
       );
     }
@@ -355,8 +357,8 @@ function rewriteNote(commit, transform, retain, cwd, options = {}) {
     const nextRetention = buildRetentionCommit(dependencies, previousRetention, cwd);
     faultPoint("retention:before-publish");
     runGit(["update-ref", "--stdin"], { cwd, input: [
-      "start", checkedRefUpdate(`refs/notes/${NOTES_REF}`, nextNotes, previousNotes),
-      checkedRefUpdate(RETENTION_REF, nextRetention, previousRetention),
+      "start", checkedRefUpdate(notesRef, nextNotes, previousNotes),
+      checkedRefUpdate(retention, nextRetention, previousRetention),
       ...(options.refUpdates ?? []), "prepare", "commit", "",
     ].join("\n") });
     faultPoint("retention:after-publish");
@@ -369,7 +371,7 @@ export function listNoteTargets(cwd = process.cwd()) {
 }
 
 function listNoteEntries(cwd = process.cwd()) {
-  return listNotes(NOTES_REF, cwd);
+  return listNotes(names(cwd).notesName, cwd);
 }
 
 function recordsForEntries(entries, cwd) {

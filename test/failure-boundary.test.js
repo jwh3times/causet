@@ -87,9 +87,9 @@ function makeReconcilable() {
 }
 
 const receipts = (repo) => JSON.parse(vlab(repo, "receipts", "--json"));
-const journalPath = (repo) => path.join(repo, ".git", "vcs-lab", "reconciliation.json");
+const journalPath = (repo) => path.join(repo, ".git", "causet", "reconciliation.json");
 const notesRef = (repo) =>
-  spawnSync("git", ["rev-parse", "refs/notes/vcs-lab"], { cwd: repo, encoding: "utf8", env: testEnv() })
+  spawnSync("git", ["rev-parse", "refs/notes/causet"], { cwd: repo, encoding: "utf8", env: testEnv() })
     .stdout.trim();
 
 test("an interrupted publication leaves a recoverable journal and no duplicate records", () => {
@@ -258,7 +258,7 @@ function conflictOnSharedFile(repo) {
   return repo;
 }
 
-const rebaseJournalPath = (repo) => path.join(repo, ".git", "vcs-lab", "rebase.json");
+const rebaseJournalPath = (repo) => path.join(repo, ".git", "causet", "rebase.json");
 
 test("an interrupted rebase publication is recoverable and never duplicates a record", () => {
   for (const point of [
@@ -517,7 +517,7 @@ test("a journal never claims more progress than Git actually made", () => {
 
     // The atomic write leaves no torn file and no debris behind it.
     const strays = fs
-      .readdirSync(path.join(repo, ".git", "vcs-lab"))
+      .readdirSync(path.join(repo, ".git", "causet"))
       .filter((entry) => entry.includes(".tmp-"));
     assert.deepEqual(strays, [], `${command}: the journal write leaves no temporary file`);
 
@@ -832,7 +832,7 @@ async function until(condition, timeoutMs = 20_000) {
 }
 
 const noteRecordIds = (repo, commit) =>
-  JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", commit)).records
+  JSON.parse(git(repo, "notes", "--ref=causet", "show", commit)).records
     .map((record) => record.id);
 
 test("two publishers appending to one commit at once lose no record", async () => {
@@ -861,13 +861,13 @@ test("two publishers appending to one commit at once lose no record", async () =
   assert.equal(firstResult.status, 0, firstResult.stderr);
   assert.equal(secondResult.status, 0, secondResult.stderr);
   assert.deepEqual(noteRecordIds(repo, commit).sort(), ["first", "second"]);
-  assert.equal(fs.existsSync(path.join(repo, ".git", "vcs-lab", "notes.lock")), false);
+  assert.equal(fs.existsSync(path.join(repo, ".git", "causet", "notes.lock")), false);
 });
 
 test("a lock whose holder is gone is abandoned, and a live holder's is respected", async () => {
   const repo = makeReconcilable();
   const commit = git(repo, "rev-parse", "HEAD");
-  const lockPath = path.join(repo, ".git", "vcs-lab", "notes.lock");
+  const lockPath = path.join(repo, ".git", "causet", "notes.lock");
   const claim = (pid, hostname) =>
     `${JSON.stringify({ pid, hostname, createdAt: new Date().toISOString() })}\n`;
 
@@ -895,7 +895,7 @@ test("a lock whose holder is gone is abandoned, and a live holder's is respected
   git(repo, "add", "-A");
   const status = git(repo, "status", "--porcelain");
   const staged = fs.readFileSync(path.join(repo, ".git", "index"));
-  const notesBefore = git(repo, "rev-parse", "refs/notes/vcs-lab");
+  const notesBefore = git(repo, "rev-parse", "refs/notes/causet");
   const refused = refusal(vlabResult(
     repo,
     ["commit", "-m", "held", "--generated-by", "agent:test", "--json"],
@@ -906,7 +906,7 @@ test("a lock whose holder is gone is abandoned, and a live holder's is respected
   assert.deepEqual(fs.readFileSync(path.join(repo, ".git", "index")), staged);
   assert.equal(git(repo, "status", "--porcelain"), status);
   assert.equal(fs.readFileSync(path.join(repo, "held.txt"), "utf8"), "held\n");
-  assert.equal(git(repo, "rev-parse", "refs/notes/vcs-lab"), notesBefore);
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), notesBefore);
   assert.equal(fs.existsSync(lockPath), true);
   fs.rmSync(lockPath);
 
@@ -936,7 +936,7 @@ function workspaceWriter(repo, args, env = {}) {
 }
 
 function workspaceRuntime(repo, name) {
-  return path.join(repo, ".git", "vcs-lab", name);
+  return path.join(repo, ".git", "causet", name);
 }
 
 async function competingWorkspaceWriters(repo, firstArgs, secondArgs, secondCwd = repo) {
@@ -1111,7 +1111,7 @@ test("failed workspace materialization leaves the registry unchanged and release
   assert.deepEqual(fs.readFileSync(registryFile), before);
   assert.equal(fs.existsSync(workspaceRuntime(repo, "workspaces.lock")), false);
   assert.ok(fs.existsSync(destination), "partial materialization is retained for inspection");
-  assert.equal(git(repo, "rev-parse", "vlab/ws/partial"), git(repo, "rev-parse", "HEAD"));
+  assert.equal(git(repo, "rev-parse", "causet/ws/partial"), git(repo, "rev-parse", "HEAD"));
   git(repo, "config", "--unset", "core.hooksPath");
   assert.equal(vlabResult(repo, ["workspace", "create", "next", "--path", path.join(parent, "next"), "--json"]).status, 0);
 
@@ -1140,7 +1140,7 @@ function pausedWorkspace(operation, pause = "publication") {
     const forecast = JSON.parse(vlab(workspace,
       operation === "reconcile" ? "forecast" : "rebase-forecast", source, "--json"));
     const savedPath = path.resolve(workspace, git(workspace, "rev-parse", "--git-path",
-      `vcs-lab/forecasts/${forecast.id}.json`));
+      `causet/forecasts/${forecast.id}.json`));
     const saved = JSON.parse(fs.readFileSync(savedPath, "utf8"));
     saved.predictedResultTree = git(workspace, "rev-parse", `${originalHead}^{tree}`);
     fs.writeFileSync(savedPath, `${JSON.stringify(saved, null, 2)}\n`);
@@ -1151,7 +1151,7 @@ function pausedWorkspace(operation, pause = "publication") {
   assert.equal(git(workspace, "status", "--porcelain"), "");
   assert.equal(JSON.parse(vlab(workspace, operation, "--status", "--json")).active, true);
   const gitDir = git(workspace, "rev-parse", "--absolute-git-dir");
-  const journal = path.join(gitDir, "vcs-lab", operation === "reconcile" ? "reconciliation.json" : "rebase.json");
+  const journal = path.join(gitDir, "causet", operation === "reconcile" ? "reconciliation.json" : "rebase.json");
   return { repo, workspace, gitDir, journal, originalHead };
 }
 
@@ -1223,7 +1223,7 @@ test("archive refuses malformed and unknown journals by presence in the target w
   const repo = makeReconcilable();
   const workspace = path.join(path.dirname(repo), "worker");
   vlab(repo, "workspace", "create", "worker", "--path", workspace, "--json");
-  const runtime = path.resolve(workspace, git(workspace, "rev-parse", "--git-path", "vcs-lab"));
+  const runtime = path.resolve(workspace, git(workspace, "rev-parse", "--git-path", "causet"));
   fs.mkdirSync(runtime, { recursive: true });
   for (const filename of ["reconciliation.json", "rebase.json"]) {
     const journal = path.join(runtime, filename);
@@ -1249,7 +1249,7 @@ test("prune checks unregistered linked journals before any repository-wide delet
     const outside = path.join(parent, "outside");
     git(repo, "worktree", "add", "-b", "outside", outside);
     const gitDir = git(outside, "rev-parse", "--absolute-git-dir");
-    const journal = path.join(gitDir, "vcs-lab", "rebase.json");
+    const journal = path.join(gitDir, "causet", "rebase.json");
     fs.mkdirSync(path.dirname(journal), { recursive: true });
     fs.writeFileSync(journal, "partial {");
     fs.rmSync(registered, { recursive: true, force: true });
@@ -1320,7 +1320,7 @@ test("attributed commits hold the notes lock through Git hooks and release it on
   const hooks = path.join(path.dirname(repo), "hooks");
   fs.mkdirSync(hooks);
   const hook = path.join(hooks, "pre-commit");
-  fs.writeFileSync(hook, "#!/bin/sh\ntest -f \"$(git rev-parse --git-common-dir)/vcs-lab/notes.lock\" || exit 77\nexit 1\n", { mode: 0o755 });
+  fs.writeFileSync(hook, "#!/bin/sh\ntest -f \"$(git rev-parse --git-common-dir)/causet/notes.lock\" || exit 77\nexit 1\n", { mode: 0o755 });
   git(repo, "config", "core.hooksPath", hooks);
   write(repo, "hook.txt", "staged\n");
   git(repo, "add", "-A");
@@ -1333,7 +1333,7 @@ test("attributed commits hold the notes lock through Git hooks and release it on
   assert.equal(git(repo, "ls-files", "--stage"), index);
   assert.equal(fs.existsSync(lock), false);
   // The hook now succeeds only if Git really runs under the outer notes lock.
-  fs.writeFileSync(hook, "#!/bin/sh\ntest -f \"$(git rev-parse --git-common-dir)/vcs-lab/notes.lock\"\n", { mode: 0o755 });
+  fs.writeFileSync(hook, "#!/bin/sh\ntest -f \"$(git rev-parse --git-common-dir)/causet/notes.lock\"\n", { mode: 0o755 });
   const committed = JSON.parse(vlab(repo, ...args));
   assert.deepEqual(noteRecordIds(repo, committed.commit), [committed.provenance.id]);
   assert.equal(fs.existsSync(lock), false, "nested append releases only after the whole commit finishes");
@@ -1342,7 +1342,7 @@ test("attributed commits hold the notes lock through Git hooks and release it on
 test("a post-commit notes failure identifies the retained commit and permits provenance repair", () => {
   const repo = makeReconcilable();
   const before = git(repo, "rev-parse", "HEAD");
-  const blockedRef = path.join(repo, ".git", "refs", "notes", "vcs-lab.lock");
+  const blockedRef = path.join(repo, ".git", "refs", "notes", "causet.lock");
   fs.mkdirSync(path.dirname(blockedRef), { recursive: true });
   fs.writeFileSync(blockedRef, "test-held Git ref lock\n");
   write(repo, "publication.txt", "committed bytes\n");

@@ -33,7 +33,7 @@ function fixture(t) {
   git("config", "user.email", "fences@example.invalid");
   git("config", "core.autocrlf", "false");
   const source = path.join(root, "spec.md");
-  const manifestFile = path.join(root, ".vcs-lab/specs/spec.md.json");
+  const manifestFile = path.join(root, ".causet/specs/spec.md.json");
   const stored = () => JSON.parse(fs.readFileSync(manifestFile, "utf8"));
   const save = (value) => fs.writeFileSync(manifestFile, `${JSON.stringify(value)}\n`);
   const index = (text) => {
@@ -234,10 +234,10 @@ test("exact resolution materialization preserves legacy bytes without certifying
   f.legacy();
   const old = f.commit();
   const bytes = fs.readFileSync(f.manifestFile, "utf8");
-  const blob = f.git("rev-parse", `${old}:.vcs-lab/specs/spec.md.json`);
+  const blob = f.git("rev-parse", `${old}:.causet/specs/spec.md.json`);
   f.index();
   f.commit();
-  materializeResolutionCandidate({ path: ".vcs-lab/specs/spec.md.json" }, {
+  materializeResolutionCandidate({ path: ".causet/specs/spec.md.json" }, {
     resultBlob: blob, resultMode: "100644",
   }, f.root);
   assert.equal(fs.readFileSync(f.manifestFile, "utf8"), bytes);
@@ -257,7 +257,7 @@ for (const mode of ["reconcile", "rebase"]) {
     const forecast = f.vlab(mode === "reconcile" ? "forecast" : "rebase-forecast", target);
     assert.equal(forecast.status, "complete");
     assert.equal(forecast.approvedSpecMerges.length, 1);
-    const forecastFile = path.join(f.root, ".git/vcs-lab/forecasts", `${forecast.id}.json`);
+    const forecastFile = path.join(f.root, ".git/causet/forecasts", `${forecast.id}.json`);
     const old = JSON.parse(fs.readFileSync(forecastFile, "utf8"));
     const before = f.git("rev-parse", "HEAD");
     fs.writeFileSync(forecastFile, JSON.stringify({
@@ -269,7 +269,7 @@ for (const mode of ["reconcile", "rebase"]) {
     delete old.approvedSpecMerges[0].algorithm;
     old.steps[0].semanticMerges[0].algorithm = "stable-markdown-three-way/v1";
     fs.writeFileSync(forecastFile, JSON.stringify(old));
-    const journal = path.join(f.root, ".git/vcs-lab", mode === "reconcile" ? "reconciliation.json" : "rebase.json");
+    const journal = path.join(f.root, ".git/causet", mode === "reconcile" ? "reconciliation.json" : "rebase.json");
     assertRefusal(() => f.vlab(mode, target, "--use-forecast", forecast.id), "precondition-not-met");
     assert.equal(f.git("rev-parse", "HEAD"), before);
     assert.equal(f.git("status", "--porcelain"), "");

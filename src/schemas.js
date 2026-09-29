@@ -74,7 +74,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "ignore",
-    store: "refs/notes/vcs-lab note blobs",
+    store: "refs/notes/causet note blobs",
   }],
   ["causet.landing", {
     scope: "note-record",
@@ -82,7 +82,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.application", {
     scope: "note-record",
@@ -90,7 +90,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1, 4],
     written: [1, 4],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.reconciliation", {
     scope: "note-record",
@@ -98,7 +98,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [6],
     written: [6],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.rebase-application", {
     scope: "note-record",
@@ -106,7 +106,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.rebase", {
     scope: "note-record",
@@ -117,7 +117,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1, 2, 3],
     written: [3],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.amendment", {
     scope: "note-record",
@@ -129,7 +129,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.interactive-absorption", {
     scope: "note-record",
@@ -137,7 +137,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.provenance", {
     scope: "note-record",
@@ -145,7 +145,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.resolution", {
     scope: "note-record",
@@ -153,7 +153,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "quarantine",
-    store: "refs/notes/vcs-lab note containers",
+    store: "refs/notes/causet note containers",
   }],
   ["causet.reconciliation-operation", {
     scope: "private",
@@ -161,7 +161,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [4],
     written: [4],
     unknownVersion: "refuse",
-    store: "<git dir>/vcs-lab/reconciliation.json",
+    store: "<git dir>/causet/reconciliation.json",
   }],
   ["causet.rebase-operation", {
     scope: "private",
@@ -173,7 +173,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [3],
     written: [3],
     unknownVersion: "refuse",
-    store: "<git dir>/vcs-lab/rebase.json",
+    store: "<git dir>/causet/rebase.json",
   }],
   ["causet.forecast", {
     scope: "private",
@@ -181,7 +181,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1, 2],
     written: [2],
     unknownVersion: "refuse",
-    store: "<git dir>/vcs-lab/forecasts/<id>.json",
+    store: "<git dir>/causet/forecasts/<id>.json",
   }],
   ["causet.rebase-forecast", {
     scope: "private",
@@ -194,7 +194,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [3],
     written: [3],
     unknownVersion: "refuse",
-    store: "<git dir>/vcs-lab/forecasts/<id>.json",
+    store: "<git dir>/causet/forecasts/<id>.json",
   }],
   ["causet.workspaces", {
     scope: "shared-local",
@@ -202,7 +202,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "refuse",
-    store: "<common dir>/vcs-lab/workspaces.json",
+    store: "<common dir>/causet/workspaces.json",
   }],
   ["causet.workspace", {
     scope: "shared-local",
@@ -210,7 +210,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "refuse",
-    store: "entries of <common dir>/vcs-lab/workspaces.json",
+    store: "entries of <common dir>/causet/workspaces.json",
   }],
   ["causet.quarantined-record", {
     scope: "shared-local",
@@ -218,7 +218,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "refuse",
-    store: "refs/vcs-lab/quarantine/<lineage>/<record id> blobs",
+    store: "refs/causet/quarantine/<lineage>/<record id> blobs",
   }],
   ["causet.dispositions", {
     scope: "shared-local",
@@ -226,7 +226,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "refuse",
-    store: "<common dir>/vcs-lab/dispositions.json",
+    store: "<common dir>/causet/dispositions.json",
   }],
   ["causet.disposition", {
     scope: "shared-local",
@@ -234,7 +234,15 @@ export const RECORD_FAMILIES = new Map([
     readable: [1],
     written: [1],
     unknownVersion: "refuse",
-    store: "entries of <common dir>/vcs-lab/dispositions.json",
+    store: "entries of <common dir>/causet/dispositions.json",
+  }],
+  ["causet.migration", {
+    scope: "shared-local",
+    registered: [1],
+    readable: [1],
+    written: [1],
+    unknownVersion: "refuse",
+    store: "<common dir>/causet/migration.json",
   }],
   ["causet.spec-manifest", {
     scope: "tracked",
@@ -242,7 +250,7 @@ export const RECORD_FAMILIES = new Map([
     readable: [1, 2, 3, 4],
     written: [4],
     unknownVersion: "refuse",
-    store: ".vcs-lab/specs/**",
+    store: ".causet/specs/**",
   }],
   ["causet.metadata-envelope", {
     scope: "envelope",
@@ -291,7 +299,7 @@ const KNOWN_SCHEMAS = new Map(
  * separate and live in `src/git.js`.
  */
 export const RESOURCE_BOUNDS = Object.freeze({
-  /** Bytes of one refs/notes/vcs-lab note blob that may be parsed. */
+  /** Bytes of one refs/notes/causet note blob that may be parsed. */
   noteContainerBytes: 8 * 1024 * 1024,
   /** Records one note container may carry. */
   noteContainerRecords: 4096,
@@ -714,7 +722,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     }
     requireOid(record, "resultBlob", objectFormat, errors, true);
     requireOid(record, "resolutionCommit", objectFormat, errors);
-    fieldError(errors, typeof record.ref === "string" && record.ref.startsWith("refs/vcs-lab/resolutions/"), "ref", "resolution retention ref");
+    fieldError(errors, typeof record.ref === "string" && ["refs/causet/resolutions/", "refs/vcs-lab/resolutions/"].some((prefix) => record.ref.startsWith(prefix)), "ref", "resolution retention ref");
     attachmentMatches(record, "resolutionCommit", errors);
   }
   return errors;

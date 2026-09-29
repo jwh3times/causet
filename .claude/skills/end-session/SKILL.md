@@ -24,8 +24,8 @@ active work, implementation briefs, handoffs, and deferred follow-ups),
 **durable records** (ADRs, `docs/product.md` §15, the changelog's `Unreleased`
 section, and evidence retained where `docs/README.md` says it belongs), and the
 **local checkout** (disposable Git fixtures in the OS temp directory, worktrees
-or `vlab/ws/*` branches that an agent created by mistake, runtime state under
-`.git/vcs-lab/`, lingering Git session processes, and static-check drift that
+or `causet/ws/*` (formerly `vlab/ws/*`) branches that an agent created by mistake,
+runtime state under `.git/causet/` (formerly `.git/vcs-lab/`), lingering Git session processes, and static-check drift that
 fails the next session for unrelated reasons).
 
 This skill is a sweep over those four, in that order, at the end of a work
@@ -212,23 +212,25 @@ Show findings before acting. Work through:
   Never `git clean -x`: the ignored set includes `node_modules/`, `*.log`, and
   packed `causet-*` or `causal-vcs-lab-*` `.bundle` / `.zip` artifacts the user may be keeping.
 - **Repository state that `cst` or an agent left in this checkout.** The real
-  checkout should normally have one worktree, no `vlab/ws/*` branches, no
-  `.git/vcs-lab/` runtime directory, and no `refs/vcs-lab/*` or
-  `refs/notes/vcs-lab` unless the user deliberately dogfoods `cst` here.
+  checkout should normally have one worktree, no `causet/ws/*` or `vlab/ws/*`
+  branches, no `.git/causet/` or `.git/vcs-lab/` runtime directory, and no
+  `refs/causet/*`, `refs/vcs-lab/*`, `refs/notes/causet` or `refs/notes/vcs-lab`
+  unless the user deliberately dogfoods `cst` here. This repository does: its
+  notes and retention refs are real published data, never cleanup targets.
   Inspect before touching anything:
 
   ```bash
   git worktree list
-  git branch --list 'vlab/ws/*'
-  ls -la .git/vcs-lab 2>/dev/null
-  git for-each-ref refs/vcs-lab refs/notes/vcs-lab
+  git branch --list 'causet/ws/*' 'vlab/ws/*'
+  ls -la .git/causet .git/vcs-lab 2>/dev/null
+  git for-each-ref refs/causet refs/vcs-lab refs/notes/causet refs/notes/vcs-lab
   ls -d "$(dirname "$PWD")"/*.workspaces 2>/dev/null
   ```
 
   Anything an agent created by running `cst` with the wrong working directory
   is listed with its timestamp and removed only after a yes
   (`git worktree remove --force <path>`, `git branch -D <branch>`,
-  `git worktree prune`, deleting `.git/vcs-lab/`). Anything the user created on
+  `git worktree prune`, deleting `.git/causet/` or `.git/vcs-lab/`). Anything the user created on
   purpose stays.
 - **Disposable fixtures in the OS temp directory.** Tests, forecasts, and the
   benchmarks remove their own `vcs-lab-test-*`, `vcs-lab-forecast-*`,

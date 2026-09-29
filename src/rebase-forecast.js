@@ -1,3 +1,4 @@
+import { runtimeDirectory } from "./locations.js";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { CliError } from "./errors.js";
@@ -29,12 +30,7 @@ function rebaseForecastPath(id, cwd) {
     throw new CliError(`Invalid rebase forecast ID '${id}'.`,
       { code: "invalid-identifier" });
   }
-  return path.join(
-    repoContext(cwd).gitDir,
-    "vcs-lab",
-    "forecasts",
-    `${id}.json`,
-  );
+  return path.join(runtimeDirectory(repoContext(cwd).gitDir, cwd), "forecasts", `${id}.json`);
 }
 
 export function readRebaseForecast(id, cwd = process.cwd()) {

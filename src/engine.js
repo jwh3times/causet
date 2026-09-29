@@ -9,6 +9,7 @@
  * fallback is recorded per operation in the active Git metrics. Mutations
  * never pass through here: they remain explicit `runGit` calls.
  */
+import { names } from "./locations.js";
 import * as git from "./git.js";
 import { CliError } from "./errors.js";
 import { sha256 } from "./ids.js";
@@ -241,8 +242,7 @@ function resultDigest(value) {
  * input the repository cannot supply is listed as skipped with the reason.
  */
 function differentialProbes(cwd) {
-  const notesRef = "vcs-lab";
-  const specsPath = ".vcs-lab/specs";
+  const { notesName: notesRef, specsDir: specsPath } = names(cwd);
   let head = null;
   try {
     head = git.withReadEngine("git", () => currentHead(cwd));

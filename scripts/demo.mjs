@@ -75,7 +75,7 @@ write(
 );
 console.log("\nIndexing an annotated Markdown spec:");
 vlab("spec", "index", "docs/spec.md");
-git("add", "docs/spec.md", ".vcs-lab/specs/docs/spec.md.json");
+git("add", "docs/spec.md", ".causet/specs/docs/spec.md.json");
 vlab("commit", "-m", "add indexed demo specification");
 
 console.log(`\nDemo complete. Inspect it with:\n  cd ${repo}\n  vlab graph\n  vlab receipts\n  vlab receipts --json`);

@@ -195,7 +195,7 @@ cst graph
 cst receipts
 ```
 
-`cst graph` deliberately hides internal Git notes and checkpoint refs. Raw `git log --all` includes the history of `refs/notes/vcs-lab`, which can appear as unrelated commits titled `Notes added by 'git notes add'`. For a clean stock-Git view, use:
+`cst graph` deliberately hides internal Git notes and checkpoint refs. Raw `git log --all` includes the history of `refs/notes/causet`, which can appear as unrelated commits titled `Notes added by 'git notes add'`. For a clean stock-Git view, use:
 
 ```bash
 git log --graph --oneline --decorate --branches --tags --remotes
@@ -659,7 +659,7 @@ overlay it cannot read is reported as unrecoverable rather than guessed at. See
 [ADR-0028](docs/adr/0028-define-target-checkpoint-forecast-semantics.md).
 
 The checkpoint captures tracked, modified, and untracked non-ignored files in
-an immutable Git commit referenced under `refs/vcs-lab/checkpoints/...`. When a
+an immutable Git commit referenced under `refs/causet/checkpoints/...`. When a
 new checkpoint replaces it, a history ref retains the previous checkpoint. The
 operation does not alter `HEAD`, the index, or the working directory.
 
@@ -668,7 +668,7 @@ This approximates the proposed distinction:
 - **Workspace:** pinned base, private draft state, ownership/focus metadata, and checkpoint history.
 - **Worktree:** one ordinary filesystem materialization of that workspace.
 
-The prototype still creates a `vlab/ws/<name>` compatibility branch because Git requires one to retain normal linked-worktree behavior. A native implementation would use a workspace ref and private draft stack instead.
+The prototype still creates a `causet/ws/<name>` compatibility branch because Git requires one to retain normal linked-worktree behavior. A native implementation would use a workspace ref and private draft stack instead.
 
 ## Annotated Markdown
 
@@ -692,7 +692,7 @@ cst spec show docs/checkout.md
 ```
 
 The exact Markdown remains canonical. The tracked
-`.vcs-lab/specs/docs/checkout.md.json` sidecar assigns stable IDs to the
+`.causet/specs/docs/checkout.md.json` sidecar assigns stable IDs to the
 preamble, headings, and explicit `REQ-*:` entries. Manifests are
 sparse and deterministic: titles, positions, content hashes, and ordinary IDs
 are derived from Markdown rather than duplicated. The sidecar retains
@@ -762,7 +762,7 @@ bytes. Inspect and explicitly stage a clean deterministic suggestion:
 ```bash
 cst spec status
 cst spec resolve --all
-git diff --cached -- docs/checkout.md .vcs-lab/specs/docs/checkout.md.json
+git diff --cached -- docs/checkout.md .causet/specs/docs/checkout.md.json
 cst reconcile --continue
 ```
 
@@ -831,14 +831,14 @@ enter an export. Strict validation additionally fails on warnings such as a
 missing workspace path or active private operation.
 
 Newly published facts retain their required commits, trees, and blobs under
-`refs/vcs-lab/retention`, so deleting a rewritten source branch and running Git
+`refs/causet/retention`, so deleting a rewritten source branch and running Git
 GC does not invalidate its receipts. Retention is monotonic: aborting an operation
 or deleting a note does not release objects. Retained receipts still prove
 coverage only when their attachments are reachable from the selected target.
 See [ADR-0025](docs/adr/0025-retain-the-object-closure-of-published-causal-facts.md).
 
 An ordinary clone fetches branch refs, not causal notes or their shared causet
-refs. A clone that fetches `refs/notes/vcs-lab` without `refs/vcs-lab/*` can
+refs. A clone that fetches `refs/notes/causet` without `refs/causet/*` can
 therefore see a valid record but not the retention carrier that keeps its
 attachment readable; `metadata validate` then reports `missing-attachment`
 even though the origin is healthy. Fetch both namespaces as shown under
@@ -870,9 +870,9 @@ cst metadata import ../project-metadata --apply
 
 An envelope directory contains `manifest.json` and, when portable facts exist,
 `objects.bundle`. Export is deterministic for fixed accepted facts. It carries
-sanitized `refs/notes/vcs-lab` data, the commit history required by accepted
+sanitized `refs/notes/causet` data, the commit history required by accepted
 causal records (including rewritten rebase origins), and accepted
-`refs/vcs-lab/resolutions/*` commits/blobs, including independent conflict-stage
+`refs/causet/resolutions/*` commits/blobs, including independent conflict-stage
 blobs. The envelope builds a carrier for its accepted facts and excludes the
 local retention chain. Tracked spec manifests already move
 with ordinary Git content. Workspace registries, checkpoint refs, active
@@ -911,7 +911,7 @@ cst metadata import ../project-metadata --apply --park-conflicts
 ```
 
 Each conflicting incoming record becomes the blob of one ref under
-`refs/vcs-lab/quarantine/<source-lineage>/<record-id>`, inspectable with
+`refs/causet/quarantine/<source-lineage>/<record-id>`, inspectable with
 `git cat-file -p`, listed by `cst metadata status` beside the local digests it
 disputes, and excluded from every reader and from export. The namespace is local:
 nothing fetches or pushes it.
@@ -1041,20 +1041,48 @@ change nothing about what negotiation concludes. See
 
 ## Metadata locations
 
-- Git notes: `refs/notes/vcs-lab`
-- Required objects of published facts: `refs/vcs-lab/retention`
-- Pending reconciliation: the current worktree Git directory under `vcs-lab/reconciliation.json`
-- Pending causal rebase: the current worktree Git directory under `vcs-lab/rebase.json`
-- Saved forecasts: the current worktree Git directory under `vcs-lab/forecasts/<forecast-id>.json`
-- Workspace registry: the common Git directory under `vcs-lab/workspaces.json`
-- Checkpoints: `refs/vcs-lab/checkpoints/<workspace-id>`
-- Parked conflicting records: `refs/vcs-lab/quarantine/<source-lineage>/<record-id>`
-- Conflict dispositions: the common Git directory under `vcs-lab/dispositions.json`
-- Reusable resolution blobs: `refs/vcs-lab/resolutions/<signature>/<result-blob>`
-- Portable spec manifests: `.vcs-lab/specs/**/*.json`
+- Git notes: `refs/notes/causet`
+- Required objects of published facts: `refs/causet/retention`
+- Pending reconciliation: the current worktree Git directory under `causet/reconciliation.json`
+- Pending causal rebase: the current worktree Git directory under `causet/rebase.json`
+- Saved forecasts: the current worktree Git directory under `causet/forecasts/<forecast-id>.json`
+- Workspace registry: the common Git directory under `causet/workspaces.json`
+- Checkpoints: `refs/causet/checkpoints/<workspace-id>`
+- Parked conflicting records: `refs/causet/quarantine/<source-lineage>/<record-id>`
+- Conflict dispositions: the common Git directory under `causet/dispositions.json`
+- Reusable resolution blobs: `refs/causet/resolutions/<signature>/<result-blob>`
+- Portable spec manifests: `.causet/specs/**/*.json`
+
+### Repositories from before causet
+
+These are the locations in a repository that uses the current names: a new one, or
+one that ran `cst migrate`. A repository holding metadata from an earlier build keeps
+`refs/notes/vcs-lab`, `refs/vcs-lab/*`, `<git dir>/vcs-lab/` and `.vcs-lab/specs/`, and keeps
+working unchanged; `cst metadata status` reports it as `unmigrated-repository` and
+`cst doctor` as `migration: unmigrated`. Move it when convenient
+([ADR-0039](docs/adr/0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) §3):
+
+```bash
+cst migrate --dry-run   # every ref, setting, path and manifest it would move; changes nothing
+cst migrate             # creates the new refs, repoints the notes settings, moves the runtime directories
+git commit -m "Move specification manifests to .causet/specs"   # the manifest move is staged, never committed for you
+```
+
+`cst migrate` refuses while a reconciliation, rebase, export or import is in progress, and
+never deletes anything: the former refs stay where they were. A former ref that moves
+afterwards (a peer on an older build published to it) is reported as `legacy-ref-advanced`;
+running `cst migrate` again fast-forwards the new ref, and refuses if both moved. Records keep
+their `vcs-lab.*` identifiers forever and are read as the `causet.*` families they name.
+Existing `vlab/ws/<name>` workspace branches keep their names; new workspaces use `causet/ws/<name>`.
 
 The supported transfer path is `cst metadata export/import`. For a low-level
 same-origin read, fetch the notes and shared cst namespaces together:
+
+```bash
+git fetch origin 'refs/notes/causet:refs/notes/causet' 'refs/causet/*:refs/causet/*'
+```
+
+From a publisher that has not migrated yet, fetch the former names instead:
 
 ```bash
 git fetch origin 'refs/notes/vcs-lab:refs/notes/vcs-lab' 'refs/vcs-lab/*:refs/vcs-lab/*'

@@ -47,7 +47,7 @@
         "properties": {
           "ref": {
             "type": "string",
-            "description": "Only refs/notes/vcs-lab or refs/vcs-lab/resolutions/* entries are accepted on read; duplicates are rejected."
+            "description": "Only refs/notes/causet or refs/causet/resolutions/* entries, or their names before issue #159 (refs/notes/vcs-lab, refs/vcs-lab/resolutions/*), are accepted on read; import applies them under the destination's own names. Duplicates are rejected."
           },
           "bundleRef": { "type": "string" },
           "oid": {

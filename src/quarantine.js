@@ -4,8 +4,8 @@ import { listRefs, readGitObjects, refExists, repoContext } from "./engine.js";
 import { CliError } from "./errors.js";
 import { ensureLabRuntime, labRuntimeDir, readJson, writeJson } from "./store.js";
 import { assertReadableSchema, canonicalSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
+import { familyRemainder, refFamily } from "./locations.js";
 
-export const QUARANTINE_REFS = "refs/vcs-lab/quarantine";
 export const PARKED_RECORD_SCHEMA = "causet.quarantined-record/v1";
 export const DISPOSITIONS_SCHEMA = "causet.dispositions/v1";
 export const DISPOSITION_SCHEMA = "causet.disposition/v1";
@@ -32,14 +32,15 @@ export const DISPOSITION_SCHEMA = "causet.disposition/v1";
  * commands pay for the blobs.
  */
 
-function quarantineRefPrefix(sourceLineage) {
-  return `${QUARANTINE_REFS}/${sourceLineage}`;
+/** The parked-record namespace under the names the repository uses. */
+export function quarantineRefs(cwd = process.cwd()) {
+  return refFamily("quarantine", cwd);
 }
 
-export function parkedRecordRef(sourceLineage, recordId) {
+export function parkedRecordRef(sourceLineage, recordId, cwd = process.cwd()) {
   assertRefComponent(sourceLineage, "source lineage");
   assertRefComponent(recordId, "record identifier");
-  return `${quarantineRefPrefix(sourceLineage)}/${recordId}`;
+  return `${quarantineRefs(cwd)}/${sourceLineage}/${recordId}`;
 }
 
 /**
@@ -59,9 +60,8 @@ function assertRefComponent(value, subject) {
 
 /** `{ sourceLineage, recordId }` of a parked ref, or null when it is not one. */
 export function parsedParkedRef(ref) {
-  const rest = typeof ref === "string" && ref.startsWith(`${QUARANTINE_REFS}/`)
-    ? ref.slice(QUARANTINE_REFS.length + 1)
-    : null;
+  // Either set of names: a migrated repository keeps its old refs (ADR-0039 §3).
+  const rest = familyRemainder(ref, "quarantine");
   const parts = rest?.split("/") ?? [];
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   return { sourceLineage: parts[0], recordId: parts[1] };
@@ -70,7 +70,7 @@ export function parsedParkedRef(ref) {
 // Listed by prefix rather than a `*/*` glob, which the native engine refuses;
 // callers keep only the two-level refs `parsedParkedRef` accepts.
 function parkedRefs(cwd) {
-  return listRefs(`${QUARANTINE_REFS}/`, cwd);
+  return listRefs(`${quarantineRefs(cwd)}/`, cwd);
 }
 
 /**
@@ -196,7 +196,7 @@ export function buildParkedPayload({ record, digest, attachment, sourceLineage, 
  * non-conflicting records: either the whole exchange lands or none of it does.
  */
 export function stageParkedRecord(payload, cwd) {
-  const ref = parkedRecordRef(payload.sourceLineage, payload.recordId);
+  const ref = parkedRecordRef(payload.sourceLineage, payload.recordId, cwd);
   const body = `${JSON.stringify(payload, null, 2)}\n`;
   if (!withinBound("noteContainerBytes", Buffer.byteLength(body))) {
     throw new CliError(

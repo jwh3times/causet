@@ -1,3 +1,4 @@
+import { runtimeDirectory } from "./locations.js";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -61,7 +62,7 @@ import {
 } from "./specs.js";
 
 function forecastDirectory(cwd) {
-  return path.join(repoContext(cwd).gitDir, "vcs-lab", "forecasts");
+  return path.join(runtimeDirectory(repoContext(cwd).gitDir, cwd), "forecasts");
 }
 
 function assertForecastId(id) {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.disposition/v1",
   "title": "Conflict disposition",
-  "description": "One person's decision about one parked conflict, stored as an entry of <common Git dir>/vcs-lab/dispositions.json (shared-local; src/dispositions.js; ADR-0030).",
+  "description": "One person's decision about one parked conflict, stored as an entry of <common Git dir>/causet/dispositions.json (shared-local; src/dispositions.js; ADR-0030).",
   "x-causet-scope": "shared-local",
   "type": "object",
   "required": [

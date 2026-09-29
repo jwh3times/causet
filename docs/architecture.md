@@ -136,19 +136,21 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/identity-audit.js` | Repository-wide logical identity audit (`causet.identity-audit/v1`): union-find over identity-preserving application edges, multi-trailer, multi-origin, and invariant findings, plus the near-duplicate provenance actor warning | Engine, notes |
 | `src/ids.js` | Unique protocol IDs, SHA-256, Git blob hashing, slugs | Node crypto |
 | `src/landings.js` | Compact and hard-squash landing mechanics and receipts | Git adapter, notes |
+| `src/locations.js` | Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix a repository uses, decided per repository from its migration state without a Git process (ADR-0039 §3) | `src/engine.js` |
 | `src/merge-plan.js` | Coverage proof lattice, effective base, patch candidates, plan formatting | Git adapter, notes |
 | `src/merge-tree-session-worker.js` | Owns one asynchronous `git merge-tree --stdin` stream for the synchronous merge-tree forecast engine | Worker threads, Git |
 | `src/metadata-envelope.js` | Canonical envelope manifest, integrity hash, payload bounds, and parser | Metadata, schemas |
 | `src/metadata-transfer.js` | Sanitized bundle export, dry-run inspection, conflict planning, staging, and atomic ref import | Metadata, envelope, Git |
 | `src/metadata.js` | Deterministic inventory, scope classification, integrity diagnostics, lineage, and accepted-record filtering | Git, schemas, specs |
+| `src/migration.js` | `cst migrate`: create the causet refs at the objects of their vcs-lab names, repoint the notes settings, move the runtime directories and stage the manifest move, never deleting; the migration marker, `doctor.migration`, and the advanced-former-ref check (ADR-0039 §3) | `src/locations.js`, `src/engine.js`, `src/git.js` (update-ref, config, mv), `src/store.js` |
 | `src/native-engine.js` | Optional in-process Node-API binding loader and conversion for the five bounded resolution-catalog read operations | Optional `native/prebuilds` binding, Node module and path utilities |
-| `src/notes.js` | Append/list/read causal records in `refs/notes/vcs-lab`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory | `src/git.js`, `src/store.js` |
+| `src/notes.js` | Append/list/read causal records in `refs/notes/causet`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory | `src/git.js`, `src/store.js` |
 | `src/operations.js` | Commit/cherry-pick and reconciliation start/queue/continue/abort/finalize | Plan, forecast, notes, resolution/spec modules |
 | `src/pending-operation.js` | Safe reconciliation/rebase journal routing for shared conflict tools | Reconciliation and rebase state |
 | `src/proof-binding.js` | The Git bindings a proof bundle carries so a verifier without the repository can check it: the bound source inventory, reachability paths, receipt inclusion proofs, and the object-id recomputation that makes them proofs (ADR-0031) | `src/engine.js`, `src/git.js`, `src/schemas.js` |
 | `src/proof-bundle.js` | Portable coverage proof bundles and their independent verifier, which applies its own copy of the lattice (`PROOF_RULES`) and compares the evidence with the repository | Merge plan, canonical JSON, metadata, engine |
 | `src/provenance.js` | Declared authorship provenance (`causet.provenance/v1`): the closed role vocabulary, `CAUSET_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
-| `src/quarantine.js` | The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/vcs-lab/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030) | `src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js` |
+| `src/quarantine.js` | The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/causet/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030) | `src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js` |
 | `src/rebase-forecast.js` | Rebase simulation orchestration, caller invariants, candidate pinning, the carried caller overlay and its second predicted tree, and private forecast presentation | Rebase plan, forecast simulator, target overlays, semantic version guards, Git adapter |
 | `src/rebase-interactive.js` | Declared interactive actions: their parsing, the shapes ADR-0035 refuses, the surviving-identity message rules, and the single-trailer check | Errors |
 | `src/rebase-operations.js` | Current-branch rebase replay, forecast enforcement, overlay reduction and re-materialization, conflict recovery, identity, and final receipts | Rebase plan/forecast, target overlays, Git, notes, specs, resolutions |
@@ -257,31 +259,31 @@ identity belongs in tracked files.
 | Data | Scope | Location | Lifecycle |
 | --- | --- | --- | --- |
 | Git source/history state | Shared repository | Git objects and ordinary refs | Normal Git lifecycle |
-| Causal notes | Shared repository | `refs/notes/vcs-lab` | Portable through a validated metadata envelope |
-| Published object retention | Shared repository | `refs/vcs-lab/retention` | Monotonic derived carrier; envelopes rebuild from selected accepted facts |
-| Resolution result objects | Shared repository | `refs/vcs-lab/resolutions/<signature>/<result-blob>` | Hidden ref prevents GC; envelope transports accepted refs |
-| Workspace registry | Shared repository installation | `<common-git-dir>/vcs-lab/workspaces.json` | Local; not automatically remote-portable |
-| Parked conflicting records | Shared repository installation | `refs/vcs-lab/quarantine/<source-lineage>/<record-id>`, one blob per dispute | Local; nothing fetches or pushes the namespace. Removed by a disposition (ADR-0030) |
-| Conflict dispositions | Shared repository installation | `<common-git-dir>/vcs-lab/dispositions.json` | Local on purpose: two clones may dispose the same conflict differently, and the disagreement is real |
-| Checkpoints | Shared repository | Latest under `refs/vcs-lab/checkpoints/<workspace-id>`; prior snapshots under `refs/vcs-lab/checkpoint-history/<workspace-id>/<oid>` | Local immutable snapshots retained across materialization changes |
-| Pending reconciliation | One linked worktree | `<worktree-git-dir>/vcs-lab/reconciliation.json` | Cleared on complete/abort |
-| Pending causal rebase | One linked worktree | `<worktree-git-dir>/vcs-lab/rebase.json` | Cleared on complete/abort |
-| Saved forecasts | One linked worktree | `<worktree-git-dir>/vcs-lab/forecasts/<id>.json` | Private approval artifact |
-| Notes lock | Shared repository installation | `<common-git-dir>/vcs-lab/notes.lock` | Held for one append or one import; abandoned when its holder is gone (§15.4) |
-| Workspace registry lock | Shared repository installation | `<common-git-dir>/vcs-lab/workspaces.lock` | Held across one registry mutation and its Git operations; abandoned claims require recovery with all writers stopped (§12) |
-| Spec identity manifest | Tracked/repository portable | `.vcs-lab/specs/<source>.json` | Versioned with Markdown |
+| Causal notes | Shared repository | `refs/notes/causet` | Portable through a validated metadata envelope |
+| Published object retention | Shared repository | `refs/causet/retention` | Monotonic derived carrier; envelopes rebuild from selected accepted facts |
+| Resolution result objects | Shared repository | `refs/causet/resolutions/<signature>/<result-blob>` | Hidden ref prevents GC; envelope transports accepted refs |
+| Workspace registry | Shared repository installation | `<common-git-dir>/causet/workspaces.json` | Local; not automatically remote-portable |
+| Parked conflicting records | Shared repository installation | `refs/causet/quarantine/<source-lineage>/<record-id>`, one blob per dispute | Local; nothing fetches or pushes the namespace. Removed by a disposition (ADR-0030) |
+| Conflict dispositions | Shared repository installation | `<common-git-dir>/causet/dispositions.json` | Local on purpose: two clones may dispose the same conflict differently, and the disagreement is real |
+| Checkpoints | Shared repository | Latest under `refs/causet/checkpoints/<workspace-id>`; prior snapshots under `refs/causet/checkpoint-history/<workspace-id>/<oid>` | Local immutable snapshots retained across materialization changes |
+| Pending reconciliation | One linked worktree | `<worktree-git-dir>/causet/reconciliation.json` | Cleared on complete/abort |
+| Pending causal rebase | One linked worktree | `<worktree-git-dir>/causet/rebase.json` | Cleared on complete/abort |
+| Saved forecasts | One linked worktree | `<worktree-git-dir>/causet/forecasts/<id>.json` | Private approval artifact |
+| Notes lock | Shared repository installation | `<common-git-dir>/causet/notes.lock` | Held for one append or one import; abandoned when its holder is gone (§15.4) |
+| Workspace registry lock | Shared repository installation | `<common-git-dir>/causet/workspaces.lock` | Held across one registry mutation and its Git operations; abandoned claims require recovery with all writers stopped (§12) |
+| Spec identity manifest | Tracked/repository portable | `.causet/specs/<source>.json` | Versioned with Markdown |
 | Persistent object session | One CLI invocation and worktree | Memory plus worker process | Closed at invocation end |
 
 An ordinary clone's default refspec fetches branches, not
-`refs/notes/vcs-lab` or `refs/vcs-lab/*`. A complete causal read needs both:
+`refs/notes/causet` or `refs/causet/*`. A complete causal read needs both:
 the notes namespace supplies the records, and the shared cst namespace
 supplies the retention carrier and reusable resolution objects those records
 depend on. Fetching notes alone can therefore produce `missing-attachment`
 diagnostics for healthy facts whose attachment commits are present on the
-origin only through `refs/vcs-lab/retention`. The low-level same-origin fetch is:
+origin only through `refs/causet/retention`. The low-level same-origin fetch is:
 
 ```bash
-git fetch origin 'refs/notes/vcs-lab:refs/notes/vcs-lab' 'refs/vcs-lab/*:refs/vcs-lab/*'
+git fetch origin 'refs/notes/causet:refs/notes/causet' 'refs/causet/*:refs/causet/*'
 ```
 
 Validated metadata envelopes remain the supported transfer path between
@@ -301,29 +303,30 @@ use at the current development baseline:
 <!-- generated:schemas:start -->
 | Family | Readable versions | Written versions | Store | Scope |
 | --- | --- | --- | --- | --- |
-| `causet.amendment` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.application` | v1, v4 | v1, v4 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.amendment` | v1 | v1 | `refs/notes/causet note containers` | `note-record` |
+| `causet.application` | v1, v4 | v1, v4 | `refs/notes/causet note containers` | `note-record` |
 | `causet.capabilities` | v1 | v1 | `produced on demand by cst capabilities; served by a gateway` | `advertisement` |
-| `causet.disposition` | v1 | v1 | `entries of <common dir>/vcs-lab/dispositions.json` | `shared-local` |
-| `causet.dispositions` | v1 | v1 | `<common dir>/vcs-lab/dispositions.json` | `shared-local` |
-| `causet.forecast` | v1, v2 | v2 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
-| `causet.interactive-absorption` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.landing` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
+| `causet.disposition` | v1 | v1 | `entries of <common dir>/causet/dispositions.json` | `shared-local` |
+| `causet.dispositions` | v1 | v1 | `<common dir>/causet/dispositions.json` | `shared-local` |
+| `causet.forecast` | v1, v2 | v2 | `<git dir>/causet/forecasts/<id>.json` | `private` |
+| `causet.interactive-absorption` | v1 | v1 | `refs/notes/causet note containers` | `note-record` |
+| `causet.landing` | v1 | v1 | `refs/notes/causet note containers` | `note-record` |
 | `causet.metadata-envelope` | v1 | v1 | `manifest.json of a metadata export directory` | `envelope` |
-| `causet.note` | v1 | v1 | `refs/notes/vcs-lab note blobs` | `note-container` |
+| `causet.migration` | v1 | v1 | `<common dir>/causet/migration.json` | `shared-local` |
+| `causet.note` | v1 | v1 | `refs/notes/causet note blobs` | `note-container` |
 | `causet.proof-bundle` | v1, v2 | v2 | `a file handed to cst verify-proof` | `envelope` |
-| `causet.provenance` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.quarantined-record` | v1 | v1 | `refs/vcs-lab/quarantine/<lineage>/<record id> blobs` | `shared-local` |
-| `causet.rebase` | v1, v2, v3 | v3 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.rebase-application` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.rebase-forecast` | v3 | v3 | `<git dir>/vcs-lab/forecasts/<id>.json` | `private` |
-| `causet.rebase-operation` | v3 | v3 | `<git dir>/vcs-lab/rebase.json` | `private` |
-| `causet.reconciliation` | v6 | v6 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.reconciliation-operation` | v4 | v4 | `<git dir>/vcs-lab/reconciliation.json` | `private` |
-| `causet.resolution` | v1 | v1 | `refs/notes/vcs-lab note containers` | `note-record` |
-| `causet.spec-manifest` | v1, v2, v3, v4 | v4 | `.vcs-lab/specs/**` | `tracked` |
-| `causet.workspace` | v1 | v1 | `entries of <common dir>/vcs-lab/workspaces.json` | `shared-local` |
-| `causet.workspaces` | v1 | v1 | `<common dir>/vcs-lab/workspaces.json` | `shared-local` |
+| `causet.provenance` | v1 | v1 | `refs/notes/causet note containers` | `note-record` |
+| `causet.quarantined-record` | v1 | v1 | `refs/causet/quarantine/<lineage>/<record id> blobs` | `shared-local` |
+| `causet.rebase` | v1, v2, v3 | v3 | `refs/notes/causet note containers` | `note-record` |
+| `causet.rebase-application` | v1 | v1 | `refs/notes/causet note containers` | `note-record` |
+| `causet.rebase-forecast` | v3 | v3 | `<git dir>/causet/forecasts/<id>.json` | `private` |
+| `causet.rebase-operation` | v3 | v3 | `<git dir>/causet/rebase.json` | `private` |
+| `causet.reconciliation` | v6 | v6 | `refs/notes/causet note containers` | `note-record` |
+| `causet.reconciliation-operation` | v4 | v4 | `<git dir>/causet/reconciliation.json` | `private` |
+| `causet.resolution` | v1 | v1 | `refs/notes/causet note containers` | `note-record` |
+| `causet.spec-manifest` | v1, v2, v3, v4 | v4 | `.causet/specs/**` | `tracked` |
+| `causet.workspace` | v1 | v1 | `entries of <common dir>/causet/workspaces.json` | `shared-local` |
+| `causet.workspaces` | v1 | v1 | `<common dir>/causet/workspaces.json` | `shared-local` |
 <!-- generated:schemas:end -->
 
 Command and automation output shapes (outside the persisted-family registry):
@@ -785,7 +788,7 @@ not part of the signature, enabling exact reuse after a rename. A candidate
 record points to a result blob retained in a small commit under:
 
 ```text
-refs/vcs-lab/resolutions/<signature>/<result-blob>
+refs/causet/resolutions/<signature>/<result-blob>
 ```
 
 On Windows, the absolute ref path plus `.lock` must fit within 259 characters
@@ -825,7 +828,7 @@ creation time.
 ## 12. Workspace and checkpoint architecture
 
 `cst workspace create` records a logical descriptor and creates a normal
-linked worktree on `vlab/ws/<slug>`. The compatibility branch is necessary for
+linked worktree on `causet/ws/<slug>`. The compatibility branch is necessary for
 Git's current worktree retention semantics, not the desired final workspace
 model. [ADR-0012](adr/0012-treat-workspace-lifecycle-as-reversible-materialization-and-drafts-as-checkpoint-inputs.md)
 defines `active` and `archived` as materialization states of that stable logical
@@ -928,8 +931,8 @@ Git. No registry schema or lifecycle identity changes.
 5. Create a commit whose parent is the captured `HEAD` and whose trailers pin
    workspace, base, tree, and deterministic `draft_` identity.
 6. Retain the prior latest snapshot under
-   `refs/vcs-lab/checkpoint-history/<workspace-id>/<checkpoint-oid>`.
-7. Update `refs/vcs-lab/checkpoints/<workspace-id>`.
+   `refs/causet/checkpoint-history/<workspace-id>/<checkpoint-oid>`.
+7. Update `refs/causet/checkpoints/<workspace-id>`.
 8. Remove the temporary index directory.
 
 The real index, `HEAD`, and working files never change. Ignored files remain
@@ -1238,9 +1241,9 @@ about which facts exist:
    default; `--park-conflicts` applies the non-conflicting records and refs
    atomically and writes each conflicting incoming record, with its envelope hash
    and source lineage, as the blob of one ref under
-   `refs/vcs-lab/quarantine/<lineage>/<record id>`. Park mode is the only mode an
+   `refs/causet/quarantine/<lineage>/<record id>`. Park mode is the only mode an
    automatic transport may use. Git's own `git notes merge` stays forbidden on
-   `refs/notes/vcs-lab`: the manual strategy stops in a conflicted worktree and
+   `refs/notes/causet`: the manual strategy stops in a conflicted worktree and
    `-s union` concatenates the containers into something
    `cst metadata status` reads as `malformed-record`, dropping every record on
    that attachment.
@@ -1489,7 +1492,7 @@ a candidate notes tree, preserving flat, fanned, and mixed layouts, and publishe
 notes and retention in one transaction that checks both previous tips. A new
 resolution ref participates in the same transaction. Foreign ref changes cause
 the transaction to refuse. `appendNote` and metadata import also hold
-one lock file, `<common-git-dir>/vcs-lab/notes.lock`, created exclusively
+one lock file, `<common-git-dir>/causet/notes.lock`, created exclusively
 the way Git creates its own lock files and costing no Git process. A lock
 whose holder is on this host and no longer running, or a minute-old lock
 whose holder cannot be checked, is abandoned; a running holder's lock is
@@ -1497,7 +1500,7 @@ waited for five seconds and then refused with `notes-locked`. The
 failure-boundary suite proves the window is closed by parking one publisher
 inside it with `CAUSET_TEST_GATE` while another runs.
 
-`refs/vcs-lab/retention` retains each published attachment and the typed closure
+`refs/causet/retention` retains each published attachment and the typed closure
 specified by `referencedObjectsForRecord`. Its previous tip remains an ancestor
 of every new carrier. Objects survive branch deletion, reflog expiry, GC, note
 deletion, and operation abort; retention never substitutes for target ancestry.
@@ -1557,7 +1560,7 @@ lock without rewriting history.
 | A proof bundle whose carried objects do not hash to the ids they claim | Fail verification and name each object; the bundle does not reach the bound tier (ADR-0031). |
 | A proof bundle whose proofs would exceed `proofBundleBytes` | Refuse to emit and name the member that did not fit; a truncated proof cannot be told apart from an omission. |
 | An anchor a verifier's chosen channel cannot confirm | Report it unconfirmed and stay at the bound tier; it is not a binding failure. |
-| Import ID conflict under `--park-conflicts` | Apply the rest atomically; write the incoming copy under `refs/vcs-lab/quarantine/<lineage>/<record id>`; report `parked-record-conflict` against the local copy so neither side proves coverage (ADR-0030). |
+| Import ID conflict under `--park-conflicts` | Apply the rest atomically; write the incoming copy under `refs/causet/quarantine/<lineage>/<record id>`; report `parked-record-conflict` against the local copy so neither side proves coverage (ADR-0030). |
 | Import resolution-ref conflict under `--park-conflicts` | Leave the destination ref exactly where it pointed, park the incoming records that name it, and keep the rest of the exchange applicable. |
 | An arriving digest a disposition already rejected | Report it as `disposed` and neither apply nor park it again. |
 | A parked record this build cannot read | `cst metadata status` reports it and keeps scanning; `cst metadata dispose` refuses with the code its reason names. |

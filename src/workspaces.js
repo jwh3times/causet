@@ -22,6 +22,7 @@ import { CliError } from "./errors.js";
 import { assertReadableSchema } from "./schemas.js";
 import { faultPoint, gatePoint } from "./faults.js";
 import { assertWorkspaceRegistryLock, withWorkspaceRegistryLock } from "./workspace-lock.js";
+import { CURRENT_NAMES, LEGACY_NAMES, names, refFamily } from "./locations.js";
 
 const ACTIVE = "active";
 const ARCHIVED = "archived";
@@ -30,12 +31,12 @@ function workspaceLifecycle(workspace) {
   return workspace.lifecycle ?? ACTIVE;
 }
 
-function workspaceCheckpointRef(workspace) {
-  return `refs/vcs-lab/checkpoints/${workspace.id}`;
+function workspaceCheckpointRef(workspace, cwd) {
+  return `${refFamily("checkpoints", cwd)}/${workspace.id}`;
 }
 
-function workspaceCheckpointHistoryRef(workspace, checkpoint) {
-  return `refs/vcs-lab/checkpoint-history/${workspace.id}/${checkpoint}`;
+function workspaceCheckpointHistoryRef(workspace, checkpoint, cwd) {
+  return `${refFamily("checkpoint-history", cwd)}/${workspace.id}/${checkpoint}`;
 }
 
 function workspaceFile(cwd) {
@@ -258,7 +259,9 @@ function createWorkspaceLocked(name, options) {
   const context = repoContext(cwd);
   const target = options.from ?? "HEAD";
   const safeName = slug(name);
-  const branch = `vlab/ws/${safeName}`;
+  // New workspaces use the current prefix; existing branches keep theirs, and
+  // the registry records each actual name (ADR-0039 §1).
+  const branch = `${names(cwd).workspaceBranchPrefix}${safeName}`;
 
   // Resolving the base and checking the branch for a collision are two
   // questions about objects, so they go through one batched inspection rather
@@ -343,7 +346,7 @@ export function checkpointWorkspace(label, options = {}) {
   const scratchDirectory = temporaryDirectory("vlab-index-");
   const indexPath = path.join(scratchDirectory, "index");
   const env = { GIT_INDEX_FILE: indexPath };
-  const ref = workspaceCheckpointRef(workspace);
+  const ref = workspaceCheckpointRef(workspace, cwd);
 
   try {
     runGit(["read-tree", "HEAD"], { cwd: context.root, env });
@@ -381,6 +384,7 @@ export function checkpointWorkspace(label, options = {}) {
       historyRef = workspaceCheckpointHistoryRef(
         workspace,
         previousCheckpoint,
+        cwd,
       );
       runGit(["update-ref", historyRef, previousCheckpoint], {
         cwd: context.root,
@@ -409,7 +413,7 @@ export function checkpointWorkspace(label, options = {}) {
 }
 
 export function latestWorkspaceCheckpoint(workspace, cwd = process.cwd()) {
-  const ref = workspaceCheckpointRef(workspace);
+  const ref = workspaceCheckpointRef(workspace, cwd);
   if (!refExists(ref, cwd)) return null;
   const id = resolveRevision(ref, cwd);
   const message = commitMessage(id, cwd);
@@ -500,8 +504,10 @@ export function archiveWorkspace(value, options = {}) {
 }
 
 function assertNoOperationJournal(gitDir, action, recovery) {
-  for (const [filename, command] of [["reconciliation.json", "reconcile"], ["rebase.json", "rebase"]]) {
-    const journal = path.join(gitDir, "vcs-lab", filename);
+  // Either runtime name: an older build's journal blocks as surely as ours (ADR-0039 §3).
+  for (const [runtime, filename, command] of [CURRENT_NAMES, LEGACY_NAMES].flatMap((set) =>
+    [[set.runtime, "reconciliation.json", "reconcile"], [set.runtime, "rebase.json", "rebase"]])) {
+    const journal = path.join(gitDir, runtime, filename);
     // Presence is sufficient: null, malformed, newer-version, and dangling
     // symlink journals must not be treated as permission to delete private state.
     if (fs.lstatSync(journal, { throwIfNoEntry: false })) {

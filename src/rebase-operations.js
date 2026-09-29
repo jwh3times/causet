@@ -1,3 +1,4 @@
+import { transientRefFamily } from "./locations.js";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -300,12 +301,24 @@ function applicationRecord(operation, change, relation, cwd) {
  * rather than a property of the reflog, and makes an interrupted operation's
  * work visible to a person looking for it.
  */
+/**
+ * Where a merge-preserving rebase anchors its rewritten commits. Anchors are
+ * transient, so they use the current names (ADR-0039 §1), except for a rebase
+ * an older build started, whose journal says so and whose anchors already sit
+ * under the former names.
+ */
+function anchorRoot(operation) {
+  return typeof operation.schema === "string" && operation.schema.startsWith("vcs-lab.")
+    ? "refs/vcs-lab/rebase"
+    : transientRefFamily("rebase");
+}
+
 function anchorRewritten(operation, originCommit, newCommit, cwd) {
   operation.rewritten ??= {};
   operation.rewritten[originCommit] = newCommit;
   if (operation.plan.mode !== "merge-preserving") return;
   runGit(
-    ["update-ref", `refs/vcs-lab/rebase/${operation.id}/${originCommit}`, newCommit],
+    ["update-ref", `${anchorRoot(operation)}/${operation.id}/${originCommit}`, newCommit],
     { cwd },
   );
 }
@@ -314,7 +327,7 @@ function releaseAnchors(operation, cwd) {
   if (operation.plan.mode !== "merge-preserving") return;
   for (const originCommit of Object.keys(operation.rewritten ?? {})) {
     runGit(
-      ["update-ref", "-d", `refs/vcs-lab/rebase/${operation.id}/${originCommit}`],
+      ["update-ref", "-d", `${anchorRoot(operation)}/${operation.id}/${originCommit}`],
       { cwd, allowFailure: true },
     );
   }

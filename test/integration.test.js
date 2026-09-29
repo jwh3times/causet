@@ -121,7 +121,7 @@ function resolutionSignature(stages) {
 function writeVlabNote(repo, commit, note) {
   exec(
     "git",
-    ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", commit],
+    ["notes", "--ref=causet", "add", "-f", "-F", "-", commit],
     repo,
     { input: typeof note === "string" ? note : `${JSON.stringify(note, null, 2)}\n` },
   );
@@ -131,7 +131,7 @@ function writeVlabNote(repo, commit, note) {
  * Publish a resolution record with Git plumbing exactly the way
  * src/resolutions.js publishResolution does: a retention commit whose tree
  * holds `result` (or is empty for a deleted result), a retention ref under
- * refs/vcs-lab/resolutions/<signature>/<resultBlob|deleted>, and a note record
+ * refs/causet/resolutions/<signature>/<resultBlob|deleted>, and a note record
  * attached to that commit. `treeBlob`, `ref`, `record`, and `note` let a test
  * corrupt exactly one aspect of an otherwise valid publication.
  */
@@ -150,7 +150,7 @@ function publishRetainedResolution(repo, options) {
   } = options;
   const signature = recordOverrides.signature ?? resolutionSignature(stages);
   const ref = options.ref ??
-    `refs/vcs-lab/resolutions/${signature}/${resultBlob ?? "deleted"}`;
+    `refs/causet/resolutions/${signature}/${resultBlob ?? "deleted"}`;
   const tree = exec("git", ["mktree"], repo, {
     input: treeBlob ? `${resultMode ?? "100644"} blob ${treeBlob}\tresult\n` : "",
   });
@@ -268,7 +268,7 @@ test("doctor diagnoses a repository without initializing it", (t) => {
   // A diagnostic must not change what it diagnoses. Before this was pinned,
   // `vlab doctor` ran `initLab()`, so asking a repository what state it was in
   // wrote `notes.displayRef` and `notes.rewriteRef` into its config and
-  // created `.git/vcs-lab/`.
+  // created `.git/causet/`.
   const { repo } = makeRepo(t);
   write(repo, "base.txt", "base\n");
   git(repo, "add", ".");
@@ -289,7 +289,7 @@ test("doctor diagnoses a repository without initializing it", (t) => {
     assert.equal(lookup.status, 1, `${key} must stay unset, got '${lookup.stdout.trim()}'`);
   }
   assert.equal(readText(repo, ".git/config"), configBefore);
-  assert.equal(fs.existsSync(path.join(repo, ".git", "vcs-lab")), false);
+  assert.equal(fs.existsSync(path.join(repo, ".git", "causet")), false);
   assert.equal(git(repo, "status", "--porcelain=v1"), "");
 });
 
@@ -380,7 +380,7 @@ test("causal rebase planning is deterministic and replays only hard-squash conti
     branch: git(repo, "branch", "--show-current"),
     tree: git(repo, "rev-parse", "HEAD^{tree}"),
     status: git(repo, "status", "--porcelain=v1"),
-    notes: git(repo, "rev-parse", "refs/notes/vcs-lab"),
+    notes: git(repo, "rev-parse", "refs/notes/causet"),
     worktrees: git(repo, "worktree", "list", "--porcelain"),
   };
   assert.match(callerBefore.status, /\?\? caller-draft\.txt/);
@@ -422,7 +422,7 @@ test("causal rebase planning is deterministic and replays only hard-squash conti
     branch: git(repo, "branch", "--show-current"),
     tree: git(repo, "rev-parse", "HEAD^{tree}"),
     status: git(repo, "status", "--porcelain=v1"),
-    notes: git(repo, "rev-parse", "refs/notes/vcs-lab"),
+    notes: git(repo, "rev-parse", "refs/notes/causet"),
     worktrees: git(repo, "worktree", "list", "--porcelain"),
   };
   assert.deepEqual(callerAfter, callerBefore);
@@ -944,7 +944,7 @@ test("causal rebase abort restores the exact source after a partial replay", (t)
     repo,
     "for-each-ref",
     "--format=%(refname) %(objectname)",
-    "refs/notes/vcs-lab",
+    "refs/notes/causet",
   );
 
   const attempt = vlabResult(repo, "rebase", "main");
@@ -954,7 +954,7 @@ test("causal rebase abort restores the exact source after a partial replay", (t)
   assert.equal(paused.progress.completed, 1);
   assert.equal(paused.applied.length, 1);
   assert.equal(
-    git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/notes/vcs-lab"),
+    git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/notes/causet"),
     notesBefore,
   );
 
@@ -968,7 +968,7 @@ test("causal rebase abort restores the exact source after a partial replay", (t)
     false,
   );
   assert.equal(
-    git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/notes/vcs-lab"),
+    git(repo, "for-each-ref", "--format=%(refname) %(objectname)", "refs/notes/causet"),
     notesBefore,
   );
 });
@@ -996,7 +996,7 @@ test("causal rebase blocks an unexpectedly empty replay instead of skipping it",
   assert.equal(status.state, "blocked");
   assert.equal(status.progress.completed, 0);
   assert.equal(
-    git(repo, "for-each-ref", "--format=%(refname)", "refs/notes/vcs-lab"),
+    git(repo, "for-each-ref", "--format=%(refname)", "refs/notes/causet"),
     "",
   );
   const aborted = JSON.parse(vlab(repo, "rebase", "--abort", "--json"));
@@ -1497,7 +1497,7 @@ test("a sparse cone materializes only its directories and survives archive and r
   // Identity, branch, base, and lifecycle are unaffected by the cone: Git
   // still has the whole tree, only the working tree is narrowed.
   assert.equal(coned.baseSnapshot, full.baseSnapshot);
-  assert.equal(coned.compatibilityBranch, "vlab/ws/coned-ws");
+  assert.equal(coned.compatibilityBranch, "causet/ws/coned-ws");
   assert.equal(coned.lifecycle, "active");
   assert.equal(
     git(repo, "rev-parse", `${coned.compatibilityBranch}^{tree}`),
@@ -1559,7 +1559,7 @@ test("workspace create records the declared owner and focus", (t) => {
   assert.equal(declared.schema, "causet.workspace/v1");
   assert.equal(declared.owner, "agent-seven@example.test");
   assert.equal(declared.focus, "spec merge for checkout");
-  assert.equal(declared.compatibilityBranch, "vlab/ws/agent-seven");
+  assert.equal(declared.compatibilityBranch, "causet/ws/agent-seven");
   assert.equal(declared.baseSnapshot, head);
   assert.equal(declared.lifecycle, "active");
 
@@ -1580,7 +1580,7 @@ test("workspace create records the declared owner and focus", (t) => {
   assert.equal(listed.get("agent-seven").status, "active");
   assert.equal(listed.get("unowned").owner, null);
   assert.equal(listed.get("unowned").focus, null);
-  const registry = JSON.parse(readText(repo, ".git/vcs-lab/workspaces.json"));
+  const registry = JSON.parse(readText(repo, ".git/causet/workspaces.json"));
   const stored = registry.workspaces.find((workspace) => workspace.name === "agent-seven");
   assert.equal(stored.owner, "agent-seven@example.test");
   assert.equal(stored.focus, "spec merge for checkout");
@@ -1991,7 +1991,7 @@ test("forecast deterministically merges independent specification blocks", (t) =
     "# Alpha\n\nsource alpha\n\n# Beta\n\ntarget beta\n",
   );
   const storedResultManifest = JSON.parse(
-    fs.readFileSync(path.join(repo, ".vcs-lab/specs/docs/spec.md.json"), "utf8"),
+    fs.readFileSync(path.join(repo, ".causet/specs/docs/spec.md.json"), "utf8"),
   );
   assert.equal(
     storedResultManifest.sourceBlob,
@@ -2186,7 +2186,7 @@ test("an edited semantic suggestion requires reindexing and is audited as modifi
   assert.match(stale.stderr, /manifest.*stale/i);
 
   vlab(repo, "spec", "index", "docs/spec.md", "--json");
-  git(repo, "add", "docs/spec.md", ".vcs-lab/specs/docs/spec.md.json");
+  git(repo, "add", "docs/spec.md", ".causet/specs/docs/spec.md.json");
   const result = JSON.parse(vlab(repo, "reconcile", "--continue", "--json"));
   const merge = result.receipt.applied[0].semanticMerges[0];
   assert.equal(merge.decision, "modified");
@@ -2552,11 +2552,11 @@ test("exact conflict resolutions are suggested and reused across worktrees", (t)
   // the conflict; the validator and the catalog must agree (issue #87).
   {
     const resolutionCommit = catalog[0].resolutionCommit;
-    const notesBefore = git(repo, "rev-parse", "refs/notes/vcs-lab");
-    const container = JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", resolutionCommit));
+    const notesBefore = git(repo, "rev-parse", "refs/notes/causet");
+    const container = JSON.parse(git(repo, "notes", "--ref=causet", "show", resolutionCommit));
     const record = container.records.find((item) => item.type === "resolution");
     const duplicated = { ...container, records: [...container.records, { ...record, reason: "altered copy" }] };
-    execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", resolutionCommit], {
+    execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", resolutionCommit], {
       cwd: repo,
       input: JSON.stringify(duplicated) + "\n",
       encoding: "utf8",
@@ -2574,7 +2574,7 @@ test("exact conflict resolutions are suggested and reused across worktrees", (t)
         "the catalog serves neither copy of an id-conflicted resolution",
       );
     } finally {
-      git(repo, "update-ref", "refs/notes/vcs-lab", notesBefore);
+      git(repo, "update-ref", "refs/notes/causet", notesBefore);
     }
     assert.equal(JSON.parse(vlab(repo, "resolve", "list", "--json")).length, 1, "the retained resolution returns once the conflict is gone");
   }
@@ -3471,7 +3471,7 @@ test("forecast result mismatch blocks receipts and remains abortable", (t) => {
     repo,
     "rev-parse",
     "--git-path",
-    `vcs-lab/forecasts/${forecast.id}.json`,
+    `causet/forecasts/${forecast.id}.json`,
   );
   const savedPath = path.resolve(repo, relativeForecastPath);
   const saved = JSON.parse(fs.readFileSync(savedPath, "utf8"));
@@ -3784,7 +3784,7 @@ test("metadata validation quarantines invalid causal claims from coverage", (t) 
   };
   exec(
     "git",
-    ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", target],
+    ["notes", "--ref=causet", "add", "-f", "-F", "-", target],
     repo,
     { input: `${JSON.stringify(invalid, null, 2)}\n` },
   );
@@ -3833,12 +3833,12 @@ test("missing note attachments remain errors with retention fetch recovery", (t)
     entry.code === "missing-attachment" && entry.subject === attachment,
   );
   assert.equal(diagnostic?.severity, "error");
-  assert.match(diagnostic?.message ?? "", /fetch .*refs\/vcs-lab\/\*/i);
+  assert.match(diagnostic?.message ?? "", /fetch .*refs\/causet\/\*/i);
 
   const humanResult = vlabResult(repo, "metadata", "validate");
   assert.notEqual(humanResult.status, 0);
   assert.match(humanResult.stdout, /missing-attachment/);
-  assert.match(humanResult.stdout, /fetch .*refs\/vcs-lab\/\*/i);
+  assert.match(humanResult.stdout, /fetch .*refs\/causet\/\*/i);
 });
 
 test("metadata envelope round-trips accepted facts between clones idempotently", (t) => {
@@ -3901,7 +3901,7 @@ test("metadata envelope round-trips accepted facts between clones idempotently",
   };
   exec(
     "git",
-    ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", attachment],
+    ["notes", "--ref=causet", "add", "-f", "-F", "-", attachment],
     repo,
     { input: `${JSON.stringify(unknown, null, 2)}\n` },
   );
@@ -3959,14 +3959,14 @@ test("metadata envelope round-trips accepted facts between clones idempotently",
   };
   exec(
     "git",
-    ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", conflictHead],
+    ["notes", "--ref=causet", "add", "-f", "-F", "-", conflictHead],
     conflictDestination,
     { input: `${JSON.stringify(conflictingRecord, null, 2)}\n` },
   );
   const conflictNotesBefore = git(
     conflictDestination,
     "rev-parse",
-    "refs/notes/vcs-lab",
+    "refs/notes/causet",
   );
   const conflictPreview = vlabResult(
     conflictDestination,
@@ -3980,11 +3980,11 @@ test("metadata envelope round-trips accepted facts between clones idempotently",
   assert.ok(conflictPreview.stdout, conflictPreview.stderr);
   assert.ok(JSON.parse(conflictPreview.stdout).summary.conflicts > 0);
   assert.equal(
-    git(conflictDestination, "rev-parse", "refs/notes/vcs-lab"),
+    git(conflictDestination, "rev-parse", "refs/notes/causet"),
     conflictNotesBefore,
   );
   assert.equal(
-    git(conflictDestination, "for-each-ref", "--format=%(refname)", "refs/vcs-lab/resolutions"),
+    git(conflictDestination, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions"),
     "",
   );
 
@@ -4155,7 +4155,7 @@ test("workspace listing batches one status query per existing path and preserves
       vlab(repo, "workspace", "create", name, "--path", paths[name], "--json"),
     );
     assert.equal(created[name].path, paths[name]);
-    assert.equal(created[name].compatibilityBranch, `vlab/ws/${name}`);
+    assert.equal(created[name].compatibilityBranch, `causet/ws/${name}`);
   }
 
   // Dirty: a real merge conflict first, then a staged rename, a modified
@@ -4201,7 +4201,7 @@ test("workspace listing batches one status query per existing path and preserves
   // Detached: HEAD at a commit that is not the compatibility branch tip.
   git(paths.detached, "checkout", "--detach", first);
   assert.equal(git(paths.detached, "rev-parse", "HEAD"), first);
-  assert.equal(git(paths.detached, "rev-parse", "vlab/ws/detached"), second);
+  assert.equal(git(paths.detached, "rev-parse", "causet/ws/detached"), second);
 
   // Unborn: an orphan branch has no HEAD commit yet, so the exact head is
   // null while the path stays an active worktree and its staged files count.
@@ -4249,7 +4249,7 @@ test("workspace listing batches one status query per existing path and preserves
     assert.equal(byName[name].id, created[name].id);
     assert.equal(byName[name].name, name);
     assert.equal(byName[name].path, paths[name]);
-    assert.equal(byName[name].compatibilityBranch, `vlab/ws/${name}`);
+    assert.equal(byName[name].compatibilityBranch, `causet/ws/${name}`);
     assert.equal(byName[name].lifecycle, name === "archived" ? "archived" : "active");
   }
 
@@ -4406,7 +4406,7 @@ test("batched resolution catalog lists retained records newest-first and quarant
     stages: stagesFor("theirs ref mismatch\n"),
     createdAt: "2026-05-01T00:00:00.000Z",
     resultBlob,
-    record: { ref: `refs/vcs-lab/resolutions/${refMismatchSignature}/${resultBlob}` },
+    record: { ref: `refs/causet/resolutions/${refMismatchSignature}/${resultBlob}` },
   });
   assert.notEqual(refMismatch.record.ref, refMismatch.ref);
 
@@ -4439,13 +4439,13 @@ test("batched resolution catalog lists retained records newest-first and quarant
   });
 
   // (g) A retention ref that names a tree instead of a commit.
-  const treeRef = `refs/vcs-lab/resolutions/${resolutionSignature(stagesFor("theirs tree\n"))}/${resultBlob}`;
+  const treeRef = `refs/causet/resolutions/${resolutionSignature(stagesFor("theirs tree\n"))}/${resultBlob}`;
   git(repo, "update-ref", treeRef, git(repo, "rev-parse", "HEAD^{tree}"));
 
   // (g2) A dangling retention ref whose object does not exist at all; the
   // files ref backend is written directly because update-ref refuses it.
   // The scan must neither abort nor truncate the rest of the catalog.
-  const danglingRef = `refs/vcs-lab/resolutions/${resolutionSignature(stagesFor("theirs dangling\n"))}/${resultBlob}`;
+  const danglingRef = `refs/causet/resolutions/${resolutionSignature(stagesFor("theirs dangling\n"))}/${resultBlob}`;
   const danglingOid = "1".repeat(resultBlob.length);
   fs.mkdirSync(path.join(repo, ".git", path.dirname(danglingRef)), { recursive: true });
   fs.writeFileSync(path.join(repo, ".git", danglingRef), `${danglingOid}\n`);
@@ -4600,13 +4600,15 @@ test("batched resolution catalog scans use a bounded number of Git processes as 
   // which is the shape asserted separately below.
   const empty = tracedGitCommands(repo, "resolve", "list", "--json");
   assert.deepEqual(JSON.parse(empty.stdout), []);
-  assert.deepEqual(empty.commands, ["for-each-ref"]);
+  // The one context probe is where the repository keeps its metadata
+  // (ADR-0039 §3): which refs to scan depends on it.
+  assert.deepEqual(empty.commands, ["rev-parse", "for-each-ref"]);
   // Asking for a session must not open one here: the ref scan answers that the
   // catalog is empty before any object read is needed, so a repository with no
   // retention refs never pays for a persistent process (issue #42).
   const emptySession = tracedGitCommands(repo, "resolve", "list", "--json", "--git-session");
   assert.deepEqual(JSON.parse(emptySession.stdout), []);
-  assert.deepEqual(emptySession.processes, ["for-each-ref"]);
+  assert.deepEqual(emptySession.processes, ["rev-parse", "for-each-ref"]);
   const repositoryContextCalls = 1;
   const processBound = 6 + repositoryContextCalls;
 
@@ -4816,7 +4818,7 @@ test("metadata export and import carry a retention ref that names an annotated t
   assert.equal(exported.refs, 2);
   const manifest = JSON.parse(fs.readFileSync(path.join(envelopePath, "manifest.json"), "utf8"));
   assert.deepEqual(
-    manifest.refs.filter((entry) => entry.ref.startsWith("refs/vcs-lab/resolutions/")),
+    manifest.refs.filter((entry) => entry.ref.startsWith("refs/causet/resolutions/")),
     [{ ref: tagged.ref, bundleRef: tagged.ref, oid: tagObject }],
   );
   assert.deepEqual(manifest.records.map((record) => record.id), ["res_tagged"]);
@@ -4827,7 +4829,7 @@ test("metadata export and import carry a retention ref that names an annotated t
   git(destination, "config", "user.name", "VCS Lab Test");
   git(destination, "config", "user.email", "vcs-lab@example.test");
   assert.equal(
-    git(destination, "for-each-ref", "--format=%(refname)", "refs/vcs-lab/resolutions"),
+    git(destination, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions"),
     "",
   );
 
@@ -4850,7 +4852,7 @@ test("metadata export and import carry a retention ref that names an annotated t
   assert.equal(git(destination, "rev-parse", `${tagged.ref}^{commit}`), tagged.commit);
   assert.equal(git(destination, "cat-file", "-t", tagObject), "tag");
   assert.equal(
-    git(destination, "for-each-ref", "--format=%(refname)", "refs/vcs-lab/import-staging"),
+    git(destination, "for-each-ref", "--format=%(refname)", "refs/causet/import-staging"),
     "",
   );
   const destinationCatalog = JSON.parse(vlab(destination, "resolve", "list", "--json"));
@@ -4960,7 +4962,7 @@ function normalizeForecast(forecast) {
 function forecastFileCount(repo) {
   const directory = path.resolve(
     repo,
-    git(repo, "rev-parse", "--git-path", "vcs-lab/forecasts"),
+    git(repo, "rev-parse", "--git-path", "causet/forecasts"),
   );
   return fs.existsSync(directory) ? fs.readdirSync(directory).length : 0;
 }
@@ -5899,7 +5901,7 @@ test("the identity audit separates preserved identity from a real collision", (t
 
   // An applied commit claimed by two application records with different
   // origins leaves its provenance ambiguous.
-  const noteList = git(repo, "notes", "--ref=vcs-lab", "list").split(/\r?\n/).filter(Boolean);
+  const noteList = git(repo, "notes", "--ref=causet", "list").split(/\r?\n/).filter(Boolean);
   let injected = false;
   for (const line of noteList) {
     const [noteOid, target] = line.split(" ");
@@ -5916,7 +5918,7 @@ test("the identity audit separates preserved identity from a real collision", (t
       originCommit: base.commit,
       originChangeId: "ch_other0000000000000000",
     });
-    execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", target], {
+    execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", target], {
       cwd: repo,
       input: `${JSON.stringify(note, null, 2)}\n`,
       encoding: "utf8",
@@ -6710,8 +6712,8 @@ test("every repository read passes through the engine seam and the native engine
       { operation: "treeId", reason: "binding-missing", count: 1 },
     ]);
     // A mutation is never a bypass, whichever engine is selected.
-    gitEngine.runGit(["update-ref", "refs/vcs-lab-test/probe", head], { cwd: repo });
-    assert.equal(git(repo, "rev-parse", "refs/vcs-lab-test/probe"), head);
+    gitEngine.runGit(["update-ref", "refs/causet-test/probe", head], { cwd: repo });
+    assert.equal(git(repo, "rev-parse", "refs/causet-test/probe"), head);
     assert.equal(
       gitEngine.withReadEngine("git", () => gitEngine.readEngine()),
       "git",

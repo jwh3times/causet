@@ -34,8 +34,8 @@ function fixture(t, options = []) {
   run("add", ".");
   run("commit", "-qm", "base");
   const head = run("rev-parse", "HEAD");
-  run("update-ref", "refs/vcs-lab/resolutions/a", head);
-  run("notes", "--ref=vcs-lab", "add", "-m", "note", head);
+  run("update-ref", "refs/causet/resolutions/a", head);
+  run("notes", "--ref=causet", "add", "-m", "note", head);
   return { root, run, head };
 }
 
@@ -78,17 +78,17 @@ test("native reads match Git for loose and packed objects, refs, notes, and link
       run("status", "--porcelain"), run("worktree", "list", "--porcelain")];
     for (const cwd of [root, linked]) {
       compare("repoContext", [cwd]);
-      compare("listRefs", ["refs/vcs-lab/resolutions", cwd]);
+      compare("listRefs", ["refs/causet/resolutions", cwd]);
       compare("inspectGitObjects", [expressions, cwd]);
       compare("readGitObjects", [expressions, cwd]);
-      compare("listNoteEntries", ["vcs-lab", cwd]);
+      compare("listNoteEntries", ["causet", cwd]);
     }
     assert.deepEqual([run("for-each-ref", "--format=%(refname) %(objectname)"),
       run("status", "--porcelain"), run("worktree", "list", "--porcelain")], before);
   }
-  run("update-ref", "refs/vcs-lab/resolutions/b", tag);
-  run("update-ref", "-d", "refs/vcs-lab/resolutions/a");
-  compare("listRefs", ["refs/vcs-lab/resolutions", root]);
+  run("update-ref", "refs/causet/resolutions/b", tag);
+  run("update-ref", "-d", "refs/causet/resolutions/a");
+  compare("listRefs", ["refs/causet/resolutions", root]);
   run("fsck", "--no-dangling");
 });
 
@@ -99,7 +99,7 @@ test("unsupported expressions and repository profiles fall back as complete oper
   refused("listRefs", ["refs/heads/*", root]);
   const sha256 = fixture(t, ["--object-format=sha256"]);
   refused("repoContext", [sha256.root]);
-  refused("listNoteEntries", ["vcs-lab", sha256.root]);
+  refused("listNoteEntries", ["causet", sha256.root]);
   const version = spawnSync("git", ["--version"], { encoding: "utf8" }).stdout.match(/(\d+)\.(\d+)/);
   if (Number(version[1]) > 2 || Number(version[2]) >= 45) {
     const reftable = fixture(t, ["--ref-format=reftable"]);
@@ -120,11 +120,11 @@ test("native notes reject duplicate, malformed, and oversized trees without part
   const note = rawObject(root, "blob", Buffer.from("duplicate\n"));
   const entry = (name) => Buffer.concat([Buffer.from(`100644 ${name}\0`), Buffer.from(note, "hex")]);
   const duplicate = rawObject(root, "tree", Buffer.concat([entry(head.toUpperCase()), entry(head)]));
-  run("update-ref", "refs/notes/vcs-lab", duplicate);
-  compare("listNoteEntries", ["vcs-lab", root], false);
+  run("update-ref", "refs/notes/causet", duplicate);
+  compare("listNoteEntries", ["causet", root], false);
   const malformed = rawObject(root, "tree", Buffer.from("100644 truncated\0x"));
-  run("update-ref", "refs/notes/vcs-lab", malformed);
-  compare("listNoteEntries", ["vcs-lab", root], false);
+  run("update-ref", "refs/notes/causet", malformed);
+  compare("listNoteEntries", ["causet", root], false);
   const oversized = rawObject(root, "blob", Buffer.alloc(64 * 1024 * 1024 + 1, 97));
   compare("inspectGitObjects", [[oversized], root]);
   // An exhausted budget is a bound the data reached, not a refused input shape.
@@ -201,9 +201,9 @@ test("the engine differential compares every native operation natively", { skip:
 
 test("parked disputes are listed natively, keeping only two-level refs", { skip: !available }, (t) => {
   const { root, run, head } = fixture(t);
-  run("update-ref", "refs/vcs-lab/quarantine/lineage-a/record-1", head);
-  run("update-ref", "refs/vcs-lab/quarantine/lineage-b/record-2/extra", head);
-  run("update-ref", "refs/vcs-lab/quarantine/stray", head);
+  run("update-ref", "refs/causet/quarantine/lineage-a/record-1", head);
+  run("update-ref", "refs/causet/quarantine/lineage-b/record-2/extra", head);
+  run("update-ref", "refs/causet/quarantine/stray", head);
   const expected = git.withReadEngine("git", () => [...parkedRecordIds(root)]);
   const collector = git.beginGitMetrics("quarantine");
   let actual;

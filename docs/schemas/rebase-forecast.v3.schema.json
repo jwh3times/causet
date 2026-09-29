@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.rebase-forecast/v3",
   "title": "Causal rebase forecast",
-  "description": "Pinned causal-rebase simulation with caller invariants, stored worktree-private under .git/vcs-lab/forecasts/ and returned by vlab rebase-forecast --json (src/rebase-forecast.js). v2 pins a causet.rebase-plan/v2 plan and adds `recreatedMerges`; steps carry `kind` and, for a recreated merge, the parents it joined (ADR-0034). v1 is not readable: it pins a v1 plan fingerprint, which no v2 plan can match, so it is refused by version rather than reported as stale. v3 adds the declared interactive program of ADR-0035 \u2014 `reword`, `edit`, `squash`, and `fixup` as plan actions, each with its own identity rule \u2014 and is a strict superset of v2.",
+  "description": "Pinned causal-rebase simulation with caller invariants, stored worktree-private under .git/causet/forecasts/ and returned by vlab rebase-forecast --json (src/rebase-forecast.js). v2 pins a causet.rebase-plan/v2 plan and adds `recreatedMerges`; steps carry `kind` and, for a recreated merge, the parents it joined (ADR-0034). v1 is not readable: it pins a v1 plan fingerprint, which no v2 plan can match, so it is refused by version rather than reported as stale. v3 adds the declared interactive program of ADR-0035 \u2014 `reword`, `edit`, `squash`, and `fixup` as plan actions, each with its own identity rule \u2014 and is a strict superset of v2.",
   "x-causet-scope": "worktree-private",
   "type": "object",
   "required": [

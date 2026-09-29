@@ -8,8 +8,7 @@ import {
 } from "./engine.js";
 import { CliError } from "./errors.js";
 import { validateNoteRecord } from "./schemas.js";
-
-const NOTES_REF = "refs/notes/vcs-lab";
+import { names } from "./locations.js";
 
 /**
  * The Git bindings a proof bundle carries so a verifier without the repository
@@ -241,7 +240,7 @@ export function buildBindings(plan, evidence, lineage, cwd = process.cwd()) {
   }
 
   // 3. Receipt inclusion, anchored to the notes tip only (owner decision 4).
-  const notesTip = refTarget(NOTES_REF, cwd);
+  const notesTip = refTarget(names(cwd).notesRef, cwd);
   const receipts = [];
   if (notesTip) {
     absorb(readRaw([notesTip], "commit", cwd));

@@ -7,7 +7,7 @@ import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const NOTES = "refs/notes/vcs-lab";
+const NOTES = "refs/notes/causet";
 
 function exec(command, args, cwd, options = {}) {
   return execFileSync(command, args, {
@@ -85,11 +85,11 @@ function landedRepository(t, name = "conflict") {
 
 /** The raw note container on `commit`, as vcs-lab wrote it. */
 function readContainer(repo, commit) {
-  return JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", commit));
+  return JSON.parse(git(repo, "notes", "--ref=causet", "show", commit));
 }
 
 function writeContainer(repo, commit, container) {
-  exec("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", commit], repo, {
+  exec("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", commit], repo, {
     input: `${JSON.stringify(container, null, 2)}\n`,
   });
 }
@@ -218,7 +218,7 @@ test("the default import still refuses the whole envelope on one conflict", (t) 
   assert.equal(JSON.parse(applied.stdout).code, "conflict-blocked");
   assert.equal(git(clone, "rev-parse", NOTES), notesBefore,
     "a refused import moves no destination ref");
-  assert.equal(git(clone, "for-each-ref", "refs/vcs-lab/quarantine"), "",
+  assert.equal(git(clone, "for-each-ref", "refs/causet/quarantine"), "",
     "the refusing default parks nothing");
 });
 
@@ -236,7 +236,7 @@ test("--park-conflicts applies the rest and parks the conflicting record", (t) =
   // The parked ref names a blob holding the incoming record and where it came
   // from, inspectable with ordinary Git.
   const sourceLineage = result.repository.sourceLineage;
-  const ref = `refs/vcs-lab/quarantine/${sourceLineage}/${landing.id}`;
+  const ref = `refs/causet/quarantine/${sourceLineage}/${landing.id}`;
   assert.equal(result.parked[0].ref, ref);
   assert.equal(git(clone, "cat-file", "-t", ref), "blob");
   const payload = JSON.parse(git(clone, "cat-file", "-p", ref));
@@ -314,7 +314,7 @@ test("keep-local returns the local record to service and remembers the rejection
   // inService false rather than claiming it returned to service.
   assert.equal(disposed.record.inService, true);
   assert.deepEqual(disposed.record.diagnostics, []);
-  assert.equal(git(clone, "for-each-ref", "refs/vcs-lab/quarantine"), "",
+  assert.equal(git(clone, "for-each-ref", "refs/causet/quarantine"), "",
     "disposing of the dispute removes the parked copy");
 
   // The local fact proves coverage again, with no code change in between.
@@ -325,7 +325,7 @@ test("keep-local returns the local record to service and remembers the rejection
 
   // The registry is shared-local and is listed by status.
   const registry = JSON.parse(
-    fs.readFileSync(path.join(clone, ".git", "vcs-lab", "dispositions.json"), "utf8"),
+    fs.readFileSync(path.join(clone, ".git", "causet", "dispositions.json"), "utf8"),
   );
   assert.equal(registry.schema, "causet.dispositions/v1");
   assert.equal(registry.dispositions.length, 1);
@@ -341,7 +341,7 @@ test("keep-local returns the local record to service and remembers the rejection
     again.records.find((entry) => entry.id === landing.id).action,
     "disposed",
   );
-  assert.equal(git(clone, "for-each-ref", "refs/vcs-lab/quarantine"), "",
+  assert.equal(git(clone, "for-each-ref", "refs/causet/quarantine"), "",
     "an already-disposed digest is not parked a second time");
   assert.equal(vlabJson(clone, "merge-plan", "feature").counts.covered, 1,
     "and the local fact stays in service");
@@ -443,7 +443,7 @@ test("a resolution ref the destination points elsewhere is refused, not merged",
   const catalog = vlabJson(repo, "resolve", "list");
   assert.equal(catalog.length, 1);
   const resolutionRef = catalog[0].discoveredRef ?? catalog[0].ref;
-  assert.ok(resolutionRef?.startsWith("refs/vcs-lab/resolutions/"), resolutionRef);
+  assert.ok(resolutionRef?.startsWith("refs/causet/resolutions/"), resolutionRef);
 
   const envelope = path.join(parent, "resolution-envelope");
   vlab(repo, "metadata", "export", envelope);

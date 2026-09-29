@@ -85,28 +85,159 @@ function cst(cwd, args, env = {}) {
 }
 
 /** What may differ between the old build's output and this build's. */
-function normalize(text, root) {
-  return text
+/**
+ * What may differ between the old build's output and this build's. After
+ * `cst migrate`, where things live differs too, so the former locations are
+ * mapped to the current ones on both sides.
+ */
+function normalize(text, root, { migrated = false } = {}) {
+  let result = text
     .split(JSON.stringify(root).slice(1, -1)).join("<ROOT>")
     .split(root).join("<ROOT>")
     .replaceAll("\\\\", "/")
     .replaceAll("\\", "/")
     .replace(/\bvcs-lab\.(?=[a-z][a-z-]*(?:\/v\d+)?\b)/g, "causet.")
     .replaceAll("causal-vcs-lab", "causet");
+  if (migrated) {
+    result = result
+      .replaceAll("refs/notes/vcs-lab", "refs/notes/causet")
+      .replaceAll("refs/vcs-lab/", "refs/causet/")
+      .replaceAll("--ref=vcs-lab", "--ref=causet")
+      .replaceAll("/.git/vcs-lab", "/.git/causet")
+      .replaceAll(".vcs-lab/specs", ".causet/specs");
+  }
+  return result;
 }
 
-test("a repository written by v0.19.1 reads identically, apart from identifier spellings", () => {
-  const root = restore();
+/**
+ * `metadata status` and `validate` report the repository's migration state,
+ * which v0.19.1 had no notion of: an unmigrated repository carries exactly one
+ * `unmigrated-repository` info diagnostic, a migrated one none. That entry is
+ * checked and then set aside, so everything else still compares byte for byte.
+ */
+function withoutMigrationDiagnostic(args, stdout, migrated) {
+  if (args[0] !== "metadata" || !["status", "validate"].includes(args[1])) return stdout;
+  const report = JSON.parse(stdout);
+  const notices = report.diagnostics.filter((entry) => entry.code === "unmigrated-repository");
+  assert.equal(notices.length, migrated ? 0 : 1, `unmigrated-repository in ${args.join(" ")}`);
+  assert.ok(notices.every((entry) => entry.severity === "info"));
+  report.diagnostics = report.diagnostics.filter((entry) => entry.code !== "unmigrated-repository");
+  return `${JSON.stringify(report, null, 2)}\n`;
+}
+
+function assertReadsMatch(root, { migrated = false } = {}) {
   const repo = path.join(root, "repo");
-  assert.match(fixture.generatedBy, /^causet 0\.19\.1$/);
   for (const expected of fixture.expected) {
     const args = rooted(expected.args, root);
     const actual = cst(repo, args);
     const label = expected.args.join(" ");
     assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
-    assert.equal(normalize(actual.stdout, root), normalize(expected.stdout, root), `stdout of ${label}`);
-    assert.equal(normalize(actual.stderr, root), normalize(expected.stderr, root), `stderr of ${label}`);
+    const stdout = withoutMigrationDiagnostic(expected.args, actual.stdout, migrated);
+    assert.equal(normalize(stdout, root, { migrated }), normalize(expected.stdout, root, { migrated }),
+      `stdout of ${label}`);
+    assert.equal(normalize(actual.stderr, root, { migrated }), normalize(expected.stderr, root, { migrated }),
+      `stderr of ${label}`);
   }
+}
+
+test("a repository written by v0.19.1 reads identically, apart from identifier spellings", () => {
+  assert.match(fixture.generatedBy, /^causet 0\.19\.1$/);
+  assertReadsMatch(restore());
+});
+
+test("cst migrate moves a v0.19.1 repository to the causet names, and every read stays the same", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  const refsBefore = git(repo, "for-each-ref", "--format=%(refname) %(objectname)");
+  const doctorBefore = JSON.parse(cst(repo, ["doctor"]).stdout);
+  assert.equal(doctorBefore.migration, "unmigrated");
+  assert.equal(doctorBefore.notesRef, "refs/notes/vcs-lab");
+
+  // A dry run reports the whole move and changes nothing.
+  const preview = JSON.parse(cst(repo, ["migrate", "--dry-run", "--json"]).stdout);
+  assert.equal(preview.schema, "causet.migration-report/v1");
+  assert.equal(preview.mode, "dry-run");
+  assert.equal(preview.refused, null);
+  assert.ok(preview.refs.some((entry) => entry.from === "refs/notes/vcs-lab" && entry.to === "refs/notes/causet"));
+  assert.ok(preview.refs.every((entry) => entry.action === "create"));
+  assert.equal(preview.specs.action, "move");
+  assert.equal(git(repo, "for-each-ref", "--format=%(refname) %(objectname)"), refsBefore);
+
+  const applied = cst(repo, ["migrate", "--json"]);
+  assert.equal(applied.status, 0, applied.stderr);
+  const report = JSON.parse(applied.stdout);
+  assert.equal(report.stateAfter, "migrated");
+  assert.equal(report.summary.commitRequired, true);
+  // Every former ref is kept where it was, and each new one names the same object.
+  const refs = new Map(git(repo, "for-each-ref", "--format=%(refname) %(objectname)").split("\n")
+    .map((line) => line.split(" ")));
+  for (const line of refsBefore.split("\n")) {
+    const [ref, oid] = line.split(" ");
+    assert.equal(refs.get(ref), oid, `${ref} must stay where it was`);
+    if (ref === "refs/notes/vcs-lab") assert.equal(refs.get("refs/notes/causet"), oid);
+    if (ref.startsWith("refs/vcs-lab/")) assert.equal(refs.get(`refs/causet/${ref.slice(13)}`), oid);
+  }
+  assert.equal(git(repo, "config", "notes.displayRef"), "refs/notes/causet");
+  assert.ok(fs.existsSync(path.join(repo, ".git", "causet", "workspaces.json")));
+  assert.equal(fs.existsSync(path.join(repo, ".git", "vcs-lab", "workspaces.json")), false);
+  // The manifest move is staged for the user to commit, never committed for them.
+  assert.match(git(repo, "status", "--porcelain"), /^R {2}\.vcs-lab\/specs\/specs\/design\.md\.json -> \.causet\/specs\/specs\/design\.md\.json$/m);
+
+  // Compared before the user commits the move, so history is what v0.19.1 saw.
+  const doctorAfter = JSON.parse(cst(repo, ["doctor"]).stdout);
+  assert.equal(doctorAfter.migration, "migrated");
+  assert.equal(doctorAfter.notesRef, "refs/notes/causet");
+  assertReadsMatch(root, { migrated: true });
+  git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
+
+  // Running it again finds nothing left to do.
+  const again = JSON.parse(cst(repo, ["migrate", "--json"]).stdout);
+  assert.deepEqual(again.summary, { refs: 0, config: 0, paths: 0, specs: 0, commitRequired: false });
+});
+
+test("a former ref that advances after migration is reported, then fast-forwarded or refused", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  assert.equal(cst(repo, ["migrate"]).status, 0);
+  git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
+  // A peer on an older build publishes to the former notes ref.
+  const oldTip = git(repo, "rev-parse", "refs/notes/vcs-lab");
+  const advanced = git(repo, "commit-tree", `${oldTip}^{tree}`, "-p", oldTip, "-m", "Notes added by an older build");
+  git(repo, "update-ref", "refs/notes/vcs-lab", advanced, oldTip);
+  const status = JSON.parse(cst(repo, ["metadata", "status", "--json"]).stdout);
+  const warnings = status.diagnostics.filter((entry) => entry.code === "legacy-ref-advanced");
+  assert.deepEqual(warnings.map((entry) => [entry.severity, entry.subject, entry.oid]),
+    [["warning", "refs/notes/vcs-lab", advanced]]);
+  assert.equal(JSON.parse(cst(repo, ["doctor"]).stdout).migration, "mixed");
+
+  // Only the former side moved: a rerun fast-forwards the new ref.
+  const forward = JSON.parse(cst(repo, ["migrate", "--json"]).stdout);
+  assert.deepEqual(forward.refs.filter((entry) => entry.action !== "present").map((entry) => entry.action), ["fast-forward"]);
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), advanced);
+  assert.equal(JSON.parse(cst(repo, ["doctor"]).stdout).migration, "migrated");
+
+  // Both sides moved: cst migrate will not choose.
+  const theirs = git(repo, "commit-tree", `${advanced}^{tree}`, "-p", advanced, "-m", "Older build again");
+  const ours = git(repo, "commit-tree", `${advanced}^{tree}`, "-p", advanced, "-m", "This build");
+  git(repo, "update-ref", "refs/notes/vcs-lab", theirs, advanced);
+  git(repo, "update-ref", "refs/notes/causet", ours, advanced);
+  const refused = cst(repo, ["migrate", "--json"]);
+  assert.equal(refused.status, 1);
+  assert.equal(JSON.parse(refused.stdout).code, "precondition-not-met");
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), ours);
+});
+
+test("cst migrate refuses while an operation is in progress", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  const journal = path.join(repo, ".git", "vcs-lab", "reconciliation.json");
+  fs.writeFileSync(journal, "{}\n");
+  const refused = cst(repo, ["migrate", "--json"]);
+  assert.equal(refused.status, 1);
+  const envelope = JSON.parse(refused.stdout);
+  assert.equal(envelope.code, "operation-in-progress");
+  assert.match(envelope.details, /cst reconcile --continue/);
+  assert.equal(git(repo, "for-each-ref", "refs/notes/causet"), "");
 });
 
 test("the legacy fixture really carries only vcs-lab identifiers", () => {

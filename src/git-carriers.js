@@ -2,13 +2,17 @@ import { runGit } from "./git.js";
 import { inspectGitObjects, readGitObjects, repoContext } from "./engine.js";
 import { referencedObjectsForRecord, validateNoteRecord } from "./schemas.js";
 import { CliError } from "./errors.js";
+import { refFamily } from "./locations.js";
 
-export const RETENTION_REF = "refs/vcs-lab/retention";
+/** The ADR-0025 retention carrier under the names the repository uses. */
+export function retentionRef(cwd = process.cwd()) {
+  return refFamily("retention", cwd);
+}
 export const DETERMINISTIC_CARRIER_ENV = {
-  GIT_AUTHOR_NAME: "vcs-lab metadata envelope",
+  GIT_AUTHOR_NAME: "causet metadata envelope",
   GIT_AUTHOR_EMAIL: "metadata-envelope@example.invalid",
   GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
-  GIT_COMMITTER_NAME: "vcs-lab metadata envelope",
+  GIT_COMMITTER_NAME: "causet metadata envelope",
   GIT_COMMITTER_EMAIL: "metadata-envelope@example.invalid",
   GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
 };
@@ -72,7 +76,7 @@ export function commitWithParents(tree, parents, cwd, options = {}) {
   let layer = [...new Set(parents)].sort();
   const env = options.deterministic ? DETERMINISTIC_CARRIER_ENV : {};
   const commit = group => runGit(["commit-tree", tree, ...group.flatMap(oid => ["-p", oid]), "-F", "-"], {
-    cwd, env, input: `${options.message ?? "vcs-lab object retention"}\n`,
+    cwd, env, input: `${options.message ?? "causet object retention"}\n`,
   }).stdout;
   while (layer.length > 64) {
     const next = [];
@@ -89,7 +93,7 @@ export function buildNoteTree(note, attachment, previousTree, cwd) {
 
 export function buildNoteCommit(note, attachment, previous, cwd) {
   const tree = buildNoteTree(note, attachment, previous ? `${previous}^{tree}` : null, cwd);
-  return commitWithParents(tree, previous ? [previous] : [], cwd, { message: "Publish vcs-lab causal note" });
+  return commitWithParents(tree, previous ? [previous] : [], cwd, { message: "Publish causet causal note" });
 }
 
 /** All dependencies of accepted facts, including attachments and raw stage blobs. */

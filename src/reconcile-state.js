@@ -1,3 +1,4 @@
+import { runtimeDirectory } from "./locations.js";
 import fs from "node:fs";
 import path from "node:path";
 import { pseudoRefTarget, repoContext } from "./engine.js";
@@ -8,7 +9,7 @@ import { assertReadableSchema } from "./schemas.js";
 
 export function reconciliationStatePath(cwd = process.cwd()) {
   const { gitDir } = repoContext(cwd);
-  return path.join(gitDir, "vcs-lab", "reconciliation.json");
+  return path.join(runtimeDirectory(gitDir, cwd), "reconciliation.json");
 }
 
 /**

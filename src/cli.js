@@ -83,6 +83,7 @@ import {
 import { auditIdentity } from "./identity-audit.js";
 import { CliError, requestJsonErrors } from "./errors.js";
 import { legacyVariablesInUse, setEnvironmentValue } from "./environment.js";
+import { names, refFamily } from "./locations.js";
 import { assertWithinBound } from "./schemas.js";
 import { VERSION } from "./version.js";
 import {
@@ -97,6 +98,7 @@ import {
 } from "./forecasts.js";
 import { metadataStatus, validateMetadata } from "./metadata.js";
 import { retainMetadata, formatRetention } from "./retention.js";
+import { migrateRepository, migrationState } from "./migration.js";
 import { exportMetadata, importMetadata } from "./metadata-transfer.js";
 import { disposeConflict } from "./dispositions.js";
 import { capabilityDocument, negotiateAgainst } from "./capabilities.js";
@@ -162,6 +164,7 @@ Usage:
   cst spec status [--json]
   cst spec resolve [markdown-file] [--all] [--json]
   cst spec benchmark [--documents <n>] [--blocks <n>]
+  cst migrate [--dry-run] [--json]              move vcs-lab metadata to the causet names
   cst doctor [--benchmark] [--samples <n>] [--warmup <n>] [--differential]
   cst version
 
@@ -395,7 +398,7 @@ function formatMetadataTransfer(result) {
   ];
   if (result.summary.parkRecords) {
     lines.push(
-      `parked       ${result.summary.parkRecords} conflicting record${result.summary.parkRecords === 1 ? "" : "s"} under refs/vcs-lab/quarantine`,
+      `parked       ${result.summary.parkRecords} conflicting record${result.summary.parkRecords === 1 ? "" : "s"} under ${refFamily("quarantine")}`,
     );
     for (const entry of result.records.filter((item) => item.action === "park")) {
       lines.push(`  ! ${entry.id} disputes the local copy; resolve it with cst metadata dispose`);
@@ -427,6 +430,23 @@ function formatDisposition(result) {
       ? "The record is in service again; the decision is local and is never exported."
       : `The dispute is resolved, but the record is still quarantined: ${result.record.diagnostics.join(", ") || "see cst metadata status"}.`,
   ].join("\n");
+}
+
+function formatMigration(result) {
+  const verb = result.mode === "apply" ? "Migrated" : "Would migrate";
+  const lines = [`${verb} metadata to the causet names (ADR-0039)`, `state        ${result.stateBefore} -> ${result.stateAfter}`];
+  if (result.refused) lines.push(`refused      ${result.refused.message}`, `             ${result.refused.details}`);
+  for (const entry of result.refs) lines.push(`ref          ${entry.action.padEnd(12)} ${entry.from} -> ${entry.to}`);
+  for (const entry of result.config) lines.push(`config       ${entry.action.padEnd(12)} ${entry.key} = ${entry.action === "repoint" ? entry.to : entry.from ?? "(unset)"}`);
+  for (const entry of result.paths) lines.push(`path         ${entry.action.padEnd(12)} ${entry.from} -> ${entry.to}`);
+  if (result.specs.action !== "none") lines.push(`specs        ${result.specs.action.padEnd(12)} ${result.specs.from} -> ${result.specs.to} (${result.specs.files} files)`);
+  if (result.summary.commitRequired) {
+    lines.push("", `The manifest move is staged, not committed: review it and commit it (git commit -m \"Move specification manifests to ${result.specs.to}\").`);
+  }
+  if (result.mode === "apply" && !result.refused) {
+    lines.push("", "The former refs stay where they were; publish the new ones with git push <remote> 'refs/notes/causet' 'refs/causet/*'.");
+  }
+  return lines.join("\n");
 }
 
 function formatCapabilities(document) {
@@ -1075,7 +1095,7 @@ function gitBenchmark(options = {}) {
     { name: "head", args: ["rev-parse", "HEAD"] },
     { name: "status", args: ["status", "--porcelain=v1"] },
     { name: "history", args: ["log", "-20", "--format=%H"] },
-    { name: "notes", args: ["notes", "--ref=vcs-lab", "list"], allowFailure: true },
+    { name: "notes", args: ["notes", `--ref=${names().notesName}`, "list"], allowFailure: true },
   ];
   // These probes measure the raw cost of one Git process on this host, so
   // they deliberately bypass the engine seam (`rawProbe`).
@@ -1280,7 +1300,7 @@ export async function main(rawArgs) {
   switch (command) {
     case "init": {
       const context = initLab();
-      print(`Initialized vcs-lab metadata in ${context.root}`);
+      print(`Initialized causet metadata in ${context.root}`);
       return;
     }
     case "commit": {
@@ -1810,6 +1830,12 @@ export async function main(rawArgs) {
       print(options.json ? document : formatCapabilities(document), options.json);
       return;
     }
+    case "migrate": {
+      const result = migrateRepository({ dryRun: options.dryRun });
+      print(options.json ? result : formatMigration(result), options.json);
+      if (result.refused) process.exitCode = 1;
+      return;
+    }
     case "doctor": {
       // A diagnostic must not change what it diagnoses: the doctor reads the
       // repository context and never runs `cst init`'s configuration writes.
@@ -1823,12 +1849,14 @@ export async function main(rawArgs) {
         git: gitVersion().raw,
         node: process.version,
         repository: context.root,
-        notesRef: "refs/notes/vcs-lab",
+        notesRef: names(context.root).notesRef,
         engine: describeReadEngines(),
         forecastEngine: forecastEngine(),
         // `VLAB_*` variables still read in place of their `CAUSET_*` names
         // (ADR-0039 §5); reported here rather than on stderr.
         legacyEnvironment: legacyVariablesInUse(),
+        // `unmigrated`, `migrated`, or `mixed` (ADR-0039 §3).
+        migration: migrationState(context.root),
         differential: options.differential ? runDifferential(context.root) : undefined,
         benchmark: options.benchmark ? gitBenchmark(options) : undefined,
         objectSession: options.benchmark

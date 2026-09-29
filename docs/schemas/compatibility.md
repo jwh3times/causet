@@ -1,6 +1,6 @@
 # Compatibility, migration, and resource bounds
 
-This document is the published contract for how vcs-lab treats a stored record
+This document is the published contract for how causet treats a stored record
 it did not write: what may change inside one schema version, which versions each
 family reads and writes, what a reader does with a version it does not know, and
 how large a record may be before it is refused or quarantined. It extends the
@@ -42,26 +42,27 @@ version in `also read` is migrated forward as section 3 describes.
 
 | Family | Scope | Written | Also read | Unknown version | Store |
 | --- | --- | --- | --- | --- | --- |
-| `causet.note` | note-container | v1 | — | ignore | refs/notes/vcs-lab note blobs |
-| `causet.landing` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.application` | note-record | v1, v4 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.reconciliation` | note-record | v6 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.rebase-application` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.rebase` | note-record | v3 | v1, v2 | quarantine | refs/notes/vcs-lab note containers |
-| `causet.amendment` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.interactive-absorption` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.provenance` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.resolution` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `causet.reconciliation-operation` | private | v4 | — | refuse | `<git dir>/vcs-lab/reconciliation.json` |
-| `causet.rebase-operation` | private | v3 | — | refuse | `<git dir>/vcs-lab/rebase.json` |
-| `causet.forecast` | private | v2 | v1 | refuse | `<git dir>/vcs-lab/forecasts/<id>.json` |
-| `causet.rebase-forecast` | private | v3 | — | refuse | `<git dir>/vcs-lab/forecasts/<id>.json` |
-| `causet.workspaces` | shared-local | v1 | — | refuse | `<common dir>/vcs-lab/workspaces.json` |
-| `causet.workspace` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/workspaces.json` |
-| `causet.quarantined-record` | shared-local | v1 | — | refuse | refs/vcs-lab/quarantine/<lineage>/<record id> blobs |
-| `causet.dispositions` | shared-local | v1 | — | refuse | `<common dir>/vcs-lab/dispositions.json` |
-| `causet.disposition` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/dispositions.json` |
-| `causet.spec-manifest` | tracked | v4 | v1, v2, v3 | refuse | `.vcs-lab/specs/**` |
+| `causet.note` | note-container | v1 | — | ignore | refs/notes/causet note blobs |
+| `causet.landing` | note-record | v1 | — | quarantine | refs/notes/causet note containers |
+| `causet.application` | note-record | v1, v4 | — | quarantine | refs/notes/causet note containers |
+| `causet.reconciliation` | note-record | v6 | — | quarantine | refs/notes/causet note containers |
+| `causet.rebase-application` | note-record | v1 | — | quarantine | refs/notes/causet note containers |
+| `causet.rebase` | note-record | v3 | v1, v2 | quarantine | refs/notes/causet note containers |
+| `causet.amendment` | note-record | v1 | — | quarantine | refs/notes/causet note containers |
+| `causet.interactive-absorption` | note-record | v1 | — | quarantine | refs/notes/causet note containers |
+| `causet.provenance` | note-record | v1 | — | quarantine | refs/notes/causet note containers |
+| `causet.resolution` | note-record | v1 | — | quarantine | refs/notes/causet note containers |
+| `causet.reconciliation-operation` | private | v4 | — | refuse | `<git dir>/causet/reconciliation.json` |
+| `causet.rebase-operation` | private | v3 | — | refuse | `<git dir>/causet/rebase.json` |
+| `causet.forecast` | private | v2 | v1 | refuse | `<git dir>/causet/forecasts/<id>.json` |
+| `causet.rebase-forecast` | private | v3 | — | refuse | `<git dir>/causet/forecasts/<id>.json` |
+| `causet.workspaces` | shared-local | v1 | — | refuse | `<common dir>/causet/workspaces.json` |
+| `causet.workspace` | shared-local | v1 | — | refuse | entries of `<common dir>/causet/workspaces.json` |
+| `causet.quarantined-record` | shared-local | v1 | — | refuse | refs/causet/quarantine/<lineage>/<record id> blobs |
+| `causet.dispositions` | shared-local | v1 | — | refuse | `<common dir>/causet/dispositions.json` |
+| `causet.disposition` | shared-local | v1 | — | refuse | entries of `<common dir>/causet/dispositions.json` |
+| `causet.migration` | shared-local | v1 | — | refuse | `<common dir>/causet/migration.json` |
+| `causet.spec-manifest` | tracked | v4 | v1, v2, v3 | refuse | `.causet/specs/**` |
 | `causet.metadata-envelope` | envelope | v1 | — | refuse | `manifest.json` of a metadata export directory |
 | `causet.proof-bundle` | envelope | v2 | v1 | refuse | a file handed to cst verify-proof |
 | `causet.capabilities` | advertisement | v1 | — | refuse | produced on demand by cst capabilities; served by a gateway |
@@ -167,6 +168,12 @@ inside their own hashed bytes. **`vcs-lab.` is a permanent, read-only alias of
   the `schema` member. The capability document lists each exchanged family's
   legacy spelling under `aliases` (ADR-0039 §4).
 
+**Locations follow the repository, not the build.** The store column above names
+where records live in a repository that uses the current names. A repository
+holding metadata from before issue #159 keeps `refs/notes/vcs-lab`,
+`refs/vcs-lab/*`, `<git dir>/vcs-lab/` and `.vcs-lab/specs/` until `cst migrate`
+moves them (ADR-0039 §3).
+
 `test/schema-compatibility.test.js` checks that the alias resolves for every
 family and version, and that no writer emits a `vcs-lab.*` identifier.
 `test/legacy-fixture.test.js` reads a repository written by v0.19.1.
@@ -238,10 +245,10 @@ tracked, or imported input refuses the command.
 
 | Bound | Bytes or count | Applies to | On excess |
 | --- | --- | --- | --- |
-| `noteContainerBytes` | 8388608 | One `refs/notes/vcs-lab` note blob, and one `refs/vcs-lab/quarantine/**` parked-record blob | Quarantine: no records, `oversize-record` warning from `cst metadata status`, and `appendNote` refuses to rewrite it. A parked blob over the bound is reported by `cst metadata status` and refused by `cst metadata dispose`; parking a record that would cross it is refused |
+| `noteContainerBytes` | 8388608 | One `refs/notes/causet` note blob, and one `refs/causet/quarantine/**` parked-record blob | Quarantine: no records, `oversize-record` warning from `cst metadata status`, and `appendNote` refuses to rewrite it. A parked blob over the bound is reported by `cst metadata status` and refused by `cst metadata dispose`; parking a record that would cross it is refused |
 | `noteContainerRecords` | 4096 | Records in one note container | Quarantine, as above; an append that would cross the bound is refused |
 | `localStateBytes` | 67108864 | One `vcs-lab/**` JSON file in the git or common directory | Refuse before reading the file |
-| `specManifestBytes` | 8388608 | One `.vcs-lab/specs/**` manifest, in the working tree or at a revision | Refuse |
+| `specManifestBytes` | 8388608 | One `.causet/specs/**` manifest, in the working tree or at a revision | Refuse |
 | `envelopeManifestBytes` | 16777216 | `manifest.json` of a metadata envelope | Refuse |
 | `envelopeBundleBytes` | 2147483648 | The `objects.bundle` size an envelope declares | Refuse |
 | `envelopeRecords` | 1000000 | Records one envelope declares | Refuse |
@@ -289,7 +296,7 @@ and each needs a retention design rather than a constant.
   repository. `cst metadata status` reads every note in one batch and holds the
   whole inventory in memory.
 - No cap on operation-journal queue length, on the number of stored forecasts
-  (nothing prunes `<git dir>/vcs-lab/forecasts/`), on registered workspaces, or
+  (nothing prunes `<git dir>/causet/forecasts/`), on registered workspaces, or
   on retained checkpoint-history and resolution refs.
 - No cap on tracked path count, spec file size, or blocks per document outside
   the benchmark commands.

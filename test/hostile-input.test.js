@@ -137,8 +137,8 @@ function assertRefusedCleanly(repo, label, args, expected) {
 /** Restore the note ref to its pre-tampering state. */
 function withTamperedNote(repo, body, run) {
   const target = git(repo, "rev-parse", "HEAD");
-  const notesBefore = git(repo, "rev-parse", "refs/notes/vcs-lab");
-  execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", target], {
+  const notesBefore = git(repo, "rev-parse", "refs/notes/causet");
+  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", target], {
     cwd: repo,
     input: body,
     encoding: "utf8",
@@ -147,7 +147,7 @@ function withTamperedNote(repo, body, run) {
   try {
     run();
   } finally {
-    git(repo, "update-ref", "refs/notes/vcs-lab", notesBefore);
+    git(repo, "update-ref", "refs/notes/causet", notesBefore);
   }
 }
 
@@ -288,7 +288,7 @@ test("hostile metadata envelopes are refused before any ref moves", () => {
   const escapingRef = tamperedEnvelope(state, "env-ref", (manifest) => {
     manifest.refs = [{
       ref: "refs/../../evil",
-      bundleRef: "refs/vcs-lab/import/evil",
+      bundleRef: "refs/causet/import/evil",
       oid: "0".repeat(40),
     }];
   });
@@ -313,7 +313,7 @@ test("hostile metadata envelopes are refused before any ref moves", () => {
 test("hostile manifests, identifiers, and object expressions fail closed", () => {
   const state = scenario();
   const { repo } = state;
-  const manifestPath = path.join(repo, ".vcs-lab", "specs", "spec.md.json");
+  const manifestPath = path.join(repo, ".causet", "specs", "spec.md.json");
   const original = fs.readFileSync(manifestPath, "utf8");
 
   try {
@@ -504,8 +504,8 @@ test("hostile proof bundles fail closed before any member is dereferenced", () =
 
 /** Tamper the note on `target` (not necessarily HEAD) and restore the ref. */
 function withTamperedNoteOn(repo, target, body, run) {
-  const notesBefore = git(repo, "rev-parse", "refs/notes/vcs-lab");
-  execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", target], {
+  const notesBefore = git(repo, "rev-parse", "refs/notes/causet");
+  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", target], {
     cwd: repo,
     input: body,
     encoding: "utf8",
@@ -514,14 +514,14 @@ function withTamperedNoteOn(repo, target, body, run) {
   try {
     run();
   } finally {
-    git(repo, "update-ref", "refs/notes/vcs-lab", notesBefore);
+    git(repo, "update-ref", "refs/notes/causet", notesBefore);
   }
 }
 
 test("a record identifier that names two facts proves nothing to any reader", () => {
   const { repo } = scenario();
   const landing = git(repo, "rev-parse", "HEAD");
-  const container = JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", landing));
+  const container = JSON.parse(git(repo, "notes", "--ref=causet", "show", landing));
   const receipt = container.records.find((record) => record.type === "landing");
   assert.ok(receipt, "the scenario landed feature with a receipt");
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.resolution/v1",
   "title": "Exact resolution record",
-  "description": "Exact conflict-resolution result and provenance, attached to its retention commit under refs/vcs-lab/resolutions/ (shared-portable note record; src/resolutions.js publishResolution). Catalog listings additionally add attachedTo, discoveredRef, and commit projections.",
+  "description": "Exact conflict-resolution result and provenance, attached to its retention commit under refs/causet/resolutions/ (shared-portable note record; src/resolutions.js publishResolution). Catalog listings additionally add attachedTo, discoveredRef, and commit projections.",
   "x-causet-scope": "note-record",
   "type": "object",
   "required": [
@@ -33,7 +33,7 @@
     "decision": { "type": "string", "minLength": 1 },
     "ref": {
       "type": "string",
-      "pattern": "^refs/vcs-lab/resolutions/",
+      "pattern": "^refs/(causet|vcs-lab)/resolutions/",
       "description": "The retention ref that keeps the resolution commit reachable."
     },
     "resolutionCommit": {

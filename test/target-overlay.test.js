@@ -355,7 +355,7 @@ test("abort never invents bytes for an overlay it cannot read", (t) => {
   // The checkpoint and its history go away underneath the paused operation, so
   // the overlay tree is unreachable by the time abort runs.
   git(workspace, "update-ref", "-d", checkpoint.ref);
-  for (const ref of git(workspace, "for-each-ref", "--format=%(refname)", "refs/vcs-lab/checkpoint-history/")
+  for (const ref of git(workspace, "for-each-ref", "--format=%(refname)", "refs/causet/checkpoint-history/")
     .split(/\r?\n/).filter(Boolean)) {
     git(workspace, "update-ref", "-d", ref);
   }
@@ -689,7 +689,7 @@ test("the human result of an application states what became of the overlay", (t)
 function breakPredictedOverlayTree(worktree, forecastId) {
   const gitDir = git(worktree, "rev-parse", "--git-dir");
   const root = path.isAbsolute(gitDir) ? gitDir : path.join(worktree, gitDir);
-  const file = path.join(root, "vcs-lab", "forecasts", `${forecastId}.json`);
+  const file = path.join(root, "causet", "forecasts", `${forecastId}.json`);
   const stored = JSON.parse(fs.readFileSync(file, "utf8"));
   stored.predictedOverlayTree = "0".repeat(40);
   fs.writeFileSync(file, JSON.stringify(stored, null, 2));

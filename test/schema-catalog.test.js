@@ -365,7 +365,7 @@ function scenario() {
   const conflicted = vlabResult(repo, "reconcile", "feature", "--json");
   assert.notEqual(conflicted.status, 0, "the reconcile fixture must pause on a conflict");
   keep("reconciliation-journal", JSON.parse(
-    fs.readFileSync(path.join(repo, ".git", "vcs-lab", "reconciliation.json"), "utf8"),
+    fs.readFileSync(path.join(repo, ".git", "causet", "reconciliation.json"), "utf8"),
   ));
   write(repo, "a.txt", "resolved\n");
   git(repo, "add", "a.txt");
@@ -391,7 +391,7 @@ function scenario() {
   vlab(repo, "spec", "index", "spec.md", "--json");
   commit(repo, "Add spec and manifest");
   keep("spec-manifest", JSON.parse(
-    fs.readFileSync(path.join(repo, ".vcs-lab", "specs", "spec.md.json"), "utf8"),
+    fs.readFileSync(path.join(repo, ".causet", "specs", "spec.md.json"), "utf8"),
   ));
   keep("spec-merge-plan", vlabJson(repo, "spec", "merge-plan", "spec.md", "HEAD", "HEAD", "HEAD", "--json"));
 
@@ -403,7 +403,7 @@ function scenario() {
   const rebaseBlocked = vlabResult(repo, "rebase", "main", "--json");
   assert.notEqual(rebaseBlocked.status, 0, "the rebase fixture must pause on a conflict");
   keep("rebase-journal", JSON.parse(
-    fs.readFileSync(path.join(repo, ".git", "vcs-lab", "rebase.json"), "utf8"),
+    fs.readFileSync(path.join(repo, ".git", "causet", "rebase.json"), "utf8"),
   ));
   keep("rebase-abort", vlabJson(repo, "rebase", "--abort", "--json"));
 
@@ -445,7 +445,7 @@ function scenario() {
   keep("checkpoint", vlabJson(workspacePath, "workspace", "checkpoint", "--label", "schema catalog", "--json"));
   keep("workspace-prune", vlabJson(repo, "workspace", "prune", "--dry-run", "--json"));
   keep("workspace-registry", JSON.parse(
-    fs.readFileSync(path.join(repo, ".git", "vcs-lab", "workspaces.json"), "utf8"),
+    fs.readFileSync(path.join(repo, ".git", "causet", "workspaces.json"), "utf8"),
   ));
 
   // Metadata inventory, envelope round trip, and the engine differential.
@@ -466,8 +466,8 @@ function scenario() {
   // conflict `--park-conflicts` parks and `vlab metadata dispose` resolves.
   const landingRecord = captured.outputs.get("landing");
   const conflictedCommit = landingRecord.landingCommit;
-  const container = JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", conflictedCommit));
-  execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", conflictedCommit], {
+  const container = JSON.parse(git(repo, "notes", "--ref=causet", "show", conflictedCommit));
+  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", conflictedCommit], {
     cwd: repo,
     input: `${JSON.stringify({
       ...container,
@@ -490,7 +490,7 @@ function scenario() {
     "--reason", "the catalog fixture keeps the record it published", "--json",
   ));
   keep("disposition-registry", JSON.parse(
-    fs.readFileSync(path.join(repo, ".git", "vcs-lab", "dispositions.json"), "utf8"),
+    fs.readFileSync(path.join(repo, ".git", "causet", "dispositions.json"), "utf8"),
   ));
   keep("doctor", vlabJson(repo, "doctor", "--differential"));
 
@@ -509,8 +509,14 @@ function scenario() {
 
   // Every published note record, and one raw note container.
   captured.noteRecords = vlabJson(repo, "receipts", "--json");
-  const noteList = git(repo, "notes", "--ref=vcs-lab", "list").split(/\r?\n/)[0];
+  const noteList = git(repo, "notes", "--ref=causet", "list").split(/\r?\n/)[0];
   keep("note-container", JSON.parse(git(repo, "cat-file", "blob", noteList.split(" ")[0])));
+
+  // Last, because it changes the repository: `cst migrate` on a repository
+  // already using the current names only records its marker (ADR-0039 §3).
+  keep("migration-report-preview", vlabJson(repo, "migrate", "--dry-run", "--json"));
+  keep("migration-report", vlabJson(repo, "migrate", "--json"));
+  keep("migration-marker", JSON.parse(fs.readFileSync(path.join(repo, ".git", "causet", "migration.json"), "utf8")));
 
   scenarioState = captured;
   return captured;
@@ -540,6 +546,9 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
     ["causet.metadata-import/v1", "metadata-import"],
     ["causet.capabilities/v1", "capabilities"],
     ["causet.capability-report/v1", "capability-report"],
+    ["causet.migration-report/v1", "migration-report-preview"],
+    ["causet.migration-report/v1", "migration-report"],
+    ["causet.migration/v1", "migration-marker"],
     ["causet.metadata-import/v1", "metadata-import-parked"],
     ["causet.quarantined-record/v1", "quarantined-record"],
     ["causet.dispositions/v1", "disposition-registry"],

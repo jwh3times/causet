@@ -22,8 +22,7 @@ import {
   writePendingOperation,
 } from "./pending-operation.js";
 import { CliError } from "./errors.js";
-
-const RESOLUTION_REFS = "refs/vcs-lab/resolutions";
+import { localRef, refFamily } from "./locations.js";
 
 function conflictStages(filePath, cwd) {
   const byStage = new Map(
@@ -65,7 +64,7 @@ function compactResolution(record) {
  */
 function scanResolutionRefs(cwd) {
   try {
-    return listRefs(RESOLUTION_REFS, cwd);
+    return listRefs(refFamily("resolutions", cwd), cwd);
   } catch (error) {
     throw new CliError("Could not scan resolution retention refs.", {
       code: "git-command-failed",
@@ -142,7 +141,7 @@ function retainedResolutions(refs, cwd) {
   const accepted = acceptedCausalRecords(records, cwd, {
     conflictingIds: duplicatedRecordIds(records),
   }).filter((record) =>
-    record.ref === record.discoveredRef &&
+    localRef(record.ref, cwd) === record.discoveredRef &&
     record.resolutionCommit === record.commit &&
     resolutionSignatureFor(record) === record.signature,
   );
@@ -232,8 +231,8 @@ export function captureResolutionOutcomes(conflicts, cwd = process.cwd()) {
   });
 }
 
-function resolutionRef(outcome) {
-  return `${RESOLUTION_REFS}/${outcome.signature}/${outcome.resultBlob ?? "deleted"}`;
+function resolutionRef(outcome, cwd) {
+  return `${refFamily("resolutions", cwd)}/${outcome.signature}/${outcome.resultBlob ?? "deleted"}`;
 }
 
 function treeForResolution(outcome, cwd) {
@@ -250,7 +249,7 @@ function treeForResolution(outcome, cwd) {
 }
 
 export function publishResolution(outcome, application, cwd = process.cwd()) {
-  const ref = resolutionRef(outcome);
+  const ref = resolutionRef(outcome, cwd);
   if (refExists(ref, cwd)) {
     const existingCommit = resolveRevision(ref, cwd);
     const existing = readNote(existingCommit, cwd).records.find(

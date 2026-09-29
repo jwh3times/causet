@@ -255,7 +255,7 @@ test("the legacy spelling of every family resolves exactly as the family does (A
     }
   }
   // Only the namespace is aliased: anything else is left exactly as given.
-  for (const other of ["vcs-lab", "vcs-labs.landing/v1", "xvcs-lab.landing/v1", "causet.landing/v1", null]) {
+  for (const other of ["causet", "vcs-labs.landing/v1", "xvcs-lab.landing/v1", "causet.landing/v1", null]) {
     assert.equal(canonicalSchema(other), other);
   }
 });
@@ -318,7 +318,7 @@ function repository(t) {
 }
 
 function labDir(repo) {
-  return path.join(repo, ".git", "vcs-lab");
+  return path.join(repo, ".git", "causet");
 }
 
 test("a journal this build cannot read is refused rather than resumed", (t) => {
@@ -440,7 +440,7 @@ test("publishing a receipt never overwrites a note container this build cannot r
     schema: "causet.note/v2",
     records: [{ schema: "causet.landing/v9", type: "landing", id: "rec_future" }],
   }, null, 2)}\n`;
-  execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", head], {
+  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", head], {
     cwd: repo,
     input: foreign,
     encoding: "utf8",
@@ -454,7 +454,7 @@ test("publishing a receipt never overwrites a note container this build cannot r
     /is not a causet\.note\/v1 container/,
   );
   assert.equal(
-    git(repo, "notes", "--ref=vcs-lab", "show", head),
+    git(repo, "notes", "--ref=causet", "show", head),
     foreign.trim(),
     "the peer's note must be byte-for-byte intact after the refusal",
   );
@@ -464,7 +464,7 @@ test("an oversize note is quarantined unparsed and reported by metadata status",
   const repo = repository(t);
   const head = git(repo, "rev-parse", "HEAD");
   const filler = "x".repeat(RESOURCE_BOUNDS.noteContainerBytes);
-  execFileSync("git", ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", head], {
+  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", head], {
     cwd: repo,
     input: `${JSON.stringify({ schema: "causet.note/v1", records: [], filler })}\n`,
     encoding: "utf8",

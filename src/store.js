@@ -5,6 +5,7 @@ import { runGit } from "./git.js";
 import { repoContext } from "./engine.js";
 import { CliError } from "./errors.js";
 import { assertWithinBound } from "./schemas.js";
+import { names, runtimeDirectory } from "./locations.js";
 
 /**
  * A fresh directory under the OS temporary root, returned in canonical form.
@@ -20,7 +21,7 @@ export function temporaryDirectory(prefix) {
 
 export function labRuntimeDir(cwd = process.cwd()) {
   const { commonDir } = repoContext(cwd);
-  return path.join(commonDir, "vcs-lab");
+  return runtimeDirectory(commonDir, cwd);
 }
 
 export function ensureLabRuntime(cwd = process.cwd()) {
@@ -33,10 +34,11 @@ export function initLab(cwd = process.cwd()) {
   const context = repoContext(cwd);
   ensureLabRuntime(cwd);
 
-  runGit(["config", "notes.displayRef", "refs/notes/vcs-lab"], {
+  const { notesRef } = names(cwd);
+  runGit(["config", "notes.displayRef", notesRef], {
     cwd: context.root,
   });
-  runGit(["config", "notes.rewriteRef", "refs/notes/vcs-lab"], {
+  runGit(["config", "notes.rewriteRef", notesRef], {
     cwd: context.root,
   });
 
@@ -45,7 +47,7 @@ export function initLab(cwd = process.cwd()) {
 
 /**
  * Read one worktree-private or shared-local JSON state file. This is the single
- * reader for every `<git dir>/vcs-lab/**` and `<common dir>/vcs-lab/**`
+ * reader for every `<git dir>/causet/**` and `<common dir>/causet/**`
  * document, so it is where the `localStateBytes` resource bound is enforced
  * (ADR-0020): a file over the bound is refused before it is parsed, rather than
  * being loaded into memory first. Malformed content is refused as a domain

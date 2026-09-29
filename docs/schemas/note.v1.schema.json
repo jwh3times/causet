@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.note/v1",
   "title": "Causal note container",
-  "description": "The single JSON container stored in each refs/notes/vcs-lab note blob. Only this container yields records; an unparsable note is preserved as one opaque legacy record ({type: 'legacy-note', text}) and any other JSON shape yields no records.",
+  "description": "The single JSON container stored in each refs/notes/causet note blob. Only this container yields records; an unparsable note is preserved as one opaque legacy record ({type: 'legacy-note', text}) and any other JSON shape yields no records.",
   "x-causet-scope": "note-container",
   "type": "object",
   "required": ["schema", "records"],

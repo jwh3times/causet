@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.rebase-operation/v3",
   "title": "Causal rebase operation journal",
-  "description": "Private supervised-replay and recovery journal, stored worktree-private at .git/vcs-lab/rebase.json while a causal rebase is in progress (src/rebase-operations.js startOperation). v2 carries the whole rewrite program rather than only the replay queue, so a merge-preserving operation can rebuild its parent mapping after an interruption (ADR-0034). v3 adds the declared interactive program of ADR-0035 \u2014 `reword`, `edit`, `squash`, and `fixup` as plan actions, each with its own identity rule \u2014 and is a strict superset of v2.",
+  "description": "Private supervised-replay and recovery journal, stored worktree-private at .git/causet/rebase.json while a causal rebase is in progress (src/rebase-operations.js startOperation). v2 carries the whole rewrite program rather than only the replay queue, so a merge-preserving operation can rebuild its parent mapping after an interruption (ADR-0034). v3 adds the declared interactive program of ADR-0035 \u2014 `reword`, `edit`, `squash`, and `fixup` as plan actions, each with its own identity rule \u2014 and is a strict superset of v2.",
   "x-causet-scope": "worktree-private",
   "type": "object",
   "required": [
@@ -314,7 +314,7 @@
     },
     "rewritten": {
       "type": "object",
-      "description": "Original commit to the commit that replaced it, so an interrupted merge-preserving operation can resume with the same parent mapping. Each entry is also named by a ref under refs/vcs-lab/rebase/<operation id>/, which the operation releases when it finalizes or aborts."
+      "description": "Original commit to the commit that replaced it, so an interrupted merge-preserving operation can resume with the same parent mapping. Each entry is also named by a ref under refs/causet/rebase/<operation id>/, which the operation releases when it finalizes or aborts."
     },
     "recreatedMerges": {
       "type": "array",

@@ -257,7 +257,7 @@ test("the ADR-0020 refusals are readable without matching English", () => {
   // response, and before this a caller could only tell them apart by prose.
   const repo = makeRepo();
 
-  const journal = path.join(repo, ".git", "vcs-lab", "reconciliation.json");
+  const journal = path.join(repo, ".git", "causet", "reconciliation.json");
   fs.mkdirSync(path.dirname(journal), { recursive: true });
   fs.writeFileSync(
     journal,
@@ -313,7 +313,7 @@ test("a conflicted landing, a duplicate workspace, and a stale manifest carry th
   const vlab = (...args) =>
     execFileSync(vlabCommand, [...vlabPrefix(), ...args], { cwd: repo, encoding: "utf8", env: testEnv() }).trim();
   const notesRef = () =>
-    spawnSync("git", ["rev-parse", "--verify", "--quiet", "refs/notes/vcs-lab"], {
+    spawnSync("git", ["rev-parse", "--verify", "--quiet", "refs/notes/causet"], {
       cwd: repo,
       encoding: "utf8",
       env: testEnv(),

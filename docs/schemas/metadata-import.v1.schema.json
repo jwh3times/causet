@@ -109,7 +109,7 @@
           }
         }
       },
-      "description": "The refs this import created under refs/vcs-lab/quarantine. Present only on an applied --park-conflicts import (ADR-0030)."
+      "description": "The refs this import created under refs/causet/quarantine. Present only on an applied --park-conflicts import (ADR-0030)."
     }
   }
 }

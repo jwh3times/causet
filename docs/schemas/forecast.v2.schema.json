@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.forecast/v2",
   "title": "Reconciliation forecast",
-  "description": "Pinned reconciliation simulation and approvals, stored worktree-private under .git/vcs-lab/forecasts/ and returned by vlab forecast --json and vlab workspace forecast --json (src/forecasts.js). Supersedes causet.forecast/v1, which is still accepted on read.",
+  "description": "Pinned reconciliation simulation and approvals, stored worktree-private under .git/causet/forecasts/ and returned by vlab forecast --json and vlab workspace forecast --json (src/forecasts.js). Supersedes causet.forecast/v1, which is still accepted on read.",
   "x-causet-scope": "worktree-private",
   "type": "object",
   "required": [

@@ -355,7 +355,7 @@ test("anchors obtained from a remote the verifier chooses reach the anchored tie
   // pushed, because a receipt's inclusion proof anchors to the notes tip.
   const remote = path.join(parent, "remote.git");
   git(parent, "clone", "--bare", "--quiet", repo, remote);
-  git(repo, "push", remote, "refs/notes/vcs-lab:refs/notes/vcs-lab");
+  git(repo, "push", remote, "refs/notes/causet:refs/notes/causet");
   git(repo, "push", remote, "feature:feature");
 
   const { file } = bundleFor(repo, parent);

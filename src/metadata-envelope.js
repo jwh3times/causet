@@ -57,7 +57,11 @@ function manifestHash(value) {
   }
 }
 
-export function buildEnvelopeManifest(snapshot, payload, refs) {
+// An envelope names refs as its exporter did, under either set of names (ADR-0039 §4).
+const NOTE_REFS = ["refs/notes/causet", "refs/notes/vcs-lab"];
+const RESOLUTION_REF_PREFIXES = ["refs/causet/resolutions/", "refs/vcs-lab/resolutions/"];
+
+export function buildEnvelopeManifest(snapshot, payload, refs, includedNamespaces) {
   const records = snapshot.portableRecords.map((entry) => ({
     attachment: entry.attachment,
     id: entry.record.id,
@@ -78,10 +82,9 @@ export function buildEnvelopeManifest(snapshot, payload, refs) {
     // an envelope cannot claim a behavior the producer does not advertise
     // (ADR-0033).
     capabilities: [...EXCHANGE_FEATURES].sort(),
-    includedNamespaces: [
-      "refs/notes/vcs-lab",
-      "refs/vcs-lab/resolutions/*",
-    ],
+    // The exporter's own names: `refs/notes/causet` once it uses the current
+    // names, `refs/notes/vcs-lab` before it migrates (ADR-0039 §4).
+    includedNamespaces,
     excludedScopes: [
       "tracked-portable/spec-manifests (moves with ordinary Git content)",
       "shared-local/workspaces",
@@ -145,7 +148,7 @@ function validateManifestShape(manifest) {
       !validRef(entry.ref) ||
       !validRef(entry.bundleRef) ||
       !isOid(entry.oid, objectFormat) ||
-      !(entry.ref === "refs/notes/vcs-lab" || entry.ref.startsWith("refs/vcs-lab/resolutions/"))
+      !(NOTE_REFS.includes(entry.ref) || RESOLUTION_REF_PREFIXES.some((prefix) => entry.ref.startsWith(prefix)))
     ) {
       throw new CliError("Metadata envelope contains an invalid or unsupported ref entry.",
         { code: "malformed-input" });
@@ -173,7 +176,7 @@ function validateManifestShape(manifest) {
       throw new CliError("Metadata envelope contains a malformed record inventory entry.",
         { code: "malformed-input" });
     }
-    if (record.ref !== null && (!validRef(record.ref) || !record.ref.startsWith("refs/vcs-lab/resolutions/"))) {
+    if (record.ref !== null && (!validRef(record.ref) || !RESOLUTION_REF_PREFIXES.some((prefix) => record.ref.startsWith(prefix)))) {
       throw new CliError("Metadata envelope contains a malformed resolution record ref.",
         { code: "malformed-input" });
     }

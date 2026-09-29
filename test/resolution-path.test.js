@@ -54,9 +54,9 @@ function publish(repo, overrides = {}) {
 }
 
 test("resolution retention diagnoses the Windows lock-path boundary and supports long paths", (t) => {
-  const short = fixture(t, 113).repo;
+  const short = fixture(t, 114).repo;
   assert.equal(publish(short).status, 0);
-  const { repo, parent } = fixture(t, 114);
+  const { repo, parent } = fixture(t, 115);
   const linked = path.join(parent, "linked");
   git(repo, "worktree", "add", "-b", "linked", linked);
   // A short linked worktree still stores shared refs in the long common dir.
@@ -70,7 +70,7 @@ test("resolution retention diagnoses the Windows lock-path boundary and supports
   assert.match(failed.value.message, /260 characters.*259/);
   assert.match(failed.value.details, /at least 1 characters/);
   assert.ok(failed.value.details.includes(path.join(repo, ".git", "refs")));
-  assert.equal(git(repo, "for-each-ref", "refs/vcs-lab/resolutions"), "");
+  assert.equal(git(repo, "for-each-ref", "refs/causet/resolutions"), "");
   // A deletion has a shorter ref suffix and must not be rejected by root length.
   assert.equal(publish(linked, { resultBlob: null, resultMode: null }).status, 0);
   git(repo, "config", "core.longpaths", "true");
@@ -78,7 +78,7 @@ test("resolution retention diagnoses the Windows lock-path boundary and supports
 });
 
 test("SHA-256 resolution failures measure the longer object ID in the ref path", (t) => {
-  const { repo } = fixture(t, 114, "sha256");
+  const { repo } = fixture(t, 115, "sha256");
   const failed = publish(repo);
   if (process.platform !== "win32") {
     assert.equal(failed.status, 0, failed.stdout + failed.stderr);
@@ -95,7 +95,7 @@ test("an existing resolution lock retains the Git error classification", (t) => 
   const { repo } = fixture(t, process.platform === "win32" ? 114 : 160);
   git(repo, "config", "core.longpaths", "true");
   const blob = git(repo, "rev-parse", "HEAD:a.txt");
-  const lock = path.join(repo, ".git", "refs", "vcs-lab", "resolutions", resolutionSignatureFor({}), `${blob}.lock`);
+  const lock = path.join(repo, ".git", "refs", "causet", "resolutions", resolutionSignatureFor({}), `${blob}.lock`);
   fs.mkdirSync(path.dirname(lock), { recursive: true });
   fs.writeFileSync(lock, "");
   const failed = publish(repo);
@@ -105,7 +105,7 @@ test("an existing resolution lock retains the Git error classification", (t) => 
 });
 
 test("CLI resolution publication reports a path error and reconciliation remains abortable", (t) => {
-  const { repo } = fixture(t, 114);
+  const { repo } = fixture(t, 115);
   const start = git(repo, "rev-parse", "HEAD");
   git(repo, "switch", "-c", "source");
   fs.writeFileSync(path.join(repo, "a.txt"), "source\n");

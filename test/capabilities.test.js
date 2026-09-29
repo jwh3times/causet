@@ -175,7 +175,7 @@ test("the document states what the registries hold, and nothing about local stat
 test("inside a repository the document is repository-scoped and changes nothing", (t) => {
   const { repo } = repository(t);
   const before = git(repo, "config", "--local", "--list");
-  const runtimeDir = path.join(repo, ".git", "vcs-lab");
+  const runtimeDir = path.join(repo, ".git", "causet");
   fs.rmSync(runtimeDir, { recursive: true, force: true });
 
   const document = vlabJson(repo, "capabilities");

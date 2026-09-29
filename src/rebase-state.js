@@ -1,3 +1,4 @@
+import { runtimeDirectory } from "./locations.js";
 import fs from "node:fs";
 import path from "node:path";
 import { repoContext } from "./engine.js";
@@ -5,7 +6,7 @@ import { readJson, writeJson } from "./store.js";
 import { assertReadableSchema } from "./schemas.js";
 
 export function rebaseStatePath(cwd = process.cwd()) {
-  return path.join(repoContext(cwd).gitDir, "vcs-lab", "rebase.json");
+  return path.join(runtimeDirectory(repoContext(cwd).gitDir, cwd), "rebase.json");
 }
 
 /**

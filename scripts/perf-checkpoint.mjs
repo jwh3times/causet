@@ -266,17 +266,24 @@ function scenarios(fixtures) {
     { suite: "startup", fixture: "template", name: "--version", args: ["--version"], floor: ["git", ["--version"]], deterministic: true },
     { suite: "startup", fixture: "template", name: "--help", args: ["--help"], floor: null, deterministic: true },
   ];
-  const reads = [
-    ["receipts --json", ["receipts", "--json"], ["git", ["notes", "--ref=vcs-lab", "list"]]],
-    ["provenance --all --json", ["provenance", "--all", "--json"], ["git", ["notes", "--ref=vcs-lab", "list"]]],
-    ["resolve list --json", ["resolve", "list", "--json"], ["git", ["for-each-ref", "refs/vcs-lab/resolutions/"]]],
+  // A fixture holds metadata under the names of the build that wrote it: the
+  // `real` clone predates #159, and older builds write `vcs-lab` names too
+  // (ADR-0039 §3), so each floor reads the names the fixture actually has.
+  const namesOf = (fixture) => {
+    const current = run("git", ["rev-parse", "--verify", "-q", "refs/notes/causet"], fixtures[fixture].path, childEnv(), { allowFailure: true });
+    return current.status === 0 ? { notes: "causet", root: "refs/causet" } : { notes: "vcs-lab", root: "refs/vcs-lab" };
+  };
+  const reads = (fixture) => [
+    ["receipts --json", ["receipts", "--json"], ["git", ["notes", `--ref=${namesOf(fixture).notes}`, "list"]]],
+    ["provenance --all --json", ["provenance", "--all", "--json"], ["git", ["notes", `--ref=${namesOf(fixture).notes}`, "list"]]],
+    ["resolve list --json", ["resolve", "list", "--json"], ["git", ["for-each-ref", `${namesOf(fixture).root}/resolutions/`]]],
     ["metadata status --json", ["metadata", "status", "--json"], null],
     ["metadata validate --json", ["metadata", "validate", "--json"], null],
     ["audit identity --json", ["audit", "identity", "--json"], null],
     ["graph", ["graph"], ["git", ["log", "--graph", "--oneline", "--all"]]],
   ];
   for (const fixture of ["real", "scale"]) {
-    for (const [name, args, floor] of reads) list.push({ suite: "reads", fixture, name, args, floor, deterministic: true });
+    for (const [name, args, floor] of reads(fixture)) list.push({ suite: "reads", fixture, name, args, floor, deterministic: true });
   }
   list.push(
     { suite: "reads", fixture: "real", name: "capabilities --json", args: ["capabilities", "--json"], floor: null, deterministic: true },

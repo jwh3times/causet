@@ -24,7 +24,7 @@ export function runMarkdownCase(t, entry, profile) {
 
   const source = "spec.md";
   const sourcePath = path.join(repo, source);
-  const manifestPath = path.join(repo, ".vcs-lab/specs/spec.md.json");
+  const manifestPath = path.join(repo, ".causet/specs/spec.md.json");
   const views = {};
   const revisions = {};
   for (const stage of ["base", "ours", "theirs"]) {

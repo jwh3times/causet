@@ -50,7 +50,7 @@ and rebase timing snapshots include and exclude.
 
 ## Record families
 
-### Shared-portable (Git notes under `refs/notes/vcs-lab`)
+### Shared-portable (Git notes under `refs/notes/causet`)
 
 | Schema | Document | Purpose |
 | --- | --- | --- |
@@ -68,7 +68,7 @@ and rebase timing snapshots include and exclude.
 | `causet.resolution/v1` | [resolution.v1.schema.json](resolution.v1.schema.json) | Exact resolution result and provenance |
 | `causet.provenance/v1` | [provenance.v1.schema.json](provenance.v1.schema.json) | Declared authorship provenance, carried across rewrites |
 
-### Worktree-private (`.git/vcs-lab/` of one worktree)
+### Worktree-private (`.git/causet/` of one worktree)
 
 | Schema | Document | Store |
 | --- | --- | --- |
@@ -81,10 +81,10 @@ and rebase timing snapshots include and exclude.
 
 | Schema | Document | Store |
 | --- | --- | --- |
-| `causet.workspaces/v1` | [workspaces.v1.schema.json](workspaces.v1.schema.json) | `<common dir>/vcs-lab/workspaces.json` |
+| `causet.workspaces/v1` | [workspaces.v1.schema.json](workspaces.v1.schema.json) | `<common dir>/causet/workspaces.json` |
 | `causet.workspace/v1` | [workspace.v1.schema.json](workspace.v1.schema.json) | Entries of the registry |
-| `causet.quarantined-record/v1` | [quarantined-record.v1.schema.json](quarantined-record.v1.schema.json) | Blob of a `refs/vcs-lab/quarantine/<lineage>/<record id>` ref |
-| `causet.dispositions/v1` | [dispositions.v1.schema.json](dispositions.v1.schema.json) | `<common dir>/vcs-lab/dispositions.json` |
+| `causet.quarantined-record/v1` | [quarantined-record.v1.schema.json](quarantined-record.v1.schema.json) | Blob of a `refs/causet/quarantine/<lineage>/<record id>` ref |
+| `causet.dispositions/v1` | [dispositions.v1.schema.json](dispositions.v1.schema.json) | `<common dir>/causet/dispositions.json` |
 | `causet.disposition/v1` | [disposition.v1.schema.json](disposition.v1.schema.json) | Entries of the disposition registry |
 
 ### Advertisement (produced on demand, never stored)
@@ -97,7 +97,7 @@ and rebase timing snapshots include and exclude.
 
 | Schema | Document | Store |
 | --- | --- | --- |
-| `causet.spec-manifest/v4` | [spec-manifest.v4.schema.json](spec-manifest.v4.schema.json) | `.vcs-lab/specs/**` |
+| `causet.spec-manifest/v4` | [spec-manifest.v4.schema.json](spec-manifest.v4.schema.json) | `.causet/specs/**` |
 | `causet.spec-manifest/v3` | [spec-manifest.v3.schema.json](spec-manifest.v3.schema.json) | Superseded; historical v1 parser view, migrated on indexing |
 | `causet.spec-manifest/v2` | [spec-manifest.v2.schema.json](spec-manifest.v2.schema.json) | Superseded; read and migrated forward |
 | `causet.spec-manifest/v1` | [spec-manifest.v1.schema.json](spec-manifest.v1.schema.json) | Superseded; read and migrated forward |

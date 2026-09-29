@@ -30,11 +30,25 @@ import {
 } from "./quarantine.js";
 import { CliError } from "./errors.js";
 import { withNotesLock } from "./notes.js";
-import { buildNoteTree, commitWithParents, buildRetentionCommit, recordDependencies, checkedRefUpdate, RETENTION_REF } from "./git-carriers.js";
+import { buildNoteTree, commitWithParents, buildRetentionCommit, recordDependencies, checkedRefUpdate, retentionRef } from "./git-carriers.js";
 import { temporaryDirectory } from "./store.js";
+import { localRef, names, refFamily, transientRefFamily } from "./locations.js";
 
-const NOTES_REF = "refs/notes/vcs-lab";
-const RESOLUTION_PREFIX = "refs/vcs-lab/resolutions/";
+/**
+ * An envelope names refs as its exporter did: `refs/notes/vcs-lab` and
+ * `refs/vcs-lab/resolutions/*` before issue #159, the `causet` names after.
+ * Import applies them under this repository's own names (ADR-0039 §4). Only
+ * `ref` is translated; `bundleRef` is the name inside the bundle file.
+ */
+function localizeEnvelope(envelope, cwd) {
+  return {
+    ...envelope,
+    manifest: {
+      ...envelope.manifest,
+      refs: envelope.manifest.refs.map((entry) => ({ ...entry, ref: localRef(entry.ref, cwd) })),
+    },
+  };
+}
 const MAX_COMMIT_PARENTS = 64;
 
 function groupRecords(entries) {
@@ -93,10 +107,10 @@ function buildNotesCommit(entries, cwd, options = {}) {
   const env = {
     GIT_INDEX_FILE: indexPath,
     ...(options.deterministic ? {
-      GIT_AUTHOR_NAME: "vcs-lab metadata envelope",
+      GIT_AUTHOR_NAME: "causet metadata envelope",
       GIT_AUTHOR_EMAIL: "metadata-envelope@example.invalid",
       GIT_AUTHOR_DATE: "2000-01-01T00:00:00Z",
-      GIT_COMMITTER_NAME: "vcs-lab metadata envelope",
+      GIT_COMMITTER_NAME: "causet metadata envelope",
       GIT_COMMITTER_EMAIL: "metadata-envelope@example.invalid",
       GIT_COMMITTER_DATE: "2000-01-01T00:00:00Z",
     } : {}),
@@ -121,13 +135,13 @@ function buildNotesCommit(entries, cwd, options = {}) {
       tree,
       cwd,
       env,
-      options.message ?? "vcs-lab metadata envelope",
+      options.message ?? "causet metadata envelope",
     );
     const parents = retainedParents.flatMap((parent) => ["-p", parent]);
     const commit = runGit(["commit-tree", tree, ...parents, "-F", "-"], {
       cwd,
       env,
-      input: `${options.message ?? "vcs-lab metadata envelope"}\n`,
+      input: `${options.message ?? "causet metadata envelope"}\n`,
     }).stdout;
     return { tree, commit };
   } finally {
@@ -183,7 +197,7 @@ function portableResolutionRefs(snapshot) {
   const accepted = new Set(
     snapshot.portableRecords
       .filter((entry) => entry.record.type === "resolution")
-      .map((entry) => entry.record.ref),
+      .map((entry) => localRef(entry.record.ref, snapshot.repository.root)),
   );
   return snapshot.scopes.sharedPortable.resolutions.refs.filter((entry) => accepted.has(entry.ref));
 }
@@ -202,7 +216,7 @@ export function exportMetadata(envelopePath, options = {}) {
     lineage: snapshot.repository.lineage,
     records: snapshot.portableRecords.map((entry) => entry.digest),
   })).slice(0, 24);
-  const temporaryNoteRef = `refs/vcs-lab/exports/${exportKey}/notes`;
+  const temporaryNoteRef = `${transientRefFamily("exports")}/${exportKey}/notes`;
   let createdDirectory = false;
   try {
     fs.mkdirSync(directory);
@@ -212,15 +226,15 @@ export function exportMetadata(envelopePath, options = {}) {
     if (snapshot.portableRecords.length) {
       const carrier = buildRetentionCommit(
         recordDependencies(snapshot.portableRecords, context.root, { validate: false }),
-        null, context.root, { deterministic: true, message: `vcs-lab metadata objects ${exportKey}` },
+        null, context.root, { deterministic: true, message: `causet metadata objects ${exportKey}` },
       );
       const notes = buildNotesCommit(snapshot.portableRecords, context.root, {
-        message: `vcs-lab metadata export ${exportKey}`,
+        message: `causet metadata export ${exportKey}`,
         deterministic: true,
         parents: [carrier],
       });
       runGit(["update-ref", temporaryNoteRef, notes.commit], { cwd: context.root });
-      refs.push({ ref: NOTES_REF, bundleRef: temporaryNoteRef, oid: notes.commit });
+      refs.push({ ref: names(context.root).notesRef, bundleRef: temporaryNoteRef, oid: notes.commit });
       bundleRefs.push(temporaryNoteRef);
     }
     for (const entry of portableResolutionRefs(snapshot)) {
@@ -239,7 +253,8 @@ export function exportMetadata(envelopePath, options = {}) {
         sha256: sha256(bytes),
       };
     }
-    const manifest = buildEnvelopeManifest(snapshot, payload, refs);
+    const { notesRef, refsRoot } = names(context.root);
+    const manifest = buildEnvelopeManifest(snapshot, payload, refs, [notesRef, `${refsRoot}/resolutions/*`]);
     writeEnvelopeManifest(directory, manifest);
     const git = endGitMetrics(metrics);
     return {
@@ -268,7 +283,7 @@ function initInspectionRepository(objectFormat) {
   const repo = path.join(parent, "repo");
   fs.mkdirSync(repo);
   runGit(["init", "-b", "main", `--object-format=${objectFormat}`], { cwd: repo });
-  runGit(["config", "user.name", "vcs-lab metadata inspector"], { cwd: repo });
+  runGit(["config", "user.name", "causet metadata inspector"], { cwd: repo });
   runGit(["config", "user.email", "metadata-inspector@example.invalid"], { cwd: repo });
   return { parent, repo };
 }
@@ -393,6 +408,7 @@ function conflictAction(entry, localDigests, disposed, parkConflicts) {
 
 function importPreview(envelope, incoming, cwd, options = {}) {
   const context = repoContext(cwd);
+  const NOTES_REF = names(cwd).notesRef;
   if (envelope.manifest.repository.objectFormat !== context.objectFormat) {
     throw new CliError(
       `Envelope object format '${envelope.manifest.repository.objectFormat}' is incompatible with '${context.objectFormat}'.`,
@@ -454,7 +470,7 @@ function importPreview(envelope, incoming, cwd, options = {}) {
       type: entry.record.type,
       attachment: entry.attachment,
       digest: entry.digest,
-      action: refusedRefs.has(entry.record.ref)
+      action: refusedRefs.has(localRef(entry.record.ref, cwd))
         ? "park"
         : conflictAction(entry, local, disposed, parkConflicts),
       localDigests: [...local].sort(),
@@ -512,7 +528,7 @@ function stageEnvelopeRefs(envelope, cwd) {
   const stageId = `${sha256(envelope.manifest.integrity.manifestHash).slice(0, 16)}-${process.pid}`;
   const staged = envelope.manifest.refs.map((entry, index) => ({
     ...entry,
-    stageRef: `refs/vcs-lab/import-staging/${stageId}/${String(index).padStart(4, "0")}`,
+    stageRef: `${transientRefFamily("import-staging")}/${stageId}/${String(index).padStart(4, "0")}`,
   }));
   for (const entry of staged) {
     if (refExists(entry.stageRef, cwd)) {
@@ -578,6 +594,9 @@ function stageParkedRecords(parked, envelope, preview, cwd) {
 }
 
 function applyImport(envelope, incoming, preview, cwd) {
+  const NOTES_REF = names(cwd).notesRef;
+  const RESOLUTION_PREFIX = `${refFamily("resolutions", cwd)}/`;
+  const RETENTION_REF = retentionRef(cwd);
   if (!preview.summary.applicable) {
     throw new CliError("Metadata import has conflicts; no destination refs were changed.",
       { code: "conflict-blocked" });
@@ -618,7 +637,7 @@ function applyImport(envelope, incoming, preview, cwd) {
           parents: existingNotes === null
             ? [notesStage.oid]
             : [existingNotes, notesStage.oid],
-          message: `Import vcs-lab metadata ${envelope.manifest.integrity.manifestHash.slice(0, 16)}`,
+          message: `Import causet metadata ${envelope.manifest.integrity.manifestHash.slice(0, 16)}`,
         });
         if (merged.tree !== existingTree) {
           commands.push(
@@ -691,7 +710,7 @@ export function importMetadata(envelopePath, options = {}) {
   }
   const metrics = beginGitMetrics("metadata-import");
   try {
-    const envelope = readEnvelope(path.resolve(cwd, envelopePath));
+    const envelope = localizeEnvelope(readEnvelope(path.resolve(cwd, envelopePath)), cwd);
     const incoming = inspectEnvelopePayload(envelope);
     const preview = importPreview(envelope, incoming, cwd, {
       parkConflicts: Boolean(options.parkConflicts),

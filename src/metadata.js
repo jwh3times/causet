@@ -17,9 +17,11 @@ import { normalizeMarkdown } from "./specs.js";
 import {
   listParkedRecords,
   parkedRecordIds,
-  QUARANTINE_REFS,
+  quarantineRefs,
   readDispositions,
 } from "./quarantine.js";
+import { localRef, names, refFamily, repositoryNames, runtimeDirectory } from "./locations.js";
+import { advancedLegacyRefs } from "./migration.js";
 import {
   METADATA_LINEAGE_ALGORITHM,
   METADATA_STATUS_SCHEMA,
@@ -35,10 +37,6 @@ import {
   withinBound,
 } from "./schemas.js";
 
-const NOTES_REF = "refs/notes/vcs-lab";
-const RESOLUTION_REFS = "refs/vcs-lab/resolutions";
-const CHECKPOINT_REFS = "refs/vcs-lab/checkpoints";
-const CHECKPOINT_HISTORY_REFS = "refs/vcs-lab/checkpoint-history";
 
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -153,7 +151,7 @@ export function lineageRelation(source, destination) {
 }
 
 function noteEntries(cwd) {
-  return [...listNoteEntries(NOTES_REF, cwd)].sort((left, right) =>
+  return [...listNoteEntries(names(cwd).notesRef, cwd)].sort((left, right) =>
     left.target.localeCompare(right.target),
   );
 }
@@ -258,7 +256,7 @@ function validatePortableNotes(context, diagnostics, options) {
           "shared-portable",
           entry.target,
           "The note attachment is missing or is not a commit in this clone. " +
-            "Fetch refs/vcs-lab/* together with refs/notes/vcs-lab from the fact's origin and validate again; " +
+            `Fetch ${names(context.root).refsRoot}/* together with ${names(context.root).notesRef} from the fact's origin and validate again; ` +
             "if it remains missing, restore it from a trusted clone, backup, or metadata envelope.",
         );
       }
@@ -320,7 +318,7 @@ function validatePortableNotes(context, diagnostics, options) {
   // `resolutionRefs[].oid` stays the raw ref target (it is reported as
   // `resolutions.refs` and compared raw by envelope export/import); only the
   // record check below uses the peeled commit.
-  const resolutionRefs = listRefs(RESOLUTION_REFS, context.root);
+  const resolutionRefs = listRefs(refFamily("resolutions", context.root), context.root);
   const resolutionRefMap = peelResolutionRefs(resolutionRefs, context.root);
   const resolutionTreeObjects = objectLookup(
     structural
@@ -375,7 +373,7 @@ function validatePortableNotes(context, diagnostics, options) {
         codes.push("resolution-signature-mismatch");
         valid = false;
       }
-      if (resolutionRefMap.get(record.ref) !== record.resolutionCommit) {
+      if (resolutionRefMap.get(localRef(record.ref, context.root)) !== record.resolutionCommit) {
         addDiagnostic(
           diagnostics,
           "missing-resolution-ref",
@@ -450,7 +448,7 @@ function validatePortableNotes(context, diagnostics, options) {
   }
 
   const acceptedResolutionRefs = new Set(
-    accepted.filter((entry) => entry.record.type === "resolution").map((entry) => entry.record.ref),
+    accepted.filter((entry) => entry.record.type === "resolution").map((entry) => localRef(entry.record.ref, context.root)),
   );
   for (const entry of resolutionRefs) {
     if (!acceptedResolutionRefs.has(entry.ref)) {
@@ -477,7 +475,7 @@ function validatePortableNotes(context, diagnostics, options) {
   );
   return {
     notes: {
-      ref: NOTES_REF,
+      ref: names(context.root).notesRef,
       targetCount: entries.length,
       recordCount: summaries.length,
       acceptedCount: accepted.length,
@@ -487,7 +485,7 @@ function validatePortableNotes(context, diagnostics, options) {
       records: summaries,
     },
     resolutions: {
-      namespace: `${RESOLUTION_REFS}/*`,
+      namespace: `${refFamily("resolutions", context.root)}/*`,
       refCount: resolutionRefs.length,
       acceptedRefCount: acceptedResolutionRefs.size,
       refs: resolutionRefs,
@@ -497,7 +495,7 @@ function validatePortableNotes(context, diagnostics, options) {
 }
 
 function validateSpecs(context, diagnostics) {
-  const files = listTrackedPaths([".vcs-lab/specs"], context.root);
+  const files = listTrackedPaths([names(context.root).specsDir], context.root);
   const manifests = [];
   for (const file of files) {
     const absolute = path.join(context.root, file);
@@ -567,7 +565,7 @@ function validateSpecs(context, diagnostics) {
 }
 
 function validateSharedLocal(context, diagnostics, localDigests) {
-  const runtime = path.join(context.commonDir, "vcs-lab");
+  const runtime = runtimeDirectory(context.commonDir, context.root);
   const workspacePath = path.join(runtime, "workspaces.json");
   let registry = { present: false, schema: null, count: 0, workspaces: [] };
   if (fs.existsSync(workspacePath)) {
@@ -628,9 +626,9 @@ function validateSharedLocal(context, diagnostics, localDigests) {
       registry = { present: true, schema: null, count: 0, workspaces: [] };
     }
   }
-  const checkpointRefs = listRefs(CHECKPOINT_REFS, context.root);
+  const checkpointRefs = listRefs(refFamily("checkpoints", context.root), context.root);
   const checkpointHistoryRefs = listRefs(
-    CHECKPOINT_HISTORY_REFS,
+    refFamily("checkpoint-history", context.root),
     context.root,
   );
   const allCheckpointRefs = [...checkpointRefs, ...checkpointHistoryRefs];
@@ -692,7 +690,7 @@ function inspectQuarantine(context, diagnostics, localDigests) {
     };
   });
   return {
-    namespace: `${QUARANTINE_REFS}/*`,
+    namespace: `${quarantineRefs(context.root)}/*`,
     refCount: records.length,
     records,
   };
@@ -708,7 +706,7 @@ function inspectDispositions(context, diagnostics) {
       error?.code === "unknown-schema-version" ? "unknown-schema" : "malformed-record",
       "error",
       "shared-local",
-      path.join(context.commonDir, "vcs-lab", "dispositions.json"),
+      path.join(runtimeDirectory(context.commonDir, context.root), "dispositions.json"),
       error?.message ?? "The disposition registry could not be read.",
     );
     return { present: false, schema: null, count: 0, dispositions: [] };
@@ -750,15 +748,15 @@ function inspectPrivateState(context, diagnostics) {
       ? [
           {
             kind: "reconciliation",
-            path: path.join(gitDir, "vcs-lab", "reconciliation.json"),
+            path: path.join(runtimeDirectory(gitDir, context.root), "reconciliation.json"),
           },
           {
             kind: "rebase",
-            path: path.join(gitDir, "vcs-lab", "rebase.json"),
+            path: path.join(runtimeDirectory(gitDir, context.root), "rebase.json"),
           },
         ]
       : [];
-    const forecastPath = gitDir ? path.join(gitDir, "vcs-lab", "forecasts") : null;
+    const forecastPath = gitDir ? path.join(runtimeDirectory(gitDir, context.root), "forecasts") : null;
     const pendingOperationKinds = operationPaths
       .filter((entry) => fs.existsSync(entry.path))
       .map((entry) => entry.kind);
@@ -863,7 +861,7 @@ function takeSnapshot(context, options) {
       historyRefs: [],
       totalRefCount: 0,
     },
-    quarantine: { namespace: `${QUARANTINE_REFS}/*`, refCount: 0, records: [] },
+    quarantine: { namespace: `${quarantineRefs(context.root)}/*`, refCount: 0, records: [] },
     dispositions: { present: false, schema: null, count: 0, dispositions: [] },
   } : validateSharedLocal(
     context,
@@ -880,6 +878,7 @@ function takeSnapshot(context, options) {
     forecastCount: 0,
     worktrees: [],
   } : inspectPrivateState(context, diagnostics);
+  if (!options.portableOnly) inspectMigration(context, diagnostics);
   return {
     repository: {
       root: context.root,
@@ -895,6 +894,27 @@ function takeSnapshot(context, options) {
     diagnostics,
     portableRecords: portable.accepted,
   };
+}
+
+/**
+ * Which names the repository uses (ADR-0039 §3). An unmigrated repository is
+ * reported, not faulted, during the migration window; a former ref that moved
+ * after migration is a warning, because a peer on an older build may still be
+ * publishing to it and nothing reads it any more.
+ */
+function inspectMigration(context, diagnostics) {
+  const { state } = repositoryNames(context.root);
+  if (state === "unmigrated") {
+    addDiagnostic(diagnostics, "unmigrated-repository", "info", "repository", context.root,
+      "This repository keeps its metadata under the names used before causet (refs/notes/vcs-lab, refs/vcs-lab/*). " +
+        "Run cst migrate --dry-run to see the move, then cst migrate.");
+  }
+  for (const entry of advancedLegacyRefs(context.root)) {
+    addDiagnostic(diagnostics, "legacy-ref-advanced", "warning", "repository", entry.ref,
+      `The former ref ${entry.ref} is at ${entry.oid}, which cst migrate did not record; a build older than causet may still publish to it. ` +
+        "Run cst migrate again to fast-forward the new ref, or import the former side as an envelope if both moved.",
+      { oid: entry.oid });
+  }
 }
 
 export function metadataStatus(options = {}) {

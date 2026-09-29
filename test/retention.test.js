@@ -10,8 +10,8 @@ import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
 const notesModule = new URL("../src/notes.js", import.meta.url).href;
 const resolutionsModule = new URL("../src/resolutions.js", import.meta.url).href;
-const RETENTION = "refs/vcs-lab/retention";
-const NOTES = "refs/notes/vcs-lab";
+const RETENTION = "refs/causet/retention";
+const NOTES = "refs/notes/causet";
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", env: testEnv(), stdio: ["pipe", "pipe", "pipe"] }).trim();
 const gitInput = (cwd, args, input) => execFileSync("git", args, { cwd, input, encoding: "utf8", env: testEnv() }).trim();
 const run = (cwd, args, env = {}) => spawnSync(vlabCommand, [...vlabPrefix(), ...args], { cwd, encoding: "utf8", env: testEnv(env) });
@@ -172,8 +172,8 @@ test("publication after importing fanned notes replaces the existing leaf", (t) 
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(clone, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(git(clone, "notes", "--ref=vcs-lab", "list").split("\n").length, 1);
-  assert.equal(JSON.parse(git(clone, "notes", "--ref=vcs-lab", "show", head)).records.length, 2);
+  assert.equal(git(clone, "notes", "--ref=causet", "list").split("\n").length, 1);
+  assert.equal(JSON.parse(git(clone, "notes", "--ref=causet", "show", head)).records.length, 2);
   gc(clone, parent);
   assert.equal(vlab(clone, "metadata", "validate", "--json").summary.acceptedPortableRecords, 2);
 });
@@ -183,7 +183,7 @@ test("mixed flat and fanned notes preserve unrelated notes and opaque entries", 
   const head = generatedChange(repo, "mixed");
   const base = git(repo, "rev-parse", "HEAD^");
   const previous = git(repo, "rev-parse", NOTES);
-  const noteBlob = git(repo, "notes", "--ref=vcs-lab", "list", head);
+  const noteBlob = git(repo, "notes", "--ref=causet", "list", head);
   const opaque = gitInput(repo, ["hash-object", "-w", "--stdin"], "opaque notes tree content\n");
   const fanned = gitInput(repo, ["mktree"], `100644 blob ${opaque}\t${base.slice(2)}\n`);
   const root = gitInput(repo, ["mktree"], `100644 blob ${noteBlob}\t${head}\n040000 tree ${fanned}\t${base.slice(0, 2)}\n100644 blob ${opaque}\topaque.txt\n`);
@@ -193,9 +193,9 @@ test("mixed flat and fanned notes preserve unrelated notes and opaque entries", 
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(git(repo, "notes", "--ref=vcs-lab", "list").split("\n").length, 2);
-  assert.equal(JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", head)).records.length, 2);
-  assert.equal(git(repo, "notes", "--ref=vcs-lab", "list", base), opaque);
+  assert.equal(git(repo, "notes", "--ref=causet", "list").split("\n").length, 2);
+  assert.equal(JSON.parse(git(repo, "notes", "--ref=causet", "show", head)).records.length, 2);
+  assert.equal(git(repo, "notes", "--ref=causet", "list", base), opaque);
   assert.equal(git(repo, "rev-parse", `${NOTES}:opaque.txt`), opaque);
 });
 
@@ -211,7 +211,7 @@ test("opaque hexadecimal directories are not mistaken for Git notes fan-out", (t
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", head)).records.length, 1);
+  assert.equal(JSON.parse(git(repo, "notes", "--ref=causet", "show", head)).records.length, 1);
   assert.equal(git(repo, "rev-parse", `${NOTES}:${head.slice(0, 4)}/opaque.txt`), opaque);
 });
 
@@ -253,7 +253,7 @@ test("a resolution, its note, and object retention publish together across hard 
     }
     gc(repo, parent);
     assert.equal(vlab(repo, "metadata", "validate", "--json").summary.acceptedPortableRecords, 1);
-    assert.equal(git(repo, "for-each-ref", "--format=%(refname)", "refs/vcs-lab/resolutions").split("\n").length, 1);
+    assert.equal(git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions").split("\n").length, 1);
     assert.ok(git(repo, "rev-parse", RETENTION));
   }
 });
@@ -285,10 +285,10 @@ test("backfill reports missing historical objects instead of certifying them", (
   const { repo } = fixture(t);
   generatedChange(repo, "accepted");
   const head = git(repo, "rev-parse", "HEAD");
-  const note = JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", head));
+  const note = JSON.parse(git(repo, "notes", "--ref=causet", "show", head));
   note.records.push({ schema: "causet.provenance/v1", type: "provenance", id: "prov_missing", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "carried", carriedFrom: ["f".repeat(head.length)] });
-  gitInput(repo, ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", head], JSON.stringify(note));
+  gitInput(repo, ["notes", "--ref=causet", "add", "-f", "-F", "-", head], JSON.stringify(note));
   const result = run(repo, ["metadata", "retain", "--apply", "--json"]);
   assert.equal(result.status, 1);
   const report = JSON.parse(result.stdout);
@@ -330,7 +330,7 @@ test("a foreign notes writer causes atomic publication to refuse without moving 
   const deadline = Date.now() + 20000;
   while (!fs.existsSync(`${gate}.reached`) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
   assert.ok(fs.existsSync(`${gate}.reached`), stderr);
-  git(repo, "notes", "--ref=vcs-lab", "add", "-f", "-m", "foreign writer", head);
+  git(repo, "notes", "--ref=causet", "add", "-f", "-m", "foreign writer", head);
   const foreign = git(repo, "rev-parse", NOTES);
   fs.writeFileSync(gate, "release");
   assert.notEqual(await exited, 0);

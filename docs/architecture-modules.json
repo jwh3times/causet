@@ -15,6 +15,14 @@
     "responsibility": "The user-facing environment variables: `CAUSET_*` with the `VLAB_*` fallback of the migration window, and the legacy names in use (ADR-0039 §5)",
     "dependencies": "None"
   },
+  "src/locations.js": {
+    "responsibility": "Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix a repository uses, decided per repository from its migration state without a Git process (ADR-0039 §3)",
+    "dependencies": "`src/engine.js`"
+  },
+  "src/migration.js": {
+    "responsibility": "`cst migrate`: create the causet refs at the objects of their vcs-lab names, repoint the notes settings, move the runtime directories and stage the manifest move, never deleting; the migration marker, `doctor.migration`, and the advanced-former-ref check (ADR-0039 §3)",
+    "dependencies": "`src/locations.js`, `src/engine.js`, `src/git.js` (update-ref, config, mv), `src/store.js`"
+  },
   "src/ids.js": {
     "responsibility": "Unique protocol IDs, SHA-256, Git blob hashing, slugs",
     "dependencies": "Node crypto"
@@ -48,7 +56,7 @@
     "dependencies": "`src/git.js`"
   },
   "src/notes.js": {
-    "responsibility": "Append/list/read causal records in `refs/notes/vcs-lab`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory",
+    "responsibility": "Append/list/read causal records in `refs/notes/causet`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory",
     "dependencies": "`src/git.js`, `src/store.js`"
   },
   "src/provenance.js": {
@@ -88,7 +96,7 @@
     "dependencies": "`src/schemas.js`, `src/metadata.js`, `src/metadata-envelope.js`, `src/canonical-json.js`"
   },
   "src/quarantine.js": {
-    "responsibility": "The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/vcs-lab/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030)",
+    "responsibility": "The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/causet/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030)",
     "dependencies": "`src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js`"
   },
   "src/dispositions.js": {

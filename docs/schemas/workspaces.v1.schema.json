@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.workspaces/v1",
   "title": "Workspace registry",
-  "description": "Shared-local workspace registry container, stored at <common Git dir>/vcs-lab/workspaces.json (src/workspaces.js).",
+  "description": "Shared-local workspace registry container, stored at <common Git dir>/causet/workspaces.json (src/workspaces.js).",
   "x-causet-scope": "shared-local",
   "type": "object",
   "required": ["schema", "workspaces"],

@@ -723,7 +723,8 @@
         "severity": {
           "enum": [
             "error",
-            "warning"
+            "warning",
+            "info"
           ]
         },
         "scope": {

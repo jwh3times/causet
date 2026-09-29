@@ -201,7 +201,7 @@
         "parkRecords": {
           "type": "integer",
           "minimum": 0,
-          "description": "Conflicting records parked under refs/vcs-lab/quarantine by this import."
+          "description": "Conflicting records parked under refs/causet/quarantine by this import."
         },
         "disposedRecords": {
           "type": "integer",
