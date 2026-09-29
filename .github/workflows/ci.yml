@@ -77,7 +77,7 @@ jobs:
         run: |
           rustup toolchain install 1.98.1 --profile minimal
           node scripts/build-native.mjs
-          echo "VLAB_REQUIRE_NATIVE=1" >> "$GITHUB_ENV"
+          echo "CAUSET_REQUIRE_NATIVE=1" >> "$GITHUB_ENV"
       - name: Native parser mutation fuzzing
         run: cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuzz-parsers -- 200000 83
       - name: Retain optional prebuild and license notices
@@ -91,11 +91,11 @@ jobs:
         run: |
           case "${{ matrix.mode }}" in
             default) ;;
-            session-on) echo "VLAB_GIT_SESSION=1" >> "$GITHUB_ENV" ;;
-            session-off) echo "VLAB_GIT_SESSION=0" >> "$GITHUB_ENV" ;;
-            forecast-worktree) echo "VLAB_FORECAST_ENGINE=worktree" >> "$GITHUB_ENV" ;;
-            forecast-merge-tree) echo "VLAB_FORECAST_ENGINE=merge-tree" >> "$GITHUB_ENV" ;;
-            engine-native) echo "VLAB_ENGINE=native" >> "$GITHUB_ENV" ;;
+            session-on) echo "CAUSET_GIT_SESSION=1" >> "$GITHUB_ENV" ;;
+            session-off) echo "CAUSET_GIT_SESSION=0" >> "$GITHUB_ENV" ;;
+            forecast-worktree) echo "CAUSET_FORECAST_ENGINE=worktree" >> "$GITHUB_ENV" ;;
+            forecast-merge-tree) echo "CAUSET_FORECAST_ENGINE=merge-tree" >> "$GITHUB_ENV" ;;
+            engine-native) echo "CAUSET_ENGINE=native" >> "$GITHUB_ENV" ;;
             *) echo "unknown mode ${{ matrix.mode }}" >&2; exit 1 ;;
           esac
       - name: Suite

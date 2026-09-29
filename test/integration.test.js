@@ -197,7 +197,7 @@ function tracedGitCommands(cwd, ...args) {
   const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
-    env: testEnv({ VLAB_TRACE: "1" }),
+    env: testEnv({ CAUSET_TRACE: "1" }),
   });
   assert.equal(result.status, 0, result.stderr);
   const commands = [];
@@ -2963,11 +2963,11 @@ function assertBenchmarkLatencyAnalysis(report) {
 }
 
 function useGitTransport(t) {
-  const previous = process.env.VLAB_ENGINE;
-  process.env.VLAB_ENGINE = "git";
+  const previous = process.env.CAUSET_ENGINE;
+  process.env.CAUSET_ENGINE = "git";
   t.after(() => {
-    if (previous === undefined) delete process.env.VLAB_ENGINE;
-    else process.env.VLAB_ENGINE = previous;
+    if (previous === undefined) delete process.env.CAUSET_ENGINE;
+    else process.env.CAUSET_ENGINE = previous;
   });
 }
 
@@ -3173,7 +3173,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
   const traced = spawnSync(vlabCommand, [...vlabPrefix(), "doctor"], {
     cwd: repo,
     encoding: "utf8",
-    env: testEnv({ VLAB_TRACE: "1" }),
+    env: testEnv({ CAUSET_TRACE: "1" }),
   });
   assert.equal(traced.status, 0);
   assert.match(traced.stderr, /\[cst trace\].*git --version/);
@@ -3204,8 +3204,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_GIT_SESSION_DIAGNOSTICS: "1",
-        VLAB_GIT_SESSION_DIAGNOSTICS_FILE: shutdownDiagnosticsPath,
+        CAUSET_GIT_SESSION_DIAGNOSTICS: "1",
+        CAUSET_GIT_SESSION_DIAGNOSTICS_FILE: shutdownDiagnosticsPath,
       }),
     },
   );
@@ -3233,8 +3233,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_GIT_SESSION_DIAGNOSTICS: "1",
-        VLAB_GIT_SESSION_DIAGNOSTICS_FILE: diagnosticsPath,
+        CAUSET_GIT_SESSION_DIAGNOSTICS: "1",
+        CAUSET_GIT_SESSION_DIAGNOSTICS_FILE: diagnosticsPath,
       }),
     },
   );
@@ -3300,8 +3300,8 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   assert.deepEqual(fallback, plan);
 
   // The forced-session suite modes are self-checking here. With the session
-  // chosen by the environment alone, `VLAB_GIT_SESSION=1` must show the
-  // persistent process answering reads and `VLAB_GIT_SESSION=0` must show no
+  // chosen by the environment alone, `CAUSET_GIT_SESSION=1` must show the
+  // persistent process answering reads and `CAUSET_GIT_SESSION=0` must show no
   // session at all; unset, the default is platform-specific and not claimed.
   const inherited = spawnSync(
     vlabCommand,
@@ -3312,16 +3312,16 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   assert.deepEqual(JSON.parse(inherited.stdout), plan);
   const sessionTraces =
     (inherited.stderr.match(/persistent process|cache hit/g) ?? []).length;
-  if (process.env.VLAB_GIT_SESSION === "1") {
+  if (process.env.CAUSET_GIT_SESSION === "1") {
     assert.ok(
       sessionTraces > 0,
-      `VLAB_GIT_SESSION=1 must answer reads through the object session:\n${inherited.stderr}`,
+      `CAUSET_GIT_SESSION=1 must answer reads through the object session:\n${inherited.stderr}`,
     );
-  } else if (process.env.VLAB_GIT_SESSION === "0") {
+  } else if (process.env.CAUSET_GIT_SESSION === "0") {
     assert.equal(
       sessionTraces,
       0,
-      `VLAB_GIT_SESSION=0 must not open an object session:\n${inherited.stderr}`,
+      `CAUSET_GIT_SESSION=0 must not open an object session:\n${inherited.stderr}`,
     );
   }
 
@@ -4133,7 +4133,7 @@ test("workspace listing batches one status query per existing path and preserves
     {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_TRACE: "1" }),
+      env: testEnv({ CAUSET_TRACE: "1" }),
     },
   );
 
@@ -4527,11 +4527,11 @@ test("batched resolution catalog lists retained records newest-first and quarant
     JSON.parse(vlab(repo, "resolve", "list", "--json", "--git-session")),
     catalog,
   );
-  for (const VLAB_GIT_SESSION of ["0", "1"]) {
+  for (const CAUSET_GIT_SESSION of ["0", "1"]) {
     const result = spawnSync(vlabCommand, [...vlabPrefix(), "resolve", "list", "--json"], {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_GIT_SESSION }),
+      env: testEnv({ CAUSET_GIT_SESSION }),
     });
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout), catalog);
@@ -4903,7 +4903,7 @@ function vlabWithEngine(cwd, engine, ...args) {
     cwd,
     encoding: "utf8",
     env: testEnv({
-      VLAB_FORECAST_ENGINE: engine,
+      CAUSET_FORECAST_ENGINE: engine,
     }),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -5476,7 +5476,7 @@ test("merge-tree forecasts fall back with a reason when the merge-tree session i
     cwd: repo,
     encoding: "utf8",
     env: testEnv({
-      VLAB_FORECAST_ENGINE: "merge-tree",
+      CAUSET_FORECAST_ENGINE: "merge-tree",
       CAUSET_TEST_MERGE_TREE_SESSION_FAILURE: "1",
     }),
   });
@@ -5591,7 +5591,7 @@ test("merge-tree forecasts fall back to git-too-old before the first request on 
 test("the default forecast engine is merge-tree on Windows and the worktree simulator elsewhere", (t) => {
   const { repo } = tooOldFixture(t);
   const env = testEnv();
-  delete env.VLAB_FORECAST_ENGINE;
+  delete env.CAUSET_FORECAST_ENGINE;
   const result = spawnSync(vlabCommand, [...vlabPrefix(), "forecast", "feature", "--json"], {
     cwd: repo,
     encoding: "utf8",
@@ -5652,7 +5652,7 @@ test("unknown merge-tree or worktree engine selections fail before any forecast 
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_FORECAST_ENGINE: "bogus",
+        CAUSET_FORECAST_ENGINE: "bogus",
       }),
     },
   );
@@ -5691,7 +5691,7 @@ test("unknown merge-tree or worktree engine selections fail before any forecast 
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_FORECAST_ENGINE: "bogus",
+        CAUSET_FORECAST_ENGINE: "bogus",
       }),
     },
   );
@@ -6593,7 +6593,7 @@ test("every repository read passes through the engine seam and the native engine
     const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_ENGINE: engineName }),
+      env: testEnv({ CAUSET_ENGINE: engineName }),
     });
     assert.equal(result.status, 0, result.stderr);
     return JSON.parse(result.stdout);
@@ -6676,9 +6676,9 @@ test("every repository read passes through the engine seam and the native engine
 
   // A read that bypasses the seam is counted in git mode and refused in
   // native mode; the doctor's raw probes are the one exemption.
-  const previousEngine = process.env.VLAB_ENGINE;
+  const previousEngine = process.env.CAUSET_ENGINE;
   try {
-    process.env.VLAB_ENGINE = "git";
+    process.env.CAUSET_ENGINE = "git";
     const counted = gitEngine.beginGitMetrics("bypass");
     assert.equal(gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo }).stdout, head);
     const countedMetrics = gitEngine.endGitMetrics(counted);
@@ -6686,7 +6686,7 @@ test("every repository read passes through the engine seam and the native engine
     assert.equal(countedMetrics.directReads, 1);
     assert.deepEqual(countedMetrics.fallbacks, []);
 
-    process.env.VLAB_ENGINE = "native";
+    process.env.CAUSET_ENGINE = "native";
     assert.throws(
       () => gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo }),
       /git rev-parse was read outside the engine seam/,
@@ -6718,8 +6718,8 @@ test("every repository read passes through the engine seam and the native engine
     );
     assert.equal(gitEngine.readEngine(), "native");
   } finally {
-    if (previousEngine === undefined) delete process.env.VLAB_ENGINE;
-    else process.env.VLAB_ENGINE = previousEngine;
+    if (previousEngine === undefined) delete process.env.CAUSET_ENGINE;
+    else process.env.CAUSET_ENGINE = previousEngine;
   }
 
   // Invalid selections fail before any work, by flag or by environment.
@@ -6729,7 +6729,7 @@ test("every repository read passes through the engine seam and the native engine
   const badEnv = spawnSync(vlabCommand, [...vlabPrefix(), "doctor"], {
     cwd: repo,
     encoding: "utf8",
-    env: testEnv({ VLAB_ENGINE: "bogus" }),
+    env: testEnv({ CAUSET_ENGINE: "bogus" }),
   });
   assert.notEqual(badEnv.status, 0);
   assert.match(badEnv.stderr, /Unknown engine 'bogus'\. Use one of: git, native/);

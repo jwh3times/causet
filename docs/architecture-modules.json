@@ -11,6 +11,10 @@
     "responsibility": "Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021)",
     "dependencies": "None"
   },
+  "src/environment.js": {
+    "responsibility": "The user-facing environment variables: `CAUSET_*` with the `VLAB_*` fallback of the migration window, and the legacy names in use (ADR-0039 §5)",
+    "dependencies": "None"
+  },
   "src/ids.js": {
     "responsibility": "Unique protocol IDs, SHA-256, Git blob hashing, slugs",
     "dependencies": "Node crypto"
@@ -48,7 +52,7 @@
     "dependencies": "`src/git.js`, `src/store.js`"
   },
   "src/provenance.js": {
-    "responsibility": "Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `VLAB_AGENT`, declaration at commit time, and exact carry onto rewritten commits",
+    "responsibility": "Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `CAUSET_AGENT`, declaration at commit time, and exact carry onto rewritten commits",
     "dependencies": "Notes, IDs, schemas"
   },
   "src/schemas.js": {

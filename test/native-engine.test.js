@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import * as engine from "../src/engine.js";
+import { environmentValue } from "../src/environment.js";
 import * as git from "../src/git.js";
 import { loadNativeEngine } from "../src/native-engine.js";
 import { parkedRecordIds } from "../src/quarantine.js";
@@ -16,7 +17,7 @@ Object.assign(process.env, testEnv());
 // The supported profile deliberately excludes command-scope configuration.
 delete process.env.GIT_CONFIG_COUNT;
 const available = engine.nativeEngine().available;
-if (process.env.VLAB_REQUIRE_NATIVE === "1") assert.equal(available, true, "native prebuild required");
+if (environmentValue("REQUIRE_NATIVE") === "1") assert.equal(available, true, "native prebuild required");
 
 function fixture(t, options = []) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vlab-native-")));
@@ -103,7 +104,7 @@ test("unsupported expressions and repository profiles fall back as complete oper
   if (Number(version[1]) > 2 || Number(version[2]) >= 45) {
     const reftable = fixture(t, ["--ref-format=reftable"]);
     refused("listRefs", ["refs/heads", reftable.root]);
-  } else assert.notEqual(process.env.VLAB_REQUIRE_NATIVE, "1", "qualification requires a reftable-capable Git");
+  } else assert.notEqual(environmentValue("REQUIRE_NATIVE"), "1", "qualification requires a reftable-capable Git");
 });
 
 function rawObject(root, type, data) {
@@ -139,7 +140,7 @@ test("missing and broken optional bindings preserve Git functionality", (t) => {
   const script = `import { describeReadEngines, repoContext } from ${JSON.stringify(moduleUrl)};
     console.log(JSON.stringify({ engine: describeReadEngines(), context: repoContext() }));`;
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
-    cwd: root, encoding: "utf8", env: testEnv({ VLAB_ENGINE: "native", CAUSET_TEST_NATIVE_BINDING: "missing" }),
+    cwd: root, encoding: "utf8", env: testEnv({ CAUSET_ENGINE: "native", CAUSET_TEST_NATIVE_BINDING: "missing" }),
   });
   assert.equal(result.status, 0, result.stderr);
   const parsed = JSON.parse(result.stdout);

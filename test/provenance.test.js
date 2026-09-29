@@ -114,7 +114,7 @@ test("the agent environment variable declares, and merges with explicit flags", 
   write(repo, "f.txt", "one\n");
   git(repo, "add", "-A");
   vlabEnv(
-    repo, { VLAB_AGENT: "claude-opus-5" },
+    repo, { CAUSET_AGENT: "claude-opus-5" },
     "commit", "-m", "agent work",
     // The same actor named twice, once by flag and once by environment, is one
     // actor; a human reviewing the agent's work is a second.
@@ -183,11 +183,11 @@ test("provenance survives a hard squash, which is where Git loses it", () => {
   git(repo, "switch", "-c", "feature");
   write(repo, "f.txt", "one\n");
   git(repo, "add", "-A");
-  vlabEnv(repo, { VLAB_AGENT: "claude-opus-5" }, "commit", "-m", "feature one");
+  vlabEnv(repo, { CAUSET_AGENT: "claude-opus-5" }, "commit", "-m", "feature one");
   write(repo, "g.txt", "two\n");
   git(repo, "add", "-A");
   vlabEnv(
-    repo, { VLAB_AGENT: "claude-opus-5" },
+    repo, { CAUSET_AGENT: "claude-opus-5" },
     "commit", "-m", "feature two", "--reviewed-by", "Jerry Holland",
   );
   const absorbed = [
@@ -228,7 +228,7 @@ test("provenance carries through a cherry-pick to the applied commit", () => {
   git(repo, "switch", "-c", "donor");
   write(repo, "d.txt", "donor\n");
   git(repo, "add", "-A");
-  vlabEnv(repo, { VLAB_AGENT: "agent-7" }, "commit", "-m", "donor work");
+  vlabEnv(repo, { CAUSET_AGENT: "agent-7" }, "commit", "-m", "donor work");
   const origin = git(repo, "rev-parse", "HEAD");
 
   git(repo, "switch", "-c", "taker", "main");
@@ -247,7 +247,7 @@ test("provenance carries through a reconciliation and a causal rebase", () => {
     git(repo, "switch", "-c", "feature");
     write(repo, "f.txt", "feature\n");
     git(repo, "add", "-A");
-    vlabEnv(repo, { VLAB_AGENT: "agent-9" }, "commit", "-m", "feature one");
+    vlabEnv(repo, { CAUSET_AGENT: "agent-9" }, "commit", "-m", "feature one");
     const origin = git(repo, "rev-parse", "feature");
     git(repo, "switch", "main");
     write(repo, "m.txt", "main\n");
@@ -285,7 +285,7 @@ test("a carried record is a valid note record and passes strict metadata validat
   git(repo, "switch", "-c", "feature");
   write(repo, "f.txt", "one\n");
   git(repo, "add", "-A");
-  vlabEnv(repo, { VLAB_AGENT: "claude-opus-5" }, "commit", "-m", "feature one");
+  vlabEnv(repo, { CAUSET_AGENT: "claude-opus-5" }, "commit", "-m", "feature one");
   git(repo, "switch", "main");
   vlab(repo, "hard-squash", "feature", "--json");
 
@@ -341,14 +341,14 @@ test("carrying provenance does not scale the notes ref reads with the queue", ()
     for (let index = 1; index <= changes; index += 1) {
       write(repo, `f${index}.txt`, `feature ${index}\n`);
       git(repo, "add", "-A");
-      vlabEnv(repo, { VLAB_AGENT: "agent-x" }, "commit", "-m", `feature ${index}`);
+      vlabEnv(repo, { CAUSET_AGENT: "agent-x" }, "commit", "-m", `feature ${index}`);
     }
     git(repo, "switch", "main");
     write(repo, "m.txt", "main\n");
     git(repo, "add", "-A");
     vlab(repo, "commit", "-m", "main moves");
 
-    const run = vlabResult(repo, ["reconcile", "feature", "--json"], { VLAB_TRACE: "1" });
+    const run = vlabResult(repo, ["reconcile", "feature", "--json"], { CAUSET_TRACE: "1" });
     assert.equal(run.status, 0, "the fixture must reconcile cleanly");
     return run.stderr.split("\n").filter((line) => line.includes("git notes")).length;
   };

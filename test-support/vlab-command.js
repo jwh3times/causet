@@ -2,7 +2,8 @@
  * The `vlab` executable the suites, demos, and measurement scripts drive.
  *
  * By default this is the checkout's JavaScript CLI, run under the current
- * Node. `VLAB_CLI=<path>` selects another implementation, such as a Rust
+ * Node. `CAUSET_CLI=<path>` (or the former `VLAB_CLI`) selects another
+ * implementation, such as a Rust
  * build of the CLI (ADR-0037, issue #140): a `.js` or `.mjs` path runs under
  * this Node; any other path is executed directly.
  *
@@ -13,13 +14,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { environmentValue } from "../src/environment.js";
 
 const defaultCli = fileURLToPath(new URL("../bin/vlab.js", import.meta.url));
 
-/** The absolute path `VLAB_CLI` names, or null when the default CLI is used. */
-export const selectedCli = process.env.VLAB_CLI ? path.resolve(process.env.VLAB_CLI) : null;
+const named = environmentValue("CLI");
+
+/** The absolute path `CAUSET_CLI` names, or null when the default CLI is used. */
+export const selectedCli = named ? path.resolve(named) : null;
 if (selectedCli && !fs.existsSync(selectedCli)) {
-  throw new Error(`VLAB_CLI names ${selectedCli}, which does not exist`);
+  throw new Error(`CAUSET_CLI names ${selectedCli}, which does not exist`);
 }
 
 const target = selectedCli ?? defaultCli;

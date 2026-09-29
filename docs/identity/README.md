@@ -211,7 +211,7 @@ Inspect `git show <commit>` and `cst provenance <commit> --json` in the affected
 repository, and resolve the original notes-write failure. Preserve existing notes;
 do not overwrite an unreadable container or remove a lock whose writer is active.
 Recover only the actors explicitly supplied to the original invocation, including
-`VLAB_AGENT`; do not infer missing attribution from the content or Git author.
+`CAUSET_AGENT`; do not infer missing attribution from the content or Git author.
 
 There is no public provenance-declaration CLI for an existing commit. A maintainer
 with a compatible causet source checkout can use the existing declaration API.
@@ -245,7 +245,7 @@ the evidence for human review instead of inventing or overwriting a claim.
 ## 8. Naming a provenance actor
 
 A `vcs-lab.provenance/v1` actor is free text: `--authored-by`, `--generated-by`,
-`--reviewed-by`, and `VLAB_AGENT` record exactly the string they are given.
+`--reviewed-by`, and `CAUSET_AGENT` record exactly the string they are given.
 Provenance is declared and never inferred (FR-TRUST-04), so causet never
 normalizes a name when it reads one, and anything that groups work by actor
 compares the strings exactly. One actor spelled two ways is therefore two actors
@@ -263,7 +263,7 @@ format. Spell every actor the same way every time:
   `codex`. A new model version is a different actor, so its name differs.
 - **A person** (`authored`, `reviewed`) is the name they choose to be recorded
   under, spelled the same way every time.
-- **An agent harness** sets `VLAB_AGENT` once to the machine actor's name, so
+- **An agent harness** sets `CAUSET_AGENT` once to the machine actor's name, so
   the spelling comes from configuration rather than from each command.
 
 `cst audit identity` reports a `near-duplicate-actor-names` warning for actor

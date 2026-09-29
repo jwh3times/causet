@@ -82,6 +82,7 @@ import {
 } from "./provenance.js";
 import { auditIdentity } from "./identity-audit.js";
 import { CliError, requestJsonErrors } from "./errors.js";
+import { legacyVariablesInUse, setEnvironmentValue } from "./environment.js";
 import { assertWithinBound } from "./schemas.js";
 import { VERSION } from "./version.js";
 import {
@@ -1220,9 +1221,9 @@ export async function main(rawArgs) {
     throw new CliError("Choose only one of --git-session or --no-git-session.",
       { code: "usage-conflicting-options" });
   }
-  if (rawArgs.includes("--trace-git")) process.env.VLAB_TRACE = "1";
-  if (forceSession) process.env.VLAB_GIT_SESSION = "1";
-  if (disableSession) process.env.VLAB_GIT_SESSION = "0";
+  if (rawArgs.includes("--trace-git")) setEnvironmentValue("TRACE", "1");
+  if (forceSession) setEnvironmentValue("GIT_SESSION", "1");
+  if (disableSession) setEnvironmentValue("GIT_SESSION", "0");
   const args = [];
   for (let index = 0; index < rawArgs.length; index += 1) {
     const item = rawArgs[index];
@@ -1239,7 +1240,7 @@ export async function main(rawArgs) {
             { code: "usage-invalid-option-value" },
         );
       }
-      process.env.VLAB_FORECAST_ENGINE = value;
+      setEnvironmentValue("FORECAST_ENGINE", value);
       continue;
     }
     if (item === "--engine" || item.startsWith("--engine=")) {
@@ -1252,7 +1253,7 @@ export async function main(rawArgs) {
             { code: "usage-invalid-option-value" },
         );
       }
-      process.env.VLAB_ENGINE = value;
+      setEnvironmentValue("ENGINE", value);
       continue;
     }
     args.push(item);
@@ -1825,6 +1826,9 @@ export async function main(rawArgs) {
         notesRef: "refs/notes/vcs-lab",
         engine: describeReadEngines(),
         forecastEngine: forecastEngine(),
+        // `VLAB_*` variables still read in place of their `CAUSET_*` names
+        // (ADR-0039 §5); reported here rather than on stderr.
+        legacyEnvironment: legacyVariablesInUse(),
         differential: options.differential ? runDifferential(context.root) : undefined,
         benchmark: options.benchmark ? gitBenchmark(options) : undefined,
         objectSession: options.benchmark

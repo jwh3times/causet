@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach } from "node:test";
+import { environmentValue } from "../src/environment.js";
 import { cliInvocations, resetCliInvocations, selectedCli } from "./vlab-command.js";
 
 /**
@@ -38,18 +39,19 @@ export function testEnv(overrides = {}) {
 }
 
 /**
- * When `VLAB_CLI` selects another implementation, report every test that
+ * When `CAUSET_CLI` selects another implementation, report every test that
  * never invoked it: such a test exercises the JavaScript modules directly and
  * says nothing about the selected CLI, whatever its result (ADR-0037, #140).
- * `VLAB_CLI_REPORT=<file>` also appends one JSON line per such test, so a
+ * `CAUSET_CLI_REPORT=<file>` also appends one JSON line per such test, so a
  * whole run can be counted.
  */
 if (selectedCli) {
   afterEach((t) => {
     if (cliInvocations() === 0) {
       t.diagnostic(`did not invoke the CLI under test (${selectedCli}); module-level test`);
-      if (process.env.VLAB_CLI_REPORT) {
-        fs.appendFileSync(process.env.VLAB_CLI_REPORT,
+      const report = environmentValue("CLI_REPORT");
+      if (report) {
+        fs.appendFileSync(report,
           `${JSON.stringify({ file: process.argv[1] ?? null, test: t.fullName })}\n`);
       }
     }

@@ -80,6 +80,11 @@ The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038), insta
 still works as an alias for the same program during the transition, and prints identical
 output.
 
+Environment variables are named `CAUSET_*` (for example `CAUSET_ENGINE`). During the same
+transition the former `VLAB_*` name of each is still read when the `CAUSET_*` one is not set;
+when both are set, `CAUSET_*` wins. `cst doctor` lists any `VLAB_*` variable it is still
+reading, under `legacyEnvironment` (ADR-0039 §5).
+
 Alternatively, run it without installing:
 
 ```bash
@@ -220,11 +225,11 @@ Every command's failure has a machine-readable form. Without `--json` a failure 
 
 ```bash
 cst commit -m "Add the parser" --generated-by claude-opus-5 --reviewed-by "Jerry Holland"
-VLAB_AGENT=claude-opus-5 cst commit -m "Add the tests"   # an agent harness sets this once
+CAUSET_AGENT=claude-opus-5 cst commit -m "Add the tests"   # an agent harness sets this once
 cst provenance HEAD            # or: cst provenance main --all
 ```
 
-When actors are declared by flags or `VLAB_AGENT`, commit takes the shared notes
+When actors are declared by flags or `CAUSET_AGENT`, commit takes the shared notes
 lock before invoking Git and holds it through provenance publication. A
 `notes-locked` refusal leaves HEAD, the index, and worktree content unchanged,
 including with `--all`; retry after the holder releases the lock. Commits with no
@@ -434,7 +439,7 @@ HEAD, index, and working files are checked before and after and must be
 unchanged.
 
 With the merge-tree engine (`--forecast-engine merge-tree` or
-`VLAB_FORECAST_ENGINE=merge-tree`; the default on Windows) clean steps are
+`CAUSET_FORECAST_ENGINE=merge-tree`; the default on Windows) clean steps are
 simulated instead through one persistent `git merge-tree`
 process with no temporary worktree, pinning the same per-step and predicted
 trees. Any conflicted, empty, or otherwise unsupported step hands the whole
@@ -1127,7 +1132,7 @@ listing command. See [session safety rules](docs/architecture.md#142-invocation-
 `--forecast-engine merge-tree` selects the merge-tree forecast
 engine for one invocation and `--forecast-engine worktree` the worktree
 simulator; without either, Windows uses the merge-tree engine and POSIX hosts
-the worktree simulator. `--engine native` (or `VLAB_ENGINE=native`) selects
+the worktree simulator. `--engine native` (or `CAUSET_ENGINE=native`) selects
 the optional [native resolution-read binding](docs/native-engine.md) for one
 invocation. Its five supported operations report successful execution under
 `nativeReads`; unsupported operations and unavailable bindings use Git and appear
@@ -1140,10 +1145,10 @@ that bypassed the engine seam (always zero; such a read is refused in native
 mode). Trace output contains command names, durations, and whether a query
 started a process, reused a persistent process, or hit the immutable object
 cache; it never includes file content or commit messages. For a hang or a
-leftover process, `VLAB_GIT_SESSION_DIAGNOSTICS=1` prints one JSON line per
+leftover process, `CAUSET_GIT_SESSION_DIAGNOSTICS=1` prints one JSON line per
 object-session and merge-tree-session lifecycle event (worker creation,
 request posting, shared-memory waits, Git responses, fallback, shutdown) to
-stderr, and `VLAB_GIT_SESSION_DIAGNOSTICS_FILE=<path>` appends the same lines
+stderr, and `CAUSET_GIT_SESSION_DIAGNOSTICS_FILE=<path>` appends the same lines
 to a file; both are off by default and never change session behaviour.
 
 Compare the read engines operation by operation in any repository with:
@@ -1186,7 +1191,7 @@ npm run test:benchmark -- --host lab-linux-a
 ```
 
 Use the stable label assigned to the actual machine, not just its operating
-system. `--host` takes precedence over `VLAB_BENCHMARK_HOST`, which can select
+system. `--host` takes precedence over `CAUSET_BENCHMARK_HOST`, which can select
 the same label for checks and recording. Labels remain stable across toolchain
 upgrades; different machines need different labels.
 
@@ -1289,11 +1294,11 @@ portable unreachable origins, plus a caller-isolated repository-scale fixture
 that verifies semantic scan results, process-amplification decisions, privacy,
 and cleanup, and the engine seam's import discipline, passthrough equality,
 bypass refusal, and differential report. The complete suite is also run with
-`VLAB_GIT_SESSION=1` and `VLAB_GIT_SESSION=0` to exercise the Windows-default
+`CAUSET_GIT_SESSION=1` and `CAUSET_GIT_SESSION=0` to exercise the Windows-default
 session path and the POSIX-default one-process path on every host, with each
-forecast engine forced (`VLAB_FORECAST_ENGINE=worktree` and
-`VLAB_FORECAST_ENGINE=merge-tree`) because the default engine differs by
-platform, and with `VLAB_ENGINE=native`, which refuses any repository read
+forecast engine forced (`CAUSET_FORECAST_ENGINE=worktree` and
+`CAUSET_FORECAST_ENGINE=merge-tree`) because the default engine differs by
+platform, and with `CAUSET_ENGINE=native`, which refuses any repository read
 that does not pass through `src/engine.js`. The GitHub Actions workflow in
 `.github/workflows/ci.yml` runs static checks for every PR and main push,
 with the default suite on Ubuntu and Windows for code PRs and on Ubuntu

@@ -49,7 +49,7 @@ or build step.
 - `npm run test:benchmark` compares bounded benchmarks against the committed
   per-host baseline in `benchmarks/baseline.json`; `npm run benchmark:record -- --host <label>`
   refreshes an explicitly identified machine's entry on a quiet machine. Use the
-  same `-- --host <label>` for checks, or set `VLAB_BENCHMARK_HOST`; otherwise
+  same `-- --host <label>` for checks, or set `CAUSET_BENCHMARK_HOST`; otherwise
   latency comparison is skipped and the deterministic counts compare against the
   most recent identified entry for the same platform.
 - `npm run sync:agents` regenerates `.claude/skills/` from `.agents/skills/`;
@@ -84,14 +84,14 @@ Tests use `node:test` and descriptive behavior names such as
 `test("stale forecasts fail before starting a reconciliation", ...)`. Add
 regression coverage for observable changes and use temporary repositories for
 history-changing cases. For Git-session, forecast, read-path, or cross-cutting
-changes, run `npm test`, `VLAB_GIT_SESSION=1 npm test`, `VLAB_GIT_SESSION=0 npm test`
+changes, run `npm test`, `CAUSET_GIT_SESSION=1 npm test`, `CAUSET_GIT_SESSION=0 npm test`
 (the session default differs by platform, so both are forced on every host),
-`VLAB_FORECAST_ENGINE=worktree npm test`, `VLAB_FORECAST_ENGINE=merge-tree npm test`
-(the default forecast engine differs by platform), and `VLAB_ENGINE=native npm test`
+`CAUSET_FORECAST_ENGINE=worktree npm test`, `CAUSET_FORECAST_ENGINE=merge-tree npm test`
+(the default forecast engine differs by platform), and `CAUSET_ENGINE=native npm test`
 (every read must pass through `src/engine.js`; never call `runGit` for a read
 in a domain module). Every CLI launch in the suites goes through
 `test-support/vlab-command.js`; never spawn `bin/vlab.js` directly, so that
-`VLAB_CLI=<executable> npm test` can run the same suites against another
+`CAUSET_CLI=<executable> npm test` can run the same suites against another
 implementation of the CLI (ADR-0037). No numeric coverage threshold is
 defined; preserve the behavioral and failure-safety guarantees in
 `docs/testing.md`.

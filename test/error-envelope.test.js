@@ -290,7 +290,7 @@ test("a missing revision is classified the same way on both Git transports", () 
     const failed = spawnSync(vlabCommand, [...vlabPrefix(), "merge-plan", "does-not-exist", "--json"], {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_GIT_SESSION: session }),
+      env: testEnv({ CAUSET_GIT_SESSION: session }),
     });
     assert.notEqual(failed.status, 0);
     assert.equal(failed.stderr, "");

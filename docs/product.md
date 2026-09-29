@@ -674,9 +674,9 @@ with identical semantic results. See
 A release is eligible when:
 
 1. `npm test` passes in ordinary mode.
-2. `VLAB_GIT_SESSION=1 npm test` and `VLAB_GIT_SESSION=0 npm test` pass (the
+2. `CAUSET_GIT_SESSION=1 npm test` and `CAUSET_GIT_SESSION=0 npm test` pass (the
    session default differs by platform, so both are forced on every host).
-3. `VLAB_FORECAST_ENGINE=worktree npm test` and `VLAB_FORECAST_ENGINE=merge-tree npm test` pass (the default engine differs by platform), and `VLAB_ENGINE=native npm test` passes (every read goes through the engine seam).
+3. `CAUSET_FORECAST_ENGINE=worktree npm test` and `CAUSET_FORECAST_ENGINE=merge-tree npm test` pass (the default engine differs by platform), and `CAUSET_ENGINE=native npm test` passes (every read goes through the engine seam).
 4. All maintained demos complete.
 5. Version constants, package metadata, changelog, and release tag agree.
 6. Bundle and source archive install/test smoke checks pass outside the source

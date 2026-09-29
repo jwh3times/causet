@@ -32,7 +32,7 @@ for planning and publication. This difference is expected; the receipt's
 invocation accumulates recorded queue metrics across the operation, while a
 trace measures the invocation that produced it.
 
-Use `VLAB_TRACE=1` to observe whole-invocation Git process starts, and an external
+Use `CAUSET_TRACE=1` to observe whole-invocation Git process starts, and an external
 elapsed-time measurement for end-to-end latency. The
 [benchmark publication phase](../testing.md#benchmark-regression-check) uses
 the trace and checks published record counts. Trace process counts do not

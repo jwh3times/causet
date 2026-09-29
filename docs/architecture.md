@@ -126,6 +126,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/cli.js` | Argument parsing, command dispatch, human and JSON presentation, benchmarks | All domain modules |
 | `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
 | `src/engine.js` | The read-side engine seam: the catalog of 44 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
+| `src/environment.js` | The user-facing environment variables: `CAUSET_*` with the `VLAB_*` fallback of the migration window, and the legacy names in use (ADR-0039 §5) | None |
 | `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021) | None |
 | `src/faults.js` | Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it | None |
 | `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
@@ -146,7 +147,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/pending-operation.js` | Safe reconciliation/rebase journal routing for shared conflict tools | Reconciliation and rebase state |
 | `src/proof-binding.js` | The Git bindings a proof bundle carries so a verifier without the repository can check it: the bound source inventory, reachability paths, receipt inclusion proofs, and the object-id recomputation that makes them proofs (ADR-0031) | `src/engine.js`, `src/git.js`, `src/schemas.js` |
 | `src/proof-bundle.js` | Portable coverage proof bundles and their independent verifier, which applies its own copy of the lattice (`PROOF_RULES`) and compares the evidence with the repository | Merge plan, canonical JSON, metadata, engine |
-| `src/provenance.js` | Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `VLAB_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
+| `src/provenance.js` | Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `CAUSET_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
 | `src/quarantine.js` | The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/vcs-lab/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030) | `src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js` |
 | `src/rebase-forecast.js` | Rebase simulation orchestration, caller invariants, candidate pinning, the carried caller overlay and its second predicted tree, and private forecast presentation | Rebase plan, forecast simulator, target overlays, semantic version guards, Git adapter |
 | `src/rebase-interactive.js` | Declared interactive actions: their parsing, the shapes ADR-0035 refuses, the surviving-identity message rules, and the single-trailer check | Errors |
@@ -640,7 +641,7 @@ caller worktree (captured invariants)
         +--> save pinned forecast in caller's private Git dir
 ```
 
-The engine is selected by `VLAB_FORECAST_ENGINE` or `--forecast-engine`;
+The engine is selected by `CAUSET_FORECAST_ENGINE` or `--forecast-engine`;
 without either, Windows uses `merge-tree` and other platforms `worktree`,
 mirroring the object session's platform default (ADR-0016, amendment of
 2026-08-30). Both engines pin the same per-step and predicted
@@ -1051,7 +1052,7 @@ Git directory as the current linked worktree's private Git directory.
 
 ### 14.2 Invocation-scoped session
 
-On Windows by default, or with `--git-session`/`VLAB_GIT_SESSION=1`, a domain
+On Windows by default, or with `--git-session`/`CAUSET_GIT_SESSION=1`, a domain
 operation may open one `GitObjectSession` keyed by resolved worktree path. The
 session is initially only a scope and cache; its worker starts lazily when the
 first uncached object request is ready, after synchronous preflight commands
@@ -1088,10 +1089,10 @@ Without an active session the ordinary listing command is used directly.
 
 Opt-in lifecycle diagnostics record session/worker creation, request posting,
 shared-memory waits, Git request/response events, fallback, and shutdown.
-`VLAB_GIT_SESSION_DIAGNOSTICS=1` writes one JSON line per event to stderr from
+`CAUSET_GIT_SESSION_DIAGNOSTICS=1` writes one JSON line per event to stderr from
 the main thread (`[cst session]`, which also covers the merge-tree session
 below) and from the object-session worker (`[cst session-worker]`), and
-`VLAB_GIT_SESSION_DIAGNOSTICS_FILE=<path>` additionally appends the same lines
+`CAUSET_GIT_SESSION_DIAGNOSTICS_FILE=<path>` additionally appends the same lines
 to that file, with a failed append ignored so diagnostics can never change
 session behaviour. They are disabled during normal operation and are intended
 for bounded process-tree investigation.
@@ -1135,7 +1136,7 @@ the separate listing process for supported trees. Composites such as
 cataloged operations only. Mutations do not pass through the seam; they stay
 explicit `runGit` calls.
 
-`VLAB_ENGINE` or `--engine <git|native>` selects the read engine. `git` is
+`CAUSET_ENGINE` or `--engine <git|native>` selects the read engine. `git` is
 the default everywhere and the oracle. `native` loads the optional Rust binding
 for the five resolution-catalog operations in ADR-0027. A missing prebuild reports
 `binding-missing` and every operation passes through to Git. When the
@@ -1171,7 +1172,7 @@ counts, and fallbacks operation by operation
 native binding implements, such as OID-rooted object expressions, because an
 input it refuses falls back to Git and would put Git's answer on both sides;
 with a binding present, every operation it implements is compared natively.
-The suite's `VLAB_ENGINE=native` mode, one
+The suite's `CAUSET_ENGINE=native` mode, one
 of the six modes [testing.md](testing.md) lists, proves that every read it
 exercises goes through the seam.
 
@@ -1812,7 +1813,7 @@ closed phase 0a by measuring and rejecting Git's read-side maintenance
 caches. The read-side engine seam of phase 0b is implemented
 ([ADR-0019](adr/0019-route-every-git-read-through-one-engine-seam.md), §14.4):
 every repository read is one of 43 cataloged operations, the native engine
-is selectable with per-operation Git fallback, and the suite's `VLAB_ENGINE=native`
+is selectable with per-operation Git fallback, and the suite's `CAUSET_ENGINE=native`
 mode refuses any read outside the seam.
 The schema catalog, canonical-JSON profile, compatibility contract
 ([ADR-0020](adr/0020-freeze-per-family-compatibility-and-resource-bounds.md)),

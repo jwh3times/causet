@@ -1,11 +1,12 @@
 import os from "node:os";
+import { environmentValue } from "../src/environment.js";
 
 export const BASELINE_SCHEMA = "vcs-lab.benchmark-baseline/v3";
 const LEGACY_SCHEMA = "vcs-lab.benchmark-baseline/v2";
 
 /** Operator-assigned labels avoid publishing hostnames or machine identifiers. */
 export function parseOptions(args, env = process.env) {
-  const options = { record: false, json: false, host: env.VLAB_BENCHMARK_HOST || null };
+  const options = { record: false, json: false, host: environmentValue("BENCHMARK_HOST", env) || null };
   let suppliedHost = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -21,7 +22,7 @@ export function parseOptions(args, env = process.env) {
     throw new Error("Host labels must be 1–64 lowercase ASCII letters, digits, dots, underscores, or hyphens, starting with a letter or digit.");
   }
   if (options.record && !options.host) {
-    throw new Error("Recording requires --host <label> or VLAB_BENCHMARK_HOST; choose a stable label for this machine.");
+    throw new Error("Recording requires --host <label> or CAUSET_BENCHMARK_HOST; choose a stable label for this machine.");
   }
   return options;
 }
@@ -36,7 +37,10 @@ export function hostProvenance(id, env = process.env) {
     logicalCpus: cpus.length,
     memoryBytes: os.totalmem(),
     osRelease: os.release(),
-    overrides: Object.fromEntries(["VLAB_ENGINE", "VLAB_GIT_SESSION", "VLAB_FORECAST_ENGINE"].map((key) => [key, env[key] || null])),
+    // Recorded under the variables' names before #159, so baselines stay comparable;
+    // the values are read under either name (ADR-0039 §5).
+    overrides: Object.fromEntries(["ENGINE", "GIT_SESSION", "FORECAST_ENGINE"]
+      .map((name) => [`VLAB_${name}`, environmentValue(name, env) || null])),
   };
 }
 
@@ -65,7 +69,7 @@ export function selectBaseline(baseline, host) {
   }
   const reason = identified
     ? `Host '${host.id}' does not match its recorded hardware or benchmark settings.`
-    : host.id ? `No identified baseline for host '${host.id}'.` : "No host identity selected; use --host <label> or VLAB_BENCHMARK_HOST.";
+    : host.id ? `No identified baseline for host '${host.id}'.` : "No host identity selected; use --host <label> or CAUSET_BENCHMARK_HOST.";
   // Deterministic metrics — process, record, and materialization counts — are
   // properties of the code rather than of the machine, so any default-mode entry
   // recorded on this platform can supply them. Latency cannot travel between
