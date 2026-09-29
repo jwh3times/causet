@@ -109,7 +109,7 @@ clarifies behavior.
 ## Work Tracking
 
 GitHub is the only tracker. Future work is issues on the
-[vcs-lab project board](https://github.com/users/jwh3times/projects/7), each
+[causet project board](https://github.com/users/jwh3times/projects/7), each
 carrying the gate that must clear before it can start; dated progress on an
 item belongs on its issue, and `CHANGELOG.md` is the one dated narrative of
 what shipped. Do not add a Markdown backlog, roadmap, continuation brief, or
@@ -124,7 +124,7 @@ validate (`docs/testing.md`).
 ## Required Human Follow-ups
 
 Every required human action left by agent-completed work must have a public
-follow-up issue in `jwh3times/vcs-lab`, the `human-action-required` label, a card
+follow-up issue in `jwh3times/causet`, the `human-action-required` label, a card
 on the private project board, and linked step-by-step instructions in the public
 wiki's `human-todo` page or a procedure linked from it. Sensitive vulnerability
 actions use a draft repository security advisory with detailed instructions and
@@ -156,7 +156,7 @@ timestamped result reports.
 
 ### Issue tracker
 
-Use GitHub Issues in `jwh3times/vcs-lab`. Before ticket operations,
+Use GitHub Issues in `jwh3times/causet`. Before ticket operations,
 read [the issue tracker configuration](docs/agents/issue-tracker.md).
 
 ### Triage labels

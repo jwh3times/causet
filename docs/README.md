@@ -32,7 +32,7 @@ the versioned record of delivered behavior.
   resolution-catalog qualification.
 - [Benchmark host baselines](testing.md#benchmark-regression-check) — machine
   labels, recording, skipped latency, and qualification requirements; the
-  [wiki walkthrough](https://github.com/jwh3times/vcs-lab/wiki/Benchmark-host-baselines)
+  [wiki walkthrough](https://github.com/jwh3times/causet/wiki/Benchmark-host-baselines)
   provides a quick operational guide.
 - [Required human follow-ups](human-followups.md) — agent completion policy for
   public follow-up issues/wiki, private board tracking, and restricted security advisories.
@@ -45,7 +45,7 @@ the versioned record of delivered behavior.
 ## Where future work lives
 
 Future work is tracked on the
-[vcs-lab project board](https://github.com/users/jwh3times/projects/7), one
+[causet project board](https://github.com/users/jwh3times/projects/7), one
 issue per increment, each with a Status, the Gate that must clear before it can
 start, and an Area. The board replaced `docs/roadmap.md` on 2026-09-04 and the
 continuation brief `docs/handoff.md` with it, so there is no Markdown backlog to

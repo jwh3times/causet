@@ -100,12 +100,12 @@ one-line pointer in `MEMORY.md`. Codex sessions skip this lane and say so.
 
 Issues are the tracker for active work, bugs, implementation briefs, and
 session handoffs (`docs/README.md`). Use explicit `gh --repo owner/repo`
-arguments for follow-ups in `jwh3times/vcs-lab`; ordinary issues and wiki pages
+arguments for follow-ups in `jwh3times/causet`; ordinary issues and wiki pages
 are public, project 7 is private, and sensitive vulnerabilities use draft advisories. Preserve existing labels and use
 `human-action-required` for required human dependencies.
 
 Ordinary source work sits on the
-[vcs-lab project board](https://github.com/users/jwh3times/projects/7). Its
+[causet project board](https://github.com/users/jwh3times/projects/7). Its
 `Status`, `Gate`, and `Area` fields are a cheap view; the issue body and its
 comments remain the record, so never let a fact live only on a card. Two things
 are worth doing at session end: put any issue this session opened onto the board

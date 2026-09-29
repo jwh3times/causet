@@ -8,7 +8,7 @@
  * it could not measure (a failed command, a mismatched output, a noisy host
  * without --allow-noisy), never because something was slow.
  *
- * Procedure: https://github.com/jwh3times/vcs-lab/wiki/Performance-testing
+ * Procedure: https://github.com/jwh3times/causet/wiki/Performance-testing
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

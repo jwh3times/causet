@@ -133,7 +133,7 @@ platform (`merge-tree` on Windows, `worktree` elsewhere, because merge-tree
 needs Git 2.49 and POSIX baselines lag it), so both runs are needed on every
 host. Flipping the default to `merge-tree` everywhere, once that version is the
 baseline or common on POSIX, is
-[issue #8](https://github.com/jwh3times/vcs-lab/issues/8); until it closes, the
+[issue #8](https://github.com/jwh3times/causet/issues/8); until it closes, the
 split default is deliberate and the two runs are not redundant. The merge-tree
 run simulates every clean forecast step through `git merge-tree` and falls back
 to the worktree simulator where it must; the worktree run exercises the oracle
@@ -720,7 +720,7 @@ identified entry shares it. That order matters: a `legacyHosts` entry is frozen
 at whatever the code did when it was captured and is never refreshed, so a later
 deliberate change makes it report a regression that is not one — on Windows it
 recorded 41 publication processes against a current ~139, and every unidentified
-run failed on it ([issue #100](https://github.com/jwh3times/vcs-lab/issues/100)).
+run failed on it ([issue #100](https://github.com/jwh3times/causet/issues/100)).
 An identified entry moves with the code, because every re-record commits its
 reason. Either way latency stays skipped, since latency cannot travel between
 machines. Both paths require that no benchmark overrides are set.
@@ -748,17 +748,17 @@ npm run test:benchmark -- --host lab-linux-a
 Establish identified baselines on the actual qualification machines before using
 latency evidence for release gates; historical entries alone are insufficient.
 The identified Windows baseline is `hosts.lab-windows-a`, established in
-[issue #22](https://github.com/jwh3times/vcs-lab/issues/22). Its latency limits
+[issue #22](https://github.com/jwh3times/causet/issues/22). Its latency limits
 apply only to matching hardware and benchmark settings. The `lab-linux-a`
 commands above illustrate recording a new machine; no identified Linux entry
 currently exists. Current releases qualify latency on Windows only, using
 `lab-windows-a`, as selected for
-[issue #68](https://github.com/jwh3times/vcs-lab/issues/68). Adding Linux latency
+[issue #68](https://github.com/jwh3times/causet/issues/68). Adding Linux latency
 qualification requires a reviewed baseline recorded on a real, quiet, identified
 Linux machine and a passing matching-host check. Shared hosted runners and Linux
 containers on the Windows host cannot supply that qualification. Real-repository,
 multi-host evidence and budget ratification remain in
-[issue #42](https://github.com/jwh3times/vcs-lab/issues/42).
+[issue #42](https://github.com/jwh3times/causet/issues/42).
 
 Name the host anyway whenever you can. Without one the check is
 deterministic-only, and `passed: true` from such a run does not qualify host
@@ -823,11 +823,11 @@ A release candidate is eligible only when:
     satisfy this gate.
 
 The Windows-only latency scope selected for
-[issue #68](https://github.com/jwh3times/vcs-lab/issues/68) makes no Linux latency
+[issue #68](https://github.com/jwh3times/causet/issues/68) makes no Linux latency
 claim. Item 3 continues to require functional qualification on both Windows and
 POSIX. This scope does not satisfy the separate multi-host workload evidence and
 budget ratification requirements in
-[issue #42](https://github.com/jwh3times/vcs-lab/issues/42).
+[issue #42](https://github.com/jwh3times/causet/issues/42).
 
 Item 2 is enforced by `test/repository-hygiene.test.js`, so item 3 already
 covers it; it is named separately because it is a property of the checkout
@@ -901,7 +901,7 @@ latency budget. Controlled analysis tests cover below/at/above-budget decisions
 and process-amplification precedence. Demos, metadata validation, and the
 packed-install smoke test stay release-time steps.
 
-[Issue #58](https://github.com/jwh3times/vcs-lab/issues/58) records the CI
+[Issue #58](https://github.com/jwh3times/causet/issues/58) records the CI
 reduction, measured runner usage, publication review, and decision to make the
 repository public. Job-duration estimates are not billing totals. Standard
 hosted execution in this public repository is free under
@@ -944,13 +944,13 @@ cannot measure, never on a timing.
 
 Results never gate anything. The full procedure (host preparation, Parts B and
 C, validity checks, recording, and optimization issues) is the wiki's
-[Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing)
+[Performance testing](https://github.com/jwh3times/causet/wiki/Performance-testing)
 page, and each checkpoint is recorded there.
 
 ### Measuring a real repository
 
 Use `scripts/measure-real-repository.mjs` for the read-only part of
-[#42](https://github.com/jwh3times/vcs-lab/issues/42). From a checkout with the
+[#42](https://github.com/jwh3times/causet/issues/42). From a checkout with the
 optional native binding built (`npm run build:native`), run:
 
 ```sh

@@ -68,7 +68,7 @@ cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuz
 
 This bounded mutation run is not a coverage-guided fuzzing claim. Dependency
 advisory checks and FFI review accompany qualification evidence on
-[#83](https://github.com/jwh3times/vcs-lab/issues/83).
+[#83](https://github.com/jwh3times/causet/issues/83).
 
 On a quiet matching `lab-windows-a` host, use an isolated Git configuration
 without command-scope configuration overrides, leave the ordinary mode settings
@@ -95,7 +95,7 @@ shipped in the `0.14.0` release; this records source delivery, not npm
 publication. ADR-0014's two-minor-release sunset, counted from that snapshot,
 fell due at `0.15.0` and **did not trigger**: the budget and identical-result
 requirements were met and recorded on
-[#83](https://github.com/jwh3times/vcs-lab/issues/83) on 2026-09-14 — all three
+[#83](https://github.com/jwh3times/causet/issues/83) on 2026-09-14 — all three
 Windows latency checks passed with identical catalogs, no fallback in the native
 phase, and zero Git processes. ADR-0027 required them before the initial
 delivery as well, and its 110% bound continues to apply to every later change;

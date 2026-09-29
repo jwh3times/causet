@@ -104,7 +104,7 @@ jobs:
           {
             echo "> Hosted runner: read ratios, process counts, equality and implementation"
             echo "> comparisons from this run. Absolute times are not comparable across runs; the"
-            echo "> reference figures are on the [Performance testing](https://github.com/jwh3times/vcs-lab/wiki/Performance-testing) wiki page."
+            echo "> reference figures are on the [Performance testing](https://github.com/jwh3times/causet/wiki/Performance-testing) wiki page."
             echo
             if [ -f "$RUNNER_TEMP/perf-checkpoint.md" ]; then cat "$RUNNER_TEMP/perf-checkpoint.md"; else echo "The harness did not produce a summary."; fi
           } >> "$GITHUB_STEP_SUMMARY"

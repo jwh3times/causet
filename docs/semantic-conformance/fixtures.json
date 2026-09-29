@@ -1635,7 +1635,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -1746,7 +1746,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -1857,7 +1857,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -1968,7 +1968,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -2079,7 +2079,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -2190,7 +2190,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -2301,7 +2301,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The v1 parser treats fenced headings and requirement declarations as document entities; rendering inserts a blank line inside the example.",
         "desired": {
           "entities": {
@@ -2469,7 +2469,7 @@
         "decisions": []
       },
       "knownFailure": {
-        "issue": "https://github.com/jwh3times/vcs-lab/issues/51",
+        "issue": "https://github.com/jwh3times/causet/issues/51",
         "reason": "The two edits are inside one real section but the false heading permits a clean merge.",
         "desired": {
           "entities": {

@@ -41,7 +41,7 @@ function validateCatalog(value) {
     assert.equal(entry.expected.result === null, entry.expected.status === "blocked");
     assert.ok(entry.rule.length > 0);
     if (entry.knownFailure) {
-      assert.equal(entry.knownFailure.issue, "https://github.com/jwh3times/vcs-lab/issues/51");
+      assert.equal(entry.knownFailure.issue, "https://github.com/jwh3times/causet/issues/51");
       assert.ok(entry.knownFailure.reason.length > 0);
       assert.deepEqual(Object.keys(entry.knownFailure.desired).sort(), ["entities", "plan"]);
       assert.notDeepEqual(expectation(entry), entry.knownFailure.desired,
