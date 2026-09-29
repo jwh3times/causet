@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { CliError } from "./errors.js";
+import { environmentValue } from "./environment.js";
 
 const activeMetricCollectors = new Set();
 const repositoryContextCache = new Map();
@@ -55,12 +56,12 @@ export function defaultReadEngine() {
 
 /**
  * Select the read engine. The environment variable mirrors
- * `VLAB_FORECAST_ENGINE`; the CLI sets it from `--engine`, and
+ * `CAUSET_FORECAST_ENGINE`; the CLI sets `CAUSET_ENGINE` from `--engine`, and
  * `withReadEngine` overrides it for a differential comparison.
  */
 export function readEngine() {
   if (readEngineOverride) return readEngineOverride;
-  const value = process.env.VLAB_ENGINE;
+  const value = environmentValue("ENGINE");
   if (value === undefined || value === "") return defaultReadEngine();
   if (READ_ENGINES.includes(value)) return value;
   throw new CliError(
@@ -87,7 +88,7 @@ export function withReadEngine(engine, callback) {
 }
 
 function sessionDiagnostic(event, details = {}) {
-  if (process.env.VLAB_GIT_SESSION_DIAGNOSTICS !== "1") return;
+  if (environmentValue("GIT_SESSION_DIAGNOSTICS") !== "1") return;
   const line = `[cst session] ${JSON.stringify({
     at: new Date().toISOString(),
     pid: process.pid,
@@ -95,7 +96,7 @@ function sessionDiagnostic(event, details = {}) {
     ...details,
   })}\n`;
   process.stderr.write(line);
-  const filePath = process.env.VLAB_GIT_SESSION_DIAGNOSTICS_FILE;
+  const filePath = environmentValue("GIT_SESSION_DIAGNOSTICS_FILE");
   if (!filePath) return;
   try {
     appendFileSync(filePath, line, "utf8");
@@ -149,7 +150,7 @@ function recordDirectRead(command) {
   for (const collector of activeMetricCollectors) {
     collector.directReads += 1;
   }
-  if (process.env.VLAB_TRACE === "1") {
+  if (environmentValue("TRACE") === "1") {
     process.stderr.write(
       `[cst trace] git ${command} was read outside the engine seam\n`,
     );
@@ -176,7 +177,7 @@ function aggregateFallbacks(fallbacks) {
 }
 
 function traceGitMetric(item) {
-  if (process.env.VLAB_TRACE !== "1") return;
+  if (environmentValue("TRACE") !== "1") return;
   const detail = item.cacheHit
     ? "cache hit"
     : item.transport === "session"
@@ -742,7 +743,7 @@ function queryObjectSession(cwd, command, expressions) {
       message: error.message,
     });
     session.disable();
-    if (process.env.VLAB_TRACE === "1") {
+    if (environmentValue("TRACE") === "1") {
       process.stderr.write(
         `[cst trace] Git object session unavailable; using ordinary processes (${error.message})\n`,
       );
@@ -752,8 +753,9 @@ function queryObjectSession(cwd, command, expressions) {
 }
 
 export function gitObjectSessionEnabled() {
-  if (process.env.VLAB_GIT_SESSION === "0") return false;
-  if (process.env.VLAB_GIT_SESSION === "1") return true;
+  const session = environmentValue("GIT_SESSION");
+  if (session === "0") return false;
+  if (session === "1") return true;
   return process.platform === "win32";
 }
 
@@ -1765,7 +1767,7 @@ export const FORECAST_ENGINES = ["worktree", "merge-tree"];
 export const GIT_NO_RERERE = ["-c", "rerere.enabled=false"];
 
 /**
- * The forecast engine used when neither `VLAB_FORECAST_ENGINE` nor
+ * The forecast engine used when neither `CAUSET_FORECAST_ENGINE` nor
  * `--forecast-engine` selects one. Like the object session, the merge-tree
  * engine is the default on Windows, where a process launch costs tens of
  * milliseconds and Git for Windows is current, and opt-in elsewhere, where
@@ -1781,10 +1783,10 @@ export function defaultForecastEngine() {
  * simulator and the semantic oracle; `merge-tree` simulates clean steps with
  * `git merge-tree --write-tree` and falls back to the worktree simulator for
  * any step it cannot reproduce. The environment variable mirrors the
- * `VLAB_GIT_SESSION` pattern; the CLI sets it from `--forecast-engine`.
+ * `CAUSET_GIT_SESSION` pattern; the CLI sets it from `--forecast-engine`.
  */
 export function forecastEngine() {
-  const value = process.env.VLAB_FORECAST_ENGINE;
+  const value = environmentValue("FORECAST_ENGINE");
   if (value === undefined || value === "") return defaultForecastEngine();
   if (FORECAST_ENGINES.includes(value)) return value;
   throw new CliError(

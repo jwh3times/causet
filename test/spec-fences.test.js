@@ -42,7 +42,7 @@ function fixture(t) {
   };
   const legacy = () => {
     const value = stored();
-    value.schema = "vcs-lab.spec-manifest/v3";
+    value.schema = "causet.spec-manifest/v3";
     value.parser = "stable-markdown-blocks/v1";
     value.idOverrides = {};
     save(value);
@@ -61,7 +61,7 @@ test("fenced headings and declarations are literal in newly indexed documents", 
   const f = fixture(t);
   const text = "# Real\r\n\r\n```python\r\n# Example\r\nREQ-X: example\r\n```\r\n";
   const result = f.index(text);
-  assert.equal(result.manifest.schema, "vcs-lab.spec-manifest/v4");
+  assert.equal(result.manifest.schema, "causet.spec-manifest/v4");
   assert.deepEqual(result.manifest.blocks.map((block) => block.semanticKey), ["section:1:real:1"]);
   assert.equal(fs.readFileSync(f.source, "utf8"), text);
 });
@@ -72,7 +72,7 @@ test("migration preserves real duplicate identities instead of recycling example
   const old = f.legacy();
   const before = fs.readFileSync(f.source, "utf8");
   const result = f.index();
-  assert.equal(result.migratedFrom, "vcs-lab.spec-manifest/v3");
+  assert.equal(result.migratedFrom, "causet.spec-manifest/v3");
   for (const kind of ["section", "requirement"]) {
     const previous = old.blocks.filter((block) => block.kind === kind);
     const current = result.manifest.blocks.find((block) => block.kind === kind);
@@ -89,7 +89,7 @@ test("migration preserves real duplicate identities instead of recycling example
 test("unknown versions cannot be overwritten by forced indexing", (t) => {
   const f = fixture(t);
   f.index("# Real\n");
-  for (const mutation of [{ schema: "vcs-lab.spec-manifest/v999" }, { parser: "future/v1" }, { idAlgorithm: "future/v1" }]) {
+  for (const mutation of [{ schema: "causet.spec-manifest/v999" }, { parser: "future/v1" }, { idAlgorithm: "future/v1" }]) {
     const value = f.stored();
     f.save({ ...value, ...mutation });
     const bytes = fs.readFileSync(f.manifestFile, "utf8");
@@ -108,7 +108,7 @@ test("an affected historical base blocks even when both tips have migrated", (t)
   const tip = f.commit();
   const before = f.git("status", "--porcelain");
   const plan = f.vlab("spec", "merge-plan", "spec.md", base, tip, tip);
-  assert.equal(plan.schema, "vcs-lab.spec-merge-plan/v2");
+  assert.equal(plan.schema, "causet.spec-merge-plan/v2");
   assert.equal(plan.status, "blocked");
   assert.deepEqual(plan.conflicts.map((item) => item.type), ["parser-migration-required"]);
   assert.deepEqual(plan.conflicts[0].stages, ["base"]);
@@ -200,14 +200,14 @@ test("v1 CRLF hashes migrate from verified source and retain expanded legacy IDs
   f.index(source);
   const old = f.legacy();
   const value = f.stored();
-  value.schema = "vcs-lab.spec-manifest/v1";
+  value.schema = "causet.spec-manifest/v1";
   value.sourceHash = createHash("sha256").update(source).digest("hex");
   value.blocks = old.blocks.map((block, index) => ({ ...block, id: `ent_legacy_${index}` }));
   delete value.sourceBlob;
   delete value.idOverrides;
   f.save(value);
   const result = f.index();
-  assert.equal(result.migratedFrom, "vcs-lab.spec-manifest/v1");
+  assert.equal(result.migratedFrom, "causet.spec-manifest/v1");
   assert.deepEqual(result.manifest.blocks.map((block) => block.id), value.blocks.map((block) => block.id));
   assert.equal(fs.readFileSync(f.source, "utf8"), source);
 });
@@ -262,7 +262,7 @@ for (const mode of ["reconcile", "rebase"]) {
     const before = f.git("rev-parse", "HEAD");
     fs.writeFileSync(forecastFile, JSON.stringify({
       ...old,
-      schema: mode === "reconcile" ? "vcs-lab.forecast/v999" : "vcs-lab.rebase-forecast/v999",
+      schema: mode === "reconcile" ? "causet.forecast/v999" : "causet.rebase-forecast/v999",
       steps: 42,
     }));
     assertRefusal(() => f.vlab(mode, target, "--use-forecast", forecast.id), "unknown-schema-version");

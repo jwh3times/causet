@@ -612,9 +612,9 @@ test("a session response too large for its buffer falls back without changing th
 
   const plan = (env) => {
     const result = vlabResult(repo, ["merge-plan", "feature", "--json"], {
-      VLAB_ENGINE: "git",
-      VLAB_GIT_SESSION: "1",
-      VLAB_TRACE: "1",
+      CAUSET_ENGINE: "git",
+      CAUSET_GIT_SESSION: "1",
+      CAUSET_TRACE: "1",
       ...env,
     });
     assert.equal(result.status, 0, "an overflowing response is a transport event, not an error");
@@ -659,8 +659,8 @@ test("a session response too large for its buffer falls back without changing th
   // And identical to the answer with no session at all, so neither transport
   // is quietly authoritative.
   const withoutSession = vlabResult(repo, ["merge-plan", "feature", "--json"], {
-    VLAB_ENGINE: "git",
-    VLAB_GIT_SESSION: "0",
+    CAUSET_ENGINE: "git",
+    CAUSET_GIT_SESSION: "0",
   });
   assert.equal(withoutSession.status, 0);
   assert.equal(
@@ -682,10 +682,10 @@ test("the session buffer override is inert unless it names a positive integer", 
   const repo = makeReconciled();
   for (const value of ["", "0", "-1", "not-a-number", "1e6", "2048.5"]) {
     const result = vlabResult(repo, ["merge-plan", "feature", "--json"], {
-      VLAB_GIT_SESSION: "1",
-      VLAB_TRACE: "1",
+      CAUSET_GIT_SESSION: "1",
+      CAUSET_TRACE: "1",
       CAUSET_TEST_SESSION_BUFFER_BYTES: value,
-      VLAB_ENGINE: "git",
+      CAUSET_ENGINE: "git",
     });
     assert.equal(result.status, 0, `${JSON.stringify(value)}: the command still succeeds`);
     assert.doesNotMatch(
@@ -800,7 +800,7 @@ function publisher(repo, commit, recordId, env = {}) {
   const script = [
     `import { appendNote } from ${JSON.stringify(notes)};`,
     `appendNote(${JSON.stringify(commit)}, {`,
-    `  schema: "vcs-lab.provenance/v1", type: "provenance", id: ${JSON.stringify(recordId)},`,
+    `  schema: "causet.provenance/v1", type: "provenance", id: ${JSON.stringify(recordId)},`,
     `  commit: ${JSON.stringify(commit)}, changeId: null, origin: "declared", carriedFrom: [],`,
     '  actors: [{ role: "generated", actor: "concurrent test" }],',
     "  createdAt: new Date().toISOString(),",
@@ -1227,7 +1227,7 @@ test("archive refuses malformed and unknown journals by presence in the target w
   fs.mkdirSync(runtime, { recursive: true });
   for (const filename of ["reconciliation.json", "rebase.json"]) {
     const journal = path.join(runtime, filename);
-    for (const bytes of ["null\n", "partial {", '{"schema":"vcs-lab.operation/v999"}\n']) {
+    for (const bytes of ["null\n", "partial {", '{"schema":"causet.operation/v999"}\n']) {
       fs.writeFileSync(journal, bytes);
       assert.equal(refusal(vlabResult(repo, ["workspace", "archive", "worker", "--json"])).code,
         "operation-in-progress");
@@ -1278,7 +1278,7 @@ test("implicit provenance in a linked worktree refuses before commit --all stage
   const claim = JSON.stringify({ pid: process.pid, hostname: os.hostname() });
   fs.writeFileSync(lock, claim);
   const error = refusal(vlabResult(linked, ["commit", "--all", "-m", "implicit", "--json"],
-    { VLAB_AGENT: "agent:implicit" }));
+    { CAUSET_AGENT: "agent:implicit" }));
   assert.equal(error.code, "notes-locked");
   assert.equal(git(linked, "rev-parse", "HEAD"), before);
   assert.deepEqual(fs.readFileSync(indexPath), index);

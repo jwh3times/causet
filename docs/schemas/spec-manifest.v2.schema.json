@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.spec-manifest/v2",
+  "$id": "causet.spec-manifest/v2",
   "title": "Sparse specification manifest (superseded)",
-  "description": "Superseded tracked-portable spec manifest that stored the full block inventory inline. Accepted on read and migrated to vcs-lab.spec-manifest/v3 on the next index (src/specs.js materializeManifest). The reader requires only schema, artifactId, source, and sourceHash.",
-  "x-vcs-lab-scope": "tracked",
+  "description": "Superseded tracked-portable spec manifest that stored the full block inventory inline. Accepted on read and migrated to causet.spec-manifest/v3 on the next index (src/specs.js materializeManifest). The reader requires only schema, artifactId, source, and sourceHash.",
+  "x-causet-scope": "tracked",
   "deprecated": true,
   "type": "object",
   "required": ["schema", "artifactId", "source", "sourceHash"],
   "properties": {
-    "schema": { "const": "vcs-lab.spec-manifest/v2" },
+    "schema": { "enum": ["causet.spec-manifest/v2", "vcs-lab.spec-manifest/v2"] },
     "artifactId": { "type": "string", "minLength": 1 },
     "source": { "type": "string", "minLength": 1 },
     "sourceHash": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },

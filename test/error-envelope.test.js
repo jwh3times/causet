@@ -261,7 +261,7 @@ test("the ADR-0020 refusals are readable without matching English", () => {
   fs.mkdirSync(path.dirname(journal), { recursive: true });
   fs.writeFileSync(
     journal,
-    JSON.stringify({ schema: "vcs-lab.reconciliation-operation/v99", id: "reconcile_op_x" }),
+    JSON.stringify({ schema: "causet.reconciliation-operation/v99", id: "reconcile_op_x" }),
   );
   const unknownVersion = run(repo, "reconcile", "--status", "--json");
   assert.notEqual(unknownVersion.status, 0);
@@ -290,7 +290,7 @@ test("a missing revision is classified the same way on both Git transports", () 
     const failed = spawnSync(vlabCommand, [...vlabPrefix(), "merge-plan", "does-not-exist", "--json"], {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_GIT_SESSION: session }),
+      env: testEnv({ CAUSET_GIT_SESSION: session }),
     });
     assert.notEqual(failed.status, 0);
     assert.equal(failed.stderr, "");

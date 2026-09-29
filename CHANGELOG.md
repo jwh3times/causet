@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- **Write `causet.*` identifiers, and read `vcs-lab.*` ones forever** (issue
+  #159, ADR-0039 §2). Every record, receipt, envelope, proof bundle, journal and
+  JSON output this build writes names its family `causet.<family>/vN`: for
+  example `causet.landing/v1`, and `causet.error/v1` for the `--json` failure
+  envelope (the Rust CLI's too). The protocol profiles are now
+  `causet.canonical-json/v1` and `causet.logical-id/v1`, the same algorithms
+  under new labels, and `producer.name` is `causet`.
+  - **Records already written keep `vcs-lab.*`**, inside their own hashed
+    bytes, and are never rewritten. `vcs-lab.` is a permanent read-only alias:
+    a legacy spelling classifies as its `causet.*` family (`legacyName: true`)
+    with the same readability, scope and quarantine.
+  - **Automation that matches a `schema` string should accept both
+    spellings.** The catalog in `docs/schemas/` publishes `causet.*` `$id`s
+    and accepts both in each `schema` member.
+  - The capability document gains an additive `aliases` member, and
+    negotiation treats a peer's `vcs-lab.*` families and profile labels as the
+    same ones, so a v0.19.1 peer still negotiates a full exchange.
+  - A build older than this one does not know `causet.*`. It quarantines new
+    shared records (ADR-0020), which is safe and ends when it is upgraded.
+  - `test/legacy-fixture.test.js` restores a repository written by v0.19.1 and
+    requires identical reads apart from identifier spellings.
+
+- Rename the user-facing environment variables from `VLAB_*` to `CAUSET_*`
+  (issue #159, ADR-0039 §5): `CAUSET_ENGINE`, `CAUSET_FORECAST_ENGINE`,
+  `CAUSET_GIT_SESSION`, `CAUSET_TRACE`, `CAUSET_AGENT`,
+  `CAUSET_GIT_SESSION_DIAGNOSTICS[_FILE]`, `CAUSET_CLI[_REPORT]`,
+  `CAUSET_BENCHMARK_HOST`, `CAUSET_REQUIRE_NATIVE`, and the Rust CLI's
+  `CAUSET_DELEGATE` and `CAUSET_JS_CLI`. **Every `VLAB_*` name keeps working**
+  during the migration window: it is read when its `CAUSET_*` name is not set,
+  and loses when both are. `cst doctor` gains `legacyEnvironment`, the legacy
+  variables still being read; nothing is printed on stderr. The benchmark
+  baseline keeps recording host overrides under their former names, so
+  existing baselines stay comparable.
+
 - Rename the Rust crates to `causet-core`, `causet-binding` and `causet-cli`,
   and the optional prebuild to `native/prebuilds/<platform>-<arch>/causet-core.node`
   (issue #159, ADR-0039 §7 step 2). Rebuild with `npm run build:native`; a

@@ -135,7 +135,7 @@ test("large dependency sets bound carrier parent fan-in and retain every commit"
   const head = git(repo, "rev-parse", "HEAD");
   const tree = git(repo, "rev-parse", "HEAD^{tree}");
   const carriedFrom = Array.from({ length: 80 }, (_, index) => gitInput(repo, ["commit-tree", tree], `origin ${index}\n`));
-  const record = { schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_many", commit: head,
+  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_many", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "carried", carriedFrom };
   const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
@@ -168,7 +168,7 @@ test("publication after importing fanned notes replaces the existing leaf", (t) 
   const head = generatedChange(repo, "original");
   roundTrip(repo, parent, 1);
   const clone = path.join(parent, "clone");
-  const record = { schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_added", commit: head,
+  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_added", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(clone, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
@@ -189,7 +189,7 @@ test("mixed flat and fanned notes preserve unrelated notes and opaque entries", 
   const root = gitInput(repo, ["mktree"], `100644 blob ${noteBlob}\t${head}\n040000 tree ${fanned}\t${base.slice(0, 2)}\n100644 blob ${opaque}\topaque.txt\n`);
   const mixed = gitInput(repo, ["commit-tree", root, "-p", previous], "mixed notes\n");
   git(repo, "update-ref", NOTES, mixed, previous);
-  const record = { schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_mixed", commit: head,
+  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_mixed", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
@@ -207,7 +207,7 @@ test("opaque hexadecimal directories are not mistaken for Git notes fan-out", (t
   const tree = gitInput(repo, ["mktree"], `040000 tree ${directory}\t${head.slice(0, 4)}\n`);
   const notes = gitInput(repo, ["commit-tree", tree], "opaque notes tree\n");
   git(repo, "update-ref", NOTES, notes);
-  const record = { schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_opaque", commit: head,
+  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_opaque", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.equal(result.status, 0, result.stderr);
@@ -223,7 +223,7 @@ test("an opaque tree occupying an attachment path is never overwritten", (t) => 
   const tree = gitInput(repo, ["mktree"], `040000 tree ${directory}\t${head}\n`);
   git(repo, "update-ref", NOTES, gitInput(repo, ["commit-tree", tree], "opaque notes tree\n"));
   const before = refs(repo);
-  const record = { schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_collision", commit: head,
+  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_collision", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
   assert.notEqual(result.status, 0);
@@ -286,7 +286,7 @@ test("backfill reports missing historical objects instead of certifying them", (
   generatedChange(repo, "accepted");
   const head = git(repo, "rev-parse", "HEAD");
   const note = JSON.parse(git(repo, "notes", "--ref=vcs-lab", "show", head));
-  note.records.push({ schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_missing", commit: head,
+  note.records.push({ schema: "causet.provenance/v1", type: "provenance", id: "prov_missing", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "carried", carriedFrom: ["f".repeat(head.length)] });
   gitInput(repo, ["notes", "--ref=vcs-lab", "add", "-f", "-F", "-", head], JSON.stringify(note));
   const result = run(repo, ["metadata", "retain", "--apply", "--json"]);
@@ -317,7 +317,7 @@ test("a foreign notes writer causes atomic publication to refuse without moving 
   const head = generatedChange(repo, "concurrent");
   const retention = git(repo, "rev-parse", RETENTION);
   const gate = path.join(parent, "gate");
-  const record = { schema: "vcs-lab.provenance/v1", type: "provenance", id: "prov_concurrent", commit: head,
+  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_concurrent", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
   const script = `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`;
   const child = spawn(process.execPath, ["--input-type=module", "-e", script], {

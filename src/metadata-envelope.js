@@ -6,6 +6,7 @@ import {
   EXCHANGE_FEATURES,
   METADATA_ENVELOPE_SCHEMA,
   RESOURCE_BOUNDS,
+  canonicalSchema,
   isOid,
 } from "./schemas.js";
 import { VERSION } from "./version.js";
@@ -34,7 +35,7 @@ function validRef(ref) {
 
 /**
  * The manifest hash covers the canonical-JSON bytes
- * (vcs-lab.canonical-json/v1) of the manifest without its reserved
+ * (causet.canonical-json/v1) of the manifest without its reserved
  * `integrity` and `signatures` members, so a future detached signature can
  * cover exactly the hashed payload. A manifest the profile cannot represent
  * (for example one carrying non-integer numbers) fails closed instead of
@@ -68,7 +69,7 @@ export function buildEnvelopeManifest(snapshot, payload, refs) {
   }));
   const manifest = {
     schema: METADATA_ENVELOPE_SCHEMA,
-    producer: { name: "causal-vcs-lab", version: VERSION },
+    producer: { name: "causet", version: VERSION },
     repository: {
       objectFormat: snapshot.repository.objectFormat,
       lineage: snapshot.repository.lineage,
@@ -110,7 +111,7 @@ function validateManifestShape(manifest) {
     throw new CliError("Metadata envelope manifest must be a JSON object.",
       { code: "malformed-input" });
   }
-  if (manifest.schema !== METADATA_ENVELOPE_SCHEMA) {
+  if (canonicalSchema(manifest.schema) !== METADATA_ENVELOPE_SCHEMA) {
     throw new CliError(
       `Unsupported metadata envelope schema '${manifest.schema ?? "(missing)"}'.`,
         { code: "unknown-schema-version" },

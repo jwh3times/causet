@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.metadata-disposition/v1",
+  "$id": "causet.metadata-disposition/v1",
   "title": "Conflict disposition result",
   "description": "CLI output of vlab metadata dispose --json: the recorded decision and what it did to the disputed record (src/dispositions.js).",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -14,10 +14,10 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.metadata-disposition/v1"
+      "enum": ["causet.metadata-disposition/v1", "vcs-lab.metadata-disposition/v1"]
     },
     "disposition": {
-      "$ref": "vcs-lab.disposition/v1"
+      "$ref": "causet.disposition/v1"
     },
     "parkedRef": {
       "type": "string",

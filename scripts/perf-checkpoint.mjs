@@ -95,11 +95,17 @@ fs.writeFileSync(perfGitConfig, [
   "[advice]", "\tdetachedHead = false", "",
 ].join("\n"));
 
+/**
+ * A selector for the implementation under test, under both names: builds from
+ * before #159 read only `VLAB_*`, later ones prefer `CAUSET_*` (ADR-0039 §5).
+ */
+const selector = (name, value) => ({ [`CAUSET_${name}`]: value, [`VLAB_${name}`]: value });
+
 /** One controlled environment for every child: isolated Git config, no launcher overrides. */
 function childEnv(extra = {}) {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+|PARAMETERS)$/.test(key) || key.startsWith("VLAB_")) delete env[key];
+    if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+|PARAMETERS)$/.test(key) || key.startsWith("VLAB_") || key.startsWith("CAUSET_")) delete env[key];
   }
   return {
     ...env, GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: perfGitConfig,
@@ -286,8 +292,8 @@ function scenarios(fixtures) {
     { suite: "writes", fixture: "template", name: "commit", setup: staged, args: ["commit", "-m", "bench commit", "--generated-by", "perf-bench"], floor: ["git", ["commit", "-q", "-m", "bench commit"]] },
     { suite: "writes", fixture: "template", name: "merge --compact feature", args: ["merge", "feature", "--compact", "-m", "bench landing"], floor: ["git", ["merge", "-q", "--no-ff", "-m", "bench landing", "feature"]] },
     { suite: "writes", fixture: "template", name: "cherry-pick <feature tip>", args: ["cherry-pick", t.featureTip], floor: ["git", ["cherry-pick", t.featureTip]] },
-    { suite: "writes", fixture: "template", name: "forecast feature (worktree engine)", args: ["forecast", "feature", "--json"], env: { VLAB_FORECAST_ENGINE: "worktree" }, floor: ["git", ["merge-tree", "--write-tree", "main", "feature"]] },
-    { suite: "writes", fixture: "template", name: "forecast feature (merge-tree engine)", args: ["forecast", "feature", "--json"], env: { VLAB_FORECAST_ENGINE: "merge-tree" }, floor: ["git", ["merge-tree", "--write-tree", "main", "feature"]] },
+    { suite: "writes", fixture: "template", name: "forecast feature (worktree engine)", args: ["forecast", "feature", "--json"], env: selector("FORECAST_ENGINE", "worktree"), floor: ["git", ["merge-tree", "--write-tree", "main", "feature"]] },
+    { suite: "writes", fixture: "template", name: "forecast feature (merge-tree engine)", args: ["forecast", "feature", "--json"], env: selector("FORECAST_ENGINE", "merge-tree"), floor: ["git", ["merge-tree", "--write-tree", "main", "feature"]] },
     { suite: "writes", fixture: "template", name: "reconcile feature", args: ["reconcile", "feature", "--json"], floor: ["git", ["merge", "-q", "--no-ff", "-m", "bench reconcile", "feature"]] },
     { suite: "writes", fixture: "template", name: "rebase main (from feature)", setup: onFeature, args: ["rebase", "main", "--json"], floor: ["git", ["rebase", "-q", "main"]] },
     { suite: "writes", fixture: "template", name: "workspace create", args: ["workspace", "create", "bench-ws", "--json"], floor: ["git", ["worktree", "add", "-q", "-b", "bench-ws", "../bench-ws-git"]] },
@@ -313,7 +319,7 @@ function measure(options, fixtures, engines, results) {
       const fixture = fixtures[scenario.fixture];
       const runEngines = scenario.suite === "reads" ? engines : ["default"];
       for (const engine of runEngines) {
-        const engineEnv = engine === "default" ? {} : { VLAB_ENGINE: engine };
+        const engineEnv = engine === "default" ? {} : selector("ENGINE", engine);
         const env = childEnv({ ...engineEnv, ...(scenario.env ?? {}) });
         const sides = [...options.impls.map((impl) => ({ kind: "impl", name: impl.name, command: impl.command })),
           ...(scenario.floor ? [{ kind: "floor", name: "git-floor", command: [scenario.floor[0]], floorArgs: scenario.floor[1] }] : []),
@@ -363,13 +369,13 @@ function measure(options, fixtures, engines, results) {
           if (side.kind === "impl") {
             const cwd = scenario.suite === "writes" ? freshCopy(fixture) : fixture.path;
             if (scenario.suite === "writes" && scenario.setup) scenario.setup(cwd);
-            const traced = run(side.command[0], [...side.command.slice(1), ...scenario.args], cwd, { ...env, VLAB_TRACE: "1" }, { allowFailure: true });
+            const traced = run(side.command[0], [...side.command.slice(1), ...scenario.args], cwd, { ...env, ...selector("TRACE", "1") }, { allowFailure: true });
             processes = traced.status === entry.status ? traceProcesses(traced.stderr) : null;
             if (scenario.suite === "writes") removeTree(path.dirname(cwd));
           }
           results.push({
             suite: scenario.suite, fixture: scenario.fixture, scenario: scenario.name, engine,
-            forecastEngine: scenario.env?.VLAB_FORECAST_ENGINE ?? null,
+            forecastEngine: scenario.env?.CAUSET_FORECAST_ENGINE ?? null,
             side: side.name, kind: side.kind,
             command: side.kind === "impl" ? ["vlab", ...scenario.args].join(" ") : [side.command[0] === process.execPath ? "node" : side.command[0], ...side.floorArgs].join(" "),
             processes, exitStatus: entry.status,

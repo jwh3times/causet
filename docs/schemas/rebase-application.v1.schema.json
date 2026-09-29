@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.rebase-application/v1",
+  "$id": "causet.rebase-application/v1",
   "title": "Causal rebase application receipt",
   "description": "Exact origin-to-rewritten-commit mapping with contextual decisions, attached to the rewritten commit (shared-portable note record; src/rebase-operations.js).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema", "type", "id", "rebaseOperation", "forecastId", "originCommit",
@@ -12,13 +12,13 @@
     "conflictedPaths", "resolutions", "semanticMerges", "createdAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.rebase-application/v1" },
+    "schema": { "enum": ["causet.rebase-application/v1", "vcs-lab.rebase-application/v1"] },
     "type": { "const": "rebase-application" },
     "id": { "type": "string", "minLength": 4 },
     "rebaseOperation": {
       "type": "string",
       "minLength": 4,
-      "description": "ID of the private vcs-lab.rebase-operation journal that produced this application."
+      "description": "ID of the private causet.rebase-operation journal that produced this application."
     },
     "forecastId": { "type": ["string", "null"] },
     "originCommit": { "$ref": "#/$defs/oid" },

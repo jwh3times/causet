@@ -1,6 +1,6 @@
 # Canonical JSON profile
 
-`vcs-lab.canonical-json/v1` is the frozen byte-exact serialization used for
+`causet.canonical-json/v1` is the frozen byte-exact serialization used for
 every new hash or signature over structured causet data (ADR-0015 phase 0b,
 issue #11 item 3). It is [RFC 8785][jcs] (the JSON Canonicalization Scheme)
 restricted to a value space that every planned implementation — Node today,
@@ -101,6 +101,9 @@ on the member-sorting vector, which is why new hashes must use the profile. The
 phase 1 Rust implementation must consume the same file and reproduce every
 byte before it may compute any hash (ADR-0015).
 
-`vcs-lab.canonical-json/v1` and `vcs-lab.canonical-json-vectors/v1` are
+`causet.canonical-json/v1` and `vcs-lab.canonical-json-vectors/v1` are
 profile identifiers, not record families, so they carry no document in the
-[schema catalog](../schemas/README.md).
+[schema catalog](../schemas/README.md). Before issue #159 the profile was
+labelled `vcs-lab.canonical-json/v1`: the same algorithm under its former name
+(ADR-0039 §1). The vectors keep their `vcs-lab.` label, because a vector is
+frozen sample data and its hash does not depend on the label.

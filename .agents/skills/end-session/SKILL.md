@@ -265,9 +265,9 @@ Show findings before acting. Work through:
   Fix skill drift with `npm run sync:agents`; never hand-edit
   `.claude/skills/`, it is generated from `.agents/skills/`. If source changed
   and was not qualified, remind the user that `npm test`,
-  `VLAB_GIT_SESSION=1 npm test`, `VLAB_GIT_SESSION=0 npm test`,
-  `VLAB_FORECAST_ENGINE=worktree npm test`,
-  `VLAB_FORECAST_ENGINE=merge-tree npm test`, and `VLAB_ENGINE=native npm test`
+  `CAUSET_GIT_SESSION=1 npm test`, `CAUSET_GIT_SESSION=0 npm test`,
+  `CAUSET_FORECAST_ENGINE=worktree npm test`,
+  `CAUSET_FORECAST_ENGINE=merge-tree npm test`, and `CAUSET_ENGINE=native npm test`
   are the qualification commands (about 60 seconds each on Linux, five
   minutes on Windows); run them only if asked. Routine CI runs default-mode
   suites (Ubuntu and Windows for code PRs, Ubuntu for main); the full matrix

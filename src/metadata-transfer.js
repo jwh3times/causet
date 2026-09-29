@@ -22,7 +22,7 @@ import {
   readEnvelope,
   writeEnvelopeManifest,
 } from "./metadata-envelope.js";
-import { referencedObjectsForRecord } from "./schemas.js";
+import { canonicalSchema, NOTE_CONTAINER_SCHEMA, referencedObjectsForRecord } from "./schemas.js";
 import {
   buildParkedPayload,
   rejectedDigests,
@@ -84,7 +84,7 @@ function buildNotesCommit(entries, cwd, options = {}) {
   if (options.baseRef) {
     let tree = `${options.baseRef}^{tree}`;
     for (const [attachment, records] of groupRecords(entries)) {
-      tree = buildNoteTree({ schema: "vcs-lab.note/v1", records }, attachment, tree, cwd);
+      tree = buildNoteTree({ schema: "causet.note/v1", records }, attachment, tree, cwd);
     }
     return { tree, commit: commitWithParents(tree, options.parents ?? [], cwd, options) };
   }
@@ -104,7 +104,7 @@ function buildNotesCommit(entries, cwd, options = {}) {
   try {
     runGit(["read-tree", "--empty"], { cwd, env });
     for (const [attachment, records] of groupRecords(entries)) {
-      const body = `${JSON.stringify({ schema: "vcs-lab.note/v1", records }, null, 2)}\n`;
+      const body = `${JSON.stringify({ schema: "causet.note/v1", records }, null, 2)}\n`;
       const blob = runGit(["hash-object", "-w", "--stdin"], {
         cwd,
         env,
@@ -145,7 +145,7 @@ function readRecordsFromNoteRef(ref, attachment, cwd) {
     throw new CliError(`Cannot merge malformed existing note on '${attachment}'.`,
       { code: "malformed-input" });
   }
-  if (parsed?.schema !== "vcs-lab.note/v1" || !Array.isArray(parsed.records)) {
+  if (canonicalSchema(parsed?.schema) !== NOTE_CONTAINER_SCHEMA || !Array.isArray(parsed.records)) {
     throw new CliError(`Cannot merge unsupported existing note on '${attachment}'.`,
       { code: "unknown-schema-version" });
   }
@@ -243,7 +243,7 @@ export function exportMetadata(envelopePath, options = {}) {
     writeEnvelopeManifest(directory, manifest);
     const git = endGitMetrics(metrics);
     return {
-      schema: "vcs-lab.metadata-export/v1",
+      schema: "causet.metadata-export/v1",
       path: directory,
       manifest: path.join(directory, "manifest.json"),
       payload: payload ? path.join(directory, payload.file) : null,
@@ -479,7 +479,7 @@ function importPreview(envelope, incoming, cwd, options = {}) {
   const conflicts = records.filter((entry) => entry.action === "conflict").length +
     refs.filter((entry) => entry.action === "conflict").length + objectProblems.length;
   return {
-    schema: "vcs-lab.metadata-import-preview/v1",
+    schema: "causet.metadata-import-preview/v1",
     path: envelope.directory,
     mode: options.parkConflicts ? "park-conflicts" : "refuse-conflicts",
     repository: {
@@ -583,7 +583,7 @@ function applyImport(envelope, incoming, preview, cwd) {
       { code: "conflict-blocked" });
   }
   if (!envelope.bundlePath || incoming.refs.length === 0) {
-    return { ...preview, schema: "vcs-lab.metadata-import/v1", applied: true, changed: false };
+    return { ...preview, schema: "causet.metadata-import/v1", applied: true, changed: false };
   }
   const partition = partitionIncoming(incoming, preview);
   if (
@@ -592,7 +592,7 @@ function applyImport(envelope, incoming, preview, cwd) {
     preview.summary.mergeRefs === 0 &&
     preview.summary.parkRecords === 0
   ) {
-    return { ...preview, schema: "vcs-lab.metadata-import/v1", applied: true, changed: false };
+    return { ...preview, schema: "causet.metadata-import/v1", applied: true, changed: false };
   }
   const staged = stageEnvelopeRefs(envelope, cwd);
   const parkedStage = stageParkedRecords(partition.parked, envelope, preview, cwd);
@@ -662,7 +662,7 @@ function applyImport(envelope, incoming, preview, cwd) {
     });
     return {
       ...preview,
-      schema: "vcs-lab.metadata-import/v1",
+      schema: "causet.metadata-import/v1",
       applied: true,
       changed: preview.summary.addRecords > 0 || preview.summary.createRefs > 0 ||
         preview.summary.mergeRefs > 0 || preview.summary.parkRecords > 0,

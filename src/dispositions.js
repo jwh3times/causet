@@ -105,7 +105,7 @@ export function disposeConflict(recordId, options = {}) {
   const after = metadataSnapshot({ cwd: context.root })
     .scopes.sharedPortable.notes.records.find((record) => record.id === recordId);
   return {
-    schema: "vcs-lab.metadata-disposition/v1",
+    schema: "causet.metadata-disposition/v1",
     disposition: entry,
     parkedRef: parked.ref,
     parkedRemoved: !refExists(parked.ref, context.root),

@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 mod delegate;
+mod environment;
 mod front;
 mod json;
 
@@ -16,7 +17,7 @@ const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
 /// Chooses between the native answer and the JavaScript CLI: `always`
 /// delegates every invocation, so a ported command can be compared with the
 /// oracle; `never` refuses to delegate, so a test can prove what is native.
-const DELEGATE_VARIABLE: &str = "VLAB_DELEGATE";
+const DELEGATE_VARIABLE: &str = "CAUSET_DELEGATE";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Delegation {
@@ -27,16 +28,17 @@ enum Delegation {
 
 fn main() {
   let raw: Vec<OsString> = env::args_os().skip(1).collect();
-  let delegation = match env::var(DELEGATE_VARIABLE).as_deref() {
-    Err(env::VarError::NotPresent) | Ok("" | "auto") => Delegation::Auto,
-    Ok("always") => Delegation::Always,
-    Ok("never") => Delegation::Never,
-    Ok(other) => exit_with(&format!(
+  let delegation = match environment::value("DELEGATE")
+    .as_ref()
+    .map(|value| value.as_deref())
+  {
+    Ok(None | Some("" | "auto")) => Delegation::Auto,
+    Ok(Some("always")) => Delegation::Always,
+    Ok(Some("never")) => Delegation::Never,
+    Ok(Some(other)) => exit_with(&format!(
       "cst: Unknown delegation mode '{other}' in {DELEGATE_VARIABLE}. Use one of: auto, always, never.\n"
     )),
-    Err(env::VarError::NotUnicode(_)) => {
-      exit_with(&format!("cst: {DELEGATE_VARIABLE} is not valid Unicode.\n"))
-    }
+    Err(_) => exit_with(&format!("cst: {DELEGATE_VARIABLE} is not valid Unicode.\n")),
   };
   let outcome = if delegation == Delegation::Always {
     Outcome::Delegate {
@@ -109,16 +111,13 @@ fn decide(raw: &[OsString]) -> Outcome {
       command: String::new(),
     };
   };
-  let names = ["VLAB_FORECAST_ENGINE", "VLAB_ENGINE"];
-  if names
-    .iter()
-    .any(|name| matches!(env::var(name), Err(env::VarError::NotUnicode(_))))
-  {
+  let names = ["FORECAST_ENGINE", "ENGINE"];
+  if names.iter().any(|name| environment::value(name).is_err()) {
     return Outcome::Delegate {
       command: String::new(),
     };
   }
-  front::decide(&args, &|name| env::var(name).ok(), HELP)
+  front::decide(&args, &|name| environment::value(name).ok().flatten(), HELP)
 }
 
 fn exit_with(message: &str) -> ! {

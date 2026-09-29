@@ -45,8 +45,9 @@ fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
   }
 }
 
-/// Decide an invocation. `env` looks up an environment variable the way the
-/// JavaScript CLI sees it; `None` means unset.
+/// Decide an invocation. `env` looks up a user-facing environment variable by
+/// the name after its prefix, the way the JavaScript CLI sees it (`CAUSET_`,
+/// then `VLAB_`); `None` means unset.
 pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) -> Outcome {
   let has = |flag: &str| raw.iter().any(|item| item == flag);
   if has("--git-session") && has("--no-git-session") {
@@ -62,7 +63,7 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
     ("--forecast-engine", &FORECAST_ENGINES, "forecast engine"),
     ("--engine", &READ_ENGINES, "engine"),
   ];
-  let mut selections = [env("VLAB_FORECAST_ENGINE"), env("VLAB_ENGINE")];
+  let mut selections = [env("FORECAST_ENGINE"), env("ENGINE")];
   let mut args: Vec<&str> = Vec::new();
   let mut index = 0;
   while index < raw.len() {
@@ -509,23 +510,20 @@ mod tests {
   fn environment_selections_are_validated_after_the_flags() {
     let (message, code, _) = failed(run_with(
       &["version"],
-      &[("VLAB_FORECAST_ENGINE", "x"), ("VLAB_ENGINE", "y")],
+      &[("FORECAST_ENGINE", "x"), ("ENGINE", "y")],
     ));
     assert_eq!(
       message,
       "Unknown forecast engine 'x'. Use one of: worktree, merge-tree."
     );
     assert_eq!(code, "usage-invalid-option-value");
-    let (message, _, _) = failed(run_with(&["version"], &[("VLAB_ENGINE", "y")]));
+    let (message, _, _) = failed(run_with(&["version"], &[("ENGINE", "y")]));
     assert_eq!(message, "Unknown engine 'y'. Use one of: git, native.");
     assert_eq!(
-      run_with(&["--engine=git", "version"], &[("VLAB_ENGINE", "y")]),
+      run_with(&["--engine=git", "version"], &[("ENGINE", "y")]),
       Outcome::Version
     );
-    assert_eq!(
-      run_with(&["version"], &[("VLAB_ENGINE", "")]),
-      Outcome::Version
-    );
+    assert_eq!(run_with(&["version"], &[("ENGINE", "")]), Outcome::Version);
   }
 
   #[test]

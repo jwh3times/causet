@@ -1,7 +1,7 @@
 import { CliError } from "./errors.js";
 import { sha256 } from "./ids.js";
 
-export const NOTE_CONTAINER_SCHEMA = "vcs-lab.note/v1";
+export const NOTE_CONTAINER_SCHEMA = "causet.note/v1";
 
 /**
  * The closed provenance role vocabulary, duplicated here as a validation
@@ -9,11 +9,11 @@ export const NOTE_CONTAINER_SCHEMA = "vcs-lab.note/v1";
  * owns the descriptions; `test/schema-catalog.test.js` keeps the two in step.
  */
 export const PROVENANCE_ROLE_NAMES = new Set(["authored", "generated", "reviewed"]);
-export const METADATA_STATUS_SCHEMA = "vcs-lab.metadata-status/v1";
-export const METADATA_VALIDATION_SCHEMA = "vcs-lab.metadata-validation/v1";
-export const METADATA_ENVELOPE_SCHEMA = "vcs-lab.metadata-envelope/v1";
+export const METADATA_STATUS_SCHEMA = "causet.metadata-status/v1";
+export const METADATA_VALIDATION_SCHEMA = "causet.metadata-validation/v1";
+export const METADATA_ENVELOPE_SCHEMA = "causet.metadata-envelope/v1";
 export const METADATA_LINEAGE_ALGORITHM = "git-root-commits-sha256/v1";
-export const CAPABILITIES_SCHEMA = "vcs-lab.capabilities/v1";
+export const CAPABILITIES_SCHEMA = "causet.capabilities/v1";
 
 /**
  * The scopes whose records cross a repository boundary, and which a capability
@@ -68,7 +68,7 @@ export const RESOLUTION_SIGNATURE_ALGORITHM = "ordered-three-way-blobs/v1";
  * - `store`: where records of the family live.
  */
 export const RECORD_FAMILIES = new Map([
-  ["vcs-lab.note", {
+  ["causet.note", {
     scope: "note-container",
     registered: [1],
     readable: [1],
@@ -76,7 +76,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "ignore",
     store: "refs/notes/vcs-lab note blobs",
   }],
-  ["vcs-lab.landing", {
+  ["causet.landing", {
     scope: "note-record",
     registered: [1],
     readable: [1],
@@ -84,7 +84,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.application", {
+  ["causet.application", {
     scope: "note-record",
     registered: [1, 4],
     readable: [1, 4],
@@ -92,7 +92,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.reconciliation", {
+  ["causet.reconciliation", {
     scope: "note-record",
     registered: [6],
     readable: [6],
@@ -100,7 +100,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.rebase-application", {
+  ["causet.rebase-application", {
     scope: "note-record",
     registered: [1],
     readable: [1],
@@ -108,7 +108,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.rebase", {
+  ["causet.rebase", {
     scope: "note-record",
     // v2 adds the preserved topology and `recreatedMerges` (ADR-0034). It is a
     // strict superset, so a v1 receipt stays readable and means exactly what it
@@ -119,7 +119,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.amendment", {
+  ["causet.amendment", {
     scope: "note-record",
     // The divergence an interactive `edit` recorded (ADR-0035). It is the one
     // fact that weakens a coverage conclusion rather than strengthening one, so
@@ -131,7 +131,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.interactive-absorption", {
+  ["causet.interactive-absorption", {
     scope: "note-record",
     registered: [1],
     readable: [1],
@@ -139,7 +139,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.provenance", {
+  ["causet.provenance", {
     scope: "note-record",
     registered: [1],
     readable: [1],
@@ -147,7 +147,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.resolution", {
+  ["causet.resolution", {
     scope: "note-record",
     registered: [1],
     readable: [1],
@@ -155,7 +155,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "quarantine",
     store: "refs/notes/vcs-lab note containers",
   }],
-  ["vcs-lab.reconciliation-operation", {
+  ["causet.reconciliation-operation", {
     scope: "private",
     registered: [4],
     readable: [4],
@@ -163,7 +163,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "<git dir>/vcs-lab/reconciliation.json",
   }],
-  ["vcs-lab.rebase-operation", {
+  ["causet.rebase-operation", {
     scope: "private",
     // v2 carries the whole rewrite program rather than only the replay queue
     // (ADR-0034). A v1 journal is refused rather than resumed: its queue cannot
@@ -175,7 +175,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "<git dir>/vcs-lab/rebase.json",
   }],
-  ["vcs-lab.forecast", {
+  ["causet.forecast", {
     scope: "private",
     registered: [2],
     readable: [1, 2],
@@ -183,7 +183,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "<git dir>/vcs-lab/forecasts/<id>.json",
   }],
-  ["vcs-lab.rebase-forecast", {
+  ["causet.rebase-forecast", {
     scope: "private",
     // A v1 forecast pins a v1 plan fingerprint, and v2 plans hash the preserved
     // topology, so no v1 forecast can approve a v2 plan. Refusing it by version
@@ -196,7 +196,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "<git dir>/vcs-lab/forecasts/<id>.json",
   }],
-  ["vcs-lab.workspaces", {
+  ["causet.workspaces", {
     scope: "shared-local",
     registered: [1],
     readable: [1],
@@ -204,7 +204,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "<common dir>/vcs-lab/workspaces.json",
   }],
-  ["vcs-lab.workspace", {
+  ["causet.workspace", {
     scope: "shared-local",
     registered: [1],
     readable: [1],
@@ -212,7 +212,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "entries of <common dir>/vcs-lab/workspaces.json",
   }],
-  ["vcs-lab.quarantined-record", {
+  ["causet.quarantined-record", {
     scope: "shared-local",
     registered: [1],
     readable: [1],
@@ -220,7 +220,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "refs/vcs-lab/quarantine/<lineage>/<record id> blobs",
   }],
-  ["vcs-lab.dispositions", {
+  ["causet.dispositions", {
     scope: "shared-local",
     registered: [1],
     readable: [1],
@@ -228,7 +228,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "<common dir>/vcs-lab/dispositions.json",
   }],
-  ["vcs-lab.disposition", {
+  ["causet.disposition", {
     scope: "shared-local",
     registered: [1],
     readable: [1],
@@ -236,7 +236,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "entries of <common dir>/vcs-lab/dispositions.json",
   }],
-  ["vcs-lab.spec-manifest", {
+  ["causet.spec-manifest", {
     scope: "tracked",
     registered: [1, 2, 3, 4],
     readable: [1, 2, 3, 4],
@@ -244,7 +244,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: ".vcs-lab/specs/**",
   }],
-  ["vcs-lab.metadata-envelope", {
+  ["causet.metadata-envelope", {
     scope: "envelope",
     registered: [1],
     readable: [1],
@@ -252,7 +252,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "manifest.json of a metadata export directory",
   }],
-  ["vcs-lab.proof-bundle", {
+  ["causet.proof-bundle", {
     scope: "envelope",
     registered: [1, 2],
     readable: [1, 2],
@@ -263,7 +263,7 @@ export const RECORD_FAMILIES = new Map([
     unknownVersion: "refuse",
     store: "a file handed to cst verify-proof",
   }],
-  ["vcs-lab.capabilities", {
+  ["causet.capabilities", {
     scope: "advertisement",
     registered: [1],
     readable: [1],
@@ -311,10 +311,10 @@ export const RESOURCE_BOUNDS = Object.freeze({
    * can accumulate before the claim stops being reviewable by a person.
    */
   provenanceActors: 64,
-  /** Bytes of one `vcs-lab.proof-bundle/v1` document handed to `cst verify-proof`. */
+  /** Bytes of one `causet.proof-bundle/v1` document handed to `cst verify-proof`. */
   proofBundleBytes: 16 * 1024 * 1024,
   /**
-   * Bytes of one `vcs-lab.capabilities/v1` document, checked before it is
+   * Bytes of one `causet.capabilities/v1` document, checked before it is
    * parsed. The document is a projection of the registries and is small by
    * construction — the whole of this build's is a few kilobytes — so this bound
    * is not a growth allowance but a limit on what an unauthenticated peer can
@@ -347,22 +347,45 @@ export function assertWithinBound(name, actual, subject) {
     {
       code: "resource-bound-exceeded",
       details:
-        "vcs-lab refuses to interpret a record larger than its published " +
+        "causet refuses to interpret a record larger than its published " +
         "resource bound; see docs/schemas/compatibility.md.",
     },
   );
 }
 
+/**
+ * Record identifiers are `causet.<family>/vN`. Records written before issue #159
+ * carry `vcs-lab.<family>/vN`, inside their own hashed bytes, so they keep that
+ * spelling forever; `vcs-lab.` is a permanent, read-only alias of `causet.`
+ * (ADR-0039 §2). Writers emit only `causet.*`.
+ */
+export const SCHEMA_NAMESPACE = "causet.";
+export const LEGACY_SCHEMA_NAMESPACE = "vcs-lab.";
+
+/**
+ * The identifier a stored schema string stands for: a legacy spelling becomes
+ * its `causet.*` equivalent, anything else is returned unchanged. Compare a
+ * stored record's schema only through this, and never write its result back
+ * into the record: that would change the record's bytes and hashes.
+ */
+export function canonicalSchema(schema) {
+  return typeof schema === "string" && schema.startsWith(LEGACY_SCHEMA_NAMESPACE)
+    ? `${SCHEMA_NAMESPACE}${schema.slice(LEGACY_SCHEMA_NAMESPACE.length)}`
+    : schema;
+}
+
 export function schemaClassification(schema) {
   if (typeof schema !== "string" || !schema) {
-    return { known: false, family: null, version: null, scope: null };
+    return { known: false, family: null, version: null, scope: null, legacyName: false };
   }
-  const match = schema.match(/^(.+)\/v(\d+)$/);
+  const canonical = canonicalSchema(schema);
+  const match = canonical.match(/^(.+)\/v(\d+)$/);
   return {
-    known: KNOWN_SCHEMAS.has(schema),
+    known: KNOWN_SCHEMAS.has(canonical),
     family: match?.[1] ?? null,
     version: match ? Number(match[2]) : null,
-    scope: KNOWN_SCHEMAS.get(schema) ?? null,
+    scope: KNOWN_SCHEMAS.get(canonical) ?? null,
+    legacyName: canonical !== schema,
   };
 }
 
@@ -493,12 +516,12 @@ function attachmentMatches(record, field, errors) {
 
 export function validateNoteRecord(record, objectFormat = "sha1") {
   const errors = [];
-  const schema = record?.schema;
+  const schema = canonicalSchema(record?.schema);
   if (!schemaClassification(schema).known || schemaClassification(schema).scope !== "note-record") {
     return [{ field: "schema", expectation: "supported causal note record schema" }];
   }
 
-  if (schema === "vcs-lab.landing/v1") {
+  if (schema === "causet.landing/v1") {
     validateCommonRecord(record, "landing", objectFormat, errors);
     fieldError(errors, ["compact", "hard-squash"].includes(record.mode), "mode", "compact or hard-squash");
     for (const field of ["sourceHead", "targetBefore", "landingCommit", "base", "resultTree"]) {
@@ -507,7 +530,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     requireOidArray(record, "absorbedCommits", objectFormat, errors);
     requireStringArray(record, "absorbedChanges", errors);
     attachmentMatches(record, "landingCommit", errors);
-  } else if (schema === "vcs-lab.application/v1") {
+  } else if (schema === "causet.application/v1") {
     validateCommonRecord(record, "application", objectFormat, errors);
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) {
       requireOid(record, field, objectFormat, errors);
@@ -516,7 +539,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
       fieldError(errors, typeof record[field] === "string" && record[field].length > 0, field, "non-empty string");
     }
     attachmentMatches(record, "appliedCommit", errors);
-  } else if (schema === "vcs-lab.application/v4") {
+  } else if (schema === "causet.application/v4") {
     validateCommonRecord(record, "application", objectFormat, errors);
     for (const field of ["originCommit", "appliedCommit", "targetBefore", "sourceTree", "resultTree"]) {
       requireOid(record, field, objectFormat, errors);
@@ -525,7 +548,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
       fieldError(errors, typeof record[field] === "string" && record[field].length > 0, field, "non-empty string");
     }
     attachmentMatches(record, "appliedCommit", errors);
-  } else if (schema === "vcs-lab.reconciliation/v6") {
+  } else if (schema === "causet.reconciliation/v6") {
     validateCommonRecord(record, "reconciliation", objectFormat, errors);
     for (const field of ["sourceHead", "targetBefore", "resultCommit", "targetTreeBefore", "sourceTree", "resultTree"]) {
       requireOid(record, field, objectFormat, errors);
@@ -534,7 +557,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     requireStringArray(record, "absorbedChanges", errors);
     fieldError(errors, Array.isArray(record.applied), "applied", "array");
     attachmentMatches(record, "resultCommit", errors);
-  } else if (schema === "vcs-lab.provenance/v1") {
+  } else if (schema === "causet.provenance/v1") {
     validateCommonRecord(record, "provenance", objectFormat, errors);
     requireOid(record, "commit", objectFormat, errors);
     fieldError(errors, ["declared", "carried"].includes(record.origin), "origin", "declared or carried");
@@ -569,7 +592,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
       record.origin === "carried" ? "at least one source commit" : "empty for a declared record",
     );
     attachmentMatches(record, "commit", errors);
-  } else if (schema === "vcs-lab.rebase-application/v1") {
+  } else if (schema === "causet.rebase-application/v1") {
     validateCommonRecord(record, "rebase-application", objectFormat, errors);
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) {
       requireOid(record, field, objectFormat, errors);
@@ -586,7 +609,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     fieldError(errors, Array.isArray(record.resolutions), "resolutions", "array");
     fieldError(errors, Array.isArray(record.semanticMerges), "semanticMerges", "array");
     attachmentMatches(record, "appliedCommit", errors);
-  } else if (schema === "vcs-lab.rebase/v1" || schema === "vcs-lab.rebase/v2" || schema === "vcs-lab.rebase/v3") {
+  } else if (schema === "causet.rebase/v1" || schema === "causet.rebase/v2" || schema === "causet.rebase/v3") {
     validateCommonRecord(record, "rebase", objectFormat, errors);
     for (const field of ["sourceHead", "ontoHead", "physicalBase", "resultCommit"]) {
       requireOid(record, field, objectFormat, errors);
@@ -618,7 +641,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
         fieldError(errors, typeof application[field] === "string" && application[field].length > 0, `applications[${index}].${field}`, "non-empty string");
       }
     }
-    if (schema === "vcs-lab.rebase/v2" || schema === "vcs-lab.rebase/v3") {
+    if (schema === "causet.rebase/v2" || schema === "causet.rebase/v3") {
       fieldError(errors, Array.isArray(record.recreatedMerges), "recreatedMerges", "array");
       for (const [index, merge] of (record.recreatedMerges ?? []).entries()) {
         const label = `recreatedMerges[${index}]`;
@@ -653,7 +676,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
       }
     }
     attachmentMatches(record, "resultCommit", errors);
-  } else if (schema === "vcs-lab.amendment/v1") {
+  } else if (schema === "causet.amendment/v1") {
     validateCommonRecord(record, "amendment", objectFormat, errors);
     for (const field of ["commit", "originCommit"]) {
       requireOid(record, field, objectFormat, errors);
@@ -667,7 +690,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     fieldError(errors, record.treeBefore !== record.treeAfter, "treeAfter", "a tree different from treeBefore");
     fieldError(errors, typeof record.rebaseOperation === "string" && record.rebaseOperation.length > 3, "rebaseOperation", "non-empty operation ID");
     attachmentMatches(record, "commit", errors);
-  } else if (schema === "vcs-lab.interactive-absorption/v1") {
+  } else if (schema === "causet.interactive-absorption/v1") {
     validateCommonRecord(record, "interactive-absorption", objectFormat, errors);
     requireOid(record, "survivingCommit", objectFormat, errors);
     requireOidArray(record, "absorbedCommits", objectFormat, errors);
@@ -680,7 +703,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     fieldError(errors, (record.absorbedCommits ?? []).length > 0, "absorbedCommits", "at least one absorbed commit");
     fieldError(errors, typeof record.rebaseOperation === "string" && record.rebaseOperation.length > 3, "rebaseOperation", "non-empty operation ID");
     attachmentMatches(record, "survivingCommit", errors);
-  } else if (schema === "vcs-lab.resolution/v1") {
+  } else if (schema === "causet.resolution/v1") {
     validateCommonRecord(record, "resolution", objectFormat, errors);
     fieldError(errors, record.algorithm === RESOLUTION_SIGNATURE_ALGORITHM, "algorithm", RESOLUTION_SIGNATURE_ALGORITHM);
     fieldError(errors, typeof record.signature === "string" && /^rsig_[0-9a-f]{64}$/i.test(record.signature), "signature", "rsig_ SHA-256 value");
@@ -703,26 +726,27 @@ export function isStructurallyValidNoteRecord(record, objectFormat = "sha1") {
 
 export function referencedObjectsForRecord(record) {
   const objects = [];
+  const schema = canonicalSchema(record.schema);
   const add = (oid, type, field) => {
     if (typeof oid === "string") objects.push({ oid, type, field });
   };
-  if (record.schema === "vcs-lab.landing/v1") {
+  if (schema === "causet.landing/v1") {
     for (const field of ["sourceHead", "targetBefore", "landingCommit", "base"]) add(record[field], "commit", field);
     for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
     add(record.resultTree, "tree", "resultTree");
-  } else if (record.schema === "vcs-lab.application/v1") {
+  } else if (schema === "causet.application/v1") {
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) add(record[field], "commit", field);
-  } else if (record.schema === "vcs-lab.application/v4") {
+  } else if (schema === "causet.application/v4") {
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) add(record[field], "commit", field);
     for (const field of ["sourceTree", "resultTree"]) add(record[field], "tree", field);
-  } else if (record.schema === "vcs-lab.reconciliation/v6") {
+  } else if (schema === "causet.reconciliation/v6") {
     for (const field of ["sourceHead", "targetBefore", "resultCommit"]) add(record[field], "commit", field);
     for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
     for (const field of ["targetTreeBefore", "sourceTree", "resultTree"]) add(record[field], "tree", field);
-  } else if (record.schema === "vcs-lab.rebase-application/v1") {
+  } else if (schema === "causet.rebase-application/v1") {
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) add(record[field], "commit", field);
     for (const field of ["sourceTree", "targetBeforeTree", "resultTree"]) add(record[field], "tree", field);
-  } else if (["vcs-lab.rebase/v1", "vcs-lab.rebase/v2", "vcs-lab.rebase/v3"].includes(record.schema)) {
+  } else if (["causet.rebase/v1", "causet.rebase/v2", "causet.rebase/v3"].includes(schema)) {
     for (const field of ["sourceHead", "ontoHead", "physicalBase", "resultCommit"]) add(record[field], "commit", field);
     for (const merge of record.recreatedMerges ?? []) {
       add(merge.originCommit, "commit", "recreatedMerges.originCommit");
@@ -740,16 +764,16 @@ export function referencedObjectsForRecord(record) {
       add(application.resultTree, "tree", "applications.resultTree");
     }
     for (const field of ["sourceTree", "ontoTree", "resultTree"]) add(record[field], "tree", field);
-  } else if (record.schema === "vcs-lab.amendment/v1") {
+  } else if (schema === "causet.amendment/v1") {
     for (const field of ["commit", "originCommit"]) add(record[field], "commit", field);
     for (const field of ["treeBefore", "treeAfter"]) add(record[field], "tree", field);
-  } else if (record.schema === "vcs-lab.interactive-absorption/v1") {
+  } else if (schema === "causet.interactive-absorption/v1") {
     add(record.survivingCommit, "commit", "survivingCommit");
     for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
-  } else if (record.schema === "vcs-lab.provenance/v1") {
+  } else if (schema === "causet.provenance/v1") {
     add(record.commit, "commit", "commit");
     for (const oid of record.carriedFrom ?? []) add(oid, "commit", "carriedFrom");
-  } else if (record.schema === "vcs-lab.resolution/v1") {
+  } else if (schema === "causet.resolution/v1") {
     add(record.resolutionCommit, "commit", "resolutionCommit");
     for (const field of ["base", "ours", "theirs"]) add(record[field]?.blob, "blob", `${field}.blob`);
     add(record.resultBlob, "blob", "resultBlob");

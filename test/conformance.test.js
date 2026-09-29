@@ -246,7 +246,7 @@ function presents(text, value, requirement) {
 // ---------------------------------------------------------------------------
 
 test("the fixture file declares a versioned, well-formed contract", () => {
-  assert.equal(fixtures.schema, "vcs-lab.conformance-fixtures/v1");
+  assert.equal(fixtures.schema, "causet.conformance-fixtures/v1");
   assert.ok(Array.isArray(fixtures.commands) && fixtures.commands.length > 0);
   const seen = new Set();
   for (const entry of fixtures.commands) {
@@ -408,7 +408,7 @@ test("declared failures report their published code", { timeout: 600_000 }, () =
       failures.push(`${entry.name}: stdout was not an envelope: ${run.stdout.slice(0, 120)}`);
       continue;
     }
-    if (envelope.schema !== "vcs-lab.error/v1") {
+    if (envelope.schema !== "causet.error/v1") {
       failures.push(`${entry.name}: schema ${envelope.schema}`);
     }
     if (envelope.code !== entry.code) {

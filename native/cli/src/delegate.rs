@@ -4,6 +4,7 @@
 //! It adds exactly one process on Windows and none on POSIX, where the
 //! JavaScript CLI replaces this process.
 
+use crate::environment;
 use std::{
   env,
   ffi::OsString,
@@ -14,14 +15,15 @@ use std::{
 
 /// The environment variable that names the JavaScript entry point to delegate
 /// to, for layouts where it is not beside an ancestor of this executable.
-pub const ENTRY_VARIABLE: &str = "VLAB_JS_CLI";
+pub const ENTRY_VARIABLE: &str = "CAUSET_JS_CLI";
 
-/// The JavaScript CLI's entry point: `VLAB_JS_CLI` if set, otherwise the
+/// The JavaScript CLI's entry point: `CAUSET_JS_CLI` (or `VLAB_JS_CLI`) if
+/// set, otherwise the
 /// first ancestor directory of this executable that holds a package with
 /// `bin/vlab.js`. That covers the repository build (`native/target/release`)
 /// and the npm package (`bin/native`, ADR-0038) alike.
 pub fn entry_point() -> Result<PathBuf, String> {
-  if let Some(named) = env::var_os(ENTRY_VARIABLE).filter(|value| !value.is_empty()) {
+  if let Some(named) = environment::value_os("JS_CLI").filter(|value| !value.is_empty()) {
     return Ok(PathBuf::from(named));
   }
   let executable = env::current_exe()

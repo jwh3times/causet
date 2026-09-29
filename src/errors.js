@@ -1,4 +1,4 @@
-export const ERROR_ENVELOPE_SCHEMA = "vcs-lab.error/v1";
+export const ERROR_ENVELOPE_SCHEMA = "causet.error/v1";
 
 /**
  * The closed error-code vocabulary (ADR-0021, issue #12). A code names *why* a
@@ -53,7 +53,7 @@ export const ERROR_CODES = Object.freeze({
   "dirty-worktree": "The worktree has uncommitted changes and this operation requires a clean one.",
   "precondition-not-met": "A stated precondition does not hold yet. The message names the step that establishes it.",
   "operation-in-progress": "A VCS Lab operation journal is present in an affected worktree. Finish or abort it first.",
-  "notes-locked": "Another vcs-lab process holds the causal notes lock. Wait for it to finish and retry; remove the lock file only if that process is gone.",
+  "notes-locked": "Another causet process holds the causal notes lock. Wait for it to finish and retry; remove the lock file only if that process is gone.",
   "workspace-registry-locked": "The workspace registry lock could not be acquired. Retry after the holder finishes; recover an abandoned lock only with all workspace writers stopped on every host sharing the repository.",
   "no-operation-pending": "No VCS Lab operation is pending, so there is nothing to continue or abort.",
   "operation-state-invalid": "The pending operation is in a state this command cannot act on. The message names the state.",
@@ -105,7 +105,7 @@ export class CliError extends Error {
     // runtime condition, so it fails loudly rather than being carried into
     // output a caller might branch on.
     if (code !== null && !Object.hasOwn(ERROR_CODES, code)) {
-      throw new TypeError(`'${code}' is not a published vcs-lab error code.`);
+      throw new TypeError(`'${code}' is not a published causet error code.`);
     }
     this.code = code;
   }

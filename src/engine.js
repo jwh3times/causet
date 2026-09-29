@@ -384,7 +384,7 @@ export function runDifferential(cwd = process.cwd()) {
       { code: "internal-invariant" });
   }
   return {
-    schema: "vcs-lab.engine-differential/v1",
+    schema: "causet.engine-differential/v1",
     engines,
     oracle: engines[0],
     operations,

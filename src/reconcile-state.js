@@ -23,9 +23,9 @@ export function readReconciliationState(cwd = process.cwd()) {
   const state = readJson(statePath, null);
   if (state === null) return null;
   assertReadableSchema(state?.schema, `The reconciliation journal at '${statePath}'`, {
-    family: "vcs-lab.reconciliation-operation",
+    family: "causet.reconciliation-operation",
     recovery:
-      "Recover it with the vcs-lab build that wrote it, or remove the file to discard the operation.",
+      "Recover it with the causet build that wrote it, or remove the file to discard the operation.",
   });
   return state;
 }

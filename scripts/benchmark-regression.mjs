@@ -305,7 +305,7 @@ function measurePublication() {
         vlabCommand,
         [...vlabPrefix(), "commit", "-m", `publish ${index}`],
         repo,
-        { VLAB_AGENT: "benchmark-agent" },
+        { CAUSET_AGENT: "benchmark-agent" },
       );
     }
     run("git", ["switch", "-q", "main"], repo);
@@ -317,7 +317,7 @@ function measurePublication() {
       vlabCommand,
       [...vlabPrefix(), "reconcile", "feature", "--json"],
       repo,
-      { VLAB_TRACE: "1" },
+      { CAUSET_TRACE: "1" },
     );
     const receipt = JSON.parse(reconciled.stdout).receipt;
     const applied = receipt.applied?.length ?? 0;

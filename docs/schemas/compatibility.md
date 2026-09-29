@@ -42,35 +42,35 @@ version in `also read` is migrated forward as section 3 describes.
 
 | Family | Scope | Written | Also read | Unknown version | Store |
 | --- | --- | --- | --- | --- | --- |
-| `vcs-lab.note` | note-container | v1 | — | ignore | refs/notes/vcs-lab note blobs |
-| `vcs-lab.landing` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.application` | note-record | v1, v4 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.reconciliation` | note-record | v6 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.rebase-application` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.rebase` | note-record | v3 | v1, v2 | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.amendment` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.interactive-absorption` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.provenance` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.resolution` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
-| `vcs-lab.reconciliation-operation` | private | v4 | — | refuse | `<git dir>/vcs-lab/reconciliation.json` |
-| `vcs-lab.rebase-operation` | private | v3 | — | refuse | `<git dir>/vcs-lab/rebase.json` |
-| `vcs-lab.forecast` | private | v2 | v1 | refuse | `<git dir>/vcs-lab/forecasts/<id>.json` |
-| `vcs-lab.rebase-forecast` | private | v3 | — | refuse | `<git dir>/vcs-lab/forecasts/<id>.json` |
-| `vcs-lab.workspaces` | shared-local | v1 | — | refuse | `<common dir>/vcs-lab/workspaces.json` |
-| `vcs-lab.workspace` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/workspaces.json` |
-| `vcs-lab.quarantined-record` | shared-local | v1 | — | refuse | refs/vcs-lab/quarantine/<lineage>/<record id> blobs |
-| `vcs-lab.dispositions` | shared-local | v1 | — | refuse | `<common dir>/vcs-lab/dispositions.json` |
-| `vcs-lab.disposition` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/dispositions.json` |
-| `vcs-lab.spec-manifest` | tracked | v4 | v1, v2, v3 | refuse | `.vcs-lab/specs/**` |
-| `vcs-lab.metadata-envelope` | envelope | v1 | — | refuse | `manifest.json` of a metadata export directory |
-| `vcs-lab.proof-bundle` | envelope | v2 | v1 | refuse | a file handed to cst verify-proof |
-| `vcs-lab.capabilities` | advertisement | v1 | — | refuse | produced on demand by cst capabilities; served by a gateway |
+| `causet.note` | note-container | v1 | — | ignore | refs/notes/vcs-lab note blobs |
+| `causet.landing` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.application` | note-record | v1, v4 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.reconciliation` | note-record | v6 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.rebase-application` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.rebase` | note-record | v3 | v1, v2 | quarantine | refs/notes/vcs-lab note containers |
+| `causet.amendment` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.interactive-absorption` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.provenance` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.resolution` | note-record | v1 | — | quarantine | refs/notes/vcs-lab note containers |
+| `causet.reconciliation-operation` | private | v4 | — | refuse | `<git dir>/vcs-lab/reconciliation.json` |
+| `causet.rebase-operation` | private | v3 | — | refuse | `<git dir>/vcs-lab/rebase.json` |
+| `causet.forecast` | private | v2 | v1 | refuse | `<git dir>/vcs-lab/forecasts/<id>.json` |
+| `causet.rebase-forecast` | private | v3 | — | refuse | `<git dir>/vcs-lab/forecasts/<id>.json` |
+| `causet.workspaces` | shared-local | v1 | — | refuse | `<common dir>/vcs-lab/workspaces.json` |
+| `causet.workspace` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/workspaces.json` |
+| `causet.quarantined-record` | shared-local | v1 | — | refuse | refs/vcs-lab/quarantine/<lineage>/<record id> blobs |
+| `causet.dispositions` | shared-local | v1 | — | refuse | `<common dir>/vcs-lab/dispositions.json` |
+| `causet.disposition` | shared-local | v1 | — | refuse | entries of `<common dir>/vcs-lab/dispositions.json` |
+| `causet.spec-manifest` | tracked | v4 | v1, v2, v3 | refuse | `.vcs-lab/specs/**` |
+| `causet.metadata-envelope` | envelope | v1 | — | refuse | `manifest.json` of a metadata export directory |
+| `causet.proof-bundle` | envelope | v2 | v1 | refuse | a file handed to cst verify-proof |
+| `causet.capabilities` | advertisement | v1 | — | refuse | produced on demand by cst capabilities; served by a gateway |
 
-`vcs-lab.application` writes two versions on purpose: `cst cherry-pick`
+`causet.application` writes two versions on purpose: `cst cherry-pick`
 publishes `v1` and reconciliation publishes the richer `v4`. Both are current;
 neither supersedes the other.
 
-CLI-output families (`vcs-lab.merge-plan/v1` and the rest of the catalog's
+CLI-output families (`causet.merge-plan/v1` and the rest of the catalog's
 CLI-output table) are not persisted and carry no compatibility rule. They are
 produced fresh by the command that prints them, so a consumer sees exactly the
 version of the build it ran.
@@ -134,7 +134,7 @@ it. The `proof` member of a coverage classification is the current case.
 
 | Member | Retired value | Replaced by | Since |
 | --- | --- | --- | --- |
-| `proof` (`vcs-lab.merge-plan/v1`, `vcs-lab.rebase-plan/v1` and `/v2`, `vcs-lab.rebase/v1` and `/v2`, `vcs-lab.rebase-forecast/v1` and `/v2`) | `signed-shaped-landing-receipt` | `receipt-commit` | v0.12.0 |
+| `proof` (`causet.merge-plan/v1`, `causet.rebase-plan/v1` and `/v2`, `causet.rebase/v1` and `/v2`, `causet.rebase-forecast/v1` and `/v2`) | `signed-shaped-landing-receipt` | `receipt-commit` | v0.12.0 |
 
 The old label printed the word *signed* in every plan for a record that nothing
 signs. Renaming it is permitted inside the version because the value is opaque
@@ -146,11 +146,36 @@ changes meaning and nothing is narrowed.
 Retiring a value that a reader **does** branch on is a different change and
 needs a version bump, because it narrows an accepted set.
 
+## 2.2 The legacy spelling of every identifier
+
+Records written before issue #159 name their family `vcs-lab.<family>/vN`,
+inside their own hashed bytes. **`vcs-lab.` is a permanent, read-only alias of
+`causet.`** ([ADR-0039](../adr/0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) §2):
+
+| Stored spelling | Read as | Written by this build | Until |
+| --- | --- | --- | --- |
+| `vcs-lab.<family>/vN`, every family above | `causet.<family>/vN`: the same readable versions, scope, unknown-version rule and quarantine | Never | Forever: the records are permanent |
+
+- A reader classifies a legacy spelling as the `causet.*` family it names, and
+  reports `legacyName: true`. Nothing else in the tables above changes.
+- A record is **never rewritten** to the new spelling, because that would change
+  its bytes and its hashes. A record read under the old spelling is carried as
+  it is, including when its note container is rewritten to add a record.
+- A legacy-spelled record is never quarantined for its spelling, only for its
+  version, exactly as its `causet.*` equivalent would be.
+- The catalog publishes each `$id` as `causet.*` and accepts both spellings in
+  the `schema` member. The capability document lists each exchanged family's
+  legacy spelling under `aliases` (ADR-0039 §4).
+
+`test/schema-compatibility.test.js` checks that the alias resolves for every
+family and version, and that no writer emits a `vcs-lab.*` identifier.
+`test/legacy-fixture.test.js` reads a repository written by v0.19.1.
+
 ## 3. Migration
 
 Only two families read a version they do not write.
 
-**`vcs-lab.spec-manifest` v1, v2, and v3 migrate to v4 on indexing,
+**`causet.spec-manifest` v1, v2, and v3 migrate to v4 on indexing,
 not on read.** Historical reads retain parser v1 and the stored schema. The
 new writer uses fence-aware parser v2; every older manifest bypasses unchanged
 source/blob caches. Migration verifies the old source, matches surviving real
@@ -168,14 +193,14 @@ decisions cannot authorize v2 results. Regenerate the forecast, or abort and
 restart the pending operation. Raw exact-resolution records retain their
 existing byte-based approval rules.
 
-**`vcs-lab.proof-bundle` v1 is read but never written.** A v2 bundle is a
+**`causet.proof-bundle` v1 is read but never written.** A v2 bundle is a
 strict superset: the v1 members and the repository-backed comparison are
 unchanged, and v2 adds the bound source inventory, reachability and inclusion
 proofs, and the anchors. Nothing migrates a v1 bundle forward — it is a document
 someone already produced, not a store — so a v1 bundle simply reaches a lower
 tier of conclusion, which the verification result states.
 
-**`vcs-lab.rebase` v1 is read but never written and never rewritten.** A v2
+**`causet.rebase` v1 is read but never written and never rewritten.** A v2
 receipt is a strict superset: every v1 member means what it always did, and v2
 adds `recreatedMerges`. A v1 receipt was necessarily written by a rewrite with
 no merge in range, because no earlier build could execute one, so reading it as
@@ -194,7 +219,7 @@ reader could not act on. A forecast costs one command to regenerate; a journal
 in flight is finished or aborted with the build that wrote it (ADR-0020,
 ADR-0034).
 
-**`vcs-lab.forecast` v1 is read but never written and never rewritten.** A v1
+**`causet.forecast` v1 is read but never written and never rewritten.** A v1
 forecast is accepted by `forecastForPlan` and read field by field; it is not
 back-filled, and the staleness and fingerprint checks apply to it unchanged. It
 has no catalog document; the catalog lists it as superseded.
@@ -220,9 +245,9 @@ tracked, or imported input refuses the command.
 | `envelopeManifestBytes` | 16777216 | `manifest.json` of a metadata envelope | Refuse |
 | `envelopeBundleBytes` | 2147483648 | The `objects.bundle` size an envelope declares | Refuse |
 | `envelopeRecords` | 1000000 | Records one envelope declares | Refuse |
-| `provenanceActors` | 64 | Actors in one `vcs-lab.provenance/v1` record | Refuse the write; a landing's provenance is the union of every absorbed commit's actors, so this bounds what one branch can accumulate before the claim stops being reviewable by a person |
-| `proofBundleBytes` | 16777216 | One `vcs-lab.proof-bundle/v1` or `/v2` document handed to `cst verify-proof` | Refuse before reading the file. A producer whose proofs would exceed it refuses to emit and names the member that did not fit, rather than truncating: a truncated proof cannot be told apart from an omission, which is the attack the bound inventory exists to catch |
-| `capabilityDocumentBytes` | 1048576 | One `vcs-lab.capabilities/v1` document read by `cst capabilities --against` or from a gateway | Refuse before parsing the document |
+| `provenanceActors` | 64 | Actors in one `causet.provenance/v1` record | Refuse the write; a landing's provenance is the union of every absorbed commit's actors, so this bounds what one branch can accumulate before the claim stops being reviewable by a person |
+| `proofBundleBytes` | 16777216 | One `causet.proof-bundle/v1` or `/v2` document handed to `cst verify-proof` | Refuse before reading the file. A producer whose proofs would exceed it refuses to emit and names the member that did not fit, rather than truncating: a truncated proof cannot be told apart from an omission, which is the attack the bound inventory exists to catch |
+| `capabilityDocumentBytes` | 1048576 | One `causet.capabilities/v1` document read by `cst capabilities --against` or from a gateway | Refuse before parsing the document |
 
 Bounds divide in one more way once a peer is involved. **Bounds are the
 receiver's**: the bound that governs what this build may send is the peer's, and
@@ -284,7 +309,7 @@ document disagree.
 
 ## 6. Known inconsistency
 
-`cst metadata validate` reports an unsupported `vcs-lab.spec-manifest` version
+`cst metadata validate` reports an unsupported `causet.spec-manifest` version
 as a warning and keeps scanning, while `materializeManifest` refuses the same
 manifest with an error. This is deliberate — validation is a report over
 everything present, and only a command that must interpret a manifest fails —

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.repository-scale-benchmark/v1",
+  "$id": "causet.repository-scale-benchmark/v1",
   "title": "Repository scale benchmark",
   "description": "Disposable-repository volume, scan, process-amplification, and decision measurements of vlab metadata benchmark --json (CLI output; src/scale-benchmark.js benchmarkRepositoryScale).",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.repository-scale-benchmark/v1"
+      "enum": ["causet.repository-scale-benchmark/v1", "vcs-lab.repository-scale-benchmark/v1"]
     },
     "environment": {
       "type": "object",

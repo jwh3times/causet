@@ -1,7 +1,7 @@
 import { sha256 } from "./ids.js";
 import { canonicalJson } from "./canonical-json.js";
 import { CliError } from "./errors.js";
-import { RESOURCE_BOUNDS, schemaClassification, withinBound } from "./schemas.js";
+import { canonicalSchema, RESOURCE_BOUNDS, schemaClassification, withinBound } from "./schemas.js";
 import { buildBindings, verifyBindings } from "./proof-binding.js";
 import {
   acceptedCausalRecords,
@@ -20,9 +20,9 @@ import {
   resolveObjectIds,
 } from "./engine.js";
 
-export const PROOF_BUNDLE_SCHEMA = "vcs-lab.proof-bundle/v2";
+export const PROOF_BUNDLE_SCHEMA = "causet.proof-bundle/v2";
 /** The version before the bound inventory. Still read; never written. */
-export const PROOF_BUNDLE_SCHEMA_V1 = "vcs-lab.proof-bundle/v1";
+export const PROOF_BUNDLE_SCHEMA_V1 = "causet.proof-bundle/v1";
 const READABLE_BUNDLE_SCHEMAS = [PROOF_BUNDLE_SCHEMA_V1, PROOF_BUNDLE_SCHEMA];
 
 /**
@@ -183,7 +183,7 @@ export function assertProofBundleDocument(bundle) {
   if (!isPlainObject(bundle)) {
     throw new CliError("The proof bundle is not a JSON object.", { code: "malformed-input" });
   }
-  if (!READABLE_BUNDLE_SCHEMAS.includes(bundle.schema)) {
+  if (!READABLE_BUNDLE_SCHEMAS.includes(canonicalSchema(bundle.schema))) {
     // The right family at another version is a build mismatch, not a foreign
     // document: its remedy is the build that wrote it (issue #98).
     const { family, version } = schemaClassification(bundle.schema);
@@ -200,7 +200,7 @@ export function assertProofBundleDocument(bundle) {
     // The complaint is about the family, so the message names the family rather
     // than one of its versions: this build reads several.
     throw new CliError(
-      `Not a vcs-lab.proof-bundle document (found ${JSON.stringify(bundle.schema ?? null)}).`,
+      `Not a causet.proof-bundle document (found ${JSON.stringify(bundle.schema ?? null)}).`,
         { code: "wrong-record-family" },
     );
   }
@@ -260,7 +260,7 @@ export function assertProofBundleDocument(bundle) {
       });
     }
   }
-  if (bundle.schema === PROOF_BUNDLE_SCHEMA) {
+  if (canonicalSchema(bundle.schema) === PROOF_BUNDLE_SCHEMA) {
     // The v2 members. A bundle that claims v2 and omits them is malformed
     // rather than merely unbound: the version is a promise about what it
     // carries.
@@ -602,7 +602,7 @@ export function anchorsFromLsRemote(bundle, remote, cwd = process.cwd()) {
 
 export function verifyProofBundle(bundle, repository = null, anchors = null) {
   assertProofBundleDocument(bundle);
-  const binding = bundle.schema === PROOF_BUNDLE_SCHEMA
+  const binding = canonicalSchema(bundle.schema) === PROOF_BUNDLE_SCHEMA
     ? verifyBindings(bundle)
     : {
         checked: false,
@@ -653,7 +653,7 @@ export function verifyProofBundle(bundle, repository = null, anchors = null) {
     }
   }
   return {
-    schema: "vcs-lab.proof-verification/v1",
+    schema: "causet.proof-verification/v1",
     bundleSchema: bundle.schema,
     integrity: {
       algorithm: bundle.integrity?.algorithm ?? null,

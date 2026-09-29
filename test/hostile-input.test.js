@@ -186,7 +186,7 @@ test("malformed causal notes are quarantined without moving a ref", () => {
   });
 
   // A bare array is valid JSON but not a versioned container.
-  withTamperedNote(repo, `${JSON.stringify([{ schema: "vcs-lab.landing/v1" }])}\n`, () => {
+  withTamperedNote(repo, `${JSON.stringify([{ schema: "causet.landing/v1" }])}\n`, () => {
     const result = vlabResult(repo, "metadata", "validate", "--json");
     assert.notEqual(result.status, 0);
     const report = JSON.parse(result.stdout);
@@ -196,8 +196,8 @@ test("malformed causal notes are quarantined without moving a ref", () => {
   // A container whose record is missing required fields is quarantined, not
   // consumed: it must not reach the coverage planner.
   const incomplete = {
-    schema: "vcs-lab.note/v1",
-    records: [{ schema: "vcs-lab.landing/v1", type: "landing", id: "land_incomplete0000000" }],
+    schema: "causet.note/v1",
+    records: [{ schema: "causet.landing/v1", type: "landing", id: "land_incomplete0000000" }],
   };
   withTamperedNote(repo, `${JSON.stringify(incomplete, null, 2)}\n`, () => {
     const result = vlabResult(repo, "metadata", "validate", "--json");
@@ -216,7 +216,7 @@ test("malformed causal notes are quarantined without moving a ref", () => {
 
   // A container from a future build yields no records and is left intact, so a
   // peer's data survives contact with this one.
-  const future = { schema: "vcs-lab.note/v2", records: [{ type: "landing", id: "x" }] };
+  const future = { schema: "causet.note/v2", records: [{ type: "landing", id: "x" }] };
   withTamperedNote(repo, `${JSON.stringify(future, null, 2)}\n`, () => {
     const report = JSON.parse(vlabResult(repo, "metadata", "validate", "--json").stdout);
     assert.ok(
@@ -252,7 +252,7 @@ test("hostile metadata envelopes are refused before any ref moves", () => {
   );
 
   const futureSchema = tamperedEnvelope(state, "env-future", (manifest) => {
-    manifest.schema = "vcs-lab.metadata-envelope/v99";
+    manifest.schema = "causet.metadata-envelope/v99";
   });
   assertRefusedCleanly(
     repo,
@@ -329,7 +329,7 @@ test("hostile manifests, identifiers, and object expressions fail closed", () =>
     // version refusal is reached rather than being masked by a staleness
     // check. Getting this wrong reports "stale" for an unreadable version.
     const manifest = JSON.parse(original);
-    manifest.schema = "vcs-lab.spec-manifest/v99";
+    manifest.schema = "causet.spec-manifest/v99";
     fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     assertRefusedCleanly(
       repo,
@@ -434,23 +434,23 @@ test("hostile proof bundles fail closed before any member is dereferenced", () =
   // A newer proof bundle is the right family at a version this build cannot
   // read: the remedy is the build that wrote it, not a human investigating a
   // foreign document (issue #98). Another family keeps the family refusal.
-  const future = written("future", (b) => { b.schema = "vcs-lab.proof-bundle/v99"; });
+  const future = written("future", (b) => { b.schema = "causet.proof-bundle/v99"; });
   assertRefusedCleanly(
     repo,
     "a newer proof-bundle version",
     ["verify-proof", future],
-    /carries unsupported schema "vcs-lab\.proof-bundle\/v99"/,
+    /carries unsupported schema "causet\.proof-bundle\/v99"/,
   );
   const futureEnvelope = JSON.parse(vlabResult(repo, "verify-proof", future, "--json").stdout);
   assert.equal(futureEnvelope.code, "unknown-schema-version");
-  assert.match(futureEnvelope.details, /reads vcs-lab.proof-bundle.v1, vcs-lab.proof-bundle.v2/);
+  assert.match(futureEnvelope.details, /reads causet.proof-bundle.v1, causet.proof-bundle.v2/);
 
-  const foreign = written("family", (b) => { b.schema = "vcs-lab.landing/v1"; });
+  const foreign = written("family", (b) => { b.schema = "causet.landing/v1"; });
   assertRefusedCleanly(
     repo,
     "a bundle from another family",
     ["verify-proof", foreign],
-    /Not a vcs-lab\.proof-bundle document/,
+    /Not a causet\.proof-bundle document/,
   );
   assert.equal(
     JSON.parse(vlabResult(repo, "verify-proof", foreign, "--json").stdout).code,
@@ -477,7 +477,7 @@ test("hostile proof bundles fail closed before any member is dereferenced", () =
   const bare = vlabResult(
     repo,
     "verify-proof",
-    written("bare", () => ({ schema: "vcs-lab.proof-bundle/v1" })),
+    written("bare", () => ({ schema: "causet.proof-bundle/v1" })),
     "--offline",
     "--json",
   );

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.spec-merge-plan/v1",
+  "$id": "causet.spec-merge-plan/v1",
   "title": "Semantic spec merge plan",
   "description": "Deterministic three-way semantic merge plan for one Markdown specification (CLI output of vlab spec merge-plan --json; src/specs.js planSpecMerge). status 'clean' carries a materializable result; 'blocked' carries the conflicts that prevent it.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema", "algorithm", "status", "file", "manifestFile", "artifactId",
@@ -11,7 +11,7 @@
     "conflicts", "result"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.spec-merge-plan/v1" },
+    "schema": { "enum": ["causet.spec-merge-plan/v1", "vcs-lab.spec-merge-plan/v1"] },
     "algorithm": { "const": "stable-markdown-three-way/v1" },
     "status": { "enum": ["clean", "blocked"] },
     "file": { "type": "string", "minLength": 1 },

@@ -11,7 +11,7 @@ import { testEnv } from "../test-support/git-environment.js";
 function fixture(t, format = "sha1") {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-notes-session-"));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
-  const env = testEnv({ VLAB_GIT_SESSION: "1", VLAB_ENGINE: "git" });
+  const env = testEnv({ CAUSET_GIT_SESSION: "1", CAUSET_ENGINE: "git" });
   const previous = new Map(Object.keys(env).map(key => [key, process.env[key]]));
   Object.assign(process.env, env);
   t.after(() => {
@@ -113,7 +113,7 @@ test("notes sessions reread moved refs and retain ordinary listing when disabled
     f.publish(f.tree([{ name: "2".repeat(f.width) }]));
     assert.equal(listNoteEntries("vcs-lab", f.cwd)[0].target, "2".repeat(f.width));
   });
-  process.env.VLAB_GIT_SESSION = "0";
+  process.env.CAUSET_GIT_SESSION = "0";
   const actual = f.listing();
   assert.deepEqual(actual.entries, f.oracle());
   assert.equal(actual.metrics.processes, 1);

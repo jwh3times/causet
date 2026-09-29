@@ -1,10 +1,10 @@
 {
-  "schema": "vcs-lab.semantic-conformance-fixtures/v1",
+  "schema": "causet.semantic-conformance-fixtures/v1",
   "profiles": {
     "markdown-v1": {
       "parser": "stable-markdown-blocks/v1",
       "merge": "stable-markdown-three-way/v2",
-      "manifest": "vcs-lab.spec-manifest/v3",
+      "manifest": "causet.spec-manifest/v3",
       "coverage": [
         "indexed entities are not independent merge units",
         "nested headings form primary units",
@@ -17,7 +17,7 @@
     "markdown-v2": {
       "parser": "stable-markdown-blocks/v2",
       "merge": "stable-markdown-three-way/v2",
-      "manifest": "vcs-lab.spec-manifest/v4",
+      "manifest": "causet.spec-manifest/v4",
       "coverage": [
         "indexed entities are not independent merge units",
         "nested headings form primary units",

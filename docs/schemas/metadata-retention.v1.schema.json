@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.metadata-retention/v1",
+  "$id": "causet.metadata-retention/v1",
   "title": "Causal object retention backfill",
   "description": "Preview or application of retention for currently accepted portable facts. Quarantined records are reported and never repaired or retained as accepted evidence. Repeating apply against the same notes snapshot is a no-op. Preview creates no objects or refs. Retention does not grant causal coverage.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": ["schema", "mode", "notesTip", "retentionBefore", "retentionAfter", "eligibleRecords", "quarantinedRecords", "objects", "wouldChange", "changed", "diagnostics"],
   "properties": {
-    "schema": { "const": "vcs-lab.metadata-retention/v1" },
+    "schema": { "enum": ["causet.metadata-retention/v1", "vcs-lab.metadata-retention/v1"] },
     "mode": { "enum": ["preview", "apply"] },
     "notesTip": { "type": ["string", "null"] },
     "retentionBefore": { "type": ["string", "null"] },
@@ -24,6 +24,6 @@
     },
     "wouldChange": { "type": "boolean" },
     "changed": { "type": "boolean" },
-    "diagnostics": { "type": "array", "items": { "$ref": "vcs-lab.metadata-status/v1#/$defs/diagnostic" } }
+    "diagnostics": { "type": "array", "items": { "$ref": "causet.metadata-status/v1#/$defs/diagnostic" } }
   }
 }

@@ -271,7 +271,7 @@ export function publishResolution(outcome, application, cwd = process.cwd()) {
     input: `${message}\n`,
   }).stdout;
   const record = {
-    schema: "vcs-lab.resolution/v1", type: "resolution", id: newId("resolution"),
+    schema: "causet.resolution/v1", type: "resolution", id: newId("resolution"),
     signature: outcome.signature, algorithm: outcome.algorithm,
     base: outcome.base, ours: outcome.ours, theirs: outcome.theirs,
     resultBlob: outcome.resultBlob, resultMode: outcome.resultMode,

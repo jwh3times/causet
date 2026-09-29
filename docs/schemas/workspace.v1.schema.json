@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.workspace/v1",
+  "$id": "causet.workspace/v1",
   "title": "Workspace descriptor",
-  "description": "One registered workspace as stored in the vcs-lab.workspaces/v1 registry (src/workspaces.js createWorkspace and lifecycle updates). CLI outputs (workspace create/list/move/archive/restore/repair) add inspection projections: lifecycle default, status, pathStatus, head, dirtyFiles, and changed.",
-  "x-vcs-lab-scope": "shared-local",
+  "description": "One registered workspace as stored in the causet.workspaces/v1 registry (src/workspaces.js createWorkspace and lifecycle updates). CLI outputs (workspace create/list/move/archive/restore/repair) add inspection projections: lifecycle default, status, pathStatus, head, dirtyFiles, and changed.",
+  "x-causet-scope": "shared-local",
   "type": "object",
   "required": [
     "schema",
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.workspace/v1"
+      "enum": ["causet.workspace/v1", "vcs-lab.workspace/v1"]
     },
     "id": {
       "type": "string",

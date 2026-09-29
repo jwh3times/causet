@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.proof-verification/v1",
+  "$id": "causet.proof-verification/v1",
   "title": "Proof bundle verification result",
   "description": "The result of 'vlab verify-proof <file>'. Integrity checks the payload hash; classification checks stated verdicts, counts, and commit uniqueness; repository comparison checks evidence, complete ordered source history, identities, subjects, lineage, counts, and physical/effective bases (FR-PLAN-08). Offline success does not establish source completeness.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": ["schema", "bundleSchema", "integrity", "classification", "repository", "trust", "ok"],
   "properties": {
-    "schema": { "const": "vcs-lab.proof-verification/v1" },
+    "schema": { "enum": ["causet.proof-verification/v1", "vcs-lab.proof-verification/v1"] },
     "bundleSchema": { "type": "string", "minLength": 1 },
     "integrity": {
       "type": "object",

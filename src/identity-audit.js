@@ -1,7 +1,7 @@
 import { commitHistory, repoContext } from "./engine.js";
 import { listNoteRecords } from "./notes.js";
 
-export const IDENTITY_AUDIT_SCHEMA = "vcs-lab.identity-audit/v1";
+export const IDENTITY_AUDIT_SCHEMA = "causet.identity-audit/v1";
 
 const APPLICATION_TYPES = new Set(["application", "rebase-application"]);
 

@@ -178,7 +178,7 @@ export function cherryPick(value, options = {}) {
   }
 
   const application = {
-    schema: "vcs-lab.application/v1",
+    schema: "causet.application/v1",
     type: "application",
     id: newId("apply"),
     originCommit,
@@ -194,7 +194,7 @@ export function cherryPick(value, options = {}) {
   // so the origin's declared provenance carries onto the result. The recorded
   // origin/applied correspondence is what makes this exact rather than a diff
   // heuristic (FR-ID-08).
-  // Side effect only: `application` is a `vcs-lab.application/v1` document and
+  // Side effect only: `application` is a `causet.application/v1` document and
   // the carried provenance is a separate record on the same commit.
   carryProvenanceSafely([originCommit], appliedCommit, appliedChangeId, cwd);
   return application;
@@ -267,7 +267,7 @@ function applicationRecord(
   cwd,
 ) {
   return {
-    schema: "vcs-lab.application/v4",
+    schema: "causet.application/v4",
     type: "application",
     id: newId("apply"),
     reconciliationOperation: operation.id,
@@ -411,7 +411,7 @@ function finalizeReconciliation(operation, cwd) {
     semanticMerges: application.semanticMerges,
   }));
   const receipt = {
-    schema: "vcs-lab.reconciliation/v6",
+    schema: "causet.reconciliation/v6",
     type: "reconciliation",
     id: newId("reconcile"),
     operationId: operation.id,
@@ -760,7 +760,7 @@ function runReconciliationQueue(operation, cwd, phaseStarted = performance.now()
 function startOperation(sourceRef, plan, options, cwd) {
   const context = repoContext(cwd);
   return {
-    schema: "vcs-lab.reconciliation-operation/v4",
+    schema: "causet.reconciliation-operation/v4",
     id: newId("reconcile_op"),
     state: "running",
     worktree: context.root,

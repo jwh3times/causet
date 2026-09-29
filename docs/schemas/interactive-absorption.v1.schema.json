@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.interactive-absorption/v1",
+  "$id": "causet.interactive-absorption/v1",
   "title": "Interactive absorption",
   "description": "The identities a surviving commit took in through an interactive `squash` or `fixup` (shared-portable note record; src/rebase-operations.js recordSuccessfulApplication). It reuses the landing absorption model of ADR-0003: coverage for an absorbed change comes from this record, exactly as it does from a landing. The absorbed identities appear here and nowhere else \u2014 the surviving commit carries exactly one Change-Id, its own, because several trailers on one commit would make the surviving identity depend on parse order (ADR-0035).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema",
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.interactive-absorption/v1"
+      "enum": ["causet.interactive-absorption/v1", "vcs-lab.interactive-absorption/v1"]
     },
     "type": {
       "const": "interactive-absorption"

@@ -1077,7 +1077,7 @@ function forecastReconciliationInSession(sourceRef, options, cwd) {
     ...simulationResult
   } = simulation;
   const forecast = {
-    schema: "vcs-lab.forecast/v2",
+    schema: "causet.forecast/v2",
     id: newId("forecast"),
     sourceRef,
     sourceHead: plan.sourceHead,
@@ -1133,7 +1133,7 @@ export function forecastForPlan(id, plan, cwd = process.cwd()) {
   // build reads: v1 is superseded but still accepted, and any other version is
   // refused rather than interpreted (ADR-0020).
   assertReadableSchema(forecast?.schema, `Forecast '${id}'`, {
-    family: "vcs-lab.forecast",
+    family: "causet.forecast",
     recovery: "Generate a new forecast with: cst forecast",
   });
   assertCurrentSpecDecisions(forecast);

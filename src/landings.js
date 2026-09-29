@@ -69,7 +69,7 @@ export function land(sourceRef, mode, options = {}) {
   runGit(["commit", "-m", message], { cwd });
   const landingCommit = currentHead(cwd);
   const receipt = {
-    schema: "vcs-lab.landing/v1",
+    schema: "causet.landing/v1",
     type: "landing",
     id: newId("land"),
     mode,
@@ -92,7 +92,7 @@ export function land(sourceRef, mode, options = {}) {
   // carries onto the landing as the union of their actors (FR-ID-08). It is a
   // claim about the landing as a whole, not about any line in it.
   // The carried record is its own note record, not a member of the receipt:
-  // the receipt is a `vcs-lab.landing/v1` document and must stay exactly that.
+  // the receipt is a `causet.landing/v1` document and must stay exactly that.
   // `cst provenance <rev>` is where the result is read back.
   carryProvenanceSafely(inputs.absorbedCommits, landingCommit, null, cwd);
   return receipt;

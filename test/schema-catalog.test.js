@@ -12,32 +12,32 @@ import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schemasDir = path.join(projectRoot, "docs", "schemas");
 
-// vcs-lab.forecast/v1 is accepted when reading stored forecasts but never
+// causet.forecast/v1 is accepted when reading stored forecasts but never
 // written; the catalog lists it as superseded without a document.
 const SUPERSEDED_WITHOUT_DOCUMENT = new Set([
-  "vcs-lab.forecast/v1",
+  "causet.forecast/v1",
   // Registered so a refusal can say "this build knows that version and does not
   // read it" rather than "unknown family", but documented only as superseded:
   // a rewrite in flight under either is finished with the build that wrote it
   // (ADR-0034).
-  "vcs-lab.rebase-forecast/v1",
-  "vcs-lab.rebase-operation/v1",
-  "vcs-lab.rebase-forecast/v2",
-  "vcs-lab.rebase-operation/v2",
+  "causet.rebase-forecast/v1",
+  "causet.rebase-operation/v1",
+  "causet.rebase-forecast/v2",
+  "causet.rebase-operation/v2",
 ]);
 
 // Frozen output contracts remain available after their writers advance.
 const HISTORICAL_OUTPUT_DOCUMENTS = new Map([
-  ["vcs-lab.spec-merge-plan/v1", "vcs-lab.spec-merge-plan/v2"],
-  ["vcs-lab.spec-benchmark/v2", "vcs-lab.spec-benchmark/v3"],
+  ["causet.spec-merge-plan/v1", "causet.spec-merge-plan/v2"],
+  ["causet.spec-benchmark/v2", "causet.spec-benchmark/v3"],
 ]);
 
 // Profile identifiers name contracts documented elsewhere -- the serialization
 // profile in docs/canonical-json/, the identifier protocol in docs/identity/ --
 // rather than record families, so they carry no schema document.
 const PROFILE_IDENTIFIERS = new Set([
-  "vcs-lab.canonical-json/v1",
-  "vcs-lab.logical-id/v1",
+  "causet.canonical-json/v1",
+  "causet.logical-id/v1",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ for (const file of fs.readdirSync(schemasDir).filter((name) => name.endsWith(".s
 
 const ANNOTATION_KEYWORDS = new Set([
   "$schema", "$id", "title", "description", "format", "examples", "deprecated",
-  "x-vcs-lab-scope", "default",
+  "x-causet-scope", "default",
 ]);
 const SCHEMA_KEYWORDS = new Set([
   "$defs", "$ref", "type", "const", "enum", "pattern", "required",
@@ -193,7 +193,7 @@ test("every schema identifier used in src has exactly one catalog document", () 
   const used = new Set();
   for (const file of fs.readdirSync(path.join(projectRoot, "src"))) {
     const content = fs.readFileSync(path.join(projectRoot, "src", file), "utf8");
-    for (const match of content.matchAll(/vcs-lab\.[a-z-]+\/v\d+/g)) used.add(match[0]);
+    for (const match of content.matchAll(/causet\.[a-z-]+\/v\d+/g)) used.add(match[0]);
   }
   // The compatibility registry holds versions as data rather than as literal
   // identifiers, so a family's registered, readable, and written versions are
@@ -217,7 +217,7 @@ test("every schema identifier used in src has exactly one catalog document", () 
   }
   for (const [id, successor] of HISTORICAL_OUTPUT_DOCUMENTS) {
     assert.ok(documents.has(id), `historical output '${id}' must keep its document`);
-    assert.equal(documents.get(id).document["x-vcs-lab-scope"], "cli-output");
+    assert.equal(documents.get(id).document["x-causet-scope"], "cli-output");
     assert.ok(documents.has(successor) && used.has(successor),
       `historical output '${id}' must name a documented successor still used by src/`);
   }
@@ -238,14 +238,16 @@ test("document identity, file naming, and scope agree with the runtime registry"
     ["advertisement", "advertisement"],
   ]);
   for (const [id, { file, document }] of documents) {
-    const match = id.match(/^vcs-lab\.(.+)\/v(\d+)$/);
-    assert.ok(match, `$id '${id}' is not a versioned vcs-lab schema identifier`);
+    const match = id.match(/^causet\.(.+)\/v(\d+)$/);
+    assert.ok(match, `$id '${id}' is not a versioned causet schema identifier`);
     assert.equal(file, `${match[1]}.v${match[2]}.schema.json`, `file name for '${id}'`);
     assert.equal(document.$schema, "https://json-schema.org/draft/2020-12/schema", `$schema of '${id}'`);
-    assert.equal(document.properties?.schema?.const, id, `properties.schema.const of '${id}'`);
+    // Both spellings, because records written before issue #159 keep theirs (ADR-0039 §2).
+    assert.deepEqual(document.properties?.schema?.enum, [id, `vcs-lab.${match[1]}/v${match[2]}`],
+      `properties.schema.enum of '${id}'`);
     walkSchema(document, id);
 
-    const scope = document["x-vcs-lab-scope"];
+    const scope = document["x-causet-scope"];
     const classification = schemaClassification(id);
     if (scope === "cli-output") {
       assert.equal(classification.known, false,
@@ -517,33 +519,33 @@ function scenario() {
 test("live CLI records and outputs match their catalog documents", { timeout: 600_000 }, () => {
   const state = scenario();
   const cases = [
-    ["vcs-lab.note/v1", "note-container"],
-    ["vcs-lab.merge-plan/v1", "merge-plan"],
-    ["vcs-lab.forecast/v2", "forecast"],
-    ["vcs-lab.reconciliation-operation/v4", "reconciliation-journal"],
-    ["vcs-lab.spec-merge-plan/v2", "spec-merge-plan"],
-    ["vcs-lab.spec-manifest/v4", "spec-manifest"],
-    ["vcs-lab.rebase-operation/v3", "rebase-journal"],
-    ["vcs-lab.rebase-plan/v3", "rebase-plan"],
-    ["vcs-lab.rebase-forecast/v3", "rebase-forecast"],
-    ["vcs-lab.workspace/v1", "workspace"],
-    ["vcs-lab.checkpoint/v1", "checkpoint"],
-    ["vcs-lab.workspace-prune/v1", "workspace-prune"],
-    ["vcs-lab.workspaces/v1", "workspace-registry"],
-    ["vcs-lab.metadata-status/v1", "metadata-status"],
-    ["vcs-lab.metadata-validation/v1", "metadata-validation"],
-    ["vcs-lab.metadata-export/v1", "metadata-export"],
-    ["vcs-lab.metadata-envelope/v1", "metadata-envelope"],
-    ["vcs-lab.metadata-import-preview/v1", "metadata-import-preview"],
-    ["vcs-lab.metadata-import/v1", "metadata-import"],
-    ["vcs-lab.capabilities/v1", "capabilities"],
-    ["vcs-lab.capability-report/v1", "capability-report"],
-    ["vcs-lab.metadata-import/v1", "metadata-import-parked"],
-    ["vcs-lab.quarantined-record/v1", "quarantined-record"],
-    ["vcs-lab.dispositions/v1", "disposition-registry"],
-    ["vcs-lab.metadata-disposition/v1", "metadata-disposition"],
-    ["vcs-lab.repository-scale-benchmark/v1", "scale-benchmark"],
-    ["vcs-lab.spec-benchmark/v3", "spec-benchmark"],
+    ["causet.note/v1", "note-container"],
+    ["causet.merge-plan/v1", "merge-plan"],
+    ["causet.forecast/v2", "forecast"],
+    ["causet.reconciliation-operation/v4", "reconciliation-journal"],
+    ["causet.spec-merge-plan/v2", "spec-merge-plan"],
+    ["causet.spec-manifest/v4", "spec-manifest"],
+    ["causet.rebase-operation/v3", "rebase-journal"],
+    ["causet.rebase-plan/v3", "rebase-plan"],
+    ["causet.rebase-forecast/v3", "rebase-forecast"],
+    ["causet.workspace/v1", "workspace"],
+    ["causet.checkpoint/v1", "checkpoint"],
+    ["causet.workspace-prune/v1", "workspace-prune"],
+    ["causet.workspaces/v1", "workspace-registry"],
+    ["causet.metadata-status/v1", "metadata-status"],
+    ["causet.metadata-validation/v1", "metadata-validation"],
+    ["causet.metadata-export/v1", "metadata-export"],
+    ["causet.metadata-envelope/v1", "metadata-envelope"],
+    ["causet.metadata-import-preview/v1", "metadata-import-preview"],
+    ["causet.metadata-import/v1", "metadata-import"],
+    ["causet.capabilities/v1", "capabilities"],
+    ["causet.capability-report/v1", "capability-report"],
+    ["causet.metadata-import/v1", "metadata-import-parked"],
+    ["causet.quarantined-record/v1", "quarantined-record"],
+    ["causet.dispositions/v1", "disposition-registry"],
+    ["causet.metadata-disposition/v1", "metadata-disposition"],
+    ["causet.repository-scale-benchmark/v1", "scale-benchmark"],
+    ["causet.spec-benchmark/v3", "spec-benchmark"],
   ];
   for (const [schemaId, outputName] of cases) {
     const value = state.outputs.get(outputName);
@@ -552,18 +554,18 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
     assertValid(schemaId, value, outputName);
   }
 
-  assertValid("vcs-lab.landing/v1", state.outputs.get("landing"), "landing");
-  assertValid("vcs-lab.application/v1", state.outputs.get("cherry-pick"), "cherry-pick");
-  assertValid("vcs-lab.reconciliation/v6", state.outputs.get("reconcile-result").receipt, "reconcile receipt");
-  assertValid("vcs-lab.merge-plan/v1", state.outputs.get("reconcile-result").plan, "reconcile plan");
-  assertValid("vcs-lab.rebase/v3", state.outputs.get("rebase-result").receipt, "rebase receipt");
-  assertValid("vcs-lab.rebase-plan/v3", state.outputs.get("rebase-result").plan, "rebase plan");
-  assertValid("vcs-lab.engine-differential/v1", state.outputs.get("doctor").differential, "doctor differential");
+  assertValid("causet.landing/v1", state.outputs.get("landing"), "landing");
+  assertValid("causet.application/v1", state.outputs.get("cherry-pick"), "cherry-pick");
+  assertValid("causet.reconciliation/v6", state.outputs.get("reconcile-result").receipt, "reconcile receipt");
+  assertValid("causet.merge-plan/v1", state.outputs.get("reconcile-result").plan, "reconcile plan");
+  assertValid("causet.rebase/v3", state.outputs.get("rebase-result").receipt, "rebase receipt");
+  assertValid("causet.rebase-plan/v3", state.outputs.get("rebase-result").plan, "rebase plan");
+  assertValid("causet.engine-differential/v1", state.outputs.get("doctor").differential, "doctor differential");
   for (const workspace of state.outputs.get("workspace-list")) {
-    assertValid("vcs-lab.workspace/v1", workspace, `workspace listing '${workspace.name}'`);
+    assertValid("causet.workspace/v1", workspace, `workspace listing '${workspace.name}'`);
   }
   for (const entry of state.outputs.get("disposition-registry").dispositions) {
-    assertValid("vcs-lab.disposition/v1", entry, `disposition '${entry.id}'`);
+    assertValid("causet.disposition/v1", entry, `disposition '${entry.id}'`);
   }
 });
 
@@ -582,15 +584,15 @@ test("every published note record satisfies its document and the runtime validat
   assert.deepEqual(
     [...families].sort(),
     [
-      "vcs-lab.amendment/v1",
-      "vcs-lab.application/v1",
-      "vcs-lab.application/v4",
-      "vcs-lab.interactive-absorption/v1",
-      "vcs-lab.landing/v1",
-      "vcs-lab.rebase-application/v1",
-      "vcs-lab.rebase/v3",
-      "vcs-lab.reconciliation/v6",
-      "vcs-lab.resolution/v1",
+      "causet.amendment/v1",
+      "causet.application/v1",
+      "causet.application/v4",
+      "causet.interactive-absorption/v1",
+      "causet.landing/v1",
+      "causet.rebase-application/v1",
+      "causet.rebase/v3",
+      "causet.reconciliation/v6",
+      "causet.resolution/v1",
     ],
     "the scenario must publish every note-record family",
   );

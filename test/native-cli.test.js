@@ -5,12 +5,12 @@
  * usage failure that `src/cli.js` raises from the arguments alone, and
  * delegates everything else to the JavaScript CLI. This suite runs each such
  * invocation through both, with the Rust CLI forbidden to delegate
- * (`VLAB_DELEGATE=never`), and requires byte-identical stdout, stderr and exit
+ * (`CAUSET_DELEGATE=never`), and requires byte-identical stdout, stderr and exit
  * status. It then checks the delegation path itself.
  *
  * This is the one suite that launches the JavaScript CLI directly rather than
  * through `test-support/vlab-command.js`: the JavaScript CLI is the oracle here,
- * whichever implementation `VLAB_CLI` selects. The Rust CLI is `VLAB_CLI` when
+ * whichever implementation `CAUSET_CLI` selects. The Rust CLI is `CAUSET_CLI` when
  * that names an executable, else the workspace's release build. Without one,
  * the suite is skipped; `node scripts/build-native.mjs` builds it.
  */
@@ -39,7 +39,7 @@ const outside = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vc
 after(() => fs.rmSync(outside, { recursive: true, force: true }));
 
 // The suite's mode variables would otherwise decide these cases for both sides.
-const neutral = { VLAB_ENGINE: "", VLAB_FORECAST_ENGINE: "", VLAB_DELEGATE: "" };
+const neutral = { CAUSET_ENGINE: "", CAUSET_FORECAST_ENGINE: "", CAUSET_DELEGATE: "" };
 
 function runOracle(args, env = {}) {
   return spawnSync(process.execPath, [oracle, ...args], {
@@ -58,7 +58,7 @@ function runRust(args, env = {}) {
 // Trace timings are the one volatile part of a delegated command's output.
 const withoutTimings = (text) => text.replace(/^(\[cst trace\]) [\d.]+ms /gm, "$1 <ms> ");
 
-function assertSame(args, env = {}, rustEnv = { VLAB_DELEGATE: "never" }) {
+function assertSame(args, env = {}, rustEnv = { CAUSET_DELEGATE: "never" }) {
   const expected = runOracle(args, env);
   const actual = runRust(args, { ...env, ...rustEnv });
   const label = `${JSON.stringify(args)} ${JSON.stringify(env)}`;
@@ -124,10 +124,17 @@ test("global flag and environment failures are answered natively as prose", { sk
   ]) {
     assertSame(args);
   }
-  assertSame(["version"], { VLAB_ENGINE: "bogus" });
-  assertSame(["help"], { VLAB_FORECAST_ENGINE: "bogus", VLAB_ENGINE: "bogus" });
-  assertSame(["--engine=git", "version"], { VLAB_ENGINE: "bogus" });
-  assertSame(["--forecast-engine=merge-tree", "x"], { VLAB_FORECAST_ENGINE: "bogus" });
+  assertSame(["version"], { CAUSET_ENGINE: "bogus" });
+  assertSame(["help"], { CAUSET_FORECAST_ENGINE: "bogus", CAUSET_ENGINE: "bogus" });
+  assertSame(["--engine=git", "version"], { CAUSET_ENGINE: "bogus" });
+  assertSame(["--forecast-engine=merge-tree", "x"], { CAUSET_FORECAST_ENGINE: "bogus" });
+  // The former names are read when the new ones are absent, and lose when both are set
+  // (ADR-0039 §5). `undefined` removes the neutral value from the spawned environment.
+  const unset = { CAUSET_ENGINE: undefined, CAUSET_FORECAST_ENGINE: undefined };
+  assertSame(["version"], { ...unset, VLAB_ENGINE: "bogus" });
+  assertSame(["version"], { ...unset, VLAB_FORECAST_ENGINE: "bogus" });
+  assertSame(["version"], { ...unset, VLAB_ENGINE: "bogus", CAUSET_ENGINE: "git" });
+  assertSame(["version"], { ...unset, VLAB_ENGINE: "native", CAUSET_ENGINE: "bogus" });
 });
 
 test("a flag without its value is answered natively, as prose even with --json", { skip }, () => {
@@ -155,25 +162,25 @@ test("a repository command is delegated with its output and exit status intact",
   assert.equal(assertSame(["doctor"], {}, {}).status, 128);
 });
 
-test("VLAB_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
-  // VLAB_JS_CLI naming a missing file proves the route: a native answer would
+test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
+  // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
   const missing = path.join(outside, "missing.js");
-  const forced = runRust(["--version"], { VLAB_DELEGATE: "always", VLAB_JS_CLI: missing });
+  const forced = runRust(["--version"], { CAUSET_DELEGATE: "always", CAUSET_JS_CLI: missing });
   assert.notEqual(forced.status, 0);
   assert.equal(forced.stdout, "");
-  const native = runRust(["--version"], { VLAB_JS_CLI: missing });
+  const native = runRust(["--version"], { CAUSET_JS_CLI: missing });
   assert.equal(native.status, 0);
-  assertSame(["--version"], {}, { VLAB_DELEGATE: "always" });
-  assertSame(["no-such-command", "--json"], {}, { VLAB_DELEGATE: "always" });
+  assertSame(["--version"], {}, { CAUSET_DELEGATE: "always" });
+  assertSame(["no-such-command", "--json"], {}, { CAUSET_DELEGATE: "always" });
 });
 
-test("VLAB_DELEGATE=never refuses a command that is not ported", { skip }, () => {
-  const result = runRust(["doctor"], { VLAB_DELEGATE: "never" });
+test("CAUSET_DELEGATE=never refuses a command that is not ported", { skip }, () => {
+  const result = runRust(["doctor"], { CAUSET_DELEGATE: "never" });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /^cst: 'doctor' is not ported to the Rust CLI yet/);
-  const invalid = runRust(["--version"], { VLAB_DELEGATE: "sometimes" });
+  const invalid = runRust(["--version"], { CAUSET_DELEGATE: "sometimes" });
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /^cst: Unknown delegation mode 'sometimes'/);
 });

@@ -240,7 +240,7 @@ test("--park-conflicts applies the rest and parks the conflicting record", (t) =
   assert.equal(result.parked[0].ref, ref);
   assert.equal(git(clone, "cat-file", "-t", ref), "blob");
   const payload = JSON.parse(git(clone, "cat-file", "-p", ref));
-  assert.equal(payload.schema, "vcs-lab.quarantined-record/v1");
+  assert.equal(payload.schema, "causet.quarantined-record/v1");
   assert.equal(payload.recordId, landing.id);
   assert.equal(payload.sourceLineage, sourceLineage);
   assert.equal(payload.record.sourceSubject, "a subject the peer never wrote");
@@ -303,8 +303,8 @@ test("keep-local returns the local record to service and remembers the rejection
     clone, "metadata", "dispose", landing.id, "--keep-local",
     "--reason", "the peer altered a receipt we published",
   );
-  assert.equal(disposed.schema, "vcs-lab.metadata-disposition/v1");
-  assert.equal(disposed.disposition.schema, "vcs-lab.disposition/v1");
+  assert.equal(disposed.schema, "causet.metadata-disposition/v1");
+  assert.equal(disposed.disposition.schema, "causet.disposition/v1");
   assert.equal(disposed.disposition.outcome, "keep-local");
   assert.deepEqual(disposed.disposition.rejectedDigests, [rejectedDigest]);
   assert.equal(disposed.disposition.reason, "the peer altered a receipt we published");
@@ -327,7 +327,7 @@ test("keep-local returns the local record to service and remembers the rejection
   const registry = JSON.parse(
     fs.readFileSync(path.join(clone, ".git", "vcs-lab", "dispositions.json"), "utf8"),
   );
-  assert.equal(registry.schema, "vcs-lab.dispositions/v1");
+  assert.equal(registry.schema, "causet.dispositions/v1");
   assert.equal(registry.dispositions.length, 1);
   const status = vlabJson(clone, "metadata", "status");
   assert.equal(status.scopes.sharedLocal.dispositions.count, 1);
@@ -474,7 +474,7 @@ test("a resolution ref the destination points elsewhere is refused, not merged",
     "the destination ref is left exactly where it pointed",
   );
   assert.equal(
-    parked.records.filter((entry) => entry.schema === "vcs-lab.resolution/v1")
+    parked.records.filter((entry) => entry.schema === "causet.resolution/v1")
       .every((entry) => entry.action === "park"),
     true,
     "the records that name the refused ref are parked with it",

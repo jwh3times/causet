@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.spec-manifest/v4",
+  "$id": "causet.spec-manifest/v4",
   "title": "Sparse specification manifest",
   "description": "Tracked-portable sparse Markdown identity manifest, stored under .vcs-lab/specs/ beside its source document (src/specs.js serializeSpecManifest). Blocks are re-derived from the canonical Markdown on read; vlab spec show --json returns the materialized view, which adds sourceBytes, sourceLines, and blocks.",
-  "x-vcs-lab-scope": "tracked",
+  "x-causet-scope": "tracked",
   "type": "object",
   "required": [
     "schema", "artifactId", "source", "sourceHash", "entityCount",
     "representation", "parser", "idAlgorithm", "idOverrides"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.spec-manifest/v4" },
+    "schema": { "enum": ["causet.spec-manifest/v4", "vcs-lab.spec-manifest/v4"] },
     "artifactId": { "type": "string", "minLength": 1 },
     "source": {
       "type": "string",

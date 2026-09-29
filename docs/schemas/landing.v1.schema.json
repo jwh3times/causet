@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.landing/v1",
+  "$id": "causet.landing/v1",
   "title": "Landing receipt",
   "description": "Compact or hard-squash causal landing receipt, attached to the landing commit (shared-portable note record; src/landings.js).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema", "type", "id", "mode", "sourceRef", "sourceHead", "sourceSubject",
@@ -11,7 +11,7 @@
     "absorbedChanges", "resultTree", "createdAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.landing/v1" },
+    "schema": { "enum": ["causet.landing/v1", "vcs-lab.landing/v1"] },
     "type": { "const": "landing" },
     "id": { "type": "string", "minLength": 4 },
     "mode": { "enum": ["compact", "hard-squash"] },

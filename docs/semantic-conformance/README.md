@@ -13,7 +13,7 @@ them in the forced modes described in [testing.md](../testing.md).
 
 ## Fixture contract
 
-The catalog is versioned as `vcs-lab.semantic-conformance-fixtures/v1`. It is a
+The catalog is versioned as `causet.semantic-conformance-fixtures/v1`. It is a
 test artifact, not a new runtime record family. Each profile names its parser,
 merge algorithm, and writer manifest version. Top-level `coverage` lists shared
 rules; profile `coverage` adds format-specific cases such as Markdown heading

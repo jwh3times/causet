@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.merge-plan/v1",
+  "$id": "causet.merge-plan/v1",
   "title": "Causal merge plan",
   "description": "Source/target coverage plan (CLI output of vlab merge-plan --json; embedded as the plan of forecast and reconciliation records; src/merge-plan.js).",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -21,7 +21,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.merge-plan/v1"
+      "enum": ["causet.merge-plan/v1", "vcs-lab.merge-plan/v1"]
     },
     "targetHead": {
       "$ref": "#/$defs/oid"

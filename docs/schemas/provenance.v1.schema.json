@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.provenance/v1",
+  "$id": "causet.provenance/v1",
   "title": "Authorship provenance record",
   "description": "Declared claim about which actors produced a commit's content and in what role, attached to that commit (shared-portable note record; src/provenance.js). The record is an UNAUTHENTICATED CLAIM by whoever ran the command that wrote it, never detection of how content was produced (FR-TRUST-04): vcs-lab records only what an actor declared and never infers a role from content, from a Git author, or from any existing commit trailer such as Co-Authored-By. Signing such a claim is FR-TRUST-02 and does not exist; the canonical-JSON profile reserves the integrity and signatures members for it. The runtime validator in src/schemas.js remains the authority for the cross-member rules this document states in prose: actors is never empty, a declared record has an empty carriedFrom, and a carried record names at least one source.",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema", "type", "id", "commit", "changeId", "actors", "origin",
     "carriedFrom", "createdAt"
   ],
   "properties": {
-    "schema": { "const": "vcs-lab.provenance/v1" },
+    "schema": { "enum": ["causet.provenance/v1", "vcs-lab.provenance/v1"] },
     "type": { "const": "provenance" },
     "id": { "type": "string", "minLength": 4 },
     "commit": {

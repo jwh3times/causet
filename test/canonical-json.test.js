@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { CANONICAL_JSON_PROFILE, canonicalJson } from "../src/canonical-json.js";
 import { canonicalJson as legacyCanonicalJson } from "../src/metadata.js";
 import { readEnvelope } from "../src/metadata-envelope.js";
-import { METADATA_LINEAGE_ALGORITHM } from "../src/schemas.js";
+import { canonicalSchema, METADATA_LINEAGE_ALGORITHM } from "../src/schemas.js";
 import { sha256 } from "../src/ids.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,7 +17,10 @@ const vectors = JSON.parse(
 
 test("the shared vector file names the frozen profile", () => {
   assert.equal(vectors.schema, "vcs-lab.canonical-json-vectors/v1");
-  assert.equal(vectors.profile, CANONICAL_JSON_PROFILE);
+  // The vectors are frozen and name the profile by its label before issue #159:
+  // the same algorithm (ADR-0039 §1).
+  assert.equal(vectors.profile, "vcs-lab.canonical-json/v1");
+  assert.equal(canonicalSchema(vectors.profile), CANONICAL_JSON_PROFILE);
   assert.equal(vectors.hashAlgorithm, "sha256");
   assert.ok(vectors.vectors.length > 0);
   assert.ok(vectors.encoders.length > 0);

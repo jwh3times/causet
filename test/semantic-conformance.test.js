@@ -17,7 +17,7 @@ function expectation(entry) {
 }
 
 function validateCatalog(value) {
-  assert.equal(value.schema, "vcs-lab.semantic-conformance-fixtures/v1");
+  assert.equal(value.schema, "causet.semantic-conformance-fixtures/v1");
   assert.ok(value.cases.length > 0);
   assert.deepEqual(Object.keys(value.profiles).sort(), Object.keys(adapters).sort(), "every profile has a runner and vice versa");
   assert.equal(new Set(value.cases.map((entry) => entry.id)).size, value.cases.length);

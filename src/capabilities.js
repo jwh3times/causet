@@ -14,12 +14,15 @@ import {
   METADATA_LINEAGE_ALGORITHM,
   RECORD_FAMILIES,
   RESOURCE_BOUNDS,
+  LEGACY_SCHEMA_NAMESPACE,
   RESOLUTION_SIGNATURE_ALGORITHM,
+  SCHEMA_NAMESPACE,
   assertReadableSchema,
+  canonicalSchema,
 } from "./schemas.js";
 import { VERSION } from "./version.js";
 
-export const CAPABILITY_REPORT_SCHEMA = "vcs-lab.capability-report/v1";
+export const CAPABILITY_REPORT_SCHEMA = "causet.capability-report/v1";
 
 /** Object formats this build reads and writes. */
 const OBJECT_FORMATS = Object.freeze(["sha1", "sha256"]);
@@ -62,7 +65,7 @@ export const UNADVERTISED_BOUNDS = Object.freeze({
 export function capabilityDocument(options = {}) {
   const document = {
     schema: CAPABILITIES_SCHEMA,
-    producer: { name: "causal-vcs-lab", version: VERSION },
+    producer: { name: "causet", version: VERSION },
     families: [...RECORD_FAMILIES]
       .filter(([, policy]) => EXCHANGED_SCOPES.includes(policy.scope))
       .map(([family, policy]) => ({
@@ -73,6 +76,17 @@ export function capabilityDocument(options = {}) {
         unknownVersion: policy.unknownVersion,
       }))
       .sort((left, right) => left.family.localeCompare(right.family)),
+    // Read-only spellings of the families above (ADR-0039 §4): records written
+    // before issue #159 carry them forever. Additive, so a peer that does not
+    // know this member ignores it and sees a smaller exchange, which is accurate.
+    aliases: [...RECORD_FAMILIES]
+      .filter(([, policy]) => EXCHANGED_SCOPES.includes(policy.scope))
+      .map(([family]) => ({
+        spelling: `${LEGACY_SCHEMA_NAMESPACE}${family.slice(SCHEMA_NAMESPACE.length)}`,
+        family,
+        access: "read",
+      }))
+      .sort((left, right) => left.spelling.localeCompare(right.spelling)),
     profiles: {
       canonicalJson: CANONICAL_JSON_PROFILE,
       logicalId: LOGICAL_ID_PROFILE,
@@ -188,7 +202,7 @@ export function readPeerCapabilities(target) {
       { code: "malformed-input" });
   }
   assertReadableSchema(parsed.schema, `The capability document at '${resolved}'`, {
-    family: "vcs-lab.capabilities",
+    family: "causet.capabilities",
     recovery: "Ask the peer for a version this build reads, or upgrade this build.",
   });
   return { source: "document", document: normalizePeer(parsed) };
@@ -242,7 +256,11 @@ function normalizePeer(document) {
       features: Array.isArray(document.features),
       repository: Boolean(document.repository),
     },
-    families: Array.isArray(document.families) ? document.families : [],
+    // A peer from before issue #159 names families `vcs-lab.*`; they are the
+    // same families (ADR-0039 §2).
+    families: Array.isArray(document.families)
+      ? document.families.map((entry) => ({ ...entry, family: canonicalSchema(entry?.family) }))
+      : [],
     features: Array.isArray(document.features) ? document.features : [],
     objectFormats: Array.isArray(document.objectFormats) ? document.objectFormats : [],
   };
@@ -366,7 +384,9 @@ function compareNamed(localGroup, peerGroup, stated) {
       local: value,
       peer: stated ? (peerGroup?.[name] ?? null) : null,
       stated: Boolean(stated),
-      agreed: stated ? peerGroup?.[name] === value : true,
+      // A profile label differs only by spelling across issue #159: the same
+      // algorithm under a new name (ADR-0039 §1).
+      agreed: stated ? canonicalSchema(peerGroup?.[name]) === value : true,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -467,7 +487,7 @@ export function assertExchangePossible(report) {
       }
     }
   }
-  const own = report.families.find((entry) => entry.family === "vcs-lab.capabilities");
+  const own = report.families.find((entry) => entry.family === "causet.capabilities");
   if (own && own.status === "blocked") {
     throw new CliError(
       `The peer reads no ${own.family} version this build writes (writes ${own.localWritten.join(", ")}; peer reads ${own.peerReadable.join(", ") || "none"}).`,

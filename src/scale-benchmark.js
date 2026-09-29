@@ -25,7 +25,7 @@ import {
 import { CliError } from "./errors.js";
 import { temporaryDirectory } from "./store.js";
 
-const SCALE_BENCHMARK_SCHEMA = "vcs-lab.repository-scale-benchmark/v1";
+const SCALE_BENCHMARK_SCHEMA = "causet.repository-scale-benchmark/v1";
 // A batched scan costs a small fixed number of processes regardless of entity
 // count, so a processes-per-entity ratio only indicates per-entity launches
 // once the fixture holds enough entities for that fixed cost to be diluted.
@@ -525,7 +525,7 @@ export function benchmarkRepositoryScale(options = {}, fixtureCallback = null) {
         historyDepth + index,
       );
       appendNote(target, {
-        schema: "vcs-lab.application/v1",
+        schema: "causet.application/v1",
         type: "application",
         id: `scale_application_${String(index).padStart(6, "0")}`,
         originCommit: baseCommit,
@@ -708,7 +708,7 @@ export function benchmarkRepositoryScale(options = {}, fixtureCallback = null) {
         causalNoteVolume: true,
         resolutionVolume: true,
         documentationVolume: {
-          companionSchema: "vcs-lab.spec-benchmark/v3",
+          companionSchema: "causet.spec-benchmark/v3",
           command: "cst spec benchmark --documents <n> --blocks <n> --json",
         },
       },

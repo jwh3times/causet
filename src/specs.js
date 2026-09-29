@@ -11,11 +11,11 @@ import {
   writePendingOperation,
 } from "./pending-operation.js";
 import { CliError } from "./errors.js";
-import { assertWithinBound } from "./schemas.js";
+import { assertWithinBound, canonicalSchema } from "./schemas.js";
 
 export const SPEC_PARSER = "stable-markdown-blocks/v2";
 export const SPEC_MERGE_ALGORITHM = "stable-markdown-three-way/v2";
-export const SPEC_MANIFEST_SCHEMA = "vcs-lab.spec-manifest/v4";
+export const SPEC_MANIFEST_SCHEMA = "causet.spec-manifest/v4";
 export const SPEC_ID_ALGORITHM = "artifact-semantic-key-sha256/v1";
 
 export function normalizeMarkdown(text) {
@@ -147,11 +147,11 @@ function manifestParser(storedManifest) {
   }
   if (
     ![
-      "vcs-lab.spec-manifest/v1",
-      "vcs-lab.spec-manifest/v2",
-      "vcs-lab.spec-manifest/v3",
+      "causet.spec-manifest/v1",
+      "causet.spec-manifest/v2",
+      "causet.spec-manifest/v3",
       SPEC_MANIFEST_SCHEMA,
-    ].includes(storedManifest.schema)
+    ].includes(canonicalSchema(storedManifest.schema))
   ) {
     throw new CliError(`Unsupported specification manifest '${storedManifest.schema}'.`,
       { code: "unknown-schema-version" });
@@ -160,9 +160,9 @@ function manifestParser(storedManifest) {
     throw new CliError("Specification manifest is missing artifact identity.",
       { code: "malformed-input" });
   }
-  const parser = storedManifest.schema === SPEC_MANIFEST_SCHEMA
+  const parser = canonicalSchema(storedManifest.schema) === SPEC_MANIFEST_SCHEMA
     ? SPEC_PARSER : "stable-markdown-blocks/v1";
-  const sparse = ["vcs-lab.spec-manifest/v3", SPEC_MANIFEST_SCHEMA].includes(storedManifest.schema);
+  const sparse = ["causet.spec-manifest/v3", SPEC_MANIFEST_SCHEMA].includes(canonicalSchema(storedManifest.schema));
   if (
     ((sparse || storedManifest.parser !== undefined) && storedManifest.parser !== parser) ||
     ((sparse || storedManifest.idAlgorithm !== undefined) && storedManifest.idAlgorithm !== SPEC_ID_ALGORITHM)
@@ -394,9 +394,9 @@ function changesBetween(oldManifest, manifest) {
 function priorManifestView(storedManifest, currentRaw, cwd) {
   if (!storedManifest) return null;
   manifestParser(storedManifest);
-  const migrating = storedManifest.schema !== SPEC_MANIFEST_SCHEMA;
+  const migrating = canonicalSchema(storedManifest.schema) !== SPEC_MANIFEST_SCHEMA;
   const matches = (raw) => sha256(raw) === storedManifest.sourceHash ||
-    storedManifest.schema === "vcs-lab.spec-manifest/v1" &&
+    canonicalSchema(storedManifest.schema) === "causet.spec-manifest/v1" &&
     sha256(raw.replace(/\n/g, "\r\n")) === storedManifest.sourceHash;
   let priorRaw = null;
   if (storedManifest.sourceBlob) {
@@ -463,7 +463,7 @@ function indexSpecWithContext(file, context, cwd, options = {}) {
     !options.force &&
     options.lazy &&
     options.sourceBlob &&
-    storedManifest?.schema === SPEC_MANIFEST_SCHEMA &&
+    canonicalSchema(storedManifest?.schema) === SPEC_MANIFEST_SCHEMA &&
     storedManifest?.parser === SPEC_PARSER &&
     storedManifest?.idAlgorithm === SPEC_ID_ALGORITHM &&
     storedManifest?.sourceBlob === options.sourceBlob
@@ -486,7 +486,7 @@ function indexSpecWithContext(file, context, cwd, options = {}) {
   const sourceHash = sha256(raw);
   if (
     !options.force &&
-    storedManifest?.schema === SPEC_MANIFEST_SCHEMA &&
+    canonicalSchema(storedManifest?.schema) === SPEC_MANIFEST_SCHEMA &&
     storedManifest?.parser === SPEC_PARSER &&
     storedManifest?.idAlgorithm === SPEC_ID_ALGORITHM &&
     storedManifest?.sourceHash === sourceHash
@@ -517,7 +517,7 @@ function indexSpecWithContext(file, context, cwd, options = {}) {
     cacheHit: false,
     cacheMode: null,
     contentRead: true,
-    migratedFrom: storedManifest?.schema && storedManifest.schema !== SPEC_MANIFEST_SCHEMA
+    migratedFrom: storedManifest?.schema && canonicalSchema(storedManifest.schema) !== SPEC_MANIFEST_SCHEMA
       ? storedManifest.schema
       : null,
     written: true,
@@ -611,7 +611,7 @@ export function indexAllSpecs(cwd = process.cwd(), options = {}) {
     if (stored) manifestParser(stored);
     if (options.force) return true;
     return !(
-      stored?.schema === SPEC_MANIFEST_SCHEMA &&
+      canonicalSchema(stored?.schema) === SPEC_MANIFEST_SCHEMA &&
       stored?.parser === SPEC_PARSER &&
       stored?.idAlgorithm === SPEC_ID_ALGORITHM &&
       stored?.sourceBlob &&
@@ -748,7 +748,7 @@ function revisionStageFromObjects(file, revision, sourceObject, manifestObject) 
   }
   const normalizedHash = sha256(raw);
   const compatibleHashes = [normalizedHash];
-  if (storedManifest.schema === "vcs-lab.spec-manifest/v1") {
+  if (canonicalSchema(storedManifest.schema) === "causet.spec-manifest/v1") {
     compatibleHashes.push(sha256(raw.replace(/\n/g, "\r\n")));
   }
   if (!compatibleHashes.includes(storedManifest.sourceHash)) {
@@ -999,14 +999,14 @@ export function planSpecMerge(
       cwd,
     );
     migrationStages = [base, ours, theirs].flatMap((stage, index) => {
-      if (!stage.exists || stage.manifest.schema === SPEC_MANIFEST_SCHEMA) return [];
+      if (!stage.exists || canonicalSchema(stage.manifest.schema) === SPEC_MANIFEST_SCHEMA) return [];
       const corrected = migrateManifest(stage.raw, stage.manifest);
       return JSON.stringify(corrected.blocks) === JSON.stringify(stage.manifest.blocks)
         ? [] : [["base", "ours", "theirs"][index]];
     });
   } catch (error) {
     return {
-      schema: "vcs-lab.spec-merge-plan/v2",
+      schema: "causet.spec-merge-plan/v2",
       algorithm: SPEC_MERGE_ALGORITHM,
       status: "blocked",
       file: relative,
@@ -1031,7 +1031,7 @@ export function planSpecMerge(
   }
   if (migrationStages.length) {
     return {
-      schema: "vcs-lab.spec-merge-plan/v2",
+      schema: "causet.spec-merge-plan/v2",
       algorithm: SPEC_MERGE_ALGORITHM,
       status: "blocked",
       file: relative,
@@ -1060,7 +1060,7 @@ export function planSpecMerge(
   );
   if (artifacts.size !== 1) {
     return {
-      schema: "vcs-lab.spec-merge-plan/v2",
+      schema: "causet.spec-merge-plan/v2",
       algorithm: SPEC_MERGE_ALGORITHM,
       status: "blocked",
       file: relative,
@@ -1163,7 +1163,7 @@ export function planSpecMerge(
   }
 
   return {
-    schema: "vcs-lab.spec-merge-plan/v2",
+    schema: "causet.spec-merge-plan/v2",
     algorithm: SPEC_MERGE_ALGORITHM,
     status: conflicts.length ? "blocked" : "clean",
     file: relative,
@@ -1478,7 +1478,7 @@ export function benchmarkSpecIndex(options = {}) {
     const legacyV2Files = coldRun.results.map((result) => {
       const manifest = result.manifest;
       return Buffer.from(`${JSON.stringify({
-        schema: "vcs-lab.spec-manifest/v2",
+        schema: "causet.spec-manifest/v2",
         artifactId: manifest.artifactId,
         source: manifest.source,
         sourceHash: manifest.sourceHash,
@@ -1498,7 +1498,7 @@ export function benchmarkSpecIndex(options = {}) {
       0,
     );
     return {
-      schema: "vcs-lab.spec-benchmark/v3",
+      schema: "causet.spec-benchmark/v3",
       manifestSchema: SPEC_MANIFEST_SCHEMA,
       documents,
       blocksPerDocument,

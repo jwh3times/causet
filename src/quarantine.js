@@ -3,12 +3,12 @@ import { runGit } from "./git.js";
 import { listRefs, readGitObjects, refExists, repoContext } from "./engine.js";
 import { CliError } from "./errors.js";
 import { ensureLabRuntime, labRuntimeDir, readJson, writeJson } from "./store.js";
-import { assertReadableSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
+import { assertReadableSchema, canonicalSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
 
 export const QUARANTINE_REFS = "refs/vcs-lab/quarantine";
-export const PARKED_RECORD_SCHEMA = "vcs-lab.quarantined-record/v1";
-export const DISPOSITIONS_SCHEMA = "vcs-lab.dispositions/v1";
-export const DISPOSITION_SCHEMA = "vcs-lab.disposition/v1";
+export const PARKED_RECORD_SCHEMA = "causet.quarantined-record/v1";
+export const DISPOSITIONS_SCHEMA = "causet.dispositions/v1";
+export const DISPOSITION_SCHEMA = "causet.disposition/v1";
 
 /**
  * The conflict policy's two local stores (ADR-0030).
@@ -116,7 +116,7 @@ export function listParkedRecords(cwd = process.cwd()) {
     } catch {
       return { ...base, readable: false, reason: "malformed-record", payload: null };
     }
-    if (payload?.schema !== PARKED_RECORD_SCHEMA) {
+    if (canonicalSchema(payload?.schema) !== PARKED_RECORD_SCHEMA) {
       return { ...base, readable: false, reason: "unknown-schema-version", payload: null };
     }
     return { ...base, readable: true, reason: null, payload };
@@ -168,8 +168,8 @@ export function readParkedRecord(recordId, cwd = process.cwd()) {
     );
   }
   assertReadableSchema(entry.payload.schema, `The parked record at '${entry.ref}'`, {
-    family: "vcs-lab.quarantined-record",
-    recovery: "Read it with the vcs-lab build that parked it.",
+    family: "causet.quarantined-record",
+    recovery: "Read it with the causet build that parked it.",
   });
   return entry;
 }
@@ -235,8 +235,8 @@ export function readDispositions(cwd = process.cwd()) {
     dispositions: [],
   });
   assertReadableSchema(registry?.schema, `The disposition registry at '${registryPath}'`, {
-    family: "vcs-lab.dispositions",
-    recovery: "Read it with the vcs-lab build that wrote it.",
+    family: "causet.dispositions",
+    recovery: "Read it with the causet build that wrote it.",
   });
   if (!Array.isArray(registry.dispositions)) {
     throw new CliError(`The disposition registry at '${registryPath}' has no disposition list.`,
@@ -244,8 +244,8 @@ export function readDispositions(cwd = process.cwd()) {
   }
   for (const entry of registry.dispositions) {
     assertReadableSchema(entry?.schema, `A disposition entry in '${registryPath}'`, {
-      family: "vcs-lab.disposition",
-      recovery: "Read it with the vcs-lab build that wrote it.",
+      family: "causet.disposition",
+      recovery: "Read it with the causet build that wrote it.",
     });
   }
   return registry;

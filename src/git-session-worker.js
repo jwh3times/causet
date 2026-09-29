@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { parentPort, threadId, workerData } from "node:worker_threads";
+import { environmentValue } from "./environment.js";
 
 function sessionDiagnostic(event, details = {}) {
-  if (process.env.VLAB_GIT_SESSION_DIAGNOSTICS !== "1") return;
+  if (environmentValue("GIT_SESSION_DIAGNOSTICS") !== "1") return;
   const line = `[cst session-worker] ${JSON.stringify({
     at: new Date().toISOString(),
     pid: process.pid,
@@ -12,7 +13,7 @@ function sessionDiagnostic(event, details = {}) {
     ...details,
   })}\n`;
   process.stderr.write(line);
-  const filePath = process.env.VLAB_GIT_SESSION_DIAGNOSTICS_FILE;
+  const filePath = environmentValue("GIT_SESSION_DIAGNOSTICS_FILE");
   if (!filePath) return;
   try {
     appendFileSync(filePath, line, "utf8");

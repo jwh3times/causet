@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.reconciliation/v6",
+  "$id": "causet.reconciliation/v6",
   "title": "Reconciliation receipt",
   "description": "Final reconciliation summary with coverage, applications, trees, and timing, attached to the result commit (shared-portable note record; src/operations.js finalizeReconciliation).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema",
@@ -30,7 +30,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.reconciliation/v6"
+      "enum": ["causet.reconciliation/v6", "vcs-lab.reconciliation/v6"]
     },
     "type": {
       "const": "reconciliation"

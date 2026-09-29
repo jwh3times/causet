@@ -99,15 +99,15 @@ test file, so a shared module there would be executed as one.
 Run it again with the invocation-scoped Git object session forced:
 
 ```powershell
-$env:VLAB_GIT_SESSION = "1"
+$env:CAUSET_GIT_SESSION = "1"
 npm test
-Remove-Item Env:VLAB_GIT_SESSION -ErrorAction SilentlyContinue
+Remove-Item Env:CAUSET_GIT_SESSION -ErrorAction SilentlyContinue
 ```
 
 On POSIX shells:
 
 ```bash
-VLAB_GIT_SESSION=1 npm test
+CAUSET_GIT_SESSION=1 npm test
 ```
 
 Run it with the session forced off as well. "Ordinary mode" is not one mode:
@@ -118,13 +118,13 @@ path because the gate ran where the session is on. Forcing both settings on
 every host closes the gap:
 
 ```powershell
-$env:VLAB_GIT_SESSION = "0"
+$env:CAUSET_GIT_SESSION = "0"
 npm test
-Remove-Item Env:VLAB_GIT_SESSION -ErrorAction SilentlyContinue
+Remove-Item Env:CAUSET_GIT_SESSION -ErrorAction SilentlyContinue
 ```
 
 ```bash
-VLAB_GIT_SESSION=0 npm test
+CAUSET_GIT_SESSION=0 npm test
 ```
 
 Run it with each forecast engine forced. The default engine differs by
@@ -139,33 +139,33 @@ to the worktree simulator where it must; the worktree run exercises the oracle
 throughout:
 
 ```powershell
-$env:VLAB_FORECAST_ENGINE = "merge-tree"
+$env:CAUSET_FORECAST_ENGINE = "merge-tree"
 npm test
-$env:VLAB_FORECAST_ENGINE = "worktree"
+$env:CAUSET_FORECAST_ENGINE = "worktree"
 npm test
-Remove-Item Env:VLAB_FORECAST_ENGINE -ErrorAction SilentlyContinue
+Remove-Item Env:CAUSET_FORECAST_ENGINE -ErrorAction SilentlyContinue
 ```
 
 ```bash
-VLAB_FORECAST_ENGINE=merge-tree npm test
-VLAB_FORECAST_ENGINE=worktree npm test
+CAUSET_FORECAST_ENGINE=merge-tree npm test
+CAUSET_FORECAST_ENGINE=worktree npm test
 ```
 
 Run it with the native read engine selected. Build the optional binding with
 `npm run build:native` first to exercise its five supported operations. CI builds
-it on both platforms and sets `VLAB_REQUIRE_NATIVE=1` so missing binaries cannot
+it on both platforms and sets `CAUSET_REQUIRE_NATIVE=1` so missing binaries cannot
 silently qualify fallback. A source checkout without a prebuild remains usable
 through Git. Every read must go through the engine seam (`src/engine.js`), because
 a read that bypasses the seam is refused in this mode (ADR-0019):
 
 ```powershell
-$env:VLAB_ENGINE = "native"
+$env:CAUSET_ENGINE = "native"
 npm test
-Remove-Item Env:VLAB_ENGINE -ErrorAction SilentlyContinue
+Remove-Item Env:CAUSET_ENGINE -ErrorAction SilentlyContinue
 ```
 
 ```bash
-VLAB_ENGINE=native npm test
+CAUSET_ENGINE=native npm test
 ```
 
 See [native build and qualification](native-engine.md) for the toolchain,
@@ -177,41 +177,41 @@ assert executed operations and zero Git processes for supported inputs.
 the suites, the demos, `scripts/benchmark-regression.mjs`, and the whole-command
 part of `scripts/measure-real-repository.mjs` goes through
 `test-support/vlab-command.js`. By default that is this checkout's JavaScript
-CLI (`node bin/vlab.js`). `VLAB_CLI=<path>` selects another implementation, such
+CLI (`node bin/vlab.js`). `CAUSET_CLI=<path>` selects another implementation, such
 as a Rust build of the CLI (ADR-0037, #140):
 - a `.js`, `.mjs` or `.cjs` path runs under the current Node;
 - any other path is executed directly;
 - a path that does not exist stops the run.
 
 ```bash
-VLAB_CLI=path/to/cst npm test
-VLAB_CLI=path/to/cst VLAB_ENGINE=native npm test   # combines with every mode
+CAUSET_CLI=path/to/cst npm test
+CAUSET_CLI=path/to/cst CAUSET_ENGINE=native npm test   # combines with every mode
 ```
 
 Some tests exercise the JavaScript modules directly and never launch the CLI;
 they cannot say anything about another implementation. Rather than a
 hand-maintained list, the suite counts CLI invocations per test. When
-`VLAB_CLI` is set, each test that made none is reported with a diagnostic line,
+`CAUSET_CLI` is set, each test that made none is reported with a diagnostic line,
 `did not invoke the CLI under test (…); module-level test`. With
-`VLAB_CLI_REPORT=<file>` set as well, it also appends one JSON line per such
+`CAUSET_CLI_REPORT=<file>` set as well, it also appends one JSON line per such
 test to that file, so a whole run can be counted. Those tests still run and
-still pass or fail against the JavaScript modules, but a `VLAB_CLI` run's
+still pass or fail against the JavaScript modules, but a `CAUSET_CLI` run's
 evidence for the selected CLI is the tests *not* in that report.
 
-With `VLAB_CLI` pointing at `bin/vlab.js` explicitly, every mode passes exactly
-as it does with `VLAB_CLI` unset; that run proves the indirection adds nothing.
-`VLAB_CLI=native/target/release/cst.exe` (or `cst` off Windows) in all six
+With `CAUSET_CLI` pointing at `bin/vlab.js` explicitly, every mode passes exactly
+as it does with `CAUSET_CLI` unset; that run proves the indirection adds nothing.
+`CAUSET_CLI=native/target/release/cst.exe` (or `cst` off Windows) in all six
 modes is the qualification a ported command needs before it stops delegating
 (ADR-0037 decision 4).
 
 The Rust CLI (`native/cli`, #141) delegates each command it has not ported to
-the JavaScript CLI. `VLAB_DELEGATE=always` forces delegation of everything, to
-compare a ported command with the oracle, and `VLAB_DELEGATE=never` refuses
+the JavaScript CLI. `CAUSET_DELEGATE=always` forces delegation of everything, to
+compare a ported command with the oracle, and `CAUSET_DELEGATE=never` refuses
 delegation, so what remains is only what the Rust CLI answers itself.
 `test/native-cli.test.js` uses `never` to compare every native answer (help,
 version, and each usage failure, human and JSON) with the JavaScript CLI byte
 for byte, and checks that a delegated command's output and exit status pass
-through unchanged. It uses the `VLAB_CLI` executable, or else the release build
+through unchanged. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 
 The suite includes `test/schema-catalog.test.js`, which keeps the published
@@ -272,7 +272,7 @@ with `notes-locked`.
 
 Attributed-commit lock refusal also pins HEAD, raw index bytes, worktree content,
 and existing notes. Retrying after release must create one commit and one
-provenance record. Additional fixtures cover `VLAB_AGENT` and `--all` from a linked
+provenance record. Additional fixtures cover `CAUSET_AGENT` and `--all` from a linked
 worktree, an unborn HEAD, undeclared commits bypassing a held notes lock, and a
 Git hook requiring that the lock already be held. A failing hook must release
 the lock. A separate Git notes-ref lock forces failure after commit creation:
@@ -651,7 +651,7 @@ every Git process the whole `cst reconcile` invocation starts and how many
 records it publishes. That is the one stretch whose work scales with the number
 of changes, and until v3 nothing covered it — a per-application `git notes list`
 was added there and passed the entire suite, every suite mode, and this
-check. The count comes from the `VLAB_TRACE=1` trace rather than from the
+check. The count comes from the `CAUSET_TRACE=1` trace rather than from the
 receipt, because the receipt's `timings.git` block covers the application phase
 only: the receipt is built before publication runs, so it cannot report its own
 publication cost. The [receipt timing contract](schemas/receipt-timings.md)
@@ -691,7 +691,7 @@ modes disagree fails the check. A forecast mode the host cannot run
 (merge-tree below Git 2.49) is reported as skipped.
 
 Latency selection uses an explicit, stable operator-assigned machine label:
-`--host <label>` takes precedence over `VLAB_BENCHMARK_HOST`. Labels use 1–64
+`--host <label>` takes precedence over `CAUSET_BENCHMARK_HOST`. Labels use 1–64
 lowercase ASCII letters, digits, dots, underscores, or hyphens, starting with a
 letter or digit. Choose a public-safe label such as `lab-linux-a`, retain it
 across toolchain upgrades, and use a different label for a different machine.
@@ -700,7 +700,7 @@ Recording requires a label and refuses before measurement if it is missing.
 
 Schema v3 stores identified entries in `hosts`. Each entry includes its label,
 platform, architecture, CPU models, logical CPU count, memory capacity, OS
-release, and `VLAB_ENGINE`, `VLAB_GIT_SESSION`, and `VLAB_FORECAST_ENGINE`
+release, and `CAUSET_ENGINE`, `CAUSET_GIT_SESSION`, and `CAUSET_FORECAST_ENGINE`
 overrides in `host`, alongside `recordedAt`, `git`, and `node`. Hardware and
 overrides must match for latency comparison; OS, Git, and Node versions remain
 provenance for interpreting upgrades rather than creating new identities.
@@ -788,7 +788,7 @@ because a suite no document names is a suite nobody maintains.
 
 | Suite | What it fails on |
 | --- | --- |
-| `test/native-engine.test.js` | The optional binding disagreeing with Git, or a build that loads but answers differently. It skips when no prebuild is present, so a green run does not by itself mean the binding was exercised — `VLAB_ENGINE=native` is what proves that. |
+| `test/native-engine.test.js` | The optional binding disagreeing with Git, or a build that loads but answers differently. It skips when no prebuild is present, so a green run does not by itself mean the binding was exercised — `CAUSET_ENGINE=native` is what proves that. |
 | `test/benchmark-host.test.js` | The baseline file's schema, host keying, reference selection, and the v2 migration. It reads the committed `legacyHosts` as fixture material, which is why a baseline re-record must touch `hosts.<label>` and nothing else. |
 | `test/scale-benchmark-analysis.test.js` | The repository-scale benchmark's own arithmetic — per-entity amplification and the phase summary — without running the benchmark. |
 | `test/ci-plan.test.js` | The change classifier in `scripts/ci-plan.mjs` choosing the wrong job set, which is how a documentation-only change would silently skip a suite it needed. |
@@ -922,7 +922,7 @@ on three fixtures it builds and removes itself:
   copy.
 
 It checks that deterministic reads print identical bytes across samples,
-engines and implementations, and counts Git processes from `VLAB_TRACE`
+engines and implementations, and counts Git processes from `CAUSET_TRACE`
 lines. It emits JSON evidence and a Markdown summary:
 
 ```sh

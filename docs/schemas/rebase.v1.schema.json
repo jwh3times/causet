@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.rebase/v1",
+  "$id": "causet.rebase/v1",
   "title": "Causal rebase receipt",
   "description": "Completed causal rebase summary with plan identity, omissions, applications, trees, and timing, attached to the rebased tip (shared-portable note record; src/rebase-operations.js finalizeRebase).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema",
@@ -37,7 +37,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.rebase/v1"
+      "enum": ["causet.rebase/v1", "vcs-lab.rebase/v1"]
     },
     "type": {
       "const": "rebase"

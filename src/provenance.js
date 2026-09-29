@@ -1,9 +1,10 @@
 import { newId } from "./ids.js";
 import { appendNote, readNotes } from "./notes.js";
 import { CliError } from "./errors.js";
-import { RESOURCE_BOUNDS, withinBound } from "./schemas.js";
+import { environmentValue } from "./environment.js";
+import { canonicalSchema, RESOURCE_BOUNDS, withinBound } from "./schemas.js";
 
-export const PROVENANCE_SCHEMA = "vcs-lab.provenance/v1";
+export const PROVENANCE_SCHEMA = "causet.provenance/v1";
 
 /**
  * The closed role vocabulary (FR-ID-08). A closed set is the point: an open
@@ -28,7 +29,7 @@ export const PROVENANCE_ROLES = Object.freeze({
  * recorded when the content is written cannot be recovered afterwards by any
  * store, so the cheap declaration at commit time is the whole game.
  */
-export const AGENT_ENV = "VLAB_AGENT";
+export const AGENT_ENV = "CAUSET_AGENT";
 
 /**
  * Provenance is **declared, never inferred** (FR-TRUST-04). Nothing in this
@@ -91,7 +92,7 @@ export function declaredActors(options = {}, env = process.env) {
       actors.push({ role, actor });
     }
   }
-  const agent = env?.[AGENT_ENV];
+  const agent = env ? environmentValue("AGENT", env) : undefined;
   if (typeof agent === "string" && agent.trim() !== "") {
     actors.push({ role: "generated", actor: agent.trim() });
   }
@@ -148,7 +149,7 @@ export function provenanceFor(commits, cwd = process.cwd()) {
   const notes = readNotes(unique, cwd);
   for (const commit of unique) {
     const records = (notes.get(commit)?.records ?? []).filter(
-      (record) => record?.schema === PROVENANCE_SCHEMA,
+      (record) => canonicalSchema(record?.schema) === PROVENANCE_SCHEMA,
     );
     if (records.length > 0) found.set(commit, records);
   }
@@ -249,7 +250,7 @@ export function carryProvenanceForApplications(applications, cwd = process.cwd()
 export function formatProvenance(entries) {
   if (entries.length === 0) {
     return "No provenance has been declared for the commits inspected.\n\n" +
-      "Provenance is declared, never inferred: vcs-lab records only what an " +
+      "Provenance is declared, never inferred: causet records only what an " +
       "actor stated with --authored-by, --generated-by, --reviewed-by, or " +
       `the ${AGENT_ENV} environment variable.`;
   }

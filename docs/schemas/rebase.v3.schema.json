@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.rebase/v3",
+  "$id": "causet.rebase/v3",
   "title": "Causal rebase receipt",
   "description": "Completed causal rebase summary with plan identity, omissions, applications, recreated merges, trees, and timing, attached to the rebased tip (shared-portable note record; src/rebase-operations.js finalizeRebase). A strict superset of v1: v2 adds `recreatedMerges`, which a merge-preserving rewrite fills and a linear one leaves empty (ADR-0034). v3 adds the declared interactive program of ADR-0035 \u2014 `reword`, `edit`, `squash`, and `fixup` as plan actions, each with its own identity rule \u2014 and is a strict superset of v2.",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema",
@@ -41,7 +41,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.rebase/v3"
+      "enum": ["causet.rebase/v3", "vcs-lab.rebase/v3"]
     },
     "type": {
       "const": "rebase"
@@ -422,7 +422,7 @@
           },
           "resolutions": {
             "type": "array",
-            "description": "The resolution outcomes the join required. Each publishes an ordinary vcs-lab.resolution/v1 record, because it is an ordinary resolution: that a merge rather than a pick produced the conflict changes nothing about its signature (ADR-0034).",
+            "description": "The resolution outcomes the join required. Each publishes an ordinary causet.resolution/v1 record, because it is an ordinary resolution: that a merge rather than a pick produced the conflict changes nothing about its signature (ADR-0034).",
             "items": {
               "type": "object",
               "required": [
@@ -514,7 +514,7 @@
     },
     "amendments": {
       "type": "array",
-      "description": "The divergences `edit` recorded, each published as a vcs-lab.amendment/v1 note on the rewritten commit. An edit that changed nothing records none.",
+      "description": "The divergences `edit` recorded, each published as a causet.amendment/v1 note on the rewritten commit. An edit that changed nothing records none.",
       "items": {
         "type": "object",
         "required": [
@@ -551,7 +551,7 @@
     },
     "absorptions": {
       "type": "array",
-      "description": "The identities each surviving commit took in, each published as a vcs-lab.interactive-absorption/v1 note on that commit. Coverage for an absorbed change comes from the record, as it does from a landing.",
+      "description": "The identities each surviving commit took in, each published as a causet.interactive-absorption/v1 note on that commit. Coverage for an absorbed change comes from the record, as it does from a landing.",
       "items": {
         "type": "object",
         "required": [

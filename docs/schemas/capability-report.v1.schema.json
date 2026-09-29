@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.capability-report/v1",
+  "$id": "causet.capability-report/v1",
   "title": "Capability negotiation report",
   "description": "What two capability documents conclude about an exchange (CLI output of vlab capabilities --against; src/capabilities.js). A pure function of the two documents: it reads no network, no repository, and no clock, so where the peer document came from cannot change the result (ADR-0033).",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": [
     "schema",
@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.capability-report/v1"
+      "enum": ["causet.capability-report/v1", "vcs-lab.capability-report/v1"]
     },
     "local": {
       "$ref": "#/$defs/side"

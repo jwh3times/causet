@@ -80,6 +80,11 @@ The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038), insta
 still works as an alias for the same program during the transition, and prints identical
 output.
 
+Environment variables are named `CAUSET_*` (for example `CAUSET_ENGINE`). During the same
+transition the former `VLAB_*` name of each is still read when the `CAUSET_*` one is not set;
+when both are set, `CAUSET_*` wins. `cst doctor` lists any `VLAB_*` variable it is still
+reading, under `legacyEnvironment` (ADR-0039 §5).
+
 Alternatively, run it without installing:
 
 ```bash
@@ -153,7 +158,7 @@ git show -s --format=%P HEAD
 
 The first-parent log contains one landing unit, while the commit has a real second parent. Stock Git can safely merge the branches later.
 
-`cst compact-merge <source>` is the same landing as `cst merge <source> --compact`, and `cst hard-squash <source>` the same as `cst merge <source> --hard-squash`; `cst merge` without a mode flag lands compactly. All three print their `vcs-lab.landing/v1` receipt as JSON whatever the flags.
+`cst compact-merge <source>` is the same landing as `cst merge <source> --compact`, and `cst hard-squash <source>` the same as `cst merge <source> --hard-squash`; `cst merge` without a mode flag lands compactly. All three print their `causet.landing/v1` receipt as JSON whatever the flags.
 
 ### Strict hard squash and causal reconciliation
 
@@ -200,13 +205,13 @@ git log --graph --oneline --decorate --branches --tags --remotes
 
 ### Failure output
 
-Every command's failure has a machine-readable form. Without `--json` a failure prints `cst: <message>` on stderr, as it always has. With `--json` it prints a `vcs-lab.error/v1` envelope on stdout instead, and leaves stderr empty:
+Every command's failure has a machine-readable form. Without `--json` a failure prints `cst: <message>` on stderr, as it always has. With `--json` it prints a `causet.error/v1` envelope on stdout instead, and leaves stderr empty:
 
 ```json
 {
-  "schema": "vcs-lab.error/v1",
+  "schema": "causet.error/v1",
   "code": "unknown-schema-version",
-  "message": "The reconciliation journal carries unsupported schema \"vcs-lab.reconciliation-operation/v99\".",
+  "message": "The reconciliation journal carries unsupported schema \"causet.reconciliation-operation/v99\".",
   "details": "This build reads v4 of that family.",
   "exitCode": 1
 }
@@ -220,11 +225,11 @@ Every command's failure has a machine-readable form. Without `--json` a failure 
 
 ```bash
 cst commit -m "Add the parser" --generated-by claude-opus-5 --reviewed-by "Jerry Holland"
-VLAB_AGENT=claude-opus-5 cst commit -m "Add the tests"   # an agent harness sets this once
+CAUSET_AGENT=claude-opus-5 cst commit -m "Add the tests"   # an agent harness sets this once
 cst provenance HEAD            # or: cst provenance main --all
 ```
 
-When actors are declared by flags or `VLAB_AGENT`, commit takes the shared notes
+When actors are declared by flags or `CAUSET_AGENT`, commit takes the shared notes
 lock before invoking Git and holds it through provenance publication. A
 `notes-locked` refusal leaves HEAD, the index, and worktree content unchanged,
 including with `--all`; retry after the holder releases the lock. Commits with no
@@ -258,9 +263,9 @@ cst verify-proof proof.json
 cst verify-proof proof.json --offline
 ```
 
-`cst proof-bundle` always prints JSON (`vcs-lab.proof-bundle/v1`): the merge plan with the target commits and change IDs, the reachable accepted receipts and what each absorbs, and the advisory patch-equivalent set, hashed under the canonical JSON profile. `cst verify-proof` re-derives every classification from that evidence with its own copy of the proof lattice and reports three checks separately: `integrity` catches editing, `classification` catches a claim that does not follow from the stated evidence even when the hash was restated, and `repository` checks evidence, the complete ordered source inventory, commit identities and subjects, counts, lineage, and physical/effective bases against the current repository. Duplicate commits and inconsistent counts also fail offline checks. `--offline` skips the repository check: success establishes internal consistency, while evidence truth, source completeness, commit identities, and bases remain unchecked; a bundle from an unrelated repository is reported as `different-repository`. The command exits non-zero when the bundle does not verify.
+`cst proof-bundle` always prints JSON (`causet.proof-bundle/v1`): the merge plan with the target commits and change IDs, the reachable accepted receipts and what each absorbs, and the advisory patch-equivalent set, hashed under the canonical JSON profile. `cst verify-proof` re-derives every classification from that evidence with its own copy of the proof lattice and reports three checks separately: `integrity` catches editing, `classification` catches a claim that does not follow from the stated evidence even when the hash was restated, and `repository` checks evidence, the complete ordered source inventory, commit identities and subjects, counts, lineage, and physical/effective bases against the current repository. Duplicate commits and inconsistent counts also fail offline checks. `--offline` skips the repository check: success establishes internal consistency, while evidence truth, source completeness, commit identities, and bases remain unchecked; a bundle from an unrelated repository is reported as `different-repository`. The command exits non-zero when the bundle does not verify.
 
-`cst audit identity` scans every commit reachable from any ref and every causal record. It reports commits carrying more than one `Change-Id` trailer, commits sharing a `Change-Id` with no identity-preserving application record linking them, applied commits with more than one claimed origin, and records that break the identity invariants, and it exits non-zero when it reports errors (`--json` emits `vcs-lab.identity-audit/v1`). It also warns, without failing, when provenance actor names look like one actor spelled two ways, such as `codex` and `OpenAI Codex`; the [actor naming convention](docs/identity/README.md#8-naming-a-provenance-actor) says how to spell them. A `Change-Id` is a line of text anyone with repository access can write, so identifiers coordinate work rather than authenticate it and the audit is the defence ([docs/identity](docs/identity/README.md)).
+`cst audit identity` scans every commit reachable from any ref and every causal record. It reports commits carrying more than one `Change-Id` trailer, commits sharing a `Change-Id` with no identity-preserving application record linking them, applied commits with more than one claimed origin, and records that break the identity invariants, and it exits non-zero when it reports errors (`--json` emits `causet.identity-audit/v1`). It also warns, without failing, when provenance actor names look like one actor spelled two ways, such as `codex` and `OpenAI Codex`; the [actor naming convention](docs/identity/README.md#8-naming-a-provenance-actor) says how to spell them. A `Change-Id` is a line of text anyone with repository access can write, so identifiers coordinate work rather than authenticate it and the audit is the defence ([docs/identity](docs/identity/README.md)).
 
 ## Planning and forecasting a causal rebase
 
@@ -314,7 +319,7 @@ action whose result a forecast cannot predict, so a forecast containing one
 reports `pauses-for-content` and says it cannot be used as an approval.
 
 `rebase-forecast` saves a worktree-private
-`vcs-lab.rebase-forecast/v3` artifact. It simulates only the ordered replay
+`causet.rebase-forecast/v3` artifact. It simulates only the ordered replay
 queue in a disposable detached worktree, records every target-before and
 result tree, pins the plan fingerprint and candidate policy, and reports a
 complete predicted tree or a fail-closed conflict/unsupported reason. Dirty
@@ -434,7 +439,7 @@ HEAD, index, and working files are checked before and after and must be
 unchanged.
 
 With the merge-tree engine (`--forecast-engine merge-tree` or
-`VLAB_FORECAST_ENGINE=merge-tree`; the default on Windows) clean steps are
+`CAUSET_FORECAST_ENGINE=merge-tree`; the default on Windows) clean steps are
 simulated instead through one persistent `git merge-tree`
 process with no temporary worktree, pinning the same per-step and predicted
 trees. Any conflicted, empty, or otherwise unsupported step hands the whole
@@ -939,7 +944,7 @@ dropping every record on that attachment. See
 
 ## Verifying a plan without the repository
 
-`cst proof-bundle <source>` emits a `vcs-lab.proof-bundle/v2` document and
+`cst proof-bundle <source>` emits a `causet.proof-bundle/v2` document and
 `cst verify-proof <file>` checks it. The bundle carries the classification, the
 evidence it was derived from, and — since v2 — Git's own bindings for what it
 claims: the raw commit objects of the source range, a commit path from the target
@@ -1127,7 +1132,7 @@ listing command. See [session safety rules](docs/architecture.md#142-invocation-
 `--forecast-engine merge-tree` selects the merge-tree forecast
 engine for one invocation and `--forecast-engine worktree` the worktree
 simulator; without either, Windows uses the merge-tree engine and POSIX hosts
-the worktree simulator. `--engine native` (or `VLAB_ENGINE=native`) selects
+the worktree simulator. `--engine native` (or `CAUSET_ENGINE=native`) selects
 the optional [native resolution-read binding](docs/native-engine.md) for one
 invocation. Its five supported operations report successful execution under
 `nativeReads`; unsupported operations and unavailable bindings use Git and appear
@@ -1140,10 +1145,10 @@ that bypassed the engine seam (always zero; such a read is refused in native
 mode). Trace output contains command names, durations, and whether a query
 started a process, reused a persistent process, or hit the immutable object
 cache; it never includes file content or commit messages. For a hang or a
-leftover process, `VLAB_GIT_SESSION_DIAGNOSTICS=1` prints one JSON line per
+leftover process, `CAUSET_GIT_SESSION_DIAGNOSTICS=1` prints one JSON line per
 object-session and merge-tree-session lifecycle event (worker creation,
 request posting, shared-memory waits, Git responses, fallback, shutdown) to
-stderr, and `VLAB_GIT_SESSION_DIAGNOSTICS_FILE=<path>` appends the same lines
+stderr, and `CAUSET_GIT_SESSION_DIAGNOSTICS_FILE=<path>` appends the same lines
 to a file; both are off by default and never change session behaviour.
 
 Compare the read engines operation by operation in any repository with:
@@ -1186,7 +1191,7 @@ npm run test:benchmark -- --host lab-linux-a
 ```
 
 Use the stable label assigned to the actual machine, not just its operating
-system. `--host` takes precedence over `VLAB_BENCHMARK_HOST`, which can select
+system. `--host` takes precedence over `CAUSET_BENCHMARK_HOST`, which can select
 the same label for checks and recording. Labels remain stable across toolchain
 upgrades; different machines need different labels.
 
@@ -1289,11 +1294,11 @@ portable unreachable origins, plus a caller-isolated repository-scale fixture
 that verifies semantic scan results, process-amplification decisions, privacy,
 and cleanup, and the engine seam's import discipline, passthrough equality,
 bypass refusal, and differential report. The complete suite is also run with
-`VLAB_GIT_SESSION=1` and `VLAB_GIT_SESSION=0` to exercise the Windows-default
+`CAUSET_GIT_SESSION=1` and `CAUSET_GIT_SESSION=0` to exercise the Windows-default
 session path and the POSIX-default one-process path on every host, with each
-forecast engine forced (`VLAB_FORECAST_ENGINE=worktree` and
-`VLAB_FORECAST_ENGINE=merge-tree`) because the default engine differs by
-platform, and with `VLAB_ENGINE=native`, which refuses any repository read
+forecast engine forced (`CAUSET_FORECAST_ENGINE=worktree` and
+`CAUSET_FORECAST_ENGINE=merge-tree`) because the default engine differs by
+platform, and with `CAUSET_ENGINE=native`, which refuses any repository read
 that does not pass through `src/engine.js`. The GitHub Actions workflow in
 `.github/workflows/ci.yml` runs static checks for every PR and main push,
 with the default suite on Ubuntu and Windows for code PRs and on Ubuntu

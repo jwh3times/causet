@@ -120,7 +120,7 @@ test("a range containing a recreatable merge is supported, and says it is not li
   const { repo, spine, sideWork, merge } = forked(t);
   const plan = vlabJson(repo, "rebase-plan", "main");
 
-  assert.equal(plan.schema, "vcs-lab.rebase-plan/v3");
+  assert.equal(plan.schema, "causet.rebase-plan/v3");
   // The whole of what changed: `supported` no longer means "linear".
   assert.equal(plan.constraints.supported, true);
   assert.equal(plan.constraints.linearHistory, false);
@@ -253,7 +253,7 @@ test("a merge-preserving forecast predicts the join and leaves the caller alone"
   const headBefore = git(repo, "rev-parse", "HEAD");
 
   const forecast = vlabJson(repo, "rebase-forecast", "main");
-  assert.equal(forecast.schema, "vcs-lab.rebase-forecast/v3");
+  assert.equal(forecast.schema, "causet.rebase-forecast/v3");
   assert.equal(forecast.status, "complete");
   assert.equal(forecast.mode, "merge-preserving");
   assert.ok(forecast.predictedResultTree);
@@ -283,7 +283,7 @@ test("a recreated merge keeps the topology, takes a new identity, and claims not
 
   const result = vlabJson(repo, "rebase", "main");
   const receipt = result.receipt;
-  assert.equal(receipt.schema, "vcs-lab.rebase/v3");
+  assert.equal(receipt.schema, "causet.rebase/v3");
 
   // 1. The topology survived: the new tip is a two-parent merge whose parents
   //    are the rewritten spine and the rewritten side line, both above the new
@@ -368,7 +368,7 @@ test("the published receipt gives a planner no way to conclude anything from a j
   const published = (receipts.receipts ?? receipts).find?.(
     (record) => record.id === result.receipt.id,
   ) ?? result.receipt;
-  assert.equal(published.schema, "vcs-lab.rebase/v3");
+  assert.equal(published.schema, "causet.rebase/v3");
 
   // The two members a planner reads, and the join is in neither.
   assert.ok(!published.absorbedCommits.includes(merge));

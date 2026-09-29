@@ -165,7 +165,7 @@ function publishRetainedResolution(repo, options) {
   });
   git(repo, "update-ref", ref, commit);
   const record = {
-    schema: "vcs-lab.resolution/v1",
+    schema: "causet.resolution/v1",
     type: "resolution",
     id,
     signature,
@@ -188,7 +188,7 @@ function publishRetainedResolution(repo, options) {
   writeVlabNote(
     repo,
     commit,
-    note ? note(record) : { schema: "vcs-lab.note/v1", records: [record] },
+    note ? note(record) : { schema: "causet.note/v1", records: [record] },
   );
   return { record, ref, commit, tree };
 }
@@ -197,7 +197,7 @@ function tracedGitCommands(cwd, ...args) {
   const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
     cwd,
     encoding: "utf8",
-    env: testEnv({ VLAB_TRACE: "1" }),
+    env: testEnv({ CAUSET_TRACE: "1" }),
   });
   assert.equal(result.status, 0, result.stderr);
   const commands = [];
@@ -387,7 +387,7 @@ test("causal rebase planning is deterministic and replays only hard-squash conti
   const plan = JSON.parse(vlab(repo, "rebase-plan", "main", "--json"));
   const repeated = JSON.parse(vlab(repo, "rebase-plan", "main", "--json"));
 
-  assert.equal(plan.schema, "vcs-lab.rebase-plan/v3");
+  assert.equal(plan.schema, "causet.rebase-plan/v3");
   assert.equal(plan.mode, "linear");
   assert.equal(plan.ontoRef, "main");
   assert.equal(plan.sourceRef, "feature");
@@ -562,7 +562,7 @@ test("causal rebase forecasts are deterministic and preserve a dirty caller", (t
     vlab(repo, "rebase-forecast", "main", "--json"),
   );
 
-  assert.equal(first.schema, "vcs-lab.rebase-forecast/v3");
+  assert.equal(first.schema, "causet.rebase-forecast/v3");
   assert.equal(first.status, "complete");
   assert.equal(first.sourceRef, "feature");
   assert.equal(first.scope, "committed-heads");
@@ -747,7 +747,7 @@ test("causal rebase applies a reviewed continuation and ports unreachable origin
       "--json",
     ),
   );
-  assert.equal(result.receipt.schema, "vcs-lab.rebase/v3");
+  assert.equal(result.receipt.schema, "causet.rebase/v3");
   assert.equal(result.receipt.forecastId, forecast.id);
   assert.equal(result.receipt.sourceHead, continuation.commit);
   assert.equal(result.receipt.resultTree, forecast.predictedResultTree);
@@ -1291,13 +1291,13 @@ test("cherry-pick does not infer ordinary Git coverage from other branches or fo
 test("cherry-pick rejects invalid or non-preserving ordinary Git application evidence", (t) => {
   const { repo, origin, target, base } = ordinaryGitPickFixture(t);
   const record = {
-    schema: "vcs-lab.application/v1", type: "application", id: "apply_coverage_test",
+    schema: "causet.application/v1", type: "application", id: "apply_coverage_test",
     originCommit: origin, originChangeId: `git:${origin}`,
     appliedCommit: target, appliedChangeId: `git:${origin}`, targetBefore: base,
     relation: "same-logical-change", createdAt: new Date(0).toISOString(),
   };
   const cases = [
-    { schema: "vcs-lab.application/v99" },
+    { schema: "causet.application/v99" },
     { id: null },
     { targetBefore: "f".repeat(origin.length) },
     { targetBefore: git(repo, "rev-parse", "HEAD^{tree}") },
@@ -1312,7 +1312,7 @@ test("cherry-pick rejects invalid or non-preserving ordinary Git application evi
     // Every reset is inside this disposable fixture. Keep the source and the
     // previous application's notes to exercise target reachability as well.
     git(repo, "reset", "--hard", target);
-    writeVlabNote(repo, target, { schema: "vcs-lab.note/v1", records: [{ ...record, ...corruption }] });
+    writeVlabNote(repo, target, { schema: "causet.note/v1", records: [{ ...record, ...corruption }] });
     const result = JSON.parse(vlab(repo, "cherry-pick", origin, "--json"));
     assert.equal(result.relation, "same-logical-change", JSON.stringify(corruption));
     assert.equal(result.targetBefore, target);
@@ -1367,7 +1367,7 @@ test("cherry-pick --repeat re-applies a change the target's history already cove
     vlab(repo, "cherry-pick", origin.changeId, "--repeat", "--json"),
   );
   assert.equal(repeated.noOp, undefined);
-  assert.equal(repeated.schema, "vcs-lab.application/v1");
+  assert.equal(repeated.schema, "causet.application/v1");
   // A Change-Id names a logical change, and by now two commits carry this
   // one: the original and its first pick. The argument resolves to the
   // change's origin, the bearer no application record names as its applied
@@ -1556,7 +1556,7 @@ test("workspace create records the declared owner and focus", (t) => {
       "--json",
     ),
   );
-  assert.equal(declared.schema, "vcs-lab.workspace/v1");
+  assert.equal(declared.schema, "causet.workspace/v1");
   assert.equal(declared.owner, "agent-seven@example.test");
   assert.equal(declared.focus, "spec merge for checkout");
   assert.equal(declared.compatibilityBranch, "vlab/ws/agent-seven");
@@ -1787,14 +1787,14 @@ test("annotated Markdown keeps stable block IDs across edits and moves", (t) => 
       assert.equal(block.id, ids.get(block.semanticKey));
     }
   }
-  assert.equal(second.manifest.schema, "vcs-lab.spec-manifest/v4");
+  assert.equal(second.manifest.schema, "causet.spec-manifest/v4");
   assert.equal(second.cacheHit, false);
   assert.ok(second.changes.changed.length >= 1);
   assert.ok(second.changes.moved.length >= 1);
 
   const manifestBefore = fs.readFileSync(second.manifestPath, "utf8");
   const stored = JSON.parse(manifestBefore);
-  assert.equal(stored.schema, "vcs-lab.spec-manifest/v4");
+  assert.equal(stored.schema, "causet.spec-manifest/v4");
   assert.equal(Object.hasOwn(stored, "blocks"), false);
   assert.equal(stored.entityCount, second.manifest.blocks.length);
   const third = JSON.parse(vlab(repo, "spec", "index", "docs/spec.md", "--json"));
@@ -1886,7 +1886,7 @@ test("v2 manifests migrate to sparse v4 without changing logical IDs", (t) => {
     id: index === 0 ? "ent_legacy_preserved_identity" : block.id,
   }));
   const legacy = {
-    schema: "vcs-lab.spec-manifest/v2",
+    schema: "causet.spec-manifest/v2",
     artifactId: indexed.manifest.artifactId,
     source: indexed.manifest.source,
     sourceHash: indexed.manifest.sourceHash,
@@ -1901,13 +1901,13 @@ test("v2 manifests migrate to sparse v4 without changing logical IDs", (t) => {
   const migrated = JSON.parse(
     vlab(repo, "spec", "index", "docs/legacy.md", "--json"),
   );
-  assert.equal(migrated.migratedFrom, "vcs-lab.spec-manifest/v2");
+  assert.equal(migrated.migratedFrom, "causet.spec-manifest/v2");
   assert.deepEqual(
     migrated.manifest.blocks.map((block) => block.id),
     legacyBlocks.map((block) => block.id),
   );
   const stored = JSON.parse(fs.readFileSync(indexed.manifestPath, "utf8"));
-  assert.equal(stored.schema, "vcs-lab.spec-manifest/v4");
+  assert.equal(stored.schema, "causet.spec-manifest/v4");
   assert.equal(Object.hasOwn(stored, "blocks"), false);
   assert.equal(
     stored.idOverrides[legacyBlocks[0].semanticKey],
@@ -1932,7 +1932,7 @@ test("forecast deterministically merges independent specification blocks", (t) =
   const forecast = JSON.parse(
     vlab(repo, "forecast", "feature", "--git-session", "--forecast-engine", "worktree", "--json"),
   );
-  assert.equal(forecast.schema, "vcs-lab.forecast/v2");
+  assert.equal(forecast.schema, "causet.forecast/v2");
   assert.equal(forecast.status, "complete");
   assert.equal(forecast.counts.semanticSpec, 1);
   assert.equal(forecast.counts.exactResolution, 0);
@@ -1970,7 +1970,7 @@ test("forecast deterministically merges independent specification blocks", (t) =
       "--json",
     ),
   );
-  assert.equal(result.receipt.schema, "vcs-lab.reconciliation/v6");
+  assert.equal(result.receipt.schema, "causet.reconciliation/v6");
   assert.equal(result.receipt.resultTree, forecast.predictedResultTree);
   assert.equal(result.receipt.applied[0].semanticMerges.length, 1);
   assert.equal(
@@ -2259,8 +2259,8 @@ test("batch spec indexing skips unchanged manifests and measures generated corpo
   assert.equal(benchmark.unchanged.cacheHits, 2);
   assert.equal(benchmark.unchanged.manifestsWritten, 0);
   assert.equal(benchmark.oneBlockChanged.manifestsWritten, 1);
-  assert.equal(benchmark.schema, "vcs-lab.spec-benchmark/v3");
-  assert.equal(benchmark.manifestSchema, "vcs-lab.spec-manifest/v4");
+  assert.equal(benchmark.schema, "causet.spec-benchmark/v3");
+  assert.equal(benchmark.manifestSchema, "causet.spec-manifest/v4");
   assert.equal(benchmark.unchanged.contentReads, 0);
   assert.equal(benchmark.unchanged.blobCacheHits, 2);
   assert.ok(benchmark.manifestBytes < benchmark.legacyV2EquivalentBytes);
@@ -2963,11 +2963,11 @@ function assertBenchmarkLatencyAnalysis(report) {
 }
 
 function useGitTransport(t) {
-  const previous = process.env.VLAB_ENGINE;
-  process.env.VLAB_ENGINE = "git";
+  const previous = process.env.CAUSET_ENGINE;
+  process.env.CAUSET_ENGINE = "git";
   t.after(() => {
-    if (previous === undefined) delete process.env.VLAB_ENGINE;
-    else process.env.VLAB_ENGINE = previous;
+    if (previous === undefined) delete process.env.CAUSET_ENGINE;
+    else process.env.CAUSET_ENGINE = previous;
   });
 }
 
@@ -3042,7 +3042,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
       "3",
       "--json",
   );
-  assert.equal(scale.schema, "vcs-lab.repository-scale-benchmark/v1");
+  assert.equal(scale.schema, "causet.repository-scale-benchmark/v1");
   assert.deepEqual(scale.fixture, {
     profile: "custom-v1",
     historyDepth: 4,
@@ -3055,7 +3055,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
     filesPerArea: 3,
     treeFiles: 6,
   });
-  assert.equal(scale.coverage.documentationVolume.companionSchema, "vcs-lab.spec-benchmark/v3");
+  assert.equal(scale.coverage.documentationVolume.companionSchema, "causet.spec-benchmark/v3");
   assert.equal(scale.setup.expectedAbsentProbeFailures, 21);
   assert.equal(scale.setup.unexpectedGitFailures, 0);
   assert.equal(scale.measurements.history.result.commits, 4);
@@ -3173,7 +3173,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
   const traced = spawnSync(vlabCommand, [...vlabPrefix(), "doctor"], {
     cwd: repo,
     encoding: "utf8",
-    env: testEnv({ VLAB_TRACE: "1" }),
+    env: testEnv({ CAUSET_TRACE: "1" }),
   });
   assert.equal(traced.status, 0);
   assert.match(traced.stderr, /\[cst trace\].*git --version/);
@@ -3204,8 +3204,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_GIT_SESSION_DIAGNOSTICS: "1",
-        VLAB_GIT_SESSION_DIAGNOSTICS_FILE: shutdownDiagnosticsPath,
+        CAUSET_GIT_SESSION_DIAGNOSTICS: "1",
+        CAUSET_GIT_SESSION_DIAGNOSTICS_FILE: shutdownDiagnosticsPath,
       }),
     },
   );
@@ -3233,8 +3233,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_GIT_SESSION_DIAGNOSTICS: "1",
-        VLAB_GIT_SESSION_DIAGNOSTICS_FILE: diagnosticsPath,
+        CAUSET_GIT_SESSION_DIAGNOSTICS: "1",
+        CAUSET_GIT_SESSION_DIAGNOSTICS_FILE: diagnosticsPath,
       }),
     },
   );
@@ -3300,8 +3300,8 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   assert.deepEqual(fallback, plan);
 
   // The forced-session suite modes are self-checking here. With the session
-  // chosen by the environment alone, `VLAB_GIT_SESSION=1` must show the
-  // persistent process answering reads and `VLAB_GIT_SESSION=0` must show no
+  // chosen by the environment alone, `CAUSET_GIT_SESSION=1` must show the
+  // persistent process answering reads and `CAUSET_GIT_SESSION=0` must show no
   // session at all; unset, the default is platform-specific and not claimed.
   const inherited = spawnSync(
     vlabCommand,
@@ -3312,16 +3312,16 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   assert.deepEqual(JSON.parse(inherited.stdout), plan);
   const sessionTraces =
     (inherited.stderr.match(/persistent process|cache hit/g) ?? []).length;
-  if (process.env.VLAB_GIT_SESSION === "1") {
+  if (process.env.CAUSET_GIT_SESSION === "1") {
     assert.ok(
       sessionTraces > 0,
-      `VLAB_GIT_SESSION=1 must answer reads through the object session:\n${inherited.stderr}`,
+      `CAUSET_GIT_SESSION=1 must answer reads through the object session:\n${inherited.stderr}`,
     );
-  } else if (process.env.VLAB_GIT_SESSION === "0") {
+  } else if (process.env.CAUSET_GIT_SESSION === "0") {
     assert.equal(
       sessionTraces,
       0,
-      `VLAB_GIT_SESSION=0 must not open an object session:\n${inherited.stderr}`,
+      `CAUSET_GIT_SESSION=0 must not open an object session:\n${inherited.stderr}`,
     );
   }
 
@@ -3756,17 +3756,17 @@ test("metadata validation quarantines invalid causal claims from coverage", (t) 
   const targetTree = git(repo, "rev-parse", "HEAD^{tree}");
   const missing = "f".repeat(40);
   const invalid = {
-    schema: "vcs-lab.note/v1",
+    schema: "causet.note/v1",
     records: [
       {
-        schema: "vcs-lab.landing/v99",
+        schema: "causet.landing/v99",
         type: "landing",
         id: "land_unknown_schema",
         absorbedCommits: [feature.commit],
         absorbedChanges: [feature.changeId],
       },
       {
-        schema: "vcs-lab.landing/v1",
+        schema: "causet.landing/v1",
         type: "landing",
         id: "land_dangling_reference",
         mode: "hard-squash",
@@ -3817,7 +3817,7 @@ test("missing note attachments remain errors with retention fetch recovery", (t)
   git(repo, "commit", "-m", "temporary source");
   const attachment = git(repo, "rev-parse", "HEAD");
   writeVlabNote(repo, attachment, {
-    schema: "vcs-lab.note/v1",
+    schema: "causet.note/v1",
     records: [],
   });
 
@@ -3891,9 +3891,9 @@ test("metadata envelope round-trips accepted facts between clones idempotently",
 
   const attachment = git(repo, "rev-parse", "HEAD");
   const unknown = {
-    schema: "vcs-lab.note/v1",
+    schema: "causet.note/v1",
     records: [{
-      schema: "vcs-lab.future-proof/v9",
+      schema: "causet.future-proof/v9",
       type: "landing",
       id: "future_quarantined",
       absorbedCommits: [continuation.commit],
@@ -3943,9 +3943,9 @@ test("metadata envelope round-trips accepted facts between clones idempotently",
   git(conflictDestination, "config", "user.email", "vcs-lab@example.test");
   const conflictHead = git(conflictDestination, "rev-parse", "HEAD");
   const conflictingRecord = {
-    schema: "vcs-lab.note/v1",
+    schema: "causet.note/v1",
     records: [{
-      schema: "vcs-lab.application/v1",
+      schema: "causet.application/v1",
       type: "application",
       id: incomingId,
       originCommit: base.commit,
@@ -4133,7 +4133,7 @@ test("workspace listing batches one status query per existing path and preserves
     {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_TRACE: "1" }),
+      env: testEnv({ CAUSET_TRACE: "1" }),
     },
   );
 
@@ -4527,11 +4527,11 @@ test("batched resolution catalog lists retained records newest-first and quarant
     JSON.parse(vlab(repo, "resolve", "list", "--json", "--git-session")),
     catalog,
   );
-  for (const VLAB_GIT_SESSION of ["0", "1"]) {
+  for (const CAUSET_GIT_SESSION of ["0", "1"]) {
     const result = spawnSync(vlabCommand, [...vlabPrefix(), "resolve", "list", "--json"], {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_GIT_SESSION }),
+      env: testEnv({ CAUSET_GIT_SESSION }),
     });
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout), catalog);
@@ -4903,7 +4903,7 @@ function vlabWithEngine(cwd, engine, ...args) {
     cwd,
     encoding: "utf8",
     env: testEnv({
-      VLAB_FORECAST_ENGINE: engine,
+      CAUSET_FORECAST_ENGINE: engine,
     }),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -5063,7 +5063,7 @@ test("merge-tree forecasts of a clean queue match the worktree oracle without a 
   assert.equal(inlineFlag.engine, "merge-tree");
   assert.equal(mergeTree.engine, "merge-tree");
   assert.deepEqual(mergeTree.fallbacks, []);
-  assert.equal(mergeTree.schema, "vcs-lab.forecast/v2");
+  assert.equal(mergeTree.schema, "causet.forecast/v2");
   assert.equal(mergeTree.predictedResultTree, worktree.predictedResultTree);
   assert.deepEqual(mergeTree.timings.worktree, {
     setupMs: 0,
@@ -5476,7 +5476,7 @@ test("merge-tree forecasts fall back with a reason when the merge-tree session i
     cwd: repo,
     encoding: "utf8",
     env: testEnv({
-      VLAB_FORECAST_ENGINE: "merge-tree",
+      CAUSET_FORECAST_ENGINE: "merge-tree",
       CAUSET_TEST_MERGE_TREE_SESSION_FAILURE: "1",
     }),
   });
@@ -5591,7 +5591,7 @@ test("merge-tree forecasts fall back to git-too-old before the first request on 
 test("the default forecast engine is merge-tree on Windows and the worktree simulator elsewhere", (t) => {
   const { repo } = tooOldFixture(t);
   const env = testEnv();
-  delete env.VLAB_FORECAST_ENGINE;
+  delete env.CAUSET_FORECAST_ENGINE;
   const result = spawnSync(vlabCommand, [...vlabPrefix(), "forecast", "feature", "--json"], {
     cwd: repo,
     encoding: "utf8",
@@ -5652,7 +5652,7 @@ test("unknown merge-tree or worktree engine selections fail before any forecast 
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_FORECAST_ENGINE: "bogus",
+        CAUSET_FORECAST_ENGINE: "bogus",
       }),
     },
   );
@@ -5691,7 +5691,7 @@ test("unknown merge-tree or worktree engine selections fail before any forecast 
       cwd: repo,
       encoding: "utf8",
       env: testEnv({
-        VLAB_FORECAST_ENGINE: "bogus",
+        CAUSET_FORECAST_ENGINE: "bogus",
       }),
     },
   );
@@ -5764,7 +5764,7 @@ test("logical identifiers follow the versioned protocol and do not collide", asy
     parseLogicalId,
   } = ids;
 
-  assert.equal(LOGICAL_ID_PROFILE, "vcs-lab.logical-id/v1");
+  assert.equal(LOGICAL_ID_PROFILE, "causet.logical-id/v1");
   assert.equal(ID_ENTROPY_BITS, 48);
 
   // Form: every namespace mints something the parser accepts and splits the
@@ -5848,7 +5848,7 @@ test("the identity audit separates preserved identity from a real collision", (t
   vlab(repo, "cherry-pick", feature.commit);
 
   const clean = JSON.parse(vlab(repo, "audit", "identity", "--json"));
-  assert.equal(clean.schema, "vcs-lab.identity-audit/v1");
+  assert.equal(clean.schema, "causet.identity-audit/v1");
   assert.equal(clean.summary.clean, true, "preserved identity is not a collision");
   assert.equal(clean.summary.collisions, 0);
   assert.ok(clean.scanned.commits >= 3);
@@ -6014,7 +6014,7 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
   fs.writeFileSync(bundlePath, vlab(repo, "proof-bundle", "feature"));
   const bundle = JSON.parse(fs.readFileSync(bundlePath, "utf8"));
 
-  assert.equal(bundle.schema, "vcs-lab.proof-bundle/v2");
+  assert.equal(bundle.schema, "causet.proof-bundle/v2");
   assert.match(bundle.repository.lineage.id, /^lineage_[0-9a-f]{64}$/);
   const covered = bundle.changes.filter((change) => change.status === "covered");
   const fresh = bundle.changes.filter((change) => change.status === "new");
@@ -6075,7 +6075,7 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
   const victim = fabricated.changes.find((change) => change.status === "new");
   fabricated.evidence.receipts.push({
     id: "land_fabricated",
-    schema: "vcs-lab.landing/v1",
+    schema: "causet.landing/v1",
     type: "landing",
     attachedTo: fabricated.target.head,
     absorbedCommits: [victim.commit],
@@ -6231,7 +6231,7 @@ test("proof verification binds rehashed claims to the complete source history an
   unreadable.source = { ref: "disconnected", head: disconnected };
   const refused = verify(unreadable, "--json");
   assert.notEqual(refused.status, 0);
-  assert.equal(JSON.parse(refused.stdout).schema, "vcs-lab.error/v1");
+  assert.equal(JSON.parse(refused.stdout).schema, "causet.error/v1");
 
   // Outside a repository the command still supports its documented local
   // consistency checks, with the completeness limitation made explicit.
@@ -6348,7 +6348,7 @@ test("merge-tree rebase forecasts match the worktree oracle and apply through --
 
   const worktree = forecastWithEngine(repo, "worktree", "rebase-forecast", "main");
   const mergeTree = forecastWithEngine(repo, "merge-tree", "rebase-forecast", "main");
-  assert.equal(worktree.schema, "vcs-lab.rebase-forecast/v3");
+  assert.equal(worktree.schema, "causet.rebase-forecast/v3");
   assert.equal(worktree.status, "complete");
   assert.equal(worktree.engine, "worktree");
   assert.deepEqual(
@@ -6356,7 +6356,7 @@ test("merge-tree rebase forecasts match the worktree oracle and apply through --
     [continuation.changeId, more.changeId],
   );
   assert.deepEqual(normalizeForecast(mergeTree), normalizeForecast(worktree));
-  assert.equal(mergeTree.schema, "vcs-lab.rebase-forecast/v3");
+  assert.equal(mergeTree.schema, "causet.rebase-forecast/v3");
   assert.equal(mergeTree.engine, "merge-tree");
   assert.deepEqual(mergeTree.fallbacks, []);
   assert.equal(mergeTree.steps[0].relation, "causal-rebase");
@@ -6593,7 +6593,7 @@ test("every repository read passes through the engine seam and the native engine
     const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
       cwd: repo,
       encoding: "utf8",
-      env: testEnv({ VLAB_ENGINE: engineName }),
+      env: testEnv({ CAUSET_ENGINE: engineName }),
     });
     assert.equal(result.status, 0, result.stderr);
     return JSON.parse(result.stdout);
@@ -6642,7 +6642,7 @@ test("every repository read passes through the engine seam and the native engine
   });
   assert.ok(["worktree", "merge-tree"].includes(doctor.forecastEngine));
   const differential = doctor.differential;
-  assert.equal(differential.schema, "vcs-lab.engine-differential/v1");
+  assert.equal(differential.schema, "causet.engine-differential/v1");
   assert.deepEqual(differential.engines, ["git", "native"]);
   assert.equal(differential.oracle, "git");
   assert.equal(differential.equal, true);
@@ -6676,9 +6676,9 @@ test("every repository read passes through the engine seam and the native engine
 
   // A read that bypasses the seam is counted in git mode and refused in
   // native mode; the doctor's raw probes are the one exemption.
-  const previousEngine = process.env.VLAB_ENGINE;
+  const previousEngine = process.env.CAUSET_ENGINE;
   try {
-    process.env.VLAB_ENGINE = "git";
+    process.env.CAUSET_ENGINE = "git";
     const counted = gitEngine.beginGitMetrics("bypass");
     assert.equal(gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo }).stdout, head);
     const countedMetrics = gitEngine.endGitMetrics(counted);
@@ -6686,7 +6686,7 @@ test("every repository read passes through the engine seam and the native engine
     assert.equal(countedMetrics.directReads, 1);
     assert.deepEqual(countedMetrics.fallbacks, []);
 
-    process.env.VLAB_ENGINE = "native";
+    process.env.CAUSET_ENGINE = "native";
     assert.throws(
       () => gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo }),
       /git rev-parse was read outside the engine seam/,
@@ -6718,8 +6718,8 @@ test("every repository read passes through the engine seam and the native engine
     );
     assert.equal(gitEngine.readEngine(), "native");
   } finally {
-    if (previousEngine === undefined) delete process.env.VLAB_ENGINE;
-    else process.env.VLAB_ENGINE = previousEngine;
+    if (previousEngine === undefined) delete process.env.CAUSET_ENGINE;
+    else process.env.CAUSET_ENGINE = previousEngine;
   }
 
   // Invalid selections fail before any work, by flag or by environment.
@@ -6729,7 +6729,7 @@ test("every repository read passes through the engine seam and the native engine
   const badEnv = spawnSync(vlabCommand, [...vlabPrefix(), "doctor"], {
     cwd: repo,
     encoding: "utf8",
-    env: testEnv({ VLAB_ENGINE: "bogus" }),
+    env: testEnv({ CAUSET_ENGINE: "bogus" }),
   });
   assert.notEqual(badEnv.status, 0);
   assert.match(badEnv.stderr, /Unknown engine 'bogus'\. Use one of: git, native/);

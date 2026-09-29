@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.amendment/v1",
+  "$id": "causet.amendment/v1",
   "title": "Interactive amendment",
   "description": "A recorded divergence between what a logical change contained before an interactive `edit` and what it contains after, under the same identity (shared-portable note record; src/rebase-operations.js completeInteractiveStep). It exists because `edit` is the one operation that changes content while keeping identity: without it, a peer holding a receipt for that identity would go on reporting it covered for content that no longer exists (ADR-0035). A reader that has this record downgrades a bare Change-Id match for the identity from `covered` to `candidate-equivalent`; a receipt naming the specific commit still proves that commit, and ancestry still proves what ancestry proves.",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema",
@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.amendment/v1"
+      "enum": ["causet.amendment/v1", "vcs-lab.amendment/v1"]
     },
     "type": {
       "const": "amendment"

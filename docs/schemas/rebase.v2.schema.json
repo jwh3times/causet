@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.rebase/v2",
+  "$id": "causet.rebase/v2",
   "title": "Causal rebase receipt",
   "description": "Completed causal rebase summary with plan identity, omissions, applications, recreated merges, trees, and timing, attached to the rebased tip (shared-portable note record; src/rebase-operations.js finalizeRebase). A strict superset of v1: v2 adds `recreatedMerges`, which a merge-preserving rewrite fills and a linear one leaves empty (ADR-0034).",
-  "x-vcs-lab-scope": "note-record",
+  "x-causet-scope": "note-record",
   "type": "object",
   "required": [
     "schema",
@@ -38,7 +38,7 @@
   ],
   "properties": {
     "schema": {
-      "const": "vcs-lab.rebase/v2"
+      "enum": ["causet.rebase/v2", "vcs-lab.rebase/v2"]
     },
     "type": {
       "const": "rebase"
@@ -419,7 +419,7 @@
           },
           "resolutions": {
             "type": "array",
-            "description": "The resolution outcomes the join required. Each publishes an ordinary vcs-lab.resolution/v1 record, because it is an ordinary resolution: that a merge rather than a pick produced the conflict changes nothing about its signature (ADR-0034).",
+            "description": "The resolution outcomes the join required. Each publishes an ordinary causet.resolution/v1 record, because it is an ordinary resolution: that a merge rather than a pick produced the conflict changes nothing about its signature (ADR-0034).",
             "items": {
               "type": "object",
               "required": [

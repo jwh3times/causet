@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vcs-lab.identity-audit/v1",
+  "$id": "causet.identity-audit/v1",
   "title": "Repository-wide logical identity audit",
   "description": "The result of 'vlab audit identity' (FR-ID-06). Answers three questions no single plan can, because each plan sees one reachable set: does any commit message claim more than one identity, do commits share a Change-Id without a recorded derivation between them, and does any applied commit have more than one claimed origin. It also warns when provenance actor names look like one actor spelled differently (docs/identity/README.md §8). Exits non-zero when errors are found; warnings do not change the exit code.",
-  "x-vcs-lab-scope": "cli-output",
+  "x-causet-scope": "cli-output",
   "type": "object",
   "required": ["schema", "repository", "scanned", "findings", "summary"],
   "properties": {
-    "schema": { "const": "vcs-lab.identity-audit/v1" },
+    "schema": { "enum": ["causet.identity-audit/v1", "vcs-lab.identity-audit/v1"] },
     "repository": {
       "type": "object",
       "required": ["root", "objectFormat"],
