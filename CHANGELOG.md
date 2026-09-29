@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.20.0
 
 - The repository is now `jwh3times/causet` and the project board is "causet"
   (#168, ADR-0039 §7 step 5). Links throughout the README, `docs/`, the skills
