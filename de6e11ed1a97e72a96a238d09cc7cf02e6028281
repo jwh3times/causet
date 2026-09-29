@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mums4b3kfd3dbb81306c",
+      "mode": "compact",
+      "sourceRef": "jwh3times/causet-links",
+      "sourceHead": "be9b9dbf8d681253a48c772a2f8155b2ea9936db",
+      "sourceSubject": "docs: point repository links at jwh3times/causet",
+      "targetBefore": "baa0efe91c0d26e135449fe4274c296a30de9ba6",
+      "landingCommit": "de6e11ed1a97e72a96a238d09cc7cf02e6028281",
+      "base": "baa0efe91c0d26e135449fe4274c296a30de9ba6",
+      "absorbedCommits": [
+        "be9b9dbf8d681253a48c772a2f8155b2ea9936db"
+      ],
+      "absorbedChanges": [
+        "ch_0mumr97za6812975742e5"
+      ],
+      "resultTree": "79d33783c28ff82bf12dd9b8d3b64c7799c5305f",
+      "createdAt": "2026-09-29T14:36:06.391Z"
+    }
+  ]
+}
