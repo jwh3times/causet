@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muoiz4po35bdfc0c1fc1",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-read-only",
+      "sourceHead": "8aa1b90f2696ba1269fe0d9d24d2d9740f9a13b3",
+      "sourceSubject": "feat: answer cst doctor natively in the Rust CLI",
+      "targetBefore": "505f2f11500a0bc8fb2652b34d99d46d5f33b330",
+      "landingCommit": "1437319d756154d3f3a1ea12dd6a4d159c8c12a4",
+      "base": "505f2f11500a0bc8fb2652b34d99d46d5f33b330",
+      "absorbedCommits": [
+        "8aa1b90f2696ba1269fe0d9d24d2d9740f9a13b3"
+      ],
+      "absorbedChanges": [
+        "ch_0muoi14uf7f1d4ffd6764"
+      ],
+      "resultTree": "2eddf30e6b98dc3319b3397a29322f2d4afb0993",
+      "createdAt": "2026-09-30T19:55:40.639Z"
+    }
+  ]
+}
