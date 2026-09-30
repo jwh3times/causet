@@ -10,4 +10,5 @@ name = "cst"
 path = "src/main.rs"
 
 [dependencies]
+causet-engine = { path = "../engine" }
 causet-model = { path = "../model" }

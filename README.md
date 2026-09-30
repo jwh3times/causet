@@ -1185,11 +1185,13 @@ Compare the read engines operation by operation in any repository with:
 cst doctor --differential
 ```
 
-The report runs each of the 39 cataloged read operations of `src/engine.js`
+The report runs each of the 44 cataloged read operations of `src/engine.js`
 through the Git engine and the native engine against the current repository
 and lists per-operation result digests, process counts, and fallbacks
 (ADR-0019); the plain `cst doctor` output names the selected read and
-forecast engines.
+forecast engines. `implementation` says which CLI answered: `javascript`, or
+`rust` for the Rust CLI's native commands (ADR-0037), which report `node` as
+`null` because they run without Node.js.
 
 Run an equality-checked comparison over a 12-change forecast with:
 

@@ -159,7 +159,41 @@ test("a repository command is delegated with its output and exit status intact",
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
-  assert.equal(assertSame(["doctor"], {}, {}).status, 128);
+  assert.equal(assertSame(["workspace", "list"], {}, {}).status, 128);
+});
+
+test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, () => {
+  // Outside a repository both fail on Git's refusal, byte for byte.
+  assertSame(["doctor"]);
+  assertSame(["doctor", "--json"]);
+  assertSame(["doctor", "--benchmark", "--samples", "0"]);
+
+  const repo = path.join(outside, "doctor-repo");
+  fs.mkdirSync(repo);
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+  git("init", "-q", "-b", "main");
+  git("-c", "user.name=Doctor", "-c", "user.email=doctor@example.invalid", "commit", "-q", "--allow-empty", "-m", "base");
+  const inRepo = (command, args, env) => spawnSync(command, args, {
+    cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, ...env }),
+  });
+  for (const args of [["doctor"], ["doctor", "--differential"], ["--engine", "native", "doctor"]]) {
+    const expected = inRepo(process.execPath, [oracle, ...args], {});
+    if (rust === selectedCli) vlabPrefix();
+    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    assert.equal(actual.status, 0, actual.stderr);
+    assert.equal(actual.stderr, expected.stderr);
+    const native = JSON.parse(actual.stdout);
+    const oracleReport = JSON.parse(expected.stdout);
+    // The runtime self-description is the one allowed difference (ADR-0037 §5).
+    assert.equal(native.implementation, "rust");
+    assert.equal(native.node, null);
+    assert.equal(oracleReport.implementation, "javascript");
+    for (const report of [native, oracleReport]) {
+      delete report.implementation;
+      delete report.node;
+    }
+    assert.deepEqual(native, oracleReport, JSON.stringify(args));
+  }
 });
 
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
@@ -176,10 +210,10 @@ test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", {
 });
 
 test("CAUSET_DELEGATE=never refuses a command that is not ported", { skip }, () => {
-  const result = runRust(["doctor"], { CAUSET_DELEGATE: "never" });
+  const result = runRust(["workspace", "list"], { CAUSET_DELEGATE: "never" });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /^cst: 'doctor' is not ported to the Rust CLI yet/);
+  assert.match(result.stderr, /^cst: 'workspace' is not ported to the Rust CLI yet/);
   const invalid = runRust(["--version"], { CAUSET_DELEGATE: "sometimes" });
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /^cst: Unknown delegation mode 'sometimes'/);

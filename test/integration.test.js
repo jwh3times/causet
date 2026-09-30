@@ -278,6 +278,10 @@ test("doctor diagnoses a repository without initializing it", (t) => {
   const doctor = JSON.parse(vlab(repo, "doctor"));
   assert.equal(doctor.ok, true);
   assert.equal(doctor.version, VERSION);
+  // The runtime self-description is the one place the implementations may
+  // differ (ADR-0037 §5): the Rust CLI has no Node.js to report.
+  assert.ok(["javascript", "rust"].includes(doctor.implementation), doctor.implementation);
+  assert.equal(doctor.node === null, doctor.implementation === "rust");
   assert.equal(path.resolve(doctor.repository), repo);
 
   for (const key of ["notes.displayRef", "notes.rewriteRef"]) {

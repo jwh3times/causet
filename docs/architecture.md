@@ -1126,7 +1126,7 @@ more than raw wall time.
 
 ### 14.4 Read-side engine seam
 
-Every repository read a domain module performs is one of the 39 operations
+Every repository read a domain module performs is one of the 44 operations
 cataloged in `src/engine.js`
 ([ADR-0019](adr/0019-route-every-git-read-through-one-engine-seam.md)):
 repository and host context, object resolution and batched reads, history

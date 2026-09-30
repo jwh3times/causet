@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `cst doctor` reports `implementation`: `javascript` from the JavaScript CLI,
+  and `rust` from the Rust CLI, which reports `node` as `null` because it runs
+  without Node.js. These two members are the only ones the implementations
+  may differ in (ADR-0037 §5). This is an addition; no existing member changed.
+- The Rust CLI answers `cst doctor` natively, including `--differential` and
+  `--benchmark`. It is the first repository command it no longer delegates
+  (#144, ADR-0037). Its report equals the JavaScript CLI's apart from
+  `implementation` and `node`. It passes every suite that drives `doctor`,
+  run against the Rust CLI in all six modes. The Rust engine now honors the
+  suites' `CAUSET_TEST_NATIVE_BINDING=missing` hook and the flags' environment
+  selections, as the JavaScript CLI does.
 - Add the Rust record model, `native/model` (`causet-model`, issue #142,
   ADR-0037). It is what the ported commands will share, and ships in no
   command yet:

@@ -26,6 +26,8 @@ pub enum Refusal {
   Failed(String),
   /// The Git engine's own failure, which the seam raises.
   Error(GitError),
+  /// The native engine is not available at all.
+  Unavailable,
 }
 
 pub type Answer<T> = Result<T, Refusal>;
@@ -221,11 +223,17 @@ fn dispatch<T>(
   run: impl Fn(&dyn ReadBackend) -> Answer<T>,
 ) -> GitResult<T> {
   if read_engine()? == ReadEngine::Native {
-    let (reason, detail) = match run(&NativeBackend) {
+    let answer = if native_available() {
+      run(&NativeBackend)
+    } else {
+      Err(Refusal::Unavailable)
+    };
+    let (reason, detail) = match answer {
       Ok(value) => {
         metrics::record_native_read(operation);
         return Ok(value);
       }
+      Err(Refusal::Unavailable) => ("binding-missing", None),
       Err(Refusal::Unsupported) => ("unsupported", None),
       Err(Refusal::UnsupportedInput(message)) => ("unsupported-input", Some(message)),
       Err(Refusal::Failed(message)) => ("native-error", Some(message)),
@@ -247,9 +255,39 @@ fn dispatch<T>(
   }
 }
 
-/// `describeReadEngines()`, for `cst doctor`. The native engine is compiled
-/// in, so it is always available.
+/// Whether the native engine can answer. It is compiled in, so it is
+/// available unless `CAUSET_TEST_NATIVE_BINDING=missing` simulates the
+/// JavaScript CLI without its optional prebuild, as the suites do.
+pub fn native_available() -> bool {
+  environment::test_hook("CAUSET_TEST_NATIVE_BINDING").as_deref() != Some("missing")
+}
+
+/// `describeReadEngines()`, for `cst doctor`.
 pub fn describe_read_engines() -> GitResult<Value> {
+  let available = native_available();
+  let native = if available {
+    object([
+      ("available", Value::Bool(true)),
+      ("reason", Value::Null),
+      ("profile", string(native::PROFILE)),
+      (
+        "operations",
+        Value::Array(
+          native::OPERATIONS
+            .iter()
+            .map(|operation| string(operation))
+            .collect(),
+        ),
+      ),
+    ])
+  } else {
+    object([
+      ("available", Value::Bool(false)),
+      ("reason", string("binding-missing")),
+      ("profile", Value::Null),
+      ("operations", Value::Array(Vec::new())),
+    ])
+  };
   Ok(object([
     ("selected", string(read_engine()?.name())),
     ("default", string(default_read_engine().name())),
@@ -257,24 +295,38 @@ pub fn describe_read_engines() -> GitResult<Value> {
       "available",
       Value::Array(READ_ENGINES.iter().map(|engine| string(engine)).collect()),
     ),
-    (
-      "native",
-      object([
-        ("available", Value::Bool(true)),
-        ("reason", Value::Null),
-        ("profile", string(native::PROFILE)),
-        (
-          "operations",
-          Value::Array(
-            native::OPERATIONS
-              .iter()
-              .map(|operation| string(operation))
-              .collect(),
-          ),
-        ),
-      ]),
-    ),
+    ("native", native),
   ]))
+}
+
+/// The forecast engines, the temporary-worktree simulator first.
+pub const FORECAST_ENGINES: [&str; 2] = ["worktree", "merge-tree"];
+
+/// `defaultForecastEngine()`: merge-tree on Windows, where a process launch
+/// is expensive and Git is current, and the worktree simulator elsewhere
+/// (ADR-0016).
+pub fn default_forecast_engine() -> &'static str {
+  if cfg!(windows) {
+    "merge-tree"
+  } else {
+    "worktree"
+  }
+}
+
+/// `forecastEngine()`: `CAUSET_FORECAST_ENGINE`, else the default.
+pub fn forecast_engine() -> GitResult<String> {
+  match environment::value("FORECAST_ENGINE") {
+    None => Ok(default_forecast_engine().to_string()),
+    Some(value) if value.is_empty() => Ok(default_forecast_engine().to_string()),
+    Some(value) if FORECAST_ENGINES.contains(&value.as_str()) => Ok(value),
+    Some(value) => Err(GitError::new(
+      "usage-invalid-option-value",
+      format!(
+        "Unknown forecast engine '{value}'. Use one of: {}.",
+        FORECAST_ENGINES.join(", ")
+      ),
+    )),
+  }
 }
 
 // ---------------------------------------------------------------------------
