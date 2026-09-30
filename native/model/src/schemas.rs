@@ -4,6 +4,7 @@
 //! error and is never read as an array (#172); only `resolutionSignatureFor`,
 //! whose callers pass trusted stages, can still throw, as [`Thrown`].
 
+use crate::js::{get, same_value_zero, strict_equals, truthy};
 use crate::json::{JsString, Object, Value, js, lossy, object, string, stringify};
 use crate::registry::{
   Family, PROVENANCE_ROLE_NAMES, RECORD_FAMILIES, RESOLUTION_SIGNATURE_ALGORITHM, RESOURCE_BOUNDS,
@@ -209,13 +210,6 @@ pub fn within_bound(name: &str, actual: u64) -> bool {
 // ---------------------------------------------------------------------------
 
 /// `value[name]` for a JSON value; `None` is `undefined`.
-fn get<'a>(value: Option<&'a Value>, name: &str) -> Option<&'a Value> {
-  match value {
-    Some(Value::Object(object)) => object.get(name),
-    _ => None,
-  }
-}
-
 /// `value[name]`, which throws only when `value` is `null` or `undefined`.
 fn get_strict<'a>(value: Option<&'a Value>, name: &str) -> Result<Option<&'a Value>, Thrown> {
   match value {
@@ -252,28 +246,6 @@ fn is_plain_object(value: Option<&Value>) -> bool {
   matches!(value, Some(Value::Object(_)))
 }
 
-fn truthy(value: Option<&Value>) -> bool {
-  match value {
-    None | Some(Value::Null) => false,
-    Some(Value::Bool(flag)) => *flag,
-    Some(Value::Number(number)) => *number != 0.0 && !number.is_nan(),
-    Some(Value::String(units)) => !units.is_empty(),
-    Some(Value::Array(_) | Value::Object(_)) => true,
-  }
-}
-
-/// `left === right`. Two parsed objects or arrays are never the same object.
-fn strict_equals(left: Option<&Value>, right: Option<&Value>) -> bool {
-  match (left, right) {
-    (None, None) => true,
-    (Some(Value::Null), Some(Value::Null)) => true,
-    (Some(Value::Bool(a)), Some(Value::Bool(b))) => a == b,
-    (Some(Value::Number(a)), Some(Value::Number(b))) => a == b,
-    (Some(Value::String(a)), Some(Value::String(b))) => a == b,
-    _ => false,
-  }
-}
-
 /// `arrayItems(value)`: an array's items, and none for any other value, whose
 /// wrong type is already a field error (#172).
 fn array_items(value: Option<&Value>) -> &[Value] {
@@ -295,13 +267,6 @@ fn array_includes(value: Option<&Value>, needle: Option<&Value>) -> bool {
   array_items(value)
     .iter()
     .any(|item| same_value_zero(Some(item), needle))
-}
-
-fn same_value_zero(left: Option<&Value>, right: Option<&Value>) -> bool {
-  match (left, right) {
-    (Some(Value::Number(a)), Some(Value::Number(b))) => a == b || (a.is_nan() && b.is_nan()),
-    _ => strict_equals(left, right),
-  }
 }
 
 /// `(value ?? []).length > 0`.

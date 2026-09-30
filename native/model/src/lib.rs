@@ -10,6 +10,7 @@ pub mod canonical;
 pub mod dates;
 pub mod errors;
 pub mod ids;
+pub mod js;
 pub mod json;
 pub mod registry;
 pub mod schemas;
