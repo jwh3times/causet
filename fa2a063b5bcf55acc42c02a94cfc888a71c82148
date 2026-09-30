@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0munpjgpy9ab02498aca8",
+      "mode": "compact",
+      "sourceRef": "release-v0.20.0",
+      "sourceHead": "ab8513b54b281b4a83de2211b07514fa05aeb01f",
+      "sourceSubject": "test: compare the legacy fixture across releases",
+      "targetBefore": "de6e11ed1a97e72a96a238d09cc7cf02e6028281",
+      "landingCommit": "fa2a063b5bcf55acc42c02a94cfc888a71c82148",
+      "base": "de6e11ed1a97e72a96a238d09cc7cf02e6028281",
+      "absorbedCommits": [
+        "49a11c642e2120ee41bdeb8d396e61d0bf6a0b07",
+        "ab8513b54b281b4a83de2211b07514fa05aeb01f"
+      ],
+      "absorbedChanges": [
+        "ch_0mumutw2ge6882bdd6b76",
+        "ch_0munob7a8f03776e32804"
+      ],
+      "resultTree": "2a7071ee38a9e99107dff8799c29331c529f482f",
+      "createdAt": "2026-09-30T06:11:40.834Z"
+    }
+  ]
+}
