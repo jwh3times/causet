@@ -86,6 +86,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "causet-engine"
+version = "0.1.0"
+dependencies = [
+ "causet-core",
+ "causet-model",
+]
+
+[[package]]
 name = "causet-model"
 version = "0.1.0"
 dependencies = [

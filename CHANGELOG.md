@@ -19,6 +19,30 @@
   `test/rust-model.test.js` and the live scenario in
   `test/schema-catalog.test.js` require identical results from `src/` and the
   Rust model. A new mutation fuzz target, `fuzz-model`, runs in CI.
+- Add the Rust Git engine, `native/engine` (`causet-engine`, issue #143,
+  ADR-0037). It is the layer every ported command will sit on, and ships in no
+  command yet:
+  - the 44 read operations of the engine seam (ADR-0019) behind one backend
+    trait, with the Git backend and the gitoxide backend for the five
+    operations it is qualified for (ADR-0027), and the same fallback reasons;
+  - the object session (ADR-0009) and the merge-tree session (ADR-0016) as
+    child processes, without the JavaScript engine's worker threads, keeping
+    their cache, response budgets, platform defaults, `CAUSET_GIT_SESSION`
+    override and failure fallbacks;
+  - mutations as explicit `git` invocations with the same arguments and
+    environment, and the bypass rule that refuses a read outside the seam in
+    native mode;
+  - the metrics, trace lines and session diagnostics;
+  - the engine differential behind `cst doctor --differential`. Its digests
+    are the ones the JavaScript engine computes, so either implementation's
+    report can be checked against the other's. `cst doctor` itself is ported
+    with the read-only commands (#144).
+
+  `test/rust-engine.test.js` requires the same value or error, and the same
+  counts of processes, session queries, cache hits, fallbacks, native reads
+  and direct reads, for every call. It runs on five repositories, including a
+  SHA-256 repository and a clone of this one. A new mutation fuzz target,
+  `fuzz-engine`, runs every parser of Git output in CI.
 - Fix: a shared note record whose `applications`, `recreatedMerges`,
   `parents`, `absorbedCommits`, `absorbedChanges` or `carriedFrom` member had
   the wrong type crashed `cst metadata status` and `metadata validate`, and
