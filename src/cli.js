@@ -1846,6 +1846,10 @@ export async function main(rawArgs) {
         // home for the build identity a peer needs to apply the per-family
         // compatibility rules of ADR-0020 (FR-GIT-06; issue #11 item 5).
         version: VERSION,
+        // Which implementation answered (ADR-0037 §5): the Rust CLI reports
+        // `rust` and, having no Node.js runtime, `node: null`. These two are
+        // the only members allowed to differ between the implementations.
+        implementation: "javascript",
         git: gitVersion().raw,
         node: process.version,
         repository: context.root,

@@ -75,6 +75,7 @@ dependencies = [
 name = "causet-cli"
 version = "0.1.0"
 dependencies = [
+ "causet-engine",
  "causet-model",
 ]
 

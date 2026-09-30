@@ -6,7 +6,7 @@
 //! `Delegate`, and so is any input whose JavaScript behavior this module does
 //! not model exactly: when in doubt, the oracle answers.
 
-use std::collections::HashMap;
+use crate::parsed::{Opt, Parsed};
 
 pub const READ_ENGINES: [&str; 2] = ["git", "native"];
 pub const FORECAST_ENGINES: [&str; 2] = ["worktree", "merge-tree"];
@@ -33,7 +33,19 @@ pub enum Outcome {
   Delegate {
     command: String,
   },
+  /// A ported command, answered by this CLI. `settings` are the variables its
+  /// global flags select, as `setEnvironmentValue` would.
+  Native {
+    command: String,
+    parsed: Parsed,
+    settings: Vec<(&'static str, String)>,
+  },
 }
+
+/// The commands this CLI answers natively. A command joins only when every
+/// CLI-level test that exercises it passes against this CLI in all six modes
+/// (ADR-0037 §4).
+pub const NATIVE_COMMANDS: &[&str] = &["doctor"];
 
 fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
   Outcome::Fail {
@@ -64,6 +76,17 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
     ("--engine", &READ_ENGINES, "engine"),
   ];
   let mut selections = [env("FORECAST_ENGINE"), env("ENGINE")];
+  let mut settings: Vec<(&'static str, String)> = Vec::new();
+  if has("--trace-git") {
+    settings.push(("TRACE", "1".into()));
+  }
+  if has("--git-session") {
+    settings.push(("GIT_SESSION", "1".into()));
+  }
+  if has("--no-git-session") {
+    settings.push(("GIT_SESSION", "0".into()));
+  }
+  let names = ["FORECAST_ENGINE", "ENGINE"];
   let mut args: Vec<&str> = Vec::new();
   let mut index = 0;
   while index < raw.len() {
@@ -87,7 +110,10 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
       raw.get(index - 1).map(String::as_str)
     };
     match value {
-      Some(value) if allowed.contains(&value) => selections[slot] = Some(value.to_string()),
+      Some(value) if allowed.contains(&value) => {
+        selections[slot] = Some(value.to_string());
+        settings.push((names[slot], value.to_string()));
+      }
       _ => {
         return fail(
           format!("{flag} requires one of: {}.", allowed.join(", ")),
@@ -137,42 +163,14 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
   let json = parsed.truthy("json");
   match usage_check(command, &parsed, help) {
     Some(failure) => Outcome::Fail { failure, json },
+    None if NATIVE_COMMANDS.contains(&command) => Outcome::Native {
+      command: command.to_string(),
+      parsed,
+      settings,
+    },
     None => Outcome::Delegate {
       command: command.to_string(),
     },
-  }
-}
-
-/// An option value as `parseArgs` stores it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Opt {
-  Flag,
-  Value(String),
-  Values(Vec<String>),
-}
-
-#[derive(Debug, Default)]
-struct Parsed {
-  positionals: Vec<String>,
-  options: HashMap<String, Opt>,
-}
-
-impl Parsed {
-  /// JavaScript truthiness of `options[key]`.
-  fn truthy(&self, key: &str) -> bool {
-    match self.options.get(key) {
-      None => false,
-      Some(Opt::Value(value)) => !value.is_empty(),
-      Some(Opt::Flag | Opt::Values(_)) => true,
-    }
-  }
-
-  /// JavaScript truthiness of `positionals[index]`.
-  fn positional(&self, index: usize) -> bool {
-    self
-      .positionals
-      .get(index)
-      .is_some_and(|value| !value.is_empty())
   }
 }
 

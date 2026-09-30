@@ -4,9 +4,14 @@
 #![forbid(unsafe_code)]
 
 mod delegate;
+mod doctor;
 mod environment;
 mod front;
 mod json;
+mod migration;
+mod native;
+mod parsed;
+mod store;
 
 use front::Outcome;
 use std::{env, ffi::OsString, io::Write, process};
@@ -51,6 +56,15 @@ fn main() {
   let mut stderr = std::io::stderr().lock();
   // Output errors are ignored, as Node ignores them on a closed stream.
   let code = match outcome {
+    Outcome::Native {
+      command,
+      parsed,
+      settings,
+    } => {
+      drop(stdout);
+      drop(stderr);
+      native::run(&command, &parsed, &settings)
+    }
     Outcome::Help => {
       let _ = writeln!(stdout, "{HELP}");
       0
