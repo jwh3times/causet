@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muoa2u5x9e2ddddd6923",
+      "mode": "compact",
+      "sourceRef": "jwh3times/rust-foundations",
+      "sourceHead": "ddc23a8b030d9ef6cd14903488a6e04669e1c091",
+      "sourceSubject": "feat: add the Rust record model the ported commands share",
+      "targetBefore": "fa2a063b5bcf55acc42c02a94cfc888a71c82148",
+      "landingCommit": "9f203622ff7e508ef7ab168f07a673901b95ed87",
+      "base": "fa2a063b5bcf55acc42c02a94cfc888a71c82148",
+      "absorbedCommits": [
+        "ddc23a8b030d9ef6cd14903488a6e04669e1c091"
+      ],
+      "absorbedChanges": [
+        "ch_0muo96k2c640e3fe3b7bf"
+      ],
+      "resultTree": "60da405e2069f0ddd59e565ab2efb19f24a75c7a",
+      "createdAt": "2026-09-30T15:46:37.045Z"
+    }
+  ]
+}
