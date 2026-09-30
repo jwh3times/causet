@@ -227,6 +227,39 @@ test("malformed causal notes are quarantined without moving a ref", () => {
   });
 });
 
+// Each member below is one the validator used to read as an array before
+// checking its type, so a single such record crashed every reader of the
+// notes instead of being quarantined (#172).
+test("a record member of the wrong type is quarantined rather than crashing the reader", () => {
+  const { repo } = scenario();
+  const oid = "a".repeat(40);
+  const records = [
+    { schema: "causet.rebase/v3", type: "rebase", id: "rebase_applications", applications: "x" },
+    { schema: "causet.rebase/v3", type: "rebase", id: "rebase_items", applications: [null, 5], recreatedMerges: { originCommit: oid } },
+    { schema: "causet.rebase/v2", type: "rebase", id: "rebase_parents", recreatedMerges: [{ parents: 7, originCommit: oid }], absorbedCommits: { length: 1 } },
+    { schema: "causet.interactive-absorption/v1", type: "interactive-absorption", id: "absorb_changes", absorbedChanges: 5, survivingChangeId: "b" },
+    { schema: "causet.provenance/v1", type: "provenance", id: "prov_carried", origin: "carried", carriedFrom: 3 },
+  ];
+  const note = { schema: "causet.note/v1", records };
+  withTamperedNote(repo, `${JSON.stringify(note, null, 2)}\n`, () => {
+    const before = refSnapshot(repo);
+    const validation = vlabResult(repo, "metadata", "validate", "--json");
+    assert.equal(validation.stderr, "", "validation reports rather than crashes");
+    const report = JSON.parse(validation.stdout);
+    const malformed = report.diagnostics
+      .filter((item) => item.code === "malformed-record")
+      .map((item) => item.subject);
+    assert.deepEqual(malformed.sort(), records.map((record) => record.id).sort());
+    assert.equal(report.summary.acceptedPortableRecords, 0);
+
+    const status = vlabResult(repo, "metadata", "status", "--json");
+    assert.equal(status.status, 0, status.stderr);
+    const notes = JSON.parse(status.stdout).scopes.sharedPortable.notes;
+    assert.equal(notes.quarantinedCount, records.length);
+    assert.equal(refSnapshot(repo), before, "reading moves no ref");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Envelopes
 // ---------------------------------------------------------------------------

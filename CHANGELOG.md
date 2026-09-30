@@ -19,10 +19,15 @@
   `test/rust-model.test.js` and the live scenario in
   `test/schema-catalog.test.js` require identical results from `src/` and the
   Rust model. A new mutation fuzz target, `fuzz-model`, runs in CI.
-- Found by the port: a malformed shared note record crashes
-  `cst metadata status` instead of being quarantined (#172). `createdAt`
-  validity follows V8's non-ISO `Date.parse` fallback, which no other
-  implementation can reproduce (#173).
+- Fix: a shared note record whose `applications`, `recreatedMerges`,
+  `parents`, `absorbedCommits`, `absorbedChanges` or `carriedFrom` member had
+  the wrong type crashed `cst metadata status` and `metadata validate`, and
+  every other reader of the notes. It is now a `malformed-record` and is
+  quarantined like any other structural fault (#172). A string in one of those
+  members is no longer searched as if it were a list. The Rust model makes the
+  same change.
+- Found by the port: `createdAt` validity follows V8's non-ISO `Date.parse`
+  fallback, which no other implementation can reproduce (#173).
 
 ## 0.20.0
 

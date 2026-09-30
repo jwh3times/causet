@@ -468,6 +468,19 @@ export function isOid(value, objectFormat) {
   );
 }
 
+/**
+ * A member's items when it is an array, and none otherwise. A member of the
+ * wrong type is already a field error; reading it as an array here would
+ * throw for an object or number and search a string's characters (#172).
+ */
+function arrayItems(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function fieldError(errors, condition, field, expectation) {
   if (!condition) errors.push({ field, expectation });
 }
@@ -636,7 +649,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     if (record.effectiveBase && typeof record.effectiveBase === "object") {
       requireOid(record.effectiveBase, "commit", objectFormat, errors);
     }
-    for (const [index, application] of (record.applications ?? []).entries()) {
+    for (const [index, application] of arrayItems(record.applications).entries()) {
       fieldError(errors, application && typeof application === "object" && !Array.isArray(application), `applications[${index}]`, "object");
       if (!application || typeof application !== "object" || Array.isArray(application)) continue;
       for (const field of ["sourceCommit", "appliedCommit"]) {
@@ -651,7 +664,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     }
     if (schema === "causet.rebase/v2" || schema === "causet.rebase/v3") {
       fieldError(errors, Array.isArray(record.recreatedMerges), "recreatedMerges", "array");
-      for (const [index, merge] of (record.recreatedMerges ?? []).entries()) {
+      for (const [index, merge] of arrayItems(record.recreatedMerges).entries()) {
         const label = `recreatedMerges[${index}]`;
         fieldError(errors, merge && typeof merge === "object" && !Array.isArray(merge), label, "object");
         if (!merge || typeof merge !== "object" || Array.isArray(merge)) continue;
@@ -673,14 +686,14 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
         fieldError(errors, typeof merge.cleanJoin === "boolean", `${label}.cleanJoin`, "boolean");
         fieldError(errors, Array.isArray(merge.resolutions), `${label}.resolutions`, "array");
         fieldError(errors, Array.isArray(merge.parents) && merge.parents.length === 2, `${label}.parents`, "exactly two parents");
-        for (const [position, parent] of (merge.parents ?? []).entries()) {
+        for (const [position, parent] of arrayItems(merge.parents).entries()) {
           fieldError(errors, parent && typeof parent === "object" && !Array.isArray(parent), `${label}.parents[${position}]`, "object");
           if (!parent || typeof parent !== "object" || Array.isArray(parent)) continue;
           requireOid(parent, "commit", objectFormat, errors);
         }
         // Nothing may absorb a join: a receipt that did would be claiming the
         // work beneath a merge nobody re-proved (ADR-0034).
-        fieldError(errors, !(record.absorbedCommits ?? []).includes(merge.originCommit), `${label}.originCommit`, "a commit the receipt does not absorb");
+        fieldError(errors, !arrayItems(record.absorbedCommits).includes(merge.originCommit), `${label}.originCommit`, "a commit the receipt does not absorb");
       }
     }
     attachmentMatches(record, "resultCommit", errors);
@@ -707,7 +720,7 @@ export function validateNoteRecord(record, objectFormat = "sha1") {
     fieldError(errors, ["squash", "fixup"].includes(record.action), "action", "squash or fixup");
     // The survivor keeps its own identity; an absorbed one is named in the
     // record and never on the commit, which is what keeps exactly one trailer.
-    fieldError(errors, !(record.absorbedChanges ?? []).includes(record.survivingChangeId), "absorbedChanges", "identities other than the survivor's");
+    fieldError(errors, !arrayItems(record.absorbedChanges).includes(record.survivingChangeId), "absorbedChanges", "identities other than the survivor's");
     fieldError(errors, (record.absorbedCommits ?? []).length > 0, "absorbedCommits", "at least one absorbed commit");
     fieldError(errors, typeof record.rebaseOperation === "string" && record.rebaseOperation.length > 3, "rebaseOperation", "non-empty operation ID");
     attachmentMatches(record, "survivingCommit", errors);
@@ -734,13 +747,16 @@ export function isStructurallyValidNoteRecord(record, objectFormat = "sha1") {
 
 export function referencedObjectsForRecord(record) {
   const objects = [];
-  const schema = canonicalSchema(record.schema);
+  const schema = canonicalSchema(record?.schema);
   const add = (oid, type, field) => {
     if (typeof oid === "string") objects.push({ oid, type, field });
   };
+  // Callers normally pass a structurally valid record, but publishing with
+  // validation disabled does not, so every member is read defensively.
+  const members = (value) => arrayItems(value).filter(isPlainObject);
   if (schema === "causet.landing/v1") {
     for (const field of ["sourceHead", "targetBefore", "landingCommit", "base"]) add(record[field], "commit", field);
-    for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
+    for (const oid of arrayItems(record.absorbedCommits)) add(oid, "commit", "absorbedCommits");
     add(record.resultTree, "tree", "resultTree");
   } else if (schema === "causet.application/v1") {
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) add(record[field], "commit", field);
@@ -749,23 +765,23 @@ export function referencedObjectsForRecord(record) {
     for (const field of ["sourceTree", "resultTree"]) add(record[field], "tree", field);
   } else if (schema === "causet.reconciliation/v6") {
     for (const field of ["sourceHead", "targetBefore", "resultCommit"]) add(record[field], "commit", field);
-    for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
+    for (const oid of arrayItems(record.absorbedCommits)) add(oid, "commit", "absorbedCommits");
     for (const field of ["targetTreeBefore", "sourceTree", "resultTree"]) add(record[field], "tree", field);
   } else if (schema === "causet.rebase-application/v1") {
     for (const field of ["originCommit", "appliedCommit", "targetBefore"]) add(record[field], "commit", field);
     for (const field of ["sourceTree", "targetBeforeTree", "resultTree"]) add(record[field], "tree", field);
   } else if (["causet.rebase/v1", "causet.rebase/v2", "causet.rebase/v3"].includes(schema)) {
     for (const field of ["sourceHead", "ontoHead", "physicalBase", "resultCommit"]) add(record[field], "commit", field);
-    for (const merge of record.recreatedMerges ?? []) {
+    for (const merge of members(record.recreatedMerges)) {
       add(merge.originCommit, "commit", "recreatedMerges.originCommit");
       add(merge.resultCommit, "commit", "recreatedMerges.resultCommit");
-      for (const parent of merge.parents ?? []) {
+      for (const parent of members(merge.parents)) {
         add(parent.commit, "commit", "recreatedMerges.parents.commit");
       }
     }
     add(record.effectiveBase?.commit, "commit", "effectiveBase.commit");
-    for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
-    for (const application of record.applications ?? []) {
+    for (const oid of arrayItems(record.absorbedCommits)) add(oid, "commit", "absorbedCommits");
+    for (const application of members(record.applications)) {
       add(application.sourceCommit, "commit", "applications.sourceCommit");
       add(application.appliedCommit, "commit", "applications.appliedCommit");
       add(application.targetBeforeTree, "tree", "applications.targetBeforeTree");
@@ -777,10 +793,10 @@ export function referencedObjectsForRecord(record) {
     for (const field of ["treeBefore", "treeAfter"]) add(record[field], "tree", field);
   } else if (schema === "causet.interactive-absorption/v1") {
     add(record.survivingCommit, "commit", "survivingCommit");
-    for (const oid of record.absorbedCommits ?? []) add(oid, "commit", "absorbedCommits");
+    for (const oid of arrayItems(record.absorbedCommits)) add(oid, "commit", "absorbedCommits");
   } else if (schema === "causet.provenance/v1") {
     add(record.commit, "commit", "commit");
-    for (const oid of record.carriedFrom ?? []) add(oid, "commit", "carriedFrom");
+    for (const oid of arrayItems(record.carriedFrom)) add(oid, "commit", "carriedFrom");
   } else if (schema === "causet.resolution/v1") {
     add(record.resolutionCommit, "commit", "resolutionCommit");
     for (const field of ["base", "ours", "theirs"]) add(record[field]?.blob, "blob", `${field}.blob`);

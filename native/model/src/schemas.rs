@@ -1,12 +1,10 @@
 //! Record classification, compatibility and structural validation, ported from
 //! `src/schemas.js`, which stays the authority. The validators follow the
-//! JavaScript expressions they port, including where JavaScript throws: a
-//! malformed member can make them raise a `TypeError` (#172), and that is
-//! reported here as [`Thrown`] until the JavaScript is fixed first (ADR-0037).
+//! JavaScript expressions they port. A member of the wrong type is a field
+//! error and is never read as an array (#172); only `resolutionSignatureFor`,
+//! whose callers pass trusted stages, can still throw, as [`Thrown`].
 
-use crate::json::{
-  JsString, Object, Value, js, lossy, number_to_string, object, string, stringify,
-};
+use crate::json::{JsString, Object, Value, js, lossy, object, string, stringify};
 use crate::registry::{
   Family, PROVENANCE_ROLE_NAMES, RECORD_FAMILIES, RESOLUTION_SIGNATURE_ALGORITHM, RESOURCE_BOUNDS,
 };
@@ -14,7 +12,7 @@ use crate::registry::{
 pub const SCHEMA_NAMESPACE: &str = "causet.";
 pub const LEGACY_SCHEMA_NAMESPACE: &str = "vcs-lab.";
 
-/// Where the JavaScript validator raises instead of returning.
+/// Where the JavaScript function raises instead of returning.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Thrown;
 
@@ -276,32 +274,27 @@ fn strict_equals(left: Option<&Value>, right: Option<&Value>) -> bool {
   }
 }
 
-/// `(value ?? [])` used as an array: its items, or [`Thrown`] where the
-/// JavaScript method call on a non-array would throw.
-fn items_or_throw(value: Option<&Value>) -> Result<&[Value], Thrown> {
+/// `arrayItems(value)`: an array's items, and none for any other value, whose
+/// wrong type is already a field error (#172).
+fn array_items(value: Option<&Value>) -> &[Value] {
   match value {
-    None | Some(Value::Null) => Ok(&[]),
-    Some(Value::Array(items)) => Ok(items),
-    Some(_) => Err(Thrown),
+    Some(Value::Array(items)) => items,
+    _ => &[],
   }
 }
 
-/// `(value ?? []).includes(needle)`; on a string this is a substring test.
-fn includes(value: Option<&Value>, needle: Option<&Value>) -> Result<bool, Thrown> {
-  match value {
-    None | Some(Value::Null) => Ok(false),
-    Some(Value::Array(items)) => Ok(items.iter().any(|item| same_value_zero(Some(item), needle))),
-    Some(Value::String(units)) => {
-      let needle = to_js_string(needle);
-      Ok(
-        needle.is_empty()
-          || units
-            .windows(needle.len())
-            .any(|window| window == needle.as_slice()),
-      )
-    }
-    Some(_) => Err(Thrown),
-  }
+/// `arrayItems(value).filter(isPlainObject)`.
+fn members(value: Option<&Value>) -> impl Iterator<Item = &Value> {
+  array_items(value)
+    .iter()
+    .filter(|item| is_plain_object(Some(item)))
+}
+
+/// `arrayItems(value).includes(needle)`.
+fn array_includes(value: Option<&Value>, needle: Option<&Value>) -> bool {
+  array_items(value)
+    .iter()
+    .any(|item| same_value_zero(Some(item), needle))
 }
 
 fn same_value_zero(left: Option<&Value>, right: Option<&Value>) -> bool {
@@ -311,57 +304,12 @@ fn same_value_zero(left: Option<&Value>, right: Option<&Value>) -> bool {
   }
 }
 
-/// ECMAScript `ToString` of a JSON value.
-fn to_js_string(value: Option<&Value>) -> JsString {
-  match value {
-    None => js("undefined"),
-    Some(Value::Null) => js("null"),
-    Some(Value::Bool(flag)) => js(if *flag { "true" } else { "false" }),
-    Some(Value::Number(number)) => js(&number_to_string(*number)),
-    Some(Value::String(units)) => units.clone(),
-    Some(Value::Array(items)) => {
-      let mut out = Vec::new();
-      for (index, item) in items.iter().enumerate() {
-        if index > 0 {
-          out.push(u16::from(b','));
-        }
-        if !matches!(item, Value::Null) {
-          out.extend(to_js_string(Some(item)));
-        }
-      }
-      out
-    }
-    Some(Value::Object(_)) => js("[object Object]"),
-  }
-}
-
 /// `(value ?? []).length > 0`.
 fn has_length(value: Option<&Value>) -> bool {
   match value {
     Some(Value::Array(items)) => !items.is_empty(),
     Some(Value::String(units)) => !units.is_empty(),
     _ => false,
-  }
-}
-
-/// `for (const item of value ?? [])`: an array's items, a string's code points.
-fn iterate(value: Option<&Value>) -> Result<Vec<Value>, Thrown> {
-  match value {
-    None | Some(Value::Null) => Ok(Vec::new()),
-    Some(Value::Array(items)) => Ok(items.clone()),
-    Some(Value::String(units)) => {
-      let mut out = Vec::new();
-      let mut index = 0;
-      while index < units.len() {
-        let pair = matches!(units[index], 0xd800..=0xdbff)
-          && matches!(units.get(index + 1), Some(0xdc00..=0xdfff));
-        let width = if pair { 2 } else { 1 };
-        out.push(Value::String(units[index..index + width].to_vec()));
-        index += width;
-      }
-      Ok(out)
-    }
-    Some(_) => Err(Thrown),
   }
 }
 
@@ -502,17 +450,14 @@ fn common(errors: &mut Errors, record: Option<&Value>, expected_type: &str, form
 }
 
 /// `validateNoteRecord`: the structural faults of one shared note record.
-pub fn validate_note_record(
-  record: Option<&Value>,
-  format: &str,
-) -> Result<Vec<FieldError>, Thrown> {
+pub fn validate_note_record(record: Option<&Value>, format: &str) -> Vec<FieldError> {
   let schema = as_str(get(record, "schema")).map(|units| canonical_schema(&lossy(units)));
   let classification = schema_classification(schema.as_deref());
   if !classification.known || classification.scope != Some("note-record") {
-    return Ok(vec![FieldError {
+    return vec![FieldError {
       field: "schema".into(),
       expectation: "supported causal note record schema".into(),
-    }]);
+    }];
   }
   let schema = schema.expect("classified");
   let mut errors = Errors(Vec::new());
@@ -683,10 +628,7 @@ pub fn validate_note_record(
       if truthy(base) && is_object(base) {
         e.oid(base, "commit", format);
       }
-      for (index, application) in items_or_throw(get(record, "applications"))?
-        .iter()
-        .enumerate()
-      {
+      for (index, application) in array_items(get(record, "applications")).iter().enumerate() {
         let application = Some(application);
         e.check(
           is_plain_object(application),
@@ -714,7 +656,7 @@ pub fn validate_note_record(
       }
       if schema != "causet.rebase/v1" {
         e.array(record, "recreatedMerges");
-        for (index, merge) in items_or_throw(get(record, "recreatedMerges"))?
+        for (index, merge) in array_items(get(record, "recreatedMerges"))
           .iter()
           .enumerate()
         {
@@ -756,7 +698,7 @@ pub fn validate_note_record(
             format!("{label}.parents"),
             "exactly two parents",
           );
-          for (position, parent) in items_or_throw(parents)?.iter().enumerate() {
+          for (position, parent) in array_items(parents).iter().enumerate() {
             let parent = Some(parent);
             e.check(
               is_plain_object(parent),
@@ -767,7 +709,7 @@ pub fn validate_note_record(
               e.oid(parent, "commit", format);
             }
           }
-          let absorbed = includes(get(record, "absorbedCommits"), get(merge, "originCommit"))?;
+          let absorbed = array_includes(get(record, "absorbedCommits"), get(merge, "originCommit"));
           e.check(
             !absorbed,
             format!("{label}.originCommit"),
@@ -802,10 +744,10 @@ pub fn validate_note_record(
         "action",
         "squash or fixup",
       );
-      let survivor_absorbed = includes(
+      let survivor_absorbed = array_includes(
         get(record, "absorbedChanges"),
         get(record, "survivingChangeId"),
-      )?;
+      );
       e.check(
         !survivor_absorbed,
         "absorbedChanges",
@@ -858,7 +800,7 @@ pub fn validate_note_record(
     }
     _ => {}
   }
-  Ok(errors.0)
+  errors.0
 }
 
 // ---------------------------------------------------------------------------
@@ -873,8 +815,8 @@ pub struct ObjectReference {
 }
 
 /// `referencedObjectsForRecord`: every object a record names, in its order.
-pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>, Thrown> {
-  let schema = as_str(get_strict(record, "schema")?).map(|units| canonical_schema(&lossy(units)));
+pub fn referenced_objects(record: Option<&Value>) -> Vec<ObjectReference> {
+  let schema = as_str(get(record, "schema")).map(|units| canonical_schema(&lossy(units)));
   let mut objects = Vec::new();
   let mut add = |value: Option<&Value>, kind: &'static str, field: &str| {
     if let Some(units) = as_str(value) {
@@ -891,8 +833,8 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
       for field in ["sourceHead", "targetBefore", "landingCommit", "base"] {
         add(get(record, field), "commit", field);
       }
-      for oid in iterate(get(record, "absorbedCommits"))? {
-        add(Some(&oid), "commit", "absorbedCommits");
+      for oid in array_items(get(record, "absorbedCommits")) {
+        add(Some(oid), "commit", "absorbedCommits");
       }
       add(get(record, "resultTree"), "tree", "resultTree");
     }
@@ -910,8 +852,8 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
       for field in ["sourceHead", "targetBefore", "resultCommit"] {
         add(get(record, field), "commit", field);
       }
-      for oid in iterate(get(record, "absorbedCommits"))? {
-        add(Some(&oid), "commit", "absorbedCommits");
+      for oid in array_items(get(record, "absorbedCommits")) {
+        add(Some(oid), "commit", "absorbedCommits");
       }
       for field in ["targetTreeBefore", "sourceTree", "resultTree"] {
         add(get(record, field), "tree", field);
@@ -929,10 +871,10 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
       for field in ["sourceHead", "ontoHead", "physicalBase", "resultCommit"] {
         add(get(record, field), "commit", field);
       }
-      for merge in iterate(get(record, "recreatedMerges"))? {
-        let merge = Some(&merge);
+      for merge in members(get(record, "recreatedMerges")) {
+        let merge = Some(merge);
         add(
-          get_strict(merge, "originCommit")?,
+          get(merge, "originCommit"),
           "commit",
           "recreatedMerges.originCommit",
         );
@@ -941,9 +883,9 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
           "commit",
           "recreatedMerges.resultCommit",
         );
-        for parent in iterate(get(merge, "parents"))? {
+        for parent in members(get(merge, "parents")) {
           add(
-            get_strict(Some(&parent), "commit")?,
+            get(Some(parent), "commit"),
             "commit",
             "recreatedMerges.parents.commit",
           );
@@ -954,13 +896,13 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
         "commit",
         "effectiveBase.commit",
       );
-      for oid in iterate(get(record, "absorbedCommits"))? {
-        add(Some(&oid), "commit", "absorbedCommits");
+      for oid in array_items(get(record, "absorbedCommits")) {
+        add(Some(oid), "commit", "absorbedCommits");
       }
-      for application in iterate(get(record, "applications"))? {
-        let application = Some(&application);
+      for application in members(get(record, "applications")) {
+        let application = Some(application);
         add(
-          get_strict(application, "sourceCommit")?,
+          get(application, "sourceCommit"),
           "commit",
           "applications.sourceCommit",
         );
@@ -994,14 +936,14 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
     }
     "causet.interactive-absorption/v1" => {
       add(get(record, "survivingCommit"), "commit", "survivingCommit");
-      for oid in iterate(get(record, "absorbedCommits"))? {
-        add(Some(&oid), "commit", "absorbedCommits");
+      for oid in array_items(get(record, "absorbedCommits")) {
+        add(Some(oid), "commit", "absorbedCommits");
       }
     }
     "causet.provenance/v1" => {
       add(get(record, "commit"), "commit", "commit");
-      for oid in iterate(get(record, "carriedFrom"))? {
-        add(Some(&oid), "commit", "carriedFrom");
+      for oid in array_items(get(record, "carriedFrom")) {
+        add(Some(oid), "commit", "carriedFrom");
       }
     }
     "causet.resolution/v1" => {
@@ -1021,7 +963,7 @@ pub fn referenced_objects(record: Option<&Value>) -> Result<Vec<ObjectReference>
     }
     _ => {}
   }
-  Ok(objects)
+  objects
 }
 
 /// `resolutionSignatureFor(stages)`.
@@ -1070,13 +1012,24 @@ mod tests {
   }
 
   #[test]
-  fn a_malformed_member_throws_where_javascript_throws() {
+  fn a_malformed_member_is_a_field_error_rather_than_a_throw() {
     let record =
       parse(r#"{"schema":"causet.rebase/v3","type":"rebase","id":"rebase_x","applications":"x"}"#)
         .unwrap();
-    assert_eq!(validate_note_record(Some(&record), "sha1"), Err(Thrown));
-    let record = parse(r#"{"schema":"causet.rebase/v3","applications":[null]}"#).unwrap();
-    assert_eq!(referenced_objects(Some(&record)), Err(Thrown));
+    let errors = validate_note_record(Some(&record), "sha1");
+    assert!(
+      errors
+        .iter()
+        .any(|error| error.field == "applications" && error.expectation == "array")
+    );
+    let record = parse(
+      r#"{"schema":"causet.rebase/v3","applications":[null,{"sourceCommit":"a"}],"absorbedCommits":"ab"}"#,
+    )
+    .unwrap();
+    let objects = referenced_objects(Some(&record));
+    assert_eq!(objects.len(), 1);
+    assert_eq!(objects[0].field, "applications.sourceCommit");
+    assert!(referenced_objects(None).is_empty());
   }
 
   #[test]

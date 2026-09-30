@@ -118,45 +118,40 @@ fn answer(request: &Value) -> Value {
     Some("validate") => match document(request) {
       Ok(value) => {
         let format = text(request, "format").unwrap_or_else(|| "sha1".into());
-        match validate_note_record(Some(&value), &format) {
-          Ok(errors) => object([(
-            "errors",
-            Value::Array(
-              errors
-                .iter()
-                .map(|error| {
-                  object([
-                    ("field", string(&error.field)),
-                    ("expectation", string(&error.expectation)),
-                  ])
-                })
-                .collect(),
-            ),
-          )]),
-          Err(Thrown) => thrown(),
-        }
-      }
-      Err(reply) => reply,
-    },
-    Some("refs") => match document(request) {
-      Ok(value) => match referenced_objects(Some(&value)) {
-        Ok(objects) => object([(
-          "objects",
+        let errors = validate_note_record(Some(&value), &format);
+        object([(
+          "errors",
           Value::Array(
-            objects
-              .into_iter()
-              .map(|reference| {
+            errors
+              .iter()
+              .map(|error| {
                 object([
-                  ("oid", Value::String(reference.oid)),
-                  ("type", string(reference.kind)),
-                  ("field", string(&reference.field)),
+                  ("field", string(&error.field)),
+                  ("expectation", string(&error.expectation)),
                 ])
               })
               .collect(),
           ),
-        )]),
-        Err(Thrown) => thrown(),
-      },
+        )])
+      }
+      Err(reply) => reply,
+    },
+    Some("refs") => match document(request) {
+      Ok(value) => object([(
+        "objects",
+        Value::Array(
+          referenced_objects(Some(&value))
+            .into_iter()
+            .map(|reference| {
+              object([
+                ("oid", Value::String(reference.oid)),
+                ("type", string(reference.kind)),
+                ("field", string(&reference.field)),
+              ])
+            })
+            .collect(),
+        ),
+      )]),
       Err(reply) => reply,
     },
     Some("signature") => match document(request) {

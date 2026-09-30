@@ -7,9 +7,9 @@
  * logical identifiers, SHA-256, and `createdAt` timestamps.
  *
  * Every case runs through `src/` and through `model-probe` and must agree
- * exactly, including where the JavaScript throws (#172). The one deliberate
- * exclusion is V8's non-ISO date fallback (#173): timestamps here are all in
- * the ECMAScript date-time format.
+ * exactly; a malformed member is a field error in both, never a throw (#172).
+ * The one deliberate exclusion is V8's non-ISO date fallback (#173):
+ * timestamps here are all in the ECMAScript date-time format.
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -329,13 +329,13 @@ test("the validators and referenced objects agree on every record and every one-
     let thrown = 0;
     for (const [index, record] of corpus.entries()) {
       const validation = jsValidation(validateNoteRecord, JSON.parse(JSON.stringify(record)), format);
-      if (validation.thrown) thrown += 1;
+      const references = jsReferences(referencedObjectsForRecord, JSON.parse(JSON.stringify(record)));
+      if (validation.thrown || references.thrown) thrown += 1;
       assert.deepEqual(replies[index * 2], validation, `${format} validate ${JSON.stringify(record)}`);
-      assert.deepEqual(replies[index * 2 + 1], jsReferences(referencedObjectsForRecord, JSON.parse(JSON.stringify(record))),
-        `refs ${JSON.stringify(record)}`);
+      assert.deepEqual(replies[index * 2 + 1], references, `refs ${JSON.stringify(record)}`);
     }
     assert.ok(corpus.length > 3000, `corpus of ${corpus.length}`);
-    assert.ok(thrown > 0, "the corpus reaches the JavaScript throwing paths (#172)");
+    assert.equal(thrown, 0, "a malformed member is a field error, never a throw (#172)");
   }
 });
 
