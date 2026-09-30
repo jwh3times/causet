@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muobm6so282a31f614da",
+      "mode": "compact",
+      "sourceRef": "jwh3times/validator-crashes",
+      "sourceHead": "3b9352cde39e84eab5a17c12c22eea89305a99f6",
+      "sourceSubject": "fix: quarantine a record member of the wrong type instead of crashing",
+      "targetBefore": "9f203622ff7e508ef7ab168f07a673901b95ed87",
+      "landingCommit": "c80573b43cc50632fe8d0eb54480e86c0cdd7f92",
+      "base": "9f203622ff7e508ef7ab168f07a673901b95ed87",
+      "absorbedCommits": [
+        "3b9352cde39e84eab5a17c12c22eea89305a99f6"
+      ],
+      "absorbedChanges": [
+        "ch_0muoaqqyn7a413f08e3e7"
+      ],
+      "resultTree": "2ca8399554dd1627516b771caf6423639827fb9f",
+      "createdAt": "2026-09-30T16:29:39.494Z"
+    }
+  ]
+}
