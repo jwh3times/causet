@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muoezawf93e1e3803f0b",
+      "mode": "compact",
+      "sourceRef": "jwh3times/rust-git-engine",
+      "sourceHead": "9835a8e0cb5a76129fd4314847d0c39a687ad483",
+      "sourceSubject": "test: tolerate a shallow checkout in the Rust engine comparison",
+      "targetBefore": "c80573b43cc50632fe8d0eb54480e86c0cdd7f92",
+      "landingCommit": "505f2f11500a0bc8fb2652b34d99d46d5f33b330",
+      "base": "c80573b43cc50632fe8d0eb54480e86c0cdd7f92",
+      "absorbedCommits": [
+        "f28d40e44c30788165ed23942d2f9977454d4d6c",
+        "9835a8e0cb5a76129fd4314847d0c39a687ad483"
+      ],
+      "absorbedChanges": [
+        "ch_0muodbo6g95d9fc72d29e",
+        "ch_0muoe6tsl15c21aae5279"
+      ],
+      "resultTree": "863da52ddde6358896eae89aed75109458130e49",
+      "createdAt": "2026-09-30T18:03:50.195Z"
+    }
+  ]
+}
