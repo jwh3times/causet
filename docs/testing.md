@@ -230,7 +230,8 @@ both on the same inputs through the `model-probe` executable
   and spelling;
 - the validators and referenced objects over every real record of the v0.19.1
   fixture and every one-member mutation of each, in both object formats,
-  including the cases where the JavaScript throws (#172);
+  where a malformed member must be a field error in both, never a throw
+  (#172);
 - resolution signatures, logical identifiers, SHA-256 and `createdAt`
   timestamps.
 
