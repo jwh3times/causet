@@ -162,7 +162,9 @@ function realClone() {
   spawnSync("git", ["fetch", "-q", "origin", "refs/notes/*:refs/notes/*"], { cwd, env: testEnv(overrides) });
   const head = git(cwd, "rev-parse", "HEAD");
   const root = git(cwd, "rev-list", "--max-parents=0", "HEAD").split("\n")[0];
-  const feature = git(cwd, "rev-parse", "HEAD~3");
+  // CI checks out one commit, so the clone may be shallow: take the oldest of
+  // the few commits there are.
+  const feature = git(cwd, "rev-list", "--max-count=4", "HEAD").split("\n").at(-1);
   return { cwd, root, head, feature };
 }
 
@@ -302,16 +304,27 @@ function compareDifferential(actual, expected, label) {
   }
 }
 
+// Built once; a failure is kept, so every test reports it rather than
+// tripping over the directories the first attempt left.
 let fixtures = null;
 function repositories() {
-  fixtures ??= [
-    historyRepository(),
-    conflictRepository(),
-    emptyRepository(),
-    sha256Repository(),
-    realClone(),
-  ];
-  return fixtures;
+  if (!fixtures) {
+    try {
+      fixtures = {
+        value: [
+          historyRepository(),
+          conflictRepository(),
+          emptyRepository(),
+          sha256Repository(),
+          realClone(),
+        ],
+      };
+    } catch (error) {
+      fixtures = { error };
+    }
+  }
+  if (fixtures.error) throw fixtures.error;
+  return fixtures.value;
 }
 
 test("every catalog operation answers as the JavaScript engine does, value and processes", { skip }, () => {
