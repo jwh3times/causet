@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst capabilities` and `cst capabilities --against`
+  natively (#144, ADR-0033). The output is byte for byte the JavaScript
+  CLI's, human and JSON, for a document, an envelope, and every refusal. That
+  includes the few malformed peer documents and envelopes on which the
+  JavaScript CLI raises a plain `TypeError`: the Rust CLI reports the same
+  message, and the same code or `null`. The Rust record model gains `js`, the
+  JavaScript value semantics the ported commands share: property access,
+  `ToString`, V8's sort, and the `localeCompare` order for the names they
+  sort.
 - `cst doctor` reports `implementation`: `javascript` from the JavaScript CLI,
   and `rust` from the Rust CLI, which reports `node` as `null` because it runs
   without Node.js. These two members are the only ones the implementations
