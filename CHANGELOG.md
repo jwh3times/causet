@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+- Add the Rust record model, `native/model` (`causet-model`, issue #142,
+  ADR-0037). It is what the ported commands will share, and ships in no
+  command yet:
+  - JSON exactly as `JSON.parse` and `JSON.stringify` handle it, including
+    UTF-16 member ordering, lone surrogates and ECMAScript number formatting;
+  - canonical JSON (passing `docs/canonical-json/vectors.json`) and the legacy
+    digest serializer;
+  - logical identifiers and SHA-256;
+  - the record-family and resource-bound registries, classification,
+    compatibility and readability, the note-record validators, referenced
+    objects and resolution signatures;
+  - the error vocabulary and envelope, which the Rust CLI now renders through
+    it.
+
+  `test/rust-model.test.js` and the live scenario in
+  `test/schema-catalog.test.js` require identical results from `src/` and the
+  Rust model. A new mutation fuzz target, `fuzz-model`, runs in CI.
+- Found by the port: a malformed shared note record crashes
+  `cst metadata status` instead of being quarantined (#172). `createdAt`
+  validity follows V8's non-ISO `Date.parse` fallback, which no other
+  implementation can reproduce (#173).
+
 ## 0.20.0
 
 - The repository is now `jwh3times/causet` and the project board is "causet"

@@ -74,12 +74,22 @@ dependencies = [
 [[package]]
 name = "causet-cli"
 version = "0.1.0"
+dependencies = [
+ "causet-model",
+]
 
 [[package]]
 name = "causet-core"
 version = "0.1.0"
 dependencies = [
  "gix",
+]
+
+[[package]]
+name = "causet-model"
+version = "0.1.0"
+dependencies = [
+ "getrandom",
 ]
 
 [[package]]

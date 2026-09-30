@@ -8,3 +8,6 @@ publish = false
 [[bin]]
 name = "cst"
 path = "src/main.rs"
+
+[dependencies]
+causet-model = { path = "../model" }
