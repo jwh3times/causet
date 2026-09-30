@@ -5,7 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
-import { RECORD_FAMILIES, schemaClassification, validateNoteRecord } from "../src/schemas.js";
+import { RECORD_FAMILIES, referencedObjectsForRecord, schemaClassification, validateNoteRecord } from "../src/schemas.js";
+import { canonicalJson as legacyCanonicalJson } from "../src/metadata.js";
+import { available as modelProbeAvailable, jsReferences, jsValidation, probe as modelProbe } from "../test-support/model-probe.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
@@ -605,6 +607,24 @@ test("every published note record satisfies its document and the runtime validat
     ],
     "the scenario must publish every note-record family",
   );
+  // The Rust record model (#142) must reach the same verdicts, reference the
+  // same objects, and digest the same bytes for every record the scenario
+  // publishes, in both object formats.
+  if (!modelProbeAvailable) return;
+  const requests = state.noteRecords.flatMap((record) => [
+    { op: "validate", text: JSON.stringify(record), format: "sha1" },
+    { op: "validate", text: JSON.stringify(record), format: "sha256" },
+    { op: "refs", text: JSON.stringify(record) },
+    { op: "serialize", text: JSON.stringify(record) },
+  ]);
+  const replies = modelProbe(requests);
+  for (const [index, record] of state.noteRecords.entries()) {
+    const label = `${record.id} (${record.schema})`;
+    assert.deepEqual(replies[index * 4], jsValidation(validateNoteRecord, record, "sha1"), `Rust sha1 validation of ${label}`);
+    assert.deepEqual(replies[index * 4 + 1], jsValidation(validateNoteRecord, record, "sha256"), `Rust sha256 validation of ${label}`);
+    assert.deepEqual(replies[index * 4 + 2], jsReferences(referencedObjectsForRecord, record), `Rust references of ${label}`);
+    assert.equal(replies[index * 4 + 3].legacy, legacyCanonicalJson(record), `Rust digest bytes of ${label}`);
+  }
 });
 
 test("documents are at least as strict as the runtime validator on missing fields", { timeout: 600_000 }, () => {

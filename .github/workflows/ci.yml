@@ -79,7 +79,9 @@ jobs:
           node scripts/build-native.mjs
           echo "CAUSET_REQUIRE_NATIVE=1" >> "$GITHUB_ENV"
       - name: Native parser mutation fuzzing
-        run: cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuzz-parsers -- 200000 83
+        run: |
+          cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuzz-parsers -- 200000 83
+          cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuzz-model -- 200000 83
       - name: Retain optional prebuild and license notices
         if: matrix.mode == 'default' && matrix.node == 24
         uses: actions/upload-artifact@v4

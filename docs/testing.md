@@ -215,6 +215,33 @@ for byte, and checks that a delegated command's output and exit status pass
 through unchanged. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 
+The Rust record model (`native/model`, #142) is what the ported commands will
+share: JSON as JavaScript parses and writes it, canonical JSON and the legacy
+digest serializer, logical identifiers, SHA-256, the record-family and
+resource-bound registries, classification, the note-record validators, and the
+error vocabulary. `src/` stays the authority. `test/rust-model.test.js` runs
+both on the same inputs through the `model-probe` executable
+(`test-support/model-probe.js`) and requires identical results:
+
+- the canonical-JSON vectors, and 1,500 generated documents through the
+  canonical, hashed-payload, compact, pretty and legacy serializers;
+- registry equality, including every family, bound, error code and namespace;
+- classification, compatibility and readability for every family, version
+  and spelling;
+- the validators and referenced objects over every real record of the v0.19.1
+  fixture and every one-member mutation of each, in both object formats,
+  including the cases where the JavaScript throws (#172);
+- resolution signatures, logical identifiers, SHA-256 and `createdAt`
+  timestamps.
+
+`test/schema-catalog.test.js` adds the same check for every record its live
+scenario publishes. Two limits are deliberate: timestamps are compared only in
+the ECMAScript date-time format, because V8's non-ISO fallback cannot be
+reproduced (#173), and generated member names avoid escapes, because Node 26.4's
+`JSON.parse` can mis-name an escaped member after an earlier object primed the
+same member path (fixed cases cover those names instead). Both suites skip when
+the probe is not built.
+
 The suite includes `test/schema-catalog.test.js`, which keeps the published
 JSON Schema catalog in `docs/schemas/` in agreement with the executable
 validators in `src/schemas.js`: every schema identifier used in `src/` must

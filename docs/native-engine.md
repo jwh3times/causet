@@ -64,7 +64,11 @@ tree, commit, tag, and object-ID parsers; failures reproduce with the same seed:
 
 ```sh
 cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuzz-parsers -- 200000 83
+cargo +1.98.1 run --manifest-path native/Cargo.toml --locked --release --bin fuzz-model -- 200000 83
 ```
+
+The second target covers the Rust CLI's record model (`native/model`, #142): its
+JSON parser and every function that reads a parsed note, envelope or journal.
 
 This bounded mutation run is not a coverage-guided fuzzing claim. Dependency
 advisory checks and FFI review accompany qualification evidence on
