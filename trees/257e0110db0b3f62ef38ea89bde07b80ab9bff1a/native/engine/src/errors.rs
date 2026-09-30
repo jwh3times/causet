@@ -27,6 +27,23 @@ impl GitError {
     }
   }
 
+  /// A failure JavaScript raises as a plain `TypeError` rather than a
+  /// `CliError`: its envelope carries `code: null`. The code is empty here.
+  pub fn uncoded(message: impl Into<String>) -> Self {
+    Self::node(message, "")
+  }
+
+  /// A failure Node raises with its own code (`ERR_INVALID_ARG_TYPE`,
+  /// `EISDIR`): not a published code, but the one its envelope carries.
+  pub fn node(message: impl Into<String>, code: &'static str) -> Self {
+    Self {
+      message: message.into(),
+      code,
+      details: String::new(),
+      exit_code: 1,
+    }
+  }
+
   pub fn details(mut self, details: impl Into<String>) -> Self {
     self.details = details.into();
     self

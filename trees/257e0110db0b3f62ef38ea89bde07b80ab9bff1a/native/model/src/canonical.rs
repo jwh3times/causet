@@ -12,6 +12,12 @@ const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 #[derive(Debug, PartialEq, Eq)]
 pub struct CanonicalError(pub String);
 
+impl std::fmt::Display for CanonicalError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.write_str(&self.0)
+  }
+}
+
 /// The canonical bytes of `value` under `causet.canonical-json/v1`.
 pub fn canonical_json(value: &Value) -> Result<String, CanonicalError> {
   let mut out = String::new();

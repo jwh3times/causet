@@ -196,6 +196,44 @@ test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, 
   }
 });
 
+test("capabilities is answered natively, byte for byte", { skip }, () => {
+  // Outside a repository the document is build-scoped.
+  assertSame(["capabilities"]);
+  assertSame(["capabilities", "--json"]);
+  assertSame(["capabilities", "--against", path.join(outside, "absent.json"), "--json"]);
+
+  const repo = path.join(outside, "capabilities-repo");
+  fs.mkdirSync(repo);
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+  git("init", "-q", "-b", "main");
+  git("-c", "user.name=Capabilities", "-c", "user.email=capabilities@example.invalid", "commit", "-q", "--allow-empty", "-m", "base");
+  const inRepo = (command, args, env) => spawnSync(command, args, {
+    cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, ...env }),
+  });
+  const own = JSON.parse(inRepo(process.execPath, [oracle, "capabilities", "--json"], {}).stdout);
+  const reduced = structuredClone(own);
+  reduced.families.find((entry) => entry.family === "causet.rebase").readable = [1];
+  delete reduced.repository.lineage;
+  const peers = [["own.json", own], ["reduced.json", reduced]].map(([name, document]) => {
+    const file = path.join(outside, name);
+    fs.writeFileSync(file, JSON.stringify(document));
+    return file;
+  });
+  for (const args of [
+    ["capabilities"],
+    ["capabilities", "--json"],
+    ...peers.flatMap((file) => [["capabilities", "--against", file], ["capabilities", "--against", file, "--json"]]),
+  ]) {
+    const expected = inRepo(process.execPath, [oracle, ...args], {});
+    if (rust === selectedCli) vlabPrefix();
+    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const label = JSON.stringify(args);
+    assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
+    assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
+    assert.equal(actual.status, expected.status, `status of ${label}`);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

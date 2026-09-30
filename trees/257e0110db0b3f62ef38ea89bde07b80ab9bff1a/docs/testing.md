@@ -212,8 +212,8 @@ delegation, so what remains is only what the Rust CLI answers itself.
 `test/native-cli.test.js` uses `never` to compare every native answer (help,
 version, and each usage failure, human and JSON) with the JavaScript CLI byte
 for byte, and checks that a delegated command's output and exit status pass
-through unchanged. For the ported commands (`doctor` so far, #144), it also
-compares their reports in a repository. The only members allowed to differ are
+through unchanged. For the ported commands (`doctor` and `capabilities` so far,
+#144), it also compares their output in a repository. The only members allowed to differ are
 `implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 
@@ -293,6 +293,10 @@ Because the JavaScript side runs every request before the probe replays them,
 a request that mutates a repository restores it before it ends. The suite
 skips when the probe is not built. A mutation fuzz target, `fuzz-engine`, runs
 every parser of Git output in CI.
+
+CI's suite jobs also run the Rust crates' unit tests:
+`cargo test --workspace --exclude causet-binding`. The N-API binding is
+excluded because it links only inside Node.
 
 The suite includes `test/schema-catalog.test.js`, which keeps the published
 JSON Schema catalog in `docs/schemas/` in agreement with the executable

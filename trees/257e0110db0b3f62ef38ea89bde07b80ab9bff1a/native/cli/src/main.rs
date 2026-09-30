@@ -3,11 +3,14 @@
 //! delegates every other invocation, whole, to the JavaScript CLI.
 #![forbid(unsafe_code)]
 
+mod capabilities;
 mod delegate;
 mod doctor;
+mod envelope;
 mod environment;
 mod front;
 mod json;
+mod lineage;
 mod migration;
 mod native;
 mod parsed;

@@ -45,7 +45,7 @@ pub enum Outcome {
 /// The commands this CLI answers natively. A command joins only when every
 /// CLI-level test that exercises it passes against this CLI in all six modes
 /// (ADR-0037 §4).
-pub const NATIVE_COMMANDS: &[&str] = &["doctor"];
+pub const NATIVE_COMMANDS: &[&str] = &["capabilities", "doctor"];
 
 fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
   Outcome::Fail {
@@ -605,11 +605,40 @@ mod tests {
       &["resolve"],
       &["metadata", "dispose", "r", "--keep-local"],
       &["spec", "index", "--all"],
-      &["doctor", "--benchmark"],
+      &["workspace", "list"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
     }
+  }
+
+  #[test]
+  fn ported_commands_are_answered_natively_with_their_flag_selections() {
+    for args in [&["doctor", "--benchmark"][..], &["capabilities", "--json"]] {
+      assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
+    }
+    let Outcome::Native {
+      settings, parsed, ..
+    } = run(&[
+      "--trace-git",
+      "--no-git-session",
+      "--engine",
+      "native",
+      "doctor",
+      "--differential",
+    ])
+    else {
+      panic!("doctor is native");
+    };
+    assert!(parsed.truthy("differential"));
+    assert_eq!(
+      settings,
+      [
+        ("TRACE", "1".to_string()),
+        ("GIT_SESSION", "0".to_string()),
+        ("ENGINE", "native".to_string())
+      ]
+    );
   }
 
   #[test]
