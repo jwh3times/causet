@@ -243,6 +243,55 @@ reproduced (#173), and generated member names avoid escapes, because Node 26.4's
 same member path (fixed cases cover those names instead). Both suites skip when
 the probe is not built.
 
+The Rust Git engine (`native/engine`, #143) is the layer every ported command
+will sit on:
+- the 44-operation read catalog behind one backend trait, with the Git backend
+  and the gitoxide backend for its five operations;
+- the object and merge-tree sessions, as child processes without a worker;
+- explicit mutations and the bypass rule;
+- the metrics;
+- the engine differential.
+
+`src/git.js` and `src/engine.js` stay the authority. `test/rust-engine.test.js`
+runs each request through both, the Rust side through the `engine-probe`
+executable (`test-support/engine-probe.js`). For every call, the two must agree
+on the canonical value or the error (code, message, details and exit code), and
+on every count:
+- processes, session queries and cache hits;
+- fallbacks, native reads and direct reads;
+- the per-command counts.
+
+Timings are the only metrics not compared. The requests cover:
+- every catalog operation and its failure paths, with and without an object
+  session, on these repositories:
+  - a history with trailers, a merge, tags, notes, specs and a locked linked
+    worktree;
+  - a stopped cherry-pick;
+  - an empty repository;
+  - a SHA-256 repository;
+  - a clone of this repository with its notes;
+- the native engine's answers and each fallback reason;
+- the session cache and its invalidation by a mutation;
+- the bypass rule;
+- the merge-tree session's clean, conflicted and refused steps;
+- the four session failure hooks;
+- the engine differential, whose Git column must match the JavaScript
+  differential digest for digest and process for process.
+
+An operation added to `src/engine.js` without its Rust counterpart fails the
+suite. The two differentials must list the same catalog, so a new operation
+needs:
+- its Git implementation in `native/engine/src/git.rs`;
+- its catalog line in `native/engine/src/engine.rs`;
+- its probe in `native/engine/src/differential.rs`;
+- its arm in `native/engine/src/bin/engine-probe.rs`;
+- a call in `test/rust-engine.test.js`.
+
+Because the JavaScript side runs every request before the probe replays them,
+a request that mutates a repository restores it before it ends. The suite
+skips when the probe is not built. A mutation fuzz target, `fuzz-engine`, runs
+every parser of Git output in CI.
+
 The suite includes `test/schema-catalog.test.js`, which keeps the published
 JSON Schema catalog in `docs/schemas/` in agreement with the executable
 validators in `src/schemas.js`: every schema identifier used in `src/` must
