@@ -96,7 +96,7 @@ On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are o
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causet-0.19.1.bundle causet
+git clone /path/to/causet-0.20.0.bundle causet
 cd causet
 git remote remove origin
 npm link
@@ -108,7 +108,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 ```bash
 git init -b main
 git add .
-git commit -m "Bootstrap causet 0.19.1"
+git commit -m "Bootstrap causet 0.20.0"
 npm link
 npm test
 ```

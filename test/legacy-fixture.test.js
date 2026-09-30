@@ -125,6 +125,18 @@ function withoutMigrationDiagnostic(args, stdout, migrated) {
   return `${JSON.stringify(report, null, 2)}\n`;
 }
 
+/**
+ * A capability report names this build's version as `local.producer.version`,
+ * which moves with every release; the peer's (`peer.producer.version`) is the
+ * fixture's and must still match. Only the local one is set to the fixture's.
+ */
+function withFixtureLocalVersion(args, stdout) {
+  if (args[0] !== "capabilities") return stdout;
+  const report = JSON.parse(stdout);
+  report.local.producer.version = fixture.generatedBy.replace(/^causet /, "");
+  return `${JSON.stringify(report, null, 2)}\n`;
+}
+
 function assertReadsMatch(root, { migrated = false } = {}) {
   const repo = path.join(root, "repo");
   for (const expected of fixture.expected) {
@@ -132,7 +144,8 @@ function assertReadsMatch(root, { migrated = false } = {}) {
     const actual = cst(repo, args);
     const label = expected.args.join(" ");
     assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
-    const stdout = withoutMigrationDiagnostic(expected.args, actual.stdout, migrated);
+    const stdout = withFixtureLocalVersion(expected.args,
+      withoutMigrationDiagnostic(expected.args, actual.stdout, migrated));
     assert.equal(normalize(stdout, root, { migrated }), normalize(expected.stdout, root, { migrated }),
       `stdout of ${label}`);
     assert.equal(normalize(actual.stderr, root, { migrated }), normalize(expected.stderr, root, { migrated }),
