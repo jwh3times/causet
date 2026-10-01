@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst graph`, `cst receipts` and `cst provenance`
+  natively (#144), byte for byte, human and JSON. Every note is read with the
+  JavaScript CLI's one parser, and every record is rendered as its template
+  literals render it. That includes a malformed record on which the
+  JavaScript CLI raises a `TypeError`: the Rust CLI reports the same message.
+  The record model's `js` gains `length` and an exact `toFixed`, which
+  rounds a half-way value away from zero, as V8 does.
 - The Rust CLI answers `cst capabilities` and `cst capabilities --against`
   natively (#144, ADR-0033). The output is byte for byte the JavaScript
   CLI's, human and JSON, for a document, an envelope, and every refusal. That

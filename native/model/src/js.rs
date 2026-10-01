@@ -88,6 +88,67 @@ pub fn join(items: &[Value], separator: &[u16]) -> JsString {
   out
 }
 
+/// `value.length` for a JSON value: an array's item count, a string's UTF-16
+/// length, an object's own `length` member, and `undefined` otherwise.
+pub fn length(value: Option<&Value>) -> Option<Value> {
+  match value {
+    Some(Value::Array(items)) => Some(Value::Number(items.len() as f64)),
+    Some(Value::String(units)) => Some(Value::Number(units.len() as f64)),
+    Some(Value::Object(object)) => object.get("length").cloned(),
+    _ => None,
+  }
+}
+
+/// `Number.prototype.toFixed(digits)`: rounded from the exact binary value,
+/// a tie going to the larger magnitude (unlike Rust's `{:.N}`, which rounds a
+/// tie to even).
+pub fn to_fixed(value: f64, digits: u32) -> String {
+  if value.is_nan() {
+    return "NaN".into();
+  }
+  if value.abs() >= 1e21 {
+    return number_to_string(value);
+  }
+  if value < 0.0 {
+    // The sign stays even when the digits round to zero: `(-0.001).toFixed(2)`
+    // is "-0.00".
+    return format!("-{}", to_fixed(-value, digits));
+  }
+  let bits = value.to_bits();
+  let exponent = ((bits >> 52) & 0x7ff) as i32;
+  let fraction = bits & ((1u64 << 52) - 1);
+  let (mantissa, power) = if exponent == 0 {
+    (fraction, -1074)
+  } else {
+    (fraction | (1u64 << 52), exponent - 1075)
+  };
+  let scale = 10u128.pow(digits);
+  let scaled = if power >= 0 {
+    (u128::from(mantissa) << power) * scale
+  } else {
+    let shift = (-power) as u32;
+    let numerator = u128::from(mantissa) * scale;
+    if shift >= 127 {
+      0
+    } else {
+      let quotient = numerator >> shift;
+      let remainder = numerator & ((1u128 << shift) - 1);
+      let half = 1u128 << (shift - 1);
+      if remainder >= half {
+        quotient + 1
+      } else {
+        quotient
+      }
+    }
+  };
+  if digits == 0 {
+    return scaled.to_string();
+  }
+  let whole = scaled / scale;
+  let part = scaled % scale;
+  format!("{whole}.{part:0width$}", width = digits as usize)
+}
+
 /// `ToNumber` of a JSON value, as the `(left, right) => left - right`
 /// comparator applies it.
 pub fn to_number(value: &Value) -> f64 {
@@ -251,6 +312,33 @@ mod tests {
     };
     numeric_sort(&mut numbers);
     assert_eq!(text(Some(&Value::Array(numbers))), "0,1,2,3,x");
+  }
+
+  #[test]
+  fn to_fixed_matches_v8() {
+    for (value, digits, expected) in [
+      (0.125, 2, "0.13"),
+      (1.005, 2, "1.00"),
+      (2.5, 0, "3"),
+      (-1.5, 0, "-2"),
+      (1e21, 2, "1e+21"),
+      (123.456, 2, "123.46"),
+      (0.000001, 2, "0.00"),
+      (-0.001, 2, "-0.00"),
+      (0.0, 2, "0.00"),
+      (-0.0, 2, "0.00"),
+      (5e-324, 2, "0.00"),
+      (0.5, 0, "1"),
+      (1.45, 1, "1.4"),
+      (8.345, 2, "8.35"),
+      (1234.5678, 2, "1234.57"),
+    ] {
+      assert_eq!(
+        to_fixed(value, digits),
+        expected,
+        "{value}.toFixed({digits})"
+      );
+    }
   }
 
   #[test]
