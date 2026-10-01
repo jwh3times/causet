@@ -155,7 +155,7 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
   // Outside a repository these succeed or fail exactly as the JavaScript CLI
   // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["metadata", "status", "--json"], ["cherry-pick", "x"], ["resolve"], ["--trace-git", "workspace", "list"]]) {
+  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["resolve"], ["--trace-git", "workspace", "list"]]) {
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
@@ -234,8 +234,8 @@ test("capabilities is answered natively, byte for byte", { skip }, () => {
   }
 });
 
-test("graph, receipts, and provenance are answered natively, byte for byte", { skip }, () => {
-  for (const args of [["graph"], ["receipts", "--json"], ["provenance"]]) assertSame(args);
+test("graph, receipts, provenance, and metadata status and validate are answered natively, byte for byte", { skip }, () => {
+  for (const args of [["graph"], ["receipts", "--json"], ["provenance"], ["metadata", "status"], ["metadata", "validate", "--json"]]) assertSame(args);
 
   const repo = path.join(outside, "records-repo");
   fs.mkdirSync(repo);
@@ -261,6 +261,8 @@ test("graph, receipts, and provenance are answered natively, byte for byte", { s
   for (const args of [
     ["graph"], ["receipts"], ["receipts", "--json"], ["provenance"], ["provenance", "HEAD~1"],
     ["provenance", "--all"], ["provenance", "--all", "--json"], ["provenance", "missing"],
+    ["metadata", "status"], ["metadata", "status", "--json"], ["metadata", "validate"],
+    ["metadata", "validate", "--strict", "--json"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();

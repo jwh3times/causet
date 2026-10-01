@@ -148,3 +148,35 @@ pub fn repository_names(cwd: &str) -> GitResult<RepositoryNames> {
 pub fn names(cwd: &str) -> GitResult<Names> {
   Ok(repository_names(cwd)?.names)
 }
+
+/// `refFamily(family, cwd)`: `<refs root>/<family>` under the names in use.
+pub fn ref_family(family: &str, cwd: &str) -> GitResult<String> {
+  Ok(format!("{}/{family}", names(cwd)?.refs_root))
+}
+
+/// `runtimeDirectory(gitDirectory, cwd)`.
+pub fn runtime_directory(git_directory: &str, cwd: &str) -> GitResult<String> {
+  Ok(text::join(git_directory, names(cwd)?.runtime))
+}
+
+/// `familyRemainder(ref, family)`: what follows `<root>/<family>/` under
+/// either set of names.
+pub fn family_remainder<'a>(name: &'a str, family: &str) -> Option<&'a str> {
+  [CURRENT_NAMES, LEGACY_NAMES]
+    .iter()
+    .find_map(|set| name.strip_prefix(&format!("{}/{family}/", set.refs_root)))
+}
+
+/// `localRef(ref, cwd)`: a ref a record names, under this repository's names.
+pub fn local_ref(name: &str, cwd: &str) -> GitResult<String> {
+  let local = names(cwd)?;
+  if name == CURRENT_NAMES.notes_ref || name == LEGACY_NAMES.notes_ref {
+    return Ok(local.notes_ref.to_string());
+  }
+  for set in [CURRENT_NAMES, LEGACY_NAMES] {
+    if let Some(rest) = name.strip_prefix(&format!("{}/", set.refs_root)) {
+      return Ok(format!("{}/{rest}", local.refs_root));
+    }
+  }
+  Ok(name.to_string())
+}
