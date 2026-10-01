@@ -237,7 +237,7 @@ test("capabilities is answered natively, byte for byte", { skip }, () => {
 test("the record readers are answered natively, byte for byte", { skip }, () => {
   for (const args of [
     ["graph"], ["receipts", "--json"], ["provenance"], ["metadata", "status"], ["metadata", "validate", "--json"],
-    ["audit", "identity"], ["resolve"], ["resolve", "list", "--json"],
+    ["audit", "identity"], ["resolve"], ["resolve", "list", "--json"], ["spec", "show", "x.md"], ["spec", "status"],
   ]) assertSame(args);
 
   const repo = path.join(outside, "records-repo");
@@ -267,6 +267,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     ["metadata", "status"], ["metadata", "status", "--json"], ["metadata", "validate"],
     ["metadata", "validate", "--strict", "--json"], ["audit", "identity"], ["audit", "identity", "--json"],
     ["resolve"], ["resolve", "status", "--json"], ["resolve", "list"], ["resolve", "list", "--json"],
+    ["spec", "status"], ["spec", "status", "--json"], ["spec", "show", "a.txt"], ["spec", "show", "missing.md"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();

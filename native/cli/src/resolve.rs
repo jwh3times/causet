@@ -221,7 +221,7 @@ fn read_journal(cwd: &str, file: &str, family: &str, kind: &str) -> GitResult<Op
 }
 
 /// `readPendingOperation(cwd)`: the reconciliation or rebase journal.
-fn read_pending_operation(cwd: &str) -> GitResult<Option<Value>> {
+pub(crate) fn read_pending_operation(cwd: &str) -> GitResult<Option<Value>> {
   let reconciliation = read_journal(
     cwd,
     "reconciliation.json",

@@ -56,6 +56,8 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "receipts",
   "resolve list",
   "resolve status",
+  "spec show",
+  "spec status",
 ];
 
 /// Whether this invocation is a ported command: the command, or for a command
@@ -648,6 +650,8 @@ mod tests {
       &["metadata", "validate", "--strict"],
       &["resolve"],
       &["resolve", "list", "--json"],
+      &["spec", "show", "a.md"],
+      &["spec", "status"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
