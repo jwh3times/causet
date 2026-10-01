@@ -50,9 +50,11 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "capabilities",
   "doctor",
   "graph",
+  "merge-plan",
   "metadata status",
   "metadata validate",
   "provenance",
+  "rebase-plan",
   "receipts",
   "resolve list",
   "resolve status",
@@ -652,6 +654,8 @@ mod tests {
       &["resolve", "list", "--json"],
       &["spec", "show", "a.md"],
       &["spec", "status"],
+      &["merge-plan", "feature", "--json"],
+      &["rebase-plan", "main", "feature", "--from", "base", "--squash", "a=b"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
@@ -660,6 +664,8 @@ mod tests {
       &["metadata", "retain"][..],
       &["metadata", "export", "x"],
       &["resolve", "apply", "--all"],
+      &["spec", "merge-plan", "f", "b", "o", "t"],
+      &["rebase-forecast", "main"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
     }

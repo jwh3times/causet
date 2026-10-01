@@ -17,6 +17,7 @@ mod migration;
 mod native;
 mod notes;
 mod parsed;
+mod plan;
 mod provenance;
 mod records;
 mod resolve;

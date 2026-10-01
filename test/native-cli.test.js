@@ -238,6 +238,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
   for (const args of [
     ["graph"], ["receipts", "--json"], ["provenance"], ["metadata", "status"], ["metadata", "validate", "--json"],
     ["audit", "identity"], ["resolve"], ["resolve", "list", "--json"], ["spec", "show", "x.md"], ["spec", "status"],
+    ["merge-plan", "main"], ["rebase-plan", "main", "feature", "--json"],
   ]) assertSame(args);
 
   const repo = path.join(outside, "records-repo");
@@ -268,6 +269,9 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     ["metadata", "validate", "--strict", "--json"], ["audit", "identity"], ["audit", "identity", "--json"],
     ["resolve"], ["resolve", "status", "--json"], ["resolve", "list"], ["resolve", "list", "--json"],
     ["spec", "status"], ["spec", "status", "--json"], ["spec", "show", "a.txt"], ["spec", "show", "missing.md"],
+    ["merge-plan", "feature"], ["merge-plan", "feature", "--json"], ["merge-plan", "missing"],
+    ["rebase-plan", "HEAD~1", "main"], ["rebase-plan", "HEAD~1", "main", "--json"],
+    ["rebase-plan", "HEAD~1", "main", "--from", "main"], ["rebase-plan", "main", "feature", "--reword", "feature"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();
