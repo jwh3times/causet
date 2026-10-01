@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mupgj0nyfee8b957a6a0",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-audit-identity",
+      "sourceHead": "949af341d0f6d872bea51f8cb4671b1b8ec4fec3",
+      "sourceSubject": "feat: answer cst audit identity natively in the Rust CLI",
+      "targetBefore": "4aad105e486217b6e6c846a8f911febcdabdb4d8",
+      "landingCommit": "c750d94bf944b1e9b8afd4dc0708cb5229fd2d47",
+      "base": "4aad105e486217b6e6c846a8f911febcdabdb4d8",
+      "absorbedCommits": [
+        "949af341d0f6d872bea51f8cb4671b1b8ec4fec3"
+      ],
+      "absorbedChanges": [
+        "ch_0mup2na9a518e0fad4e38"
+      ],
+      "resultTree": "d69c9d4024ee45aaddee06a2103036fa23ca3453",
+      "createdAt": "2026-10-01T11:34:55.836Z"
+    }
+  ]
+}
