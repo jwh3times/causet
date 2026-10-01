@@ -97,6 +97,72 @@ fn string_items(value: Option<&Value>) -> Vec<String> {
   }
 }
 
+/// `directChangeCoverage(ref, cwd)`: the commits and identities in the target
+/// history.
+fn direct_change_coverage(
+  target_head: &str,
+  cwd: &str,
+) -> GitResult<(HashSet<String>, HashSet<String>)> {
+  let history = engine::commit_history(&[target_head.to_string()], cwd, HistoryOptions::default())?;
+  let commits = history.iter().map(|item| item.commit.clone()).collect();
+  let change_ids = history
+    .iter()
+    .map(|item| extract_change_id(&item.commit, &item.message))
+    .collect();
+  Ok((commits, change_ids))
+}
+
+fn sorted(items: impl IntoIterator<Item = String>) -> Value {
+  let mut items: Vec<String> = items.into_iter().collect();
+  text::sort(&mut items);
+  strings(&items)
+}
+
+/// `coverageEvidence(sourceRef, cwd)`: the raw evidence a coverage
+/// classification rests on, for the portable proof bundle.
+pub fn coverage_evidence(source_ref: &str, cwd: &str) -> GitResult<Value> {
+  with_object_session(cwd, || {
+    let heads = engine::resolve_object_ids(
+      &["HEAD^{commit}".to_string(), format!("{source_ref}^{{commit}}")],
+      cwd,
+    )?;
+    let (target_head, source_head) = (heads[0].clone(), heads[1].clone());
+    let physical_base = engine::merge_base(&target_head, &source_head, cwd)?;
+    let (direct_commits, direct_change_ids) = direct_change_coverage(&target_head, cwd)?;
+    let receipt = receipt_coverage(&direct_commits, cwd)?;
+    let candidates: BTreeSet<String> =
+      engine::patch_equivalent_commits(&target_head, &source_head, &physical_base, cwd)?
+        .into_iter()
+        .collect();
+    let mut receipts: Vec<(String, Value)> = receipt
+      .receipts
+      .iter()
+      .map(|record| {
+        let field = |name: &str| get(Some(record), name).cloned().unwrap_or(Value::Null);
+        let mut object = Object::new();
+        object.set("id", field("id"));
+        object.set("schema", field("schema"));
+        object.set("type", field("type"));
+        object.set("attachedTo", field("attachedTo"));
+        object.set("absorbedCommits", sorted(string_items(get(Some(record), "absorbedCommits"))));
+        object.set("absorbedChanges", sorted(string_items(get(Some(record), "absorbedChanges"))));
+        (js_text(get(Some(record), "id")), Value::Object(object))
+      })
+      .collect();
+    receipts.sort_by(|left, right| causet_model::js::locale_compare(&left.0, &right.0));
+    let mut object = Object::new();
+    object.set("targetCommits", sorted(direct_commits));
+    object.set("targetChangeIds", sorted(direct_change_ids));
+    object.set(
+      "receipts",
+      Value::Array(receipts.into_iter().map(|(_, receipt)| receipt).collect()),
+    );
+    object.set("patchEquivalentCommits", sorted(candidates));
+    object.set("quarantinedFacts", strings(&receipt.quarantined));
+    Ok(Value::Object(object))
+  })
+}
+
 /// `receiptCoverage(directCommits, cwd)`.
 fn receipt_coverage(direct_commits: &HashSet<String>, cwd: &str) -> GitResult<ReceiptCoverage> {
   let (records, conflicting) = read_causal_record_catalog(cwd)?;
@@ -186,13 +252,7 @@ fn build_merge_plan_in_session(
   let (target_tree, source_tree) = (trees[0].clone(), trees[1].clone());
   let exact_state_equality = target_tree == source_tree;
 
-  // `directChangeCoverage(targetHead, cwd)`.
-  let history = engine::commit_history(&[target_head.clone()], cwd, HistoryOptions::default())?;
-  let direct_commits: HashSet<String> = history.iter().map(|item| item.commit.clone()).collect();
-  let direct_change_ids: HashSet<String> = history
-    .iter()
-    .map(|item| extract_change_id(&item.commit, &item.message))
-    .collect();
+  let (direct_commits, direct_change_ids) = direct_change_coverage(&target_head, cwd)?;
   let receipt = receipt_coverage(&direct_commits, cwd)?;
   let candidates: HashSet<String> =
     engine::patch_equivalent_commits(&target_head, &source_head, &physical_base, cwd)?

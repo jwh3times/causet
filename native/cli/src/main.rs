@@ -18,6 +18,7 @@ mod native;
 mod notes;
 mod parsed;
 mod plan;
+mod proof;
 mod provenance;
 mod records;
 mod resolve;

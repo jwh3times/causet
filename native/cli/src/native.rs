@@ -174,6 +174,25 @@ Causal edges
       };
       Ok((output, if failed { 1 } else { 0 }))
     }
+    "proof-bundle" => {
+      // Always JSON: the bundle exists to be handed to another tool.
+      let source = parsed.positionals.first().cloned().unwrap_or_default();
+      Ok((crate::proof::build_proof_bundle(&source, cwd)?, 0))
+    }
+    "verify-proof" => {
+      let file = parsed.positionals.first().cloned().unwrap_or_default();
+      let (result, ok) = crate::proof::verify_proof(
+        &file,
+        parsed.truthy("offline"),
+        parsed.value("anchorsFrom"),
+        cwd,
+      )?;
+      let exit = if ok { 0 } else { 1 };
+      if json {
+        return Ok((result, exit));
+      }
+      Ok((causet_model::json::string(&crate::proof::format_proof_verification(&result)), exit))
+    }
     "merge-plan" => {
       let source = parsed.positionals.first().cloned().unwrap_or_default();
       let plan = crate::plan::merge_plan(&source, cwd)?;

@@ -214,8 +214,8 @@ version, and each usage failure, human and JSON) with the JavaScript CLI byte
 for byte, and checks that a delegated command's output and exit status pass
 through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
 `receipts`, `provenance`, `metadata status` and `validate`, `audit identity`,
-`resolve list` and `status`, `spec show` and `status`, `merge-plan`, and
-`rebase-plan` so far, #144), it also compares their output in a repository. The only members allowed to differ are
+`resolve list` and `status`, `spec show` and `status`, `merge-plan`,
+`rebase-plan`, `proof-bundle`, and `verify-proof`, #144), it also compares their output in a repository. The only members allowed to differ are
 `implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 

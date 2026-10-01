@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst proof-bundle` and `cst verify-proof` natively
+  (#144), byte for byte. Bundle hashes are identical, and each implementation
+  verifies the other's bundles.
+  - The producer computes the coverage evidence and the Git bindings: the
+    source inventory, reachability paths, receipt inclusion proofs and anchors.
+  - The verifier covers:
+    - the document shape checks;
+    - integrity;
+    - the classification lattice;
+    - the bindings, recomputing object ids from carried bytes as leniently as
+      Node decodes base64;
+    - the repository comparison, including lineage relations, plus
+      `--offline` and `--anchors-from`.
+  - Malformed input fails with the same report or the same JavaScript
+    `TypeError`.
+
+  With this, every read-only command #144 lists answers natively.
 - The Rust CLI answers `cst merge-plan` and `cst rebase-plan` natively (#144),
   byte for byte, human and JSON. The causal planner classifies each source
   change by commit ancestry, reachable receipts, stable and absorbed

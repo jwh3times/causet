@@ -1362,7 +1362,7 @@ fn git_blob_id(content: &str, format: &str) -> String {
 }
 
 /// SHA-1, for a blob identifier in a SHA-1 repository.
-fn sha1_hex(data: &[u8]) -> String {
+pub(crate) fn sha1_hex(data: &[u8]) -> String {
   let mut h: [u32; 5] = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
   let mut message = data.to_vec();
   let bits = (data.len() as u64).wrapping_mul(8);
