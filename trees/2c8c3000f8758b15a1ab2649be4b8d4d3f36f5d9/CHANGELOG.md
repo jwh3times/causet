@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst merge-plan` and `cst rebase-plan` natively (#144),
+  byte for byte, human and JSON. The causal planner classifies each source
+  change by commit ancestry, reachable receipts, stable and absorbed
+  `Change-Id`s, amendments, and Git's patch-id heuristic. It also chooses the
+  effective base and lists the quarantined facts. The rebase planner adds
+  `--from` ranges and the excluded commits, the merge topology (recreated
+  joins, octopus merges, and parents outside the range), the declared
+  `--reword`, `--edit`, `--squash` and `--fixup` program with every
+  refusal, and the plan fingerprint. `rebase-forecast` and the operations
+  still delegate. With `CAUSET_GIT_SESSION_DIAGNOSTICS=1`, the Rust object
+  session now also writes the shutdown events the JavaScript session worker
+  writes (`close-start`, `close-stdin-end`, `close-git-kill`, `git-close`,
+  `close-finish`), so either implementation shows the same close sequence.
 - The Rust CLI answers `cst spec show` and `cst spec status` natively (#144),
   byte for byte, human and JSON. It ports the Markdown block parser, including
   fenced code, requirements, and `slug` with NFKD normalization, together with

@@ -314,6 +314,76 @@ pub(crate) fn duplicated_record_ids(records: &[&Value]) -> BTreeSet<String> {
     .collect()
 }
 
+/// `readCausalRecordCatalog(cwd)`: every record in the notes tree, read under
+/// the snapshot's container rules, with the identifiers that conflict across
+/// the whole tree (duplicated here, or disputed by a parked copy).
+pub(crate) fn read_causal_record_catalog(
+  cwd: &str,
+) -> GitResult<(Vec<Value>, BTreeSet<String>)> {
+  let context = engine::repo_context(cwd)?;
+  let root = &context.root;
+  let mut entries = engine::list_note_entries(names(root)?.notes_ref, root)?;
+  entries.sort_by(|left, right| locale_compare(&left.target, &right.target));
+  let note_objects = object_lookup(
+    entries.iter().map(|entry| entry.note.clone()).collect(),
+    root,
+  )?;
+  let mut ignored = Diagnostics::default();
+  let mut records = Vec::new();
+  for entry in &entries {
+    let parsed = parse_note_object(
+      note_objects.get(&entry.note),
+      &entry.note,
+      &entry.target,
+      &mut ignored,
+    );
+    for record in parsed.unwrap_or_default() {
+      records.push(attached(&record, &entry.target));
+    }
+  }
+  let mut conflicting = duplicated_record_ids(&records.iter().collect::<Vec<_>>());
+  conflicting.extend(parked_record_ids(root)?);
+  Ok((records, conflicting))
+}
+
+/// `acceptedCausalRecords(records, cwd, { conflictingIds })`: the records a
+/// reader may rely on, structurally valid, with every referenced object
+/// present at the expected type, and no identifier conflict.
+pub(crate) fn accepted_causal_records(
+  records: &[&Value],
+  cwd: &str,
+  conflicting: &BTreeSet<String>,
+) -> GitResult<Vec<Value>> {
+  let context = engine::repo_context(cwd)?;
+  let structural: Vec<&Value> = records
+    .iter()
+    .copied()
+    .filter(|record| {
+      !as_string(get(Some(record), "id")).is_some_and(|id| conflicting.contains(&id))
+        && validate_note_record(Some(record), &context.object_format).is_empty()
+    })
+    .collect();
+  let references: Vec<String> = structural
+    .iter()
+    .flat_map(|record| referenced_objects(Some(record)))
+    .map(|reference| lossy(&reference.oid))
+    .collect();
+  let objects = object_lookup(references, cwd)?;
+  Ok(
+    structural
+      .into_iter()
+      .filter(|record| {
+        referenced_objects(Some(record)).iter().all(|reference| {
+          objects.get(&lossy(&reference.oid)).is_some_and(|object| {
+            object.exists && object.kind.as_deref() == Some(reference.kind)
+          })
+        })
+      })
+      .cloned()
+      .collect(),
+  )
+}
+
 /// `parkedRecordIds(cwd)`: the identifiers a parked dispute names.
 fn parked_record_ids(cwd: &str) -> GitResult<BTreeSet<String>> {
   let prefix = format!("{}/", ref_family("quarantine", cwd)?);

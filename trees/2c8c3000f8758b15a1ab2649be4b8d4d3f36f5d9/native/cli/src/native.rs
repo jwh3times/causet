@@ -174,6 +174,36 @@ Causal edges
       };
       Ok((output, if failed { 1 } else { 0 }))
     }
+    "merge-plan" => {
+      let source = parsed.positionals.first().cloned().unwrap_or_default();
+      let plan = crate::plan::merge_plan(&source, cwd)?;
+      if json {
+        return Ok((plan, 0));
+      }
+      Ok((causet_model::json::string(&crate::plan::format_merge_plan(&plan)), 0))
+    }
+    "rebase-plan" => {
+      use crate::parsed::Opt;
+      let values = |key: &str| match parsed.options.get(key) {
+        Some(Opt::Values(values)) => values.clone(),
+        Some(Opt::Value(value)) => vec![value.clone()],
+        _ => Vec::new(),
+      };
+      let options = crate::plan::RebaseOptions {
+        from: parsed.value("from").map(str::to_string),
+        interactive: ["reword", "edit", "squash", "fixup"]
+          .into_iter()
+          .map(|action| (action, values(action)))
+          .collect(),
+      };
+      let onto = parsed.positionals.first().cloned().unwrap_or_default();
+      let plan =
+        crate::plan::rebase_plan(&onto, parsed.positionals.get(1).map(String::as_str), cwd, &options)?;
+      if json {
+        return Ok((plan, 0));
+      }
+      Ok((causet_model::json::string(&crate::plan::format_rebase_plan(&plan)), 0))
+    }
     "metadata" => {
       let subcommand = parsed
         .positionals

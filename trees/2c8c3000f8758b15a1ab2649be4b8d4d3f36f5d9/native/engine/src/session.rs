@@ -455,9 +455,47 @@ impl ObjectSession {
 
   fn shut_down(&mut self, event: &str) {
     if let Some(mut process) = self.process.take() {
+      // The worker's shutdown events, in its order, so a diagnostics reader
+      // sees the same close sequence from either implementation. Requests are
+      // synchronous here, so none is ever pending at close.
+      let pending = || ("pending", Value::Number(0.0));
+      let exited = process.child.try_wait().ok().flatten();
+      metrics::diagnostic(
+        "close-start",
+        vec![
+          pending(),
+          ("gitExitCode", exited.and_then(|status| status.code()).map_or(Value::Null, |code| Value::Number(f64::from(code)))),
+          ("gitSignalCode", Value::Null),
+        ],
+      );
       drop(process.stdin.take());
+      if exited.is_none() {
+        metrics::diagnostic("close-stdin-end", vec![pending()]);
+      }
       metrics::diagnostic(event, vec![("sessionId", string(&self.session_id))]);
-      stop(&mut process.child, process.pid);
+      let stopped = stop(&mut process.child, process.pid);
+      if stopped.killed {
+        metrics::diagnostic(
+          "close-git-kill",
+          vec![
+            pending(),
+            ("pid", Value::Number(f64::from(process.pid))),
+            ("tree", Value::Bool(cfg!(windows))),
+          ],
+        );
+      }
+      metrics::diagnostic(
+        "git-close",
+        vec![
+          ("code", stopped.code.map_or(Value::Null, |code| Value::Number(f64::from(code)))),
+          ("signal", if stopped.killed && stopped.code.is_none() { string("SIGKILL") } else { Value::Null }),
+          pending(),
+        ],
+      );
+      metrics::diagnostic(
+        "close-finish",
+        vec![pending(), ("ok", Value::Bool(true)), ("error", Value::Null)],
+      );
     }
   }
 
@@ -508,11 +546,11 @@ fn exited(process: &mut SessionProcess) -> String {
 
 /// Close stdin, give Git two seconds to exit, then end the process tree, as
 /// the worker's shutdown does.
-pub(crate) fn stop(child: &mut Child, pid: u32) {
+pub(crate) fn stop(child: &mut Child, pid: u32) -> Stopped {
   let deadline = Instant::now() + Duration::from_secs(2);
   loop {
     match child.try_wait() {
-      Ok(Some(_)) => return,
+      Ok(Some(status)) => return Stopped { code: status.code(), killed: false },
       Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(2)),
       _ => break,
     }
@@ -530,7 +568,15 @@ pub(crate) fn stop(child: &mut Child, pid: u32) {
   } else {
     let _ = child.kill();
   }
-  let _ = child.wait();
+  let code = child.wait().ok().and_then(|status| status.code());
+  Stopped { code, killed: true }
+}
+
+/// How a stopped Git process ended: its exit code, if it had one, and whether
+/// it had to be killed after the grace period.
+pub(crate) struct Stopped {
+  pub code: Option<i32>,
+  pub killed: bool,
 }
 
 /// One response: a header line, and for `contents` the object and its `\n`.
