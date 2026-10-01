@@ -153,7 +153,10 @@ fn refs_value(entries: &[RefEntry]) -> Value {
 }
 
 /// `objectLookup(expressions)`: one batched read of the unique expressions.
-fn object_lookup(expressions: Vec<String>, cwd: &str) -> GitResult<HashMap<String, ObjectRecord>> {
+pub(crate) fn object_lookup(
+  expressions: Vec<String>,
+  cwd: &str,
+) -> GitResult<HashMap<String, ObjectRecord>> {
   let mut unique: Vec<String> = expressions
     .into_iter()
     .filter(|item| !item.is_empty())
@@ -297,7 +300,7 @@ fn attached(record: &Value, target: &str) -> Value {
 }
 
 /// `duplicatedRecordIds(records)`.
-fn duplicated_record_ids(records: &[&Value]) -> BTreeSet<String> {
+pub(crate) fn duplicated_record_ids(records: &[&Value]) -> BTreeSet<String> {
   let mut counts: HashMap<String, usize> = HashMap::new();
   for record in records {
     if let Some(id) = as_string(get(Some(record), "id")) {

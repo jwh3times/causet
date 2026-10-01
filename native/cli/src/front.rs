@@ -54,15 +54,24 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "metadata validate",
   "provenance",
   "receipts",
+  "resolve list",
+  "resolve status",
 ];
 
 /// Whether this invocation is a ported command: the command, or for a command
 /// with subcommands, the command and its subcommand.
 fn is_native(command: &str, parsed: &Parsed) -> bool {
+  // `cst resolve` alone is `cst resolve status` (`positionals[0] ?? "status"`).
+  let default = (command == "resolve").then_some("status");
   NATIVE_COMMANDS.contains(&command)
-    || parsed.positionals.first().is_some_and(|subcommand| {
-      NATIVE_COMMANDS.contains(&format!("{command} {subcommand}").as_str())
-    })
+    || parsed
+      .positionals
+      .first()
+      .map(String::as_str)
+      .or(default)
+      .is_some_and(|subcommand| {
+        NATIVE_COMMANDS.contains(&format!("{command} {subcommand}").as_str())
+      })
 }
 
 fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
@@ -620,7 +629,7 @@ mod tests {
       &["init"][..],
       &["commit", "-m", "x"],
       &["rebase", "--status", "extra", "args"],
-      &["resolve"],
+      &["resolve", "reject"],
       &["metadata", "dispose", "r", "--keep-local"],
       &["spec", "index", "--all"],
       &["workspace", "list"],
@@ -637,11 +646,17 @@ mod tests {
       &["capabilities", "--json"],
       &["metadata", "status"],
       &["metadata", "validate", "--strict"],
+      &["resolve"],
+      &["resolve", "list", "--json"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
     // A command is native per subcommand: these still delegate.
-    for args in [&["metadata", "retain"][..], &["metadata", "export", "x"]] {
+    for args in [
+      &["metadata", "retain"][..],
+      &["metadata", "export", "x"],
+      &["resolve", "apply", "--all"],
+    ] {
       assert!(delegated(run(args)), "{args:?}");
     }
     let Outcome::Native {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst resolve list` and `cst resolve status` (and
+  `cst resolve`, which is `status`) natively (#144), byte for byte, human and
+  JSON. `list` reads the retained resolution catalog with the same accepted-
+  record, ref, signature and retained-result checks. `status` reads the
+  worktree's reconciliation or rebase journal. `resolve apply` and
+  `resolve reject` still delegate.
 - The Rust CLI answers `cst audit identity` natively (#144), byte for byte,
   human and JSON. That covers trailer conflicts, `Change-Id` collisions across
   derivation groups, ambiguous origins, the fork and preservation invariants,

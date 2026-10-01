@@ -19,6 +19,7 @@ mod notes;
 mod parsed;
 mod provenance;
 mod records;
+mod resolve;
 mod store;
 
 use front::Outcome;

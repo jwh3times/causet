@@ -127,6 +127,27 @@ Causal edges
       ))
     }
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
+    "resolve" => {
+      // `positionals[0] ?? "status"`.
+      if parsed.positionals.first().map(String::as_str) == Some("list") {
+        let records = crate::resolve::list_resolution_records(cwd)?;
+        if json {
+          return Ok((Value::Array(records), 0));
+        }
+        return Ok((
+          causet_model::json::string(&crate::resolve::format_resolution_catalog(&records)),
+          0,
+        ));
+      }
+      let status = crate::resolve::pending_resolution_status(cwd)?;
+      if json {
+        return Ok((status, 0));
+      }
+      Ok((
+        causet_model::json::string(&crate::resolve::format_resolution_status(&status)?),
+        0,
+      ))
+    }
     "audit" => {
       let result = crate::audit::audit_identity(cwd)?;
       let errors = causet_model::js::get(causet_model::js::get(Some(&result), "summary"), "errors");

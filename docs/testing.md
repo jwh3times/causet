@@ -213,8 +213,9 @@ delegation, so what remains is only what the Rust CLI answers itself.
 version, and each usage failure, human and JSON) with the JavaScript CLI byte
 for byte, and checks that a delegated command's output and exit status pass
 through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
-`receipts`, `provenance`, `metadata status` and `validate`, and `audit identity`
-so far, #144), it also compares their output in a repository. The only members allowed to differ are
+`receipts`, `provenance`, `metadata status` and `validate`, `audit identity`, and
+`resolve list` and `status` so far, #144), it also compares their output in a
+repository. The only members allowed to differ are
 `implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 
