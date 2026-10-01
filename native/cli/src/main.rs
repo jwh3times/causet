@@ -13,7 +13,10 @@ mod json;
 mod lineage;
 mod migration;
 mod native;
+mod notes;
 mod parsed;
+mod provenance;
+mod records;
 mod store;
 
 use front::Outcome;

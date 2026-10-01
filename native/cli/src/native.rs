@@ -101,6 +101,32 @@ fn answer(command: &str, parsed: &Parsed, cwd: &str) -> GitResult<(Value, i32)> 
       };
       Ok((output, 0))
     }
+    "graph" => {
+      let graph = causet_engine::engine::history_graph(cwd)?;
+      let records = crate::notes::list_note_records(cwd)?;
+      let edges = crate::records::format_causal_edges(&records)?;
+      Ok((
+        causet_model::json::string(&format!(
+          "Project history
+{graph}
+
+Causal edges
+{edges}"
+        )),
+        0,
+      ))
+    }
+    "receipts" => {
+      let records = crate::notes::list_note_records(cwd)?;
+      if json {
+        return Ok((Value::Array(records), 0));
+      }
+      Ok((
+        causet_model::json::string(&crate::records::format_receipts(&records)?),
+        0,
+      ))
+    }
+    "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
     other => Err(GitError::new(
       "internal-invariant",
       format!("'{other}' is listed as native but has no implementation."),

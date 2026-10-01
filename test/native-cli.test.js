@@ -155,7 +155,7 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
   // Outside a repository these succeed or fail exactly as the JavaScript CLI
   // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["receipts", "--json"], ["cherry-pick", "x"], ["resolve"], ["--trace-git", "provenance"]]) {
+  for (const args of [["metadata", "status", "--json"], ["cherry-pick", "x"], ["resolve"], ["--trace-git", "workspace", "list"]]) {
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
@@ -223,6 +223,44 @@ test("capabilities is answered natively, byte for byte", { skip }, () => {
     ["capabilities"],
     ["capabilities", "--json"],
     ...peers.flatMap((file) => [["capabilities", "--against", file], ["capabilities", "--against", file, "--json"]]),
+  ]) {
+    const expected = inRepo(process.execPath, [oracle, ...args], {});
+    if (rust === selectedCli) vlabPrefix();
+    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const label = JSON.stringify(args);
+    assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
+    assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
+    assert.equal(actual.status, expected.status, `status of ${label}`);
+  }
+});
+
+test("graph, receipts, and provenance are answered natively, byte for byte", { skip }, () => {
+  for (const args of [["graph"], ["receipts", "--json"], ["provenance"]]) assertSame(args);
+
+  const repo = path.join(outside, "records-repo");
+  fs.mkdirSync(repo);
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Records");
+  git("config", "user.email", "records@example.invalid");
+  git("commit", "-q", "--allow-empty", "-m", "base");
+  const inRepo = (command, args, env) => spawnSync(command, args, {
+    cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, ...env }),
+  });
+  // Real records, written by the JavaScript CLI: a declared provenance and a
+  // landing receipt.
+  fs.writeFileSync(path.join(repo, "a.txt"), "a\n");
+  git("add", "a.txt");
+  assert.equal(inRepo(process.execPath, [oracle, "commit", "-m", "add a", "--generated-by", "agent-1"], {}).status, 0);
+  git("switch", "-q", "-c", "feature");
+  fs.writeFileSync(path.join(repo, "b.txt"), "b\n");
+  git("add", "b.txt");
+  assert.equal(inRepo(process.execPath, [oracle, "commit", "-m", "add b"], {}).status, 0);
+  git("switch", "-q", "main");
+  assert.equal(inRepo(process.execPath, [oracle, "merge", "feature", "--compact", "-m", "land feature"], {}).status, 0);
+  for (const args of [
+    ["graph"], ["receipts"], ["receipts", "--json"], ["provenance"], ["provenance", "HEAD~1"],
+    ["provenance", "--all"], ["provenance", "--all", "--json"], ["provenance", "missing"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();

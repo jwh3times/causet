@@ -45,7 +45,7 @@ pub enum Outcome {
 /// The commands this CLI answers natively. A command joins only when every
 /// CLI-level test that exercises it passes against this CLI in all six modes
 /// (ADR-0037 §4).
-pub const NATIVE_COMMANDS: &[&str] = &["capabilities", "doctor"];
+pub const NATIVE_COMMANDS: &[&str] = &["capabilities", "doctor", "graph", "provenance", "receipts"];
 
 fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
   Outcome::Fail {
