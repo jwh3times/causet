@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muq18aj4fbc7c7db06de",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-proofs",
+      "sourceHead": "269a46fb62b76261fff88a7ca70caa333405ee8f",
+      "sourceSubject": "feat: answer cst proof-bundle and verify-proof natively in the Rust CLI",
+      "targetBefore": "a2f92a09b9c9cf4fb16a0c813502563e2383a98c",
+      "landingCommit": "386d17c2c5b7e70040415865dd5840f1d892fa38",
+      "base": "a2f92a09b9c9cf4fb16a0c813502563e2383a98c",
+      "absorbedCommits": [
+        "269a46fb62b76261fff88a7ca70caa333405ee8f"
+      ],
+      "absorbedChanges": [
+        "ch_0muq0cmxwd5a707dc8e05"
+      ],
+      "resultTree": "deffea92d560763ab5d16edba5d9ca3bce241da7",
+      "createdAt": "2026-10-01T21:14:27.339Z"
+    }
+  ]
+}
