@@ -127,6 +127,21 @@ Causal edges
       ))
     }
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
+    "spec" => {
+      let file = parsed.positionals.get(1).cloned().unwrap_or_default();
+      if parsed.positionals.first().map(String::as_str) == Some("show") {
+        // `print(readSpecManifest(file), true)`: JSON either way.
+        return Ok((crate::spec::read_spec_manifest(&file, cwd)?, 0));
+      }
+      let status = crate::spec::pending_spec_merge_status(cwd)?;
+      if json {
+        return Ok((status, 0));
+      }
+      Ok((
+        causet_model::json::string(&crate::spec::format_spec_merge_status(&status)),
+        0,
+      ))
+    }
     "resolve" => {
       // `positionals[0] ?? "status"`.
       if parsed.positionals.first().map(String::as_str) == Some("list") {

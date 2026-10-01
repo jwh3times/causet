@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst spec show` and `cst spec status` natively (#144),
+  byte for byte, human and JSON. It ports the Markdown block parser, including
+  fenced code, requirements, and `slug` with NFKD normalization, together with
+  manifest materialization for every manifest version. It also ports the
+  semantic three-way merge planner a pending operation's conflicted Markdown
+  runs through: content decisions, ordering and moves, parser-migration and
+  artifact checks, and the merged manifest's hash. The CLI pins
+  `unicode-normalization` (already in the tree through gix) for `slug`.
+  `spec index`, `merge-plan`, `resolve` and `benchmark` still delegate.
 - The Rust CLI answers `cst resolve list` and `cst resolve status` (and
   `cst resolve`, which is `status`) natively (#144), byte for byte, human and
   JSON. `list` reads the retained resolution catalog with the same accepted-
