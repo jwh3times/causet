@@ -45,7 +45,24 @@ pub enum Outcome {
 /// The commands this CLI answers natively. A command joins only when every
 /// CLI-level test that exercises it passes against this CLI in all six modes
 /// (ADR-0037 §4).
-pub const NATIVE_COMMANDS: &[&str] = &["capabilities", "doctor", "graph", "provenance", "receipts"];
+pub const NATIVE_COMMANDS: &[&str] = &[
+  "capabilities",
+  "doctor",
+  "graph",
+  "metadata status",
+  "metadata validate",
+  "provenance",
+  "receipts",
+];
+
+/// Whether this invocation is a ported command: the command, or for a command
+/// with subcommands, the command and its subcommand.
+fn is_native(command: &str, parsed: &Parsed) -> bool {
+  NATIVE_COMMANDS.contains(&command)
+    || parsed.positionals.first().is_some_and(|subcommand| {
+      NATIVE_COMMANDS.contains(&format!("{command} {subcommand}").as_str())
+    })
+}
 
 fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
   Outcome::Fail {
@@ -163,7 +180,7 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
   let json = parsed.truthy("json");
   match usage_check(command, &parsed, help) {
     Some(failure) => Outcome::Fail { failure, json },
-    None if NATIVE_COMMANDS.contains(&command) => Outcome::Native {
+    None if is_native(command, &parsed) => Outcome::Native {
       command: command.to_string(),
       parsed,
       settings,
@@ -614,8 +631,17 @@ mod tests {
 
   #[test]
   fn ported_commands_are_answered_natively_with_their_flag_selections() {
-    for args in [&["doctor", "--benchmark"][..], &["capabilities", "--json"]] {
+    for args in [
+      &["doctor", "--benchmark"][..],
+      &["capabilities", "--json"],
+      &["metadata", "status"],
+      &["metadata", "validate", "--strict"],
+    ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
+    }
+    // A command is native per subcommand: these still delegate.
+    for args in [&["metadata", "retain"][..], &["metadata", "export", "x"]] {
+      assert!(delegated(run(args)), "{args:?}");
     }
     let Outcome::Native {
       settings, parsed, ..

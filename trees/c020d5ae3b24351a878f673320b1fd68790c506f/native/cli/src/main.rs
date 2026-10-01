@@ -11,6 +11,7 @@ mod environment;
 mod front;
 mod json;
 mod lineage;
+mod metadata;
 mod migration;
 mod native;
 mod notes;

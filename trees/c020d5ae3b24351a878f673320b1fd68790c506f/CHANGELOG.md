@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst metadata status` and `cst metadata validate`
+  (with `--strict`) natively (#144), byte for byte, human and JSON. The ported
+  inventory covers notes, resolutions, specification manifests, the workspace
+  registry, checkpoints, parked records, dispositions, worktree-private
+  operations and forecasts, and the migration state. It runs under one object
+  session, with every diagnostic arising where the JavaScript CLI raises it.
+  The other `metadata` subcommands still delegate: the Rust CLI now decides
+  per subcommand.
 - The Rust CLI answers `cst graph`, `cst receipts` and `cst provenance`
   natively (#144), byte for byte, human and JSON. Every note is read with the
   JavaScript CLI's one parser, and every record is rendered as its template

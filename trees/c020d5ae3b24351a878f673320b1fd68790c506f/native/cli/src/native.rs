@@ -127,6 +127,14 @@ Causal edges
       ))
     }
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
+    "metadata" => {
+      let subcommand = parsed
+        .positionals
+        .first()
+        .map(String::as_str)
+        .unwrap_or_default();
+      crate::metadata::metadata(subcommand, parsed.truthy("strict"), json, cwd)
+    }
     other => Err(GitError::new(
       "internal-invariant",
       format!("'{other}' is listed as native but has no implementation."),
