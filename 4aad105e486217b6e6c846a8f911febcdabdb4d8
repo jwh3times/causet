@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mup0la2fcd6814325359",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-metadata-status",
+      "sourceHead": "5f4ab9f5cb5ccfd54e1d0deb81f80e6d06abf390",
+      "sourceSubject": "feat: answer cst metadata status and validate natively in the Rust CLI",
+      "targetBefore": "34334dcab6adb2a3c9b4b1d05038ec108cd02e29",
+      "landingCommit": "4aad105e486217b6e6c846a8f911febcdabdb4d8",
+      "base": "34334dcab6adb2a3c9b4b1d05038ec108cd02e29",
+      "absorbedCommits": [
+        "5f4ab9f5cb5ccfd54e1d0deb81f80e6d06abf390"
+      ],
+      "absorbedChanges": [
+        "ch_0muoz0zpw15569ffd613e"
+      ],
+      "resultTree": "c020d5ae3b24351a878f673320b1fd68790c506f",
+      "createdAt": "2026-10-01T04:08:47.497Z"
+    }
+  ]
+}
