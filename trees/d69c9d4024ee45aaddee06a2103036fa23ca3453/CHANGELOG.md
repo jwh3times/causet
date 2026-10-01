@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst audit identity` natively (#144), byte for byte,
+  human and JSON. That covers trailer conflicts, `Change-Id` collisions across
+  derivation groups, ambiguous origins, the fork and preservation invariants,
+  and near-duplicate actor names. Trailers are matched per line and entries
+  ordered as the JavaScript CLI orders them. A malformed record fails with the
+  JavaScript CLI's `TypeError` message, including the comparison order V8's
+  sort makes. The record model's `js` gains `try_v8_sort_by` for comparators
+  that throw.
 - The Rust CLI answers `cst metadata status` and `cst metadata validate`
   (with `--strict`) natively (#144), byte for byte, human and JSON. The ported
   inventory covers notes, resolutions, specification manifests, the workspace

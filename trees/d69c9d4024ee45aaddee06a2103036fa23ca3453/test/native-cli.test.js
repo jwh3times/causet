@@ -234,8 +234,11 @@ test("capabilities is answered natively, byte for byte", { skip }, () => {
   }
 });
 
-test("graph, receipts, provenance, and metadata status and validate are answered natively, byte for byte", { skip }, () => {
-  for (const args of [["graph"], ["receipts", "--json"], ["provenance"], ["metadata", "status"], ["metadata", "validate", "--json"]]) assertSame(args);
+test("the record readers are answered natively, byte for byte", { skip }, () => {
+  for (const args of [
+    ["graph"], ["receipts", "--json"], ["provenance"], ["metadata", "status"], ["metadata", "validate", "--json"],
+    ["audit", "identity"],
+  ]) assertSame(args);
 
   const repo = path.join(outside, "records-repo");
   fs.mkdirSync(repo);
@@ -262,7 +265,7 @@ test("graph, receipts, provenance, and metadata status and validate are answered
     ["graph"], ["receipts"], ["receipts", "--json"], ["provenance"], ["provenance", "HEAD~1"],
     ["provenance", "--all"], ["provenance", "--all", "--json"], ["provenance", "missing"],
     ["metadata", "status"], ["metadata", "status", "--json"], ["metadata", "validate"],
-    ["metadata", "validate", "--strict", "--json"],
+    ["metadata", "validate", "--strict", "--json"], ["audit", "identity"], ["audit", "identity", "--json"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();

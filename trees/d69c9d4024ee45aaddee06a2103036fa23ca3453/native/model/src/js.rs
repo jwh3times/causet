@@ -208,27 +208,60 @@ pub fn numeric_sort(items: &mut [Value]) {
 /// above, any stable sort gives the same order for a consistent comparator,
 /// which is the only kind a larger array meets here.
 pub fn v8_sort_by<T: Clone>(items: &mut [T], compare: impl Fn(&T, &T) -> f64) {
-  let order = |left: &T, right: &T| {
-    let value = compare(left, right);
-    if value.is_nan() { 0.0 } else { value }
+  let _ = try_v8_sort_by(items, |left, right| Ok::<f64, ()>(compare(left, right)));
+}
+
+/// [`v8_sort_by`] with a comparator that can throw, as a JavaScript
+/// comparator can: the sort stops at the comparison that throws, which is the
+/// same comparison V8 would have made. Above 64 elements the comparisons are
+/// a stable merge sort's, not V8's.
+pub fn try_v8_sort_by<T: Clone, E>(
+  items: &mut [T],
+  mut compare: impl FnMut(&T, &T) -> Result<f64, E>,
+) -> Result<(), E> {
+  let mut order = |left: &T, right: &T| -> Result<f64, E> {
+    let value = compare(left, right)?;
+    Ok(if value.is_nan() { 0.0 } else { value })
   };
   let length = items.len();
   if length < 2 {
-    return;
+    return Ok(());
   }
   if length >= 64 {
-    items.sort_by(|left, right| {
-      order(left, right)
-        .partial_cmp(&0.0)
-        .unwrap_or(Ordering::Equal)
-    });
-    return;
+    // A stable merge sort over a scratch copy.
+    let mut width = 1;
+    let mut source = items.to_vec();
+    while width < length {
+      let mut merged = Vec::with_capacity(length);
+      let mut start = 0;
+      while start < length {
+        let middle = (start + width).min(length);
+        let end = (start + 2 * width).min(length);
+        let (mut left, mut right) = (start, middle);
+        while left < middle && right < end {
+          if order(&source[right], &source[left])? < 0.0 {
+            merged.push(source[right].clone());
+            right += 1;
+          } else {
+            merged.push(source[left].clone());
+            left += 1;
+          }
+        }
+        merged.extend_from_slice(&source[left..middle]);
+        merged.extend_from_slice(&source[right..end]);
+        start = end;
+      }
+      source = merged;
+      width *= 2;
+    }
+    items.clone_from_slice(&source);
+    return Ok(());
   }
   // CountAndMakeRun.
   let mut run = 2;
-  let descending = order(&items[1], &items[0]) < 0.0;
+  let descending = order(&items[1], &items[0])? < 0.0;
   while run < length {
-    let step = order(&items[run], &items[run - 1]);
+    let step = order(&items[run], &items[run - 1])?;
     if (descending && step >= 0.0) || (!descending && step < 0.0) {
       break;
     }
@@ -243,7 +276,7 @@ pub fn v8_sort_by<T: Clone>(items: &mut [T], compare: impl Fn(&T, &T) -> f64) {
     let (mut left, mut right) = (0, start);
     while left < right {
       let middle = left + ((right - left) >> 1);
-      if order(&pivot, &items[middle]) < 0.0 {
+      if order(&pivot, &items[middle])? < 0.0 {
         right = middle;
       } else {
         left = middle + 1;
@@ -252,6 +285,7 @@ pub fn v8_sort_by<T: Clone>(items: &mut [T], compare: impl Fn(&T, &T) -> f64) {
     items[left..=start].rotate_right(1);
     items[left] = pivot;
   }
+  Ok(())
 }
 
 /// The collation `String.prototype.localeCompare` applies under Node's ICU
