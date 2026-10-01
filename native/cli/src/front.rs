@@ -53,6 +53,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "merge-plan",
   "metadata status",
   "metadata validate",
+  "proof-bundle",
   "provenance",
   "rebase-plan",
   "receipts",
@@ -60,6 +61,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "resolve status",
   "spec show",
   "spec status",
+  "verify-proof",
 ];
 
 /// Whether this invocation is a ported command: the command, or for a command
@@ -656,6 +658,8 @@ mod tests {
       &["spec", "status"],
       &["merge-plan", "feature", "--json"],
       &["rebase-plan", "main", "feature", "--from", "base", "--squash", "a=b"],
+      &["proof-bundle", "feature"],
+      &["verify-proof", "bundle.json", "--offline", "--anchors-from", "origin"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }

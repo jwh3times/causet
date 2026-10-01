@@ -239,6 +239,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     ["graph"], ["receipts", "--json"], ["provenance"], ["metadata", "status"], ["metadata", "validate", "--json"],
     ["audit", "identity"], ["resolve"], ["resolve", "list", "--json"], ["spec", "show", "x.md"], ["spec", "status"],
     ["merge-plan", "main"], ["rebase-plan", "main", "feature", "--json"],
+    ["proof-bundle", "main"], ["verify-proof", "missing.json"],
   ]) assertSame(args);
 
   const repo = path.join(outside, "records-repo");
@@ -262,6 +263,13 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
   assert.equal(inRepo(process.execPath, [oracle, "commit", "-m", "add b"], {}).status, 0);
   git("switch", "-q", "main");
   assert.equal(inRepo(process.execPath, [oracle, "merge", "feature", "--compact", "-m", "land feature"], {}).status, 0);
+  // A proof bundle written by the JavaScript CLI, as it is and with one
+  // classification forged after the fact, for the verifier to read.
+  const bundle = JSON.parse(inRepo(process.execPath, [oracle, "proof-bundle", "HEAD~1"], {}).stdout);
+  const bundleFile = path.join(outside, "bundle.json");
+  fs.writeFileSync(bundleFile, JSON.stringify(bundle));
+  const forgedFile = path.join(outside, "forged.json");
+  fs.writeFileSync(forgedFile, JSON.stringify({ ...bundle, counts: { ...bundle.counts, new: 9 } }));
   for (const args of [
     ["graph"], ["receipts"], ["receipts", "--json"], ["provenance"], ["provenance", "HEAD~1"],
     ["provenance", "--all"], ["provenance", "--all", "--json"], ["provenance", "missing"],
@@ -272,6 +280,9 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     ["merge-plan", "feature"], ["merge-plan", "feature", "--json"], ["merge-plan", "missing"],
     ["rebase-plan", "HEAD~1", "main"], ["rebase-plan", "HEAD~1", "main", "--json"],
     ["rebase-plan", "HEAD~1", "main", "--from", "main"], ["rebase-plan", "main", "feature", "--reword", "feature"],
+    ["proof-bundle", "feature"], ["proof-bundle", "HEAD~1"], ["proof-bundle", "missing"],
+    ["verify-proof", bundleFile], ["verify-proof", bundleFile, "--offline", "--json"], ["verify-proof", forgedFile],
+    ["verify-proof", path.join(outside, "missing.json")],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();
@@ -281,6 +292,15 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
     assert.equal(actual.status, expected.status, `status of ${label}`);
   }
+  // Each implementation writes the same bundle bytes and verifies the other's.
+  const oracleBundle = inRepo(process.execPath, [oracle, "proof-bundle", "HEAD~1"], {});
+  if (rust === selectedCli) vlabPrefix();
+  const rustBundle = inRepo(rust, ["proof-bundle", "HEAD~1"], { CAUSET_DELEGATE: "never" });
+  assert.equal(rustBundle.stdout, oracleBundle.stdout);
+  const rustFile = path.join(outside, "rust-bundle.json");
+  fs.writeFileSync(rustFile, rustBundle.stdout);
+  assert.equal(inRepo(process.execPath, [oracle, "verify-proof", rustFile], {}).status, 0);
+  assert.equal(inRepo(rust, ["verify-proof", bundleFile], { CAUSET_DELEGATE: "never" }).status, 0);
 });
 
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
