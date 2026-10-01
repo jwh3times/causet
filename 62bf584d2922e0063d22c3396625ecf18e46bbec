@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mupl5p3h39e01ee330b1",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-resolve",
+      "sourceHead": "94a973569e095f66cb837d15fc7da02f5725b8b3",
+      "sourceSubject": "feat: answer cst resolve list and status natively in the Rust CLI",
+      "targetBefore": "c750d94bf944b1e9b8afd4dc0708cb5229fd2d47",
+      "landingCommit": "62bf584d2922e0063d22c3396625ecf18e46bbec",
+      "base": "c750d94bf944b1e9b8afd4dc0708cb5229fd2d47",
+      "absorbedCommits": [
+        "94a973569e095f66cb837d15fc7da02f5725b8b3"
+      ],
+      "absorbedChanges": [
+        "ch_0mupj382z4de8e7401b2d"
+      ],
+      "resultTree": "0010457d5e51886ea80647d1cb7da29a66b305d1",
+      "createdAt": "2026-10-01T13:44:32.394Z"
+    }
+  ]
+}
