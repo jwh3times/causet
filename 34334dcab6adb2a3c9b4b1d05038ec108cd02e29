@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muoui4jad7c0d97b81fe",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-notes-commands",
+      "sourceHead": "12abd8aea9acc0f411f100039303e2876a03ca17",
+      "sourceSubject": "feat: answer cst graph, receipts and provenance natively in the Rust CLI",
+      "targetBefore": "f447833a857d35b79ed44fef764cac14e5eb57bf",
+      "landingCommit": "34334dcab6adb2a3c9b4b1d05038ec108cd02e29",
+      "base": "f447833a857d35b79ed44fef764cac14e5eb57bf",
+      "absorbedCommits": [
+        "12abd8aea9acc0f411f100039303e2876a03ca17"
+      ],
+      "absorbedChanges": [
+        "ch_0muotq73p7b641fd97850"
+      ],
+      "resultTree": "509b2e99f7f9e31a4bf856833728e1437d0ce46b",
+      "createdAt": "2026-10-01T01:18:22.643Z"
+    }
+  ]
+}
