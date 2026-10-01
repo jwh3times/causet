@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mupo4krvb0249c894c47",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-spec",
+      "sourceHead": "b5e0a362e57e82917173244fb00fc3cc0e5ab3c2",
+      "sourceSubject": "feat: answer cst spec show and status natively in the Rust CLI",
+      "targetBefore": "62bf584d2922e0063d22c3396625ecf18e46bbec",
+      "landingCommit": "6bcd97efffa0e20add04a26d1b14104bb0ea2743",
+      "base": "62bf584d2922e0063d22c3396625ecf18e46bbec",
+      "absorbedCommits": [
+        "b5e0a362e57e82917173244fb00fc3cc0e5ab3c2"
+      ],
+      "absorbedChanges": [
+        "ch_0mupn6k06681cdcf5ed01"
+      ],
+      "resultTree": "a9576d7b2e9f42cf2b87dbf807a053babfb27aff",
+      "createdAt": "2026-10-01T15:07:38.980Z"
+    }
+  ]
+}
