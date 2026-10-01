@@ -46,6 +46,7 @@ pub enum Outcome {
 /// CLI-level test that exercises it passes against this CLI in all six modes
 /// (ADR-0037 §4).
 pub const NATIVE_COMMANDS: &[&str] = &[
+  "audit identity",
   "capabilities",
   "doctor",
   "graph",

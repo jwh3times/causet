@@ -127,6 +127,17 @@ Causal edges
       ))
     }
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
+    "audit" => {
+      let result = crate::audit::audit_identity(cwd)?;
+      let errors = causet_model::js::get(causet_model::js::get(Some(&result), "summary"), "errors");
+      let failed = matches!(errors, Some(Value::Number(count)) if *count > 0.0);
+      let output = if json {
+        result
+      } else {
+        causet_model::json::string(&crate::audit::format_identity_audit(&result))
+      };
+      Ok((output, if failed { 1 } else { 0 }))
+    }
     "metadata" => {
       let subcommand = parsed
         .positionals
