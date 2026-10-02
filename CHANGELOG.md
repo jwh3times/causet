@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst metadata retain --dry-run|--apply` natively
+  (#145). It ports the retention backfill:
+  - the portable-only metadata snapshot;
+  - every accepted record's object dependencies;
+  - the `Retention-Notes` marker that makes a backfill idempotent;
+  - the stale-input recheck;
+  - one `update-ref` transaction that verifies the notes tip and advances
+    the retention carrier, under the notes lock for `--apply`;
+  - the `retention:backfill-before-publish` gate and
+    `retention:before-publish` fault point.
+
+  It exits 1 on quarantined records or an error diagnostic, as before.
 - The Rust CLI answers `cst commit` natively (#145), with `--authored-by`,
   `--generated-by`, `--reviewed-by` and `CAUSET_AGENT`. It ports the
   note-append path every later metadata write shares:

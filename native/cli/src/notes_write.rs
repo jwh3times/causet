@@ -412,10 +412,11 @@ fn build_note_commit(note: &Object, attachment: &str, previous: Option<&str>, cw
 
 /// `recordDependencies(entries, cwd)`: every object an accepted fact needs,
 /// in first-reference order, validated against the repository.
-pub fn record_dependencies(entries: &[(String, Value)], cwd: &str) -> GitResult<Vec<(String, &'static str)>> {
+pub fn record_dependencies(entries: &[(String, Value)], cwd: &str, validate: bool) -> GitResult<Vec<(String, &'static str)>> {
   let mut dependencies: Vec<(String, &'static str)> = Vec::new();
   let format = engine::repo_context(cwd)?.object_format;
   for (attachment, record) in entries {
+    if validate {
     let mut attached = match record {
       Value::Object(object) => object.clone(),
       _ => Object::new(),
@@ -439,6 +440,7 @@ pub fn record_dependencies(entries: &[(String, Value)], cwd: &str) -> GitResult<
           .details(stringify(&details)),
       );
     }
+    }
     let mut references = vec![(attachment.clone(), "commit")];
     references.extend(
       referenced_objects(Some(record))
@@ -458,7 +460,7 @@ pub fn record_dependencies(entries: &[(String, Value)], cwd: &str) -> GitResult<
       }
     }
   }
-  if !dependencies.is_empty() {
+  if validate && !dependencies.is_empty() {
     let expressions: Vec<String> = dependencies.iter().map(|(oid, _)| oid.clone()).collect();
     let objects = engine::inspect_git_objects(&expressions, cwd)?.records;
     for ((oid, kind), object) in dependencies.iter().zip(objects) {
@@ -587,7 +589,7 @@ pub fn append_note(commit: &str, record: &Value, cwd: &str, ref_updates: &[Strin
         "The resulting note exceeds the noteContainerBytes bound.",
       ));
     }
-    let dependencies = record_dependencies(&[(commit.to_string(), record.clone())], cwd)?;
+    let dependencies = record_dependencies(&[(commit.to_string(), record.clone())], cwd, true)?;
     host::gate_point("notes:after-read");
     let next_notes = build_note_commit(&note, commit, previous_notes.as_deref(), cwd)?;
     let next_retention = build_retention_commit(

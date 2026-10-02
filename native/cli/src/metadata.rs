@@ -415,6 +415,8 @@ struct Portable {
   notes: Value,
   resolutions: Value,
   accepted: usize,
+  /// The accepted records with their attachments, in note order.
+  records: Vec<(String, Value)>,
   /// The summaries, for the quarantine's local digests.
   summaries: Vec<Value>,
 }
@@ -794,6 +796,10 @@ fn validate_portable_notes(
     notes: Value::Object(notes),
     resolutions: Value::Object(resolutions),
     accepted: accepted.len(),
+    records: accepted
+      .iter()
+      .map(|(attachment, raw, _)| (attachment.clone(), raw.clone()))
+      .collect(),
     summaries,
   })
 }
@@ -1445,6 +1451,31 @@ fn inspect_migration(context: &RepoContext, diagnostics: &mut Diagnostics) -> Gi
 }
 
 /// `metadataSnapshot` and `publicStatus`: the report for `schema`.
+/// `metadataSnapshot({ portableOnly: true })`, reduced to what retention reads:
+/// the accepted portable records with their attachments, the quarantined
+/// count, and the diagnostics in the order they arose.
+pub(crate) struct PortableSnapshot {
+  pub records: Vec<(String, Value)>,
+  pub quarantined: Value,
+  pub diagnostics: Vec<Value>,
+}
+
+pub(crate) fn portable_snapshot(cwd: &str) -> GitResult<PortableSnapshot> {
+  let context = engine::repo_context(cwd)?;
+  with_object_session(&context.root, || -> GitResult<PortableSnapshot> {
+    let mut diagnostics = Diagnostics::default();
+    let parked = parked_record_ids(&context.root)?;
+    let portable = validate_portable_notes(&context, &mut diagnostics, &parked)?;
+    // The snapshot states the lineage, though retention does not report it.
+    repository_lineage(&context.root)?;
+    Ok(PortableSnapshot {
+      quarantined: get(Some(&portable.notes), "quarantinedCount").cloned().unwrap_or(Value::Null),
+      records: portable.records,
+      diagnostics: diagnostics.0.iter().map(Diagnostic::to_value).collect(),
+    })
+  })
+}
+
 pub fn metadata_report(cwd: &str, schema: &str) -> GitResult<Value> {
   let context = engine::repo_context(cwd)?;
   let (scopes, mut diagnostics, accepted, quarantined, lineage) =
