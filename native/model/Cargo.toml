@@ -13,6 +13,9 @@ publish = false
 [dependencies]
 # Already in the workspace through gix; used only for identifier entropy.
 getrandom = "=0.4.3"
+# Already in the workspace through gix; `localeCompare` compares text after
+# compatibility decomposition, as ICU does.
+unicode-normalization = "=0.1.25"
 
 [[bin]]
 name = "model-probe"
