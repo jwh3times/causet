@@ -48,6 +48,7 @@ pub enum Outcome {
 pub const NATIVE_COMMANDS: &[&str] = &[
   "audit identity",
   "capabilities",
+  "commit",
   "doctor",
   "graph",
   "init",
@@ -633,8 +634,7 @@ mod tests {
   #[test]
   fn commands_that_need_the_repository_delegate() {
     for args in [
-      &["commit", "-m", "x"][..],
-      &["rebase", "--status", "extra", "args"],
+      &["rebase", "--status", "extra", "args"][..],
       &["resolve", "reject"],
       &["metadata", "dispose", "r", "--keep-local"],
       &["spec", "index", "--all"],
@@ -650,6 +650,7 @@ mod tests {
     for args in [
       &["doctor", "--benchmark"][..],
       &["init", "--json"],
+      &["commit", "-m", "x", "--generated-by", "agent", "--all"],
       &["capabilities", "--json"],
       &["metadata", "status"],
       &["metadata", "validate", "--strict"],

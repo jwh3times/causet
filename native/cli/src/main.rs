@@ -5,17 +5,20 @@
 
 mod audit;
 mod capabilities;
+mod commit;
 mod delegate;
 mod doctor;
 mod envelope;
 mod environment;
 mod front;
+mod host;
 mod json;
 mod lineage;
 mod metadata;
 mod migration;
 mod native;
 mod notes;
+mod notes_write;
 mod parsed;
 mod plan;
 mod proof;

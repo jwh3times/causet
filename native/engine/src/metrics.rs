@@ -362,7 +362,7 @@ pub(crate) fn diagnostic(event: &str, details: Vec<(&str, Value)>) {
 }
 
 /// `new Date().toISOString()`.
-fn iso_now() -> String {
+pub fn iso_now() -> String {
   let now = std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
     .unwrap_or_default();

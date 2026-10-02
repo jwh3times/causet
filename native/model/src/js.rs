@@ -289,24 +289,93 @@ pub fn try_v8_sort_by<T: Clone, E>(
 }
 
 /// The collation `String.prototype.localeCompare` applies under Node's ICU
-/// root locale, for the text a command sorts this way: family names, spellings,
-/// member names and timestamps, which are ASCII. Characters compare first by
-/// their primary weight (whitespace, then punctuation and symbols in ICU's
-/// order, then digits, then letters without regard to case); a tie is broken
-/// by case, lowercase first. Text outside ASCII keeps code-point order after
-/// every ASCII character, which is an approximation the ported commands never
-/// meet in practice.
+/// root locale, at its three levels.
+///
+/// - **Primary**: whitespace, then punctuation and symbols in ICU's order, then
+///   digits, then letters without regard to case or accent. Text is compared
+///   after compatibility decomposition (NFKD), so an accented letter weighs as
+///   its base letter, `ﬁ` as `fi`, and `ß`, `æ` and `œ` as the letters they
+///   expand to; `ø`, `đ`, `ł` and `ħ` weigh as their base letters too.
+///   Other letters outside ASCII keep code-point order after every ASCII one.
+/// - **Secondary**: accents, compared position by position from the left, an
+///   unaccented letter first.
+/// - **Tertiary**: lowercase before uppercase, and a letter as written before a
+///   compatibility form or an expansion of it.
+///
+/// This reproduces ICU for the Latin text commands sort (names, identifiers,
+/// timestamps, actors) without carrying ICU's tables.
 pub fn locale_compare(left: &str, right: &str) -> Ordering {
-  let primary = |text: &str| text.chars().map(primary_weight).collect::<Vec<_>>();
-  primary(left).cmp(&primary(right)).then_with(|| {
-    let tertiary = |text: &str| {
-      text
-        .chars()
-        .map(|c| u8::from(c.is_ascii_uppercase()))
-        .collect::<Vec<_>>()
-    };
-    tertiary(left).cmp(&tertiary(right))
-  })
+  let (left, right) = (collation_units(left), collation_units(right));
+  let primary = |units: &[Unit]| units.iter().map(|unit| unit.primary).collect::<Vec<_>>();
+  let secondary = |units: &[Unit]| units.iter().map(|unit| unit.accents.clone()).collect::<Vec<_>>();
+  let tertiary = |units: &[Unit]| units.iter().map(|unit| unit.tertiary).collect::<Vec<_>>();
+  primary(&left)
+    .cmp(&primary(&right))
+    .then_with(|| secondary(&left).cmp(&secondary(&right)))
+    .then_with(|| tertiary(&left).cmp(&tertiary(&right)))
+}
+
+/// One collation element: a primary weight, the accents on it, and its
+/// tertiary weight (0 for lowercase, 1 for uppercase, 2 for a compatibility
+/// form or an expansion).
+struct Unit {
+  primary: u32,
+  accents: Vec<u32>,
+  tertiary: u8,
+}
+
+/// The stroke and slash a decomposition does not separate, as accents.
+const STROKE: u32 = 0x0338;
+
+fn collation_units(text: &str) -> Vec<Unit> {
+  use unicode_normalization::UnicodeNormalization as _;
+  use unicode_normalization::char::is_combining_mark;
+  let mut units: Vec<Unit> = Vec::new();
+  for original in text.chars() {
+    let canonical: Vec<char> = std::iter::once(original).nfd().collect();
+    let compatibility: Vec<char> = std::iter::once(original).nfkd().collect();
+    let compat_form = canonical != compatibility;
+    for c in compatibility {
+      if is_combining_mark(c) {
+        match units.last_mut() {
+          Some(unit) => unit.accents.push(c as u32),
+          // A mark with nothing before it weighs as itself.
+          None => units.push(Unit { primary: 0x100 + c as u32, accents: Vec::new(), tertiary: 0 }),
+        }
+        continue;
+      }
+      let (letters, stroke, expansion): (&[char], bool, bool) = match c {
+        'ß' => (&['s', 's'], false, true),
+        'ẞ' => (&['S', 'S'], false, true),
+        'æ' => (&['a', 'e'], false, true),
+        'Æ' => (&['A', 'E'], false, true),
+        'œ' => (&['o', 'e'], false, true),
+        'Œ' => (&['O', 'E'], false, true),
+        'ø' => (&['o'], true, false),
+        'Ø' => (&['O'], true, false),
+        'đ' => (&['d'], true, false),
+        'Đ' => (&['D'], true, false),
+        'ł' => (&['l'], true, false),
+        'Ł' => (&['L'], true, false),
+        'ħ' => (&['h'], true, false),
+        'Ħ' => (&['H'], true, false),
+        _ => (std::slice::from_ref(&c), false, false),
+      };
+      for letter in letters {
+        let tertiary = if expansion || compat_form {
+          2
+        } else {
+          u8::from(letter.is_uppercase())
+        };
+        units.push(Unit {
+          primary: primary_weight(*letter),
+          accents: if stroke { vec![STROKE] } else { Vec::new() },
+          tertiary,
+        });
+      }
+    }
+  }
+  units
 }
 
 const ICU_ASCII_ORDER: &str =
@@ -316,7 +385,7 @@ fn primary_weight(c: char) -> u32 {
   let folded = c.to_ascii_lowercase();
   match ICU_ASCII_ORDER.find(folded) {
     Some(index) => index as u32,
-    None => 0x100 + c as u32,
+    None => 0x100 + c.to_lowercase().next().unwrap_or(c) as u32,
   }
 }
 
@@ -373,6 +442,21 @@ mod tests {
         "{value}.toFixed({digits})"
       );
     }
+  }
+
+  #[test]
+  fn locale_compare_orders_accented_latin_as_icu_does() {
+    // `[...names].sort((a, b) => a.localeCompare(b))` on Node 26.
+    let expected = [
+      "1", "A", "ä", "a_b", "a-b", "a1", "ab", "adne", "Adne", "Ådne", "az", "b", "b ", "ba", "cote", "coté",
+      "côte", "côté", "e", "E", "é", "É", "émile", "Émile", "eva", "eve", "Eve", "Ève", "fix", "ﬁx", "naive",
+      "naïve", "nu", "ñu", "nz", "ore", "øre", "oz", "resume", "résume", "résumé", "Résumé", "strasse", "straße",
+      "zoe", "zoe", "Zoë", "α", "β", "ω",
+    ];
+    let mut names = expected.to_vec();
+    names.reverse();
+    names.sort_by(|left, right| locale_compare(left, right));
+    assert_eq!(names, expected);
   }
 
   #[test]

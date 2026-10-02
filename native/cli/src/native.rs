@@ -193,6 +193,19 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::proof::format_proof_verification(&result)), exit))
     }
+    "commit" => {
+      // Always printed as JSON: the result is an object.
+      let actors = crate::commit::declared_actors(parsed)?;
+      let message = parsed.value("message").unwrap_or_default();
+      let result = crate::commit::create_commit(
+        message,
+        parsed.truthy("all"),
+        parsed.truthy("allowEmpty"),
+        &actors,
+        cwd,
+      )?;
+      Ok((result, 0))
+    }
     "init" => {
       // Printed as text even under --json: `init` does not pass the flag on.
       let root = crate::store::init_lab(cwd)?;

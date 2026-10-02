@@ -396,6 +396,56 @@ test("init writes the same configuration and runtime directory natively (#145)",
   }
 });
 
+test("commit publishes the same commit and declared provenance natively (#145)", { skip }, () => {
+  // Ids, object ids and times differ run to run, so each side is renamed by
+  // first appearance before the two are compared.
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"));
+  };
+  const twin = (name) => {
+    const repo = path.join(outside, name);
+    fs.mkdirSync(repo);
+    const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Commit twin");
+    git("config", "user.email", "commit-twin@example.invalid");
+    fs.writeFileSync(path.join(repo, "a.txt"), "a\n");
+    git("add", "a.txt");
+    return { repo, git };
+  };
+  const cases = [
+    ["commit", "-m", "plain"],
+    ["commit", "-m", "declared", "--authored-by", "Ada", "--generated-by", "model-b", "--reviewed-by", "Émile", "--reviewed-by", "Eve", "--json"],
+    ["commit", "-m", "blank", "--generated-by", "  "],
+  ];
+  for (const [index, args] of cases.entries()) {
+    const oracleSide = twin("commit-js-" + index);
+    const rustSide = twin("commit-rust-" + index);
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: oracleSide.repo, encoding: "utf8", env: testEnv(neutral),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args);
+    assert.equal(actual.status, expected.status, "status of " + label);
+    assert.equal(rename(actual.stderr), rename(expected.stderr), "stderr of " + label);
+    assert.equal(rename(actual.stdout), rename(expected.stdout), "stdout of " + label);
+    const notes = (side) => rename(side.git("log", "-1", "--format=%B", "refs/notes/causet").stdout
+      + side.git("notes", "--ref=causet", "show", "HEAD").stdout);
+    assert.equal(notes(rustSide), notes(oracleSide), "notes of " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

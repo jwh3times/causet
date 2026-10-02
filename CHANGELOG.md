@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst commit` natively (#145), with `--authored-by`,
+  `--generated-by`, `--reviewed-by` and `CAUSET_AGENT`. It ports the
+  note-append path every later metadata write shares:
+  - the notes lock, with the same claim file, stale-holder rules and
+    `notes-locked` refusal;
+  - container classification and bounds;
+  - the note and retention carriers, published in one checked `update-ref`
+    transaction;
+  - the `notes:after-read` gate and the `retention:*-publish` fault points.
+
+  Every crate still forbids `unsafe`, so the lock reads the host name and
+  checks a holder process through the system rather than through FFI. The
+  model's `localeCompare` now follows ICU's root collation for Latin text,
+  including accents, case, ligatures and `ß`, so declared actors are ordered
+  exactly as the JavaScript CLI orders them.
 - The Rust CLI answers `cst init` natively (#145, the first metadata write).
   It creates the runtime directory under the names the repository uses and
   sets `notes.displayRef` and `notes.rewriteRef`, with the same output and
