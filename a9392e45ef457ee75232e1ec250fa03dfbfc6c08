@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mur0iomhdfab366bb088",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-commit",
+      "sourceHead": "d1b5e5ceafcd3c868af2a6f73dd2528c5bc0fec9",
+      "sourceSubject": "feat: answer cst commit natively in the Rust CLI",
+      "targetBefore": "e9630d30b65c1c3ad1d86974dc52499668c0b38a",
+      "landingCommit": "a9392e45ef457ee75232e1ec250fa03dfbfc6c08",
+      "base": "e9630d30b65c1c3ad1d86974dc52499668c0b38a",
+      "absorbedCommits": [
+        "d1b5e5ceafcd3c868af2a6f73dd2528c5bc0fec9"
+      ],
+      "absorbedChanges": [
+        "ch_0muqzeaaa01b80ec3a055"
+      ],
+      "resultTree": "30e2b502994bf60ed520737422dff0839724e96e",
+      "createdAt": "2026-10-02T13:42:18.740Z"
+    }
+  ]
+}
