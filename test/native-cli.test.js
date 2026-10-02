@@ -577,6 +577,64 @@ test("metadata import previews and applies an envelope as the JavaScript CLI doe
   assert.equal(git(copy, "rev-parse", "refs/notes/causet").stdout, git(clone, "rev-parse", "refs/notes/causet").stdout);
 });
 
+test("metadata dispose resolves a parked conflict as the JavaScript CLI does (#145)", { skip }, () => {
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"));
+  };
+  // A destination holding a parked copy of the source's record, made by the
+  // JavaScript CLI; each implementation disposes of it in its own byte copy.
+  const root = path.join(outside, "dispose-twin");
+  const source = path.join(root, "source");
+  fs.mkdirSync(source, { recursive: true });
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv() });
+  const oracleIn = (cwd, args) => spawnSync(process.execPath, [oracle, ...args], {
+    cwd, encoding: "utf8", env: testEnv(neutral),
+  });
+  git(source, "init", "-q", "-b", "main");
+  git(source, "config", "user.name", "Dispose twin");
+  git(source, "config", "user.email", "dispose-twin@example.invalid");
+  fs.writeFileSync(path.join(source, "a.txt"), "a\n");
+  git(source, "add", "a.txt");
+  assert.equal(oracleIn(source, ["commit", "-m", "add a", "--generated-by", "agent"]).status, 0);
+  assert.equal(oracleIn(source, ["metadata", "export", path.join(root, "envelope")]).status, 0);
+  const parked = path.join(root, "parked");
+  git(root, "clone", "-q", "--no-local", source, parked);
+  git(parked, "config", "user.name", "Dispose twin");
+  git(parked, "config", "user.email", "dispose-twin@example.invalid");
+  const note = JSON.parse(git(source, "notes", "--ref=causet", "show", "HEAD").stdout);
+  const local = { schema: "causet.note/v1", records: [{ ...note.records[0], actors: [{ role: "authored", actor: "Local author" }] }] };
+  fs.writeFileSync(path.join(root, "local.json"), JSON.stringify(local));
+  git(parked, "notes", "--ref=causet", "add", "-F", path.join(root, "local.json"), "HEAD");
+  assert.equal(oracleIn(parked, ["metadata", "import", "../envelope", "--apply", "--park-conflicts"]).status, 0);
+  const recordId = note.records[0].id;
+  for (const flags of [["--keep-local"], ["--replace-local", "--reason", "the peer is right", "--json"]]) {
+    const name = flags[0].slice(2);
+    const oracleSide = path.join(root, name + "-js");
+    const rustSide = path.join(root, name + "-rust");
+    fs.cpSync(parked, oracleSide, { recursive: true });
+    fs.cpSync(parked, rustSide, { recursive: true });
+    const args = ["metadata", "dispose", recordId, ...flags];
+    const expected = oracleIn(oracleSide, args);
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: rustSide, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args);
+    assert.equal(actual.status, expected.status, "status of " + label);
+    assert.equal(rename(actual.stdout + actual.stderr), rename(expected.stdout + expected.stderr), "output of " + label);
+    assert.equal(git(rustSide, "notes", "--ref=causet", "show", "HEAD").stdout, git(oracleSide, "notes", "--ref=causet", "show", "HEAD").stdout);
+    assert.equal(git(rustSide, "for-each-ref", "refs/causet/quarantine/").stdout, "");
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

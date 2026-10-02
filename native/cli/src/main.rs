@@ -7,6 +7,7 @@ mod audit;
 mod capabilities;
 mod commit;
 mod delegate;
+mod dispose;
 mod doctor;
 mod envelope;
 mod environment;

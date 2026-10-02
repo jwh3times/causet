@@ -241,6 +241,19 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::plan::format_rebase_plan(&plan)), 0))
     }
+    "metadata" if parsed.positionals.first().map(String::as_str) == Some("dispose") => {
+      let record_id = parsed.positionals.get(1).cloned().unwrap_or_default();
+      let result = crate::dispose::dispose_conflict(
+        &record_id,
+        parsed.truthy("keepLocal"),
+        parsed.value("reason"),
+        cwd,
+      )?;
+      if json {
+        return Ok((result, 0));
+      }
+      Ok((causet_model::json::string(&crate::dispose::format_disposition(&result)), 0))
+    }
     "metadata" if parsed.positionals.first().map(String::as_str) == Some("import") => {
       let source = parsed.positionals.get(1).cloned().unwrap_or_default();
       let result = crate::import::import_metadata(

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst metadata dispose <record-id>
+  --keep-local|--replace-local` natively (#145). It ports the disposition of
+  `src/dispositions.js`:
+  - **Reading the parked record:** the record and its refusals, for an unknown,
+    ambiguous, unreadable or future-schema copy.
+  - **Checking the local copy:** missing, duplicated, or attached elsewhere.
+  - **Clearing the dispute:** `keep-local` deletes the parked ref.
+    `replace-local` rewrites the local record through the shared note rewrite,
+    clearing the parked ref in the same transaction.
+  - **Recording the decision:** the decision is appended to the disposition
+    registry, then the record is read back to report whether it is in service.
+
+  With this, every metadata write #145 lists answers natively.
 - The Rust CLI answers `cst metadata import <directory> --dry-run|--apply`
   natively, with `--park-conflicts` (#145). It ports the import of
   `src/metadata-transfer.js` and the parking of `src/quarantine.js`:
