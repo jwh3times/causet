@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst metadata export <directory>` natively (#145).
+  It ports the export of `src/metadata-transfer.js`:
+  - the full metadata snapshot, shared with `metadata status`;
+  - the export key;
+  - the deterministic retention carrier;
+  - the notes commit, built through a temporary index;
+  - the transient export ref, always removed;
+  - the Git bundle;
+  - the hashed envelope manifest;
+  - the `git` metrics block.
+
+  A repository and a copy of it exported by each CLI give byte-identical
+  manifests and bundles. Porting it found #191: exporting from an
+  unmigrated repository leaves an empty `refs/causet` directory that flips
+  the repository to the current names. Both CLIs behave that way until the
+  JavaScript fix lands.
 - The Rust CLI answers `cst metadata retain --dry-run|--apply` natively
   (#145). It ports the retention backfill:
   - the portable-only metadata snapshot;
