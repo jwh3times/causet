@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst metadata import <directory> --dry-run|--apply`
+  natively, with `--park-conflicts` (#145). It ports the import of
+  `src/metadata-transfer.js` and the parking of `src/quarantine.js`:
+  - **Inspection:** the payload is fetched into an empty repository, then the
+    record inventory and refs are checked against the manifest.
+  - **Preview:** the lineage, object-format and conflict classification
+    against the destination snapshot, including already-disposed digests.
+  - **Apply:**
+    - staged refs;
+    - parked conflicting records;
+    - a note merge that refuses an identity conflict;
+    - the retention update, with the notes, parked and resolution refs in one
+      checked transaction under the notes lock.
 - The Rust CLI answers `cst metadata export <directory>` natively (#145).
   It ports the export of `src/metadata-transfer.js`:
   - the full metadata snapshot, shared with `metadata status`;
