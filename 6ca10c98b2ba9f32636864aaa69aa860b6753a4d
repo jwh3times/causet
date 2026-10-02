@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mur61a0r6d5a991f4f4e",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-retain",
+      "sourceHead": "c942babf97911e54c849ceec85cf6947fd0e74d1",
+      "sourceSubject": "feat: answer cst metadata retain natively in the Rust CLI",
+      "targetBefore": "a9392e45ef457ee75232e1ec250fa03dfbfc6c08",
+      "landingCommit": "6ca10c98b2ba9f32636864aaa69aa860b6753a4d",
+      "base": "a9392e45ef457ee75232e1ec250fa03dfbfc6c08",
+      "absorbedCommits": [
+        "c942babf97911e54c849ceec85cf6947fd0e74d1"
+      ],
+      "absorbedChanges": [
+        "ch_0mur33cg73805df858a79"
+      ],
+      "resultTree": "874e6a5f463f280906d3e2fb6c1ce4f2704ec13a",
+      "createdAt": "2026-10-02T16:16:44.345Z"
+    }
+  ]
+}
