@@ -396,7 +396,7 @@ fn parked_record_ids(cwd: &str) -> GitResult<BTreeSet<String>> {
 }
 
 /// `parsedParkedRef(ref)`: `<source lineage>/<record id>` under either names.
-fn parsed_parked_ref(name: &str) -> Option<(String, String)> {
+pub(crate) fn parsed_parked_ref(name: &str) -> Option<(String, String)> {
   let rest = family_remainder(name, "quarantine")?;
   let parts: Vec<&str> = rest.split('/').collect();
   (parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty())

@@ -537,6 +537,60 @@ pub fn checked_ref_update(name: &str, next: &str, previous: Option<&str>) -> Str
 /// `appendNote(commit, record, cwd)`: the container with the record appended,
 /// published together with the objects it keeps reachable.
 pub fn append_note(commit: &str, record: &Value, cwd: &str, ref_updates: &[String]) -> GitResult<Object> {
+  rewrite_note(
+    commit,
+    |mut records| {
+      records.push(record.clone());
+      Ok(records)
+    },
+    std::slice::from_ref(record),
+    cwd,
+    ref_updates,
+  )
+}
+
+/// `replaceNoteRecord(commit, recordId, replacement, cwd, { refUpdates })`:
+/// the one record `record_id` names on `commit` replaced, every other record
+/// untouched (ADR-0030's `replace-local`).
+pub fn replace_note_record(commit: &str, record_id: &str, replacement: &Value, cwd: &str, ref_updates: &[String]) -> GitResult<Object> {
+  rewrite_note(
+    commit,
+    |mut records| {
+      let mut found = None;
+      for (index, record) in records.iter().enumerate() {
+        if matches!(record, Value::Null) {
+          return Err(GitError::uncoded("Cannot read properties of null (reading 'id')"));
+        }
+        if matches!(get(Some(record), "id"), Some(Value::String(units)) if lossy(units) == record_id) {
+          found = Some(index);
+          break;
+        }
+      }
+      let Some(index) = found else {
+        return Err(GitError::new(
+          "not-found",
+          format!("The note on '{commit}' holds no record '{record_id}'."),
+        ));
+      };
+      records[index] = replacement.clone();
+      Ok(records)
+    },
+    std::slice::from_ref(replacement),
+    cwd,
+    ref_updates,
+  )
+}
+
+/// `rewriteNote(commit, transform, retain, cwd, options)`: the one path that
+/// rewrites a note container, under the notes lock, failing closed on a
+/// container it could not fully read.
+fn rewrite_note(
+  commit: &str,
+  transform: impl FnOnce(Vec<Value>) -> GitResult<Vec<Value>>,
+  retain: &[Value],
+  cwd: &str,
+  ref_updates: &[String],
+) -> GitResult<Object> {
   with_notes_lock(cwd, || {
     let repository = names(cwd)?;
     let retention = ref_family("retention", cwd)?;
@@ -572,11 +626,11 @@ pub fn append_note(commit: &str, record: &Value, cwd: &str, ref_updates: &[Strin
       }
       Disposition::Empty | Disposition::Legacy | Disposition::Accept => {}
     }
-    let mut records = match note.get("records") {
+    let records = match note.get("records") {
       Some(Value::Array(records)) => records.clone(),
       _ => Vec::new(),
     };
-    records.push(record.clone());
+    let records = transform(records)?;
     let count = records.len();
     note.set("records", Value::Array(records));
     if !within_bound("noteContainerRecords", count as u64) {
@@ -595,7 +649,8 @@ pub fn append_note(commit: &str, record: &Value, cwd: &str, ref_updates: &[Strin
         "The resulting note exceeds the noteContainerBytes bound.",
       ));
     }
-    let dependencies = record_dependencies(&[(commit.to_string(), record.clone())], cwd, true)?;
+    let entries: Vec<(String, Value)> = retain.iter().map(|item| (commit.to_string(), item.clone())).collect();
+    let dependencies = record_dependencies(&entries, cwd, true)?;
     host::gate_point("notes:after-read");
     let next_notes = build_note_commit(&note, commit, previous_notes.as_deref(), cwd)?;
     let next_retention = build_retention_commit(

@@ -53,6 +53,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "graph",
   "init",
   "merge-plan",
+  "metadata dispose",
   "metadata export",
   "metadata import",
   "metadata retain",
@@ -639,7 +640,6 @@ mod tests {
     for args in [
       &["rebase", "--status", "extra", "args"][..],
       &["resolve", "reject"],
-      &["metadata", "dispose", "r", "--keep-local"],
       &["spec", "index", "--all"],
       &["workspace", "list"],
       &["commit", "--authoredBy", "--authored-by", "a"],
@@ -656,6 +656,7 @@ mod tests {
       &["metadata", "retain", "--apply"],
       &["metadata", "export", "x"],
       &["metadata", "import", "x", "--apply", "--park-conflicts"],
+      &["metadata", "dispose", "r", "--replace-local", "--reason", "peer is right"],
       &["commit", "-m", "x", "--generated-by", "agent", "--all"],
       &["capabilities", "--json"],
       &["metadata", "status"],
@@ -673,7 +674,7 @@ mod tests {
     }
     // A command is native per subcommand: these still delegate.
     for args in [
-      &["metadata", "dispose", "r", "--keep-local"][..],
+      &["workspace", "create", "w"][..],
       &["resolve", "apply", "--all"],
       &["spec", "merge-plan", "f", "b", "o", "t"],
       &["rebase-forecast", "main"],
