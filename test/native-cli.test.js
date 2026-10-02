@@ -303,6 +303,58 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
   assert.equal(inRepo(rust, ["verify-proof", bundleFile], { CAUSET_DELEGATE: "never" }).status, 0);
 });
 
+test("spec status plans a base whose manifest predates cst migrate, as the JavaScript CLI does (#183)", { skip }, () => {
+  const repo = path.join(outside, "legacy-spec-repo");
+  fs.mkdirSync(repo);
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+  const oracleIn = (args) => spawnSync(process.execPath, [oracle, ...args], {
+    cwd: repo, encoding: "utf8", env: testEnv(neutral),
+  });
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Legacy spec");
+  git("config", "user.email", "legacy-spec@example.invalid");
+  git("config", "core.autocrlf", "false");
+  const text = "Intro\n\n# A\na\n\n# B\nb\n";
+  fs.writeFileSync(path.join(repo, "s.md"), text);
+  assert.equal(oracleIn(["spec", "index", "s.md"]).status, 0);
+  // The base keeps its manifest under the former directory, as a commit made
+  // before cst migrate does; each side moves it as cst migrate does.
+  fs.mkdirSync(path.join(repo, ".vcs-lab", "specs"), { recursive: true });
+  fs.renameSync(path.join(repo, ".causet", "specs", "s.md.json"), path.join(repo, ".vcs-lab", "specs", "s.md.json"));
+  git("add", "-A");
+  git("commit", "-q", "-m", "base");
+  const side = (name, edited) => {
+    git("switch", "-q", "-c", name, "main");
+    fs.writeFileSync(path.join(repo, "s.md"), edited);
+    fs.mkdirSync(path.join(repo, ".causet", "specs"), { recursive: true });
+    git("mv", ".vcs-lab/specs/s.md.json", ".causet/specs/s.md.json");
+    assert.equal(oracleIn(["spec", "index", "s.md"]).status, 0);
+    git("add", "-A");
+    git("commit", "-q", "-m", name);
+    return git("rev-parse", "HEAD").stdout.trim();
+  };
+  const ours = side("ours", text.replace("a\n", "a edited\n"));
+  const theirs = side("theirs", text.replace("b\n", "b edited\n"));
+  fs.mkdirSync(path.join(repo, ".git", "causet"), { recursive: true });
+  fs.writeFileSync(path.join(repo, ".git", "causet", "reconciliation.json"), JSON.stringify({
+    schema: "causet.reconciliation-operation/v4",
+    id: "op_legacy",
+    current: { sourceCommit: theirs, targetBefore: ours, conflictedPaths: ["s.md"] },
+  }));
+  for (const args of [["spec", "status"], ["spec", "status", "--json"]]) {
+    const expected = oracleIn(args);
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args);
+    assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
+    assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
+    assert.equal(actual.status, expected.status, `status of ${label}`);
+  }
+  assert.equal(JSON.parse(oracleIn(["spec", "status", "--json"]).stdout).plans[0].status, "clean");
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

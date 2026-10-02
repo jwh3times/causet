@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed: semantic spec merge planning now reads a spec manifest committed
+  before `cst migrate` from `.vcs-lab/specs/` (#183). The fallback chose by
+  `??`, but a missing object is still a record, so the former directory was
+  never read. A merge whose base, ours or theirs predates the migration was
+  reported `blocked` with `semantic-metadata-unavailable` instead of being
+  planned. This affected `cst spec status`, `cst spec merge-plan` and the
+  reconciliation and rebase paths that plan spec merges. The JavaScript and
+  Rust CLIs are fixed together.
 - The Rust CLI answers `cst proof-bundle` and `cst verify-proof` natively
   (#144), byte for byte. Bundle hashes are identical, and each implementation
   verifies the other's bundles.

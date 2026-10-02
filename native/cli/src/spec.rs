@@ -939,10 +939,8 @@ fn revision_stage(
   })
 }
 
-/// `revisionStages(file, revisions, cwd)`. The JavaScript reads the current
-/// and the former manifest directory and joins them with `??`; every read
-/// returns a record, so the current directory's always wins, and so it does
-/// here.
+/// `revisionStages(file, revisions, cwd)`: both manifest directories are read
+/// in one batch, and the current one wins when it exists.
 fn revision_stages(file: &str, revisions: &[String], cwd: &str) -> GitResult<Vec<Stage>> {
   let expressions: Vec<String> = revisions
     .iter()
@@ -959,7 +957,11 @@ fn revision_stages(file: &str, revisions: &[String], cwd: &str) -> GitResult<Vec
     .iter()
     .enumerate()
     .map(|(index, revision)| {
-      revision_stage(file, revision, &objects[index * 3], &objects[index * 3 + 1])
+      // The current directory's manifest when it exists, else the one a revision
+      // from before the migration keeps under the former directory (#183).
+      let current = &objects[index * 3 + 1];
+      let manifest = if current.exists { current } else { &objects[index * 3 + 2] };
+      revision_stage(file, revision, &objects[index * 3], manifest)
     })
     .collect()
 }
