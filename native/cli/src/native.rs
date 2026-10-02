@@ -193,6 +193,11 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::proof::format_proof_verification(&result)), exit))
     }
+    "init" => {
+      // Printed as text even under --json: `init` does not pass the flag on.
+      let root = crate::store::init_lab(cwd)?;
+      Ok((causet_model::json::string(&format!("Initialized causet metadata in {root}")), 0))
+    }
     "merge-plan" => {
       let source = parsed.positionals.first().cloned().unwrap_or_default();
       let plan = crate::plan::merge_plan(&source, cwd)?;

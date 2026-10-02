@@ -250,6 +250,7 @@ pub fn io_failure(error: &std::io::Error, syscall: &str, path: &str) -> GitError
     std::io::ErrorKind::PermissionDenied => ("EACCES", "permission denied"),
     std::io::ErrorKind::NotADirectory => ("ENOTDIR", "not a directory"),
     std::io::ErrorKind::NotFound => ("ENOENT", "no such file or directory"),
+    std::io::ErrorKind::AlreadyExists => ("EEXIST", "file already exists"),
     _ => ("EIO", "i/o error"),
   };
   // A read of an open descriptor names no path.

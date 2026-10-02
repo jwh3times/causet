@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst init` natively (#145, the first metadata write).
+  It creates the runtime directory under the names the repository uses and
+  sets `notes.displayRef` and `notes.rewriteRef`, with the same output and
+  errors as the JavaScript CLI. A Node `EEXIST` is reported as Node reports it.
 - Fixed: semantic spec merge planning now reads a spec manifest committed
   before `cst migrate` from `.vcs-lab/specs/` (#183). The fallback chose by
   `??`, but a missing object is still a record, so the former directory was

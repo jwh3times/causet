@@ -355,6 +355,47 @@ test("spec status plans a base whose manifest predates cst migrate, as the JavaS
   assert.equal(JSON.parse(oracleIn(["spec", "status", "--json"]).stdout).plans[0].status, "clean");
 });
 
+test("init writes the same configuration and runtime directory natively (#145)", { skip }, () => {
+  // Twin repositories, one per implementation, because init changes the one it runs in.
+  const twin = (name, legacy) => {
+    const repo = path.join(outside, name);
+    fs.mkdirSync(repo);
+    const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+    git("init", "-q", "-b", "main");
+    if (legacy) fs.mkdirSync(path.join(repo, ".git", "vcs-lab"));
+    return { repo, git };
+  };
+  for (const [index, [args, legacy]] of [[["init"], false], [["init", "--json"], false], [["init"], true]].entries()) {
+    const oracleSide = twin(`init-js-${index}`, legacy);
+    const rustSide = twin(`init-rust-${index}`, legacy);
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: oracleSide.repo, encoding: "utf8", env: testEnv(neutral),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify([args, legacy]);
+    assert.equal(actual.status, expected.status, `status of ${label}`);
+    assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
+    assert.equal(
+      actual.stdout.replace(fs.realpathSync.native(rustSide.repo), "<repo>").replace(rustSide.repo, "<repo>"),
+      expected.stdout.replace(fs.realpathSync.native(oracleSide.repo), "<repo>").replace(oracleSide.repo, "<repo>"),
+      `stdout of ${label}`,
+    );
+    for (const key of ["notes.displayRef", "notes.rewriteRef"]) {
+      assert.equal(rustSide.git("config", key).stdout, oracleSide.git("config", key).stdout, `${key} of ${label}`);
+    }
+    for (const name of ["causet", "vcs-lab"]) {
+      assert.equal(
+        fs.existsSync(path.join(rustSide.repo, ".git", name)),
+        fs.existsSync(path.join(oracleSide.repo, ".git", name)),
+        `.git/${name} of ${label}`,
+      );
+    }
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
