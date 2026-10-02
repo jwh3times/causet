@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muqec4f97e6e07e85c54",
+      "mode": "compact",
+      "sourceRef": "jwh3times/spec-legacy-manifest",
+      "sourceHead": "78fd1ec897b1becb3e062233e3e63a063331a12b",
+      "sourceSubject": "fix: read pre-migration spec manifests in semantic merge planning",
+      "targetBefore": "386d17c2c5b7e70040415865dd5840f1d892fa38",
+      "landingCommit": "b81f66317613b800e233a2a0a49cec3cc8052898",
+      "base": "386d17c2c5b7e70040415865dd5840f1d892fa38",
+      "absorbedCommits": [
+        "78fd1ec897b1becb3e062233e3e63a063331a12b"
+      ],
+      "absorbedChanges": [
+        "ch_0muqc60qr8aabe521a076"
+      ],
+      "resultTree": "7a5a6ae875a7819da0dae6779e918777853cf000",
+      "createdAt": "2026-10-02T03:21:21.063Z"
+    }
+  ]
+}
