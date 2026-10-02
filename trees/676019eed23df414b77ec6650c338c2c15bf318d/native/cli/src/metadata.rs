@@ -415,8 +415,8 @@ struct Portable {
   notes: Value,
   resolutions: Value,
   accepted: usize,
-  /// The accepted records with their attachments, in note order.
-  records: Vec<(String, Value)>,
+  /// The accepted records with their attachments and digests, in note order.
+  records: Vec<(String, Value, String)>,
   /// The summaries, for the quarantine's local digests.
   summaries: Vec<Value>,
 }
@@ -774,6 +774,12 @@ fn validate_portable_notes(
       .then_with(|| locale_compare(&left.1, &right.1))
       .then_with(|| locale_compare(&left.2, &right.2))
   });
+  // `accepted.sort(...)`: by attachment, `String(record.id)`, then digest.
+  accepted.sort_by(|left, right| {
+    locale_compare(&left.0, &right.0)
+      .then_with(|| locale_compare(&js_text(get(Some(&left.1), "id")), &js_text(get(Some(&right.1), "id"))))
+      .then_with(|| locale_compare(&left.2, &right.2))
+  });
   let quarantined = summaries.len() - accepted.len();
   let mut notes = Object::new();
   notes.set("ref", string(repository_names.notes_ref));
@@ -796,10 +802,7 @@ fn validate_portable_notes(
     notes: Value::Object(notes),
     resolutions: Value::Object(resolutions),
     accepted: accepted.len(),
-    records: accepted
-      .iter()
-      .map(|(attachment, raw, _)| (attachment.clone(), raw.clone()))
-      .collect(),
+    records: accepted.clone(),
     summaries,
   })
 }
@@ -1470,52 +1473,71 @@ pub(crate) fn portable_snapshot(cwd: &str) -> GitResult<PortableSnapshot> {
     repository_lineage(&context.root)?;
     Ok(PortableSnapshot {
       quarantined: get(Some(&portable.notes), "quarantinedCount").cloned().unwrap_or(Value::Null),
-      records: portable.records,
+      records: portable
+        .records
+        .into_iter()
+        .map(|(attachment, raw, _)| (attachment, raw))
+        .collect(),
       diagnostics: diagnostics.0.iter().map(Diagnostic::to_value).collect(),
+    })
+  })
+}
+
+/// `metadataSnapshot({ cwd })`: every scope, taken under one object session.
+pub(crate) struct FullSnapshot {
+  pub scopes: Value,
+  diagnostics: Diagnostics,
+  pub accepted: usize,
+  pub quarantined: Value,
+  pub lineage: Value,
+  /// The accepted portable records: attachment, record, digest.
+  pub records: Vec<(String, Value, String)>,
+}
+
+pub(crate) fn full_snapshot(context: &RepoContext) -> GitResult<FullSnapshot> {
+  with_object_session(&context.root, || -> GitResult<FullSnapshot> {
+    let mut diagnostics = Diagnostics::default();
+    let parked = parked_record_ids(&context.root)?;
+    let portable = validate_portable_notes(context, &mut diagnostics, &parked)?;
+    let tracked = validate_specs(context, &mut diagnostics)?;
+    let mut local_digests: HashMap<String, Vec<String>> = HashMap::new();
+    for summary in &portable.summaries {
+      if let Some(id) = as_string(get(Some(summary), "id")) {
+        local_digests
+          .entry(id)
+          .or_default()
+          .push(as_string(get(Some(summary), "digest")).unwrap_or_default());
+      }
+    }
+    let shared = validate_shared_local(context, &mut diagnostics, &local_digests)?;
+    let private = inspect_private_state(context, &mut diagnostics)?;
+    inspect_migration(context, &mut diagnostics)?;
+    let lineage = repository_lineage(&context.root)?;
+    let quarantined = get(Some(&portable.notes), "quarantinedCount")
+      .cloned()
+      .unwrap_or(Value::Null);
+    let mut shared_portable = Object::new();
+    shared_portable.set("notes", portable.notes);
+    shared_portable.set("resolutions", portable.resolutions);
+    let mut scopes = Object::new();
+    scopes.set("sharedPortable", Value::Object(shared_portable));
+    scopes.set("trackedPortable", tracked);
+    scopes.set("sharedLocal", shared);
+    scopes.set("worktreePrivate", private);
+    Ok(FullSnapshot {
+      scopes: Value::Object(scopes),
+      diagnostics,
+      accepted: portable.accepted,
+      quarantined,
+      lineage,
+      records: portable.records,
     })
   })
 }
 
 pub fn metadata_report(cwd: &str, schema: &str) -> GitResult<Value> {
   let context = engine::repo_context(cwd)?;
-  let (scopes, mut diagnostics, accepted, quarantined, lineage) =
-    with_object_session(&context.root, || -> GitResult<_> {
-      let mut diagnostics = Diagnostics::default();
-      let parked = parked_record_ids(&context.root)?;
-      let portable = validate_portable_notes(&context, &mut diagnostics, &parked)?;
-      let tracked = validate_specs(&context, &mut diagnostics)?;
-      let mut local_digests: HashMap<String, Vec<String>> = HashMap::new();
-      for summary in &portable.summaries {
-        if let Some(id) = as_string(get(Some(summary), "id")) {
-          local_digests
-            .entry(id)
-            .or_default()
-            .push(as_string(get(Some(summary), "digest")).unwrap_or_default());
-        }
-      }
-      let shared = validate_shared_local(&context, &mut diagnostics, &local_digests)?;
-      let private = inspect_private_state(&context, &mut diagnostics)?;
-      inspect_migration(&context, &mut diagnostics)?;
-      let lineage = repository_lineage(&context.root)?;
-      let quarantined = get(Some(&portable.notes), "quarantinedCount")
-        .cloned()
-        .unwrap_or(Value::Null);
-      let mut shared_portable = Object::new();
-      shared_portable.set("notes", portable.notes);
-      shared_portable.set("resolutions", portable.resolutions);
-      let mut scopes = Object::new();
-      scopes.set("sharedPortable", Value::Object(shared_portable));
-      scopes.set("trackedPortable", tracked);
-      scopes.set("sharedLocal", shared);
-      scopes.set("worktreePrivate", private);
-      Ok((
-        Value::Object(scopes),
-        diagnostics,
-        portable.accepted,
-        quarantined,
-        lineage,
-      ))
-    })?;
+  let FullSnapshot { scopes, mut diagnostics, accepted, quarantined, lineage, .. } = full_snapshot(&context)?;
   diagnostics.0.sort_by(|left, right| {
     locale_compare(&left.code, &right.code)
       .then_with(|| locale_compare(left.scope, right.scope))
@@ -1571,7 +1593,7 @@ pub fn metadata_report(cwd: &str, schema: &str) -> GitResult<Value> {
 }
 
 /// `formatTrustState(trust)`.
-fn trust_state(trust: Option<&Value>) -> String {
+pub(crate) fn trust_state(trust: Option<&Value>) -> String {
   if !matches!(trust, Some(Value::Object(_) | Value::Array(_))) {
     return "trust not reported".into();
   }

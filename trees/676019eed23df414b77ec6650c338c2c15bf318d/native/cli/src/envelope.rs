@@ -70,7 +70,7 @@ fn is_sha256_text(value: Option<&Value>) -> bool {
 }
 
 /// `manifestHash(value)`.
-fn manifest_hash(manifest: &Value) -> GitResult<String> {
+pub(crate) fn manifest_hash(manifest: &Value) -> GitResult<String> {
   hashed_payload(manifest)
     .map(|bytes| causet_model::sha256::hex(bytes.as_bytes()))
     .map_err(|error| {

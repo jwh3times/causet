@@ -492,6 +492,53 @@ test("metadata retain --apply publishes the same backfill natively (#145)", { sk
   }
 });
 
+test("metadata export writes the same envelope natively, byte for byte (#145)", { skip }, () => {
+  // One repository and a byte-for-byte copy of it, one per implementation:
+  // every envelope carrier is deterministic, so the files must be identical.
+  const root = path.join(outside, "export-twin");
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo, { recursive: true });
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Export twin");
+  git("config", "user.email", "export-twin@example.invalid");
+  fs.writeFileSync(path.join(repo, "a.txt"), "a\n");
+  git("add", "a.txt");
+  const made = spawnSync(process.execPath, [oracle, "commit", "-m", "add a", "--generated-by", "agent"], {
+    cwd: repo, encoding: "utf8", env: testEnv(neutral),
+  });
+  assert.equal(made.status, 0, made.stderr);
+  const copy = path.join(root, "copy");
+  fs.cpSync(repo, copy, { recursive: true });
+  const expected = spawnSync(process.execPath, [oracle, "metadata", "export", "../envelope-js"], {
+    cwd: repo, encoding: "utf8", env: testEnv(neutral),
+  });
+  if (rust === selectedCli) vlabPrefix();
+  const actual = spawnSync(rust, ["metadata", "export", "../envelope-rust"], {
+    cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+  });
+  assert.equal(actual.status, expected.status, actual.stderr);
+  assert.equal(
+    actual.stdout.replace(/envelope-rust/g, "<envelope>"),
+    expected.stdout.replace(/envelope-js/g, "<envelope>"),
+  );
+  for (const file of ["manifest.json", "objects.bundle"]) {
+    assert.ok(
+      fs.readFileSync(path.join(root, "envelope-rust", file)).equals(fs.readFileSync(path.join(root, "envelope-js", file))),
+      file + " must be byte-identical",
+    );
+  }
+  // An existing destination is refused the same way.
+  const refused = spawnSync(rust, ["metadata", "export", "../envelope-rust", "--json"], {
+    cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+  });
+  const oracleRefused = spawnSync(process.execPath, [oracle, "metadata", "export", "../envelope-js", "--json"], {
+    cwd: repo, encoding: "utf8", env: testEnv(neutral),
+  });
+  assert.equal(refused.status, oracleRefused.status);
+  assert.equal(JSON.parse(refused.stdout).code, JSON.parse(oracleRefused.stdout).code);
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
