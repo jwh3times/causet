@@ -422,10 +422,21 @@ struct Portable {
 }
 
 /// `validatePortableNotes(context, diagnostics, options)`.
+/// `validateAttachments` and `validateReferences`: an envelope is inspected
+/// in an empty repository, where neither can hold.
+#[derive(Clone, Copy)]
+pub(crate) struct NoteChecks {
+  pub attachments: bool,
+  pub references: bool,
+}
+
+const ALL_CHECKS: NoteChecks = NoteChecks { attachments: true, references: true };
+
 fn validate_portable_notes(
   context: &RepoContext,
   diagnostics: &mut Diagnostics,
   parked: &BTreeSet<String>,
+  checks: NoteChecks,
 ) -> GitResult<Portable> {
   let root = &context.root;
   let repository_names = names(root)?;
@@ -435,13 +446,14 @@ fn validate_portable_notes(
     entries.iter().map(|entry| entry.note.clone()).collect(),
     root,
   )?;
-  let target_objects = object_lookup(
-    entries.iter().map(|entry| entry.target.clone()).collect(),
-    root,
-  )?;
+  let target_objects = if checks.attachments {
+    object_lookup(entries.iter().map(|entry| entry.target.clone()).collect(), root)?
+  } else {
+    HashMap::new()
+  };
   let mut raw_records: Vec<(Value, String)> = Vec::new();
   for entry in &entries {
-    if !is_commit(target_objects.get(&entry.target)) {
+    if checks.attachments && !is_commit(target_objects.get(&entry.target)) {
       diagnostics.add(
         "missing-attachment",
         "error",
@@ -542,7 +554,11 @@ fn validate_portable_notes(
     .flat_map(|entry| referenced_objects(Some(&entry.record)))
     .map(|reference| lossy(&reference.oid))
     .collect();
-  let referenced = object_lookup(references, root)?;
+  let referenced = if checks.references {
+    object_lookup(references, root)?
+  } else {
+    HashMap::new()
+  };
   let resolution_refs = list_refs(&ref_family("resolutions", root)?, root);
   let peeled: HashMap<String, Option<String>> = if resolution_refs.is_empty() {
     HashMap::new()
@@ -591,10 +607,10 @@ fn validate_portable_notes(
     let member = |name: &str| get(Some(record), name);
     let mut valid = entry.valid;
     let mut codes: Vec<String> = Vec::new();
-    if valid && !is_commit(target_objects.get(&entry.attachment)) {
+    if valid && checks.attachments && !is_commit(target_objects.get(&entry.attachment)) {
       valid = false;
     }
-    if valid {
+    if valid && checks.references {
       for reference in referenced_objects(Some(record)) {
         let oid = lossy(&reference.oid);
         let object = referenced.get(&oid);
@@ -1234,7 +1250,7 @@ fn inspect_quarantine(
 }
 
 /// `readDispositions(cwd)`: the registry, or the refusal it raises.
-fn read_dispositions(context: &RepoContext) -> GitResult<Value> {
+pub(crate) fn read_dispositions(context: &RepoContext) -> GitResult<Value> {
   let runtime = runtime_directory(
     &engine::repo_context(&context.root)?.common_dir,
     &context.root,
@@ -1463,12 +1479,27 @@ pub(crate) struct PortableSnapshot {
   pub diagnostics: Vec<Value>,
 }
 
+/// `metadataSnapshot({ portableOnly, validateAttachments: false,
+/// validateReferences: false })`: the accepted records of an envelope's
+/// payload, fetched into an empty repository.
+pub(crate) fn inspection_records(root: &str) -> GitResult<Vec<(String, Value, String)>> {
+  let context = engine::repo_context(root)?;
+  with_object_session(&context.root, || {
+    let mut diagnostics = Diagnostics::default();
+    let parked = parked_record_ids(&context.root)?;
+    let checks = NoteChecks { attachments: false, references: false };
+    let portable = validate_portable_notes(&context, &mut diagnostics, &parked, checks)?;
+    repository_lineage(&context.root)?;
+    Ok(portable.records)
+  })
+}
+
 pub(crate) fn portable_snapshot(cwd: &str) -> GitResult<PortableSnapshot> {
   let context = engine::repo_context(cwd)?;
   with_object_session(&context.root, || -> GitResult<PortableSnapshot> {
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
-    let portable = validate_portable_notes(&context, &mut diagnostics, &parked)?;
+    let portable = validate_portable_notes(&context, &mut diagnostics, &parked, ALL_CHECKS)?;
     // The snapshot states the lineage, though retention does not report it.
     repository_lineage(&context.root)?;
     Ok(PortableSnapshot {
@@ -1498,7 +1529,7 @@ pub(crate) fn full_snapshot(context: &RepoContext) -> GitResult<FullSnapshot> {
   with_object_session(&context.root, || -> GitResult<FullSnapshot> {
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
-    let portable = validate_portable_notes(context, &mut diagnostics, &parked)?;
+    let portable = validate_portable_notes(context, &mut diagnostics, &parked, ALL_CHECKS)?;
     let tracked = validate_specs(context, &mut diagnostics)?;
     let mut local_digests: HashMap<String, Vec<String>> = HashMap::new();
     for summary in &portable.summaries {

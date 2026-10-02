@@ -539,6 +539,44 @@ test("metadata export writes the same envelope natively, byte for byte (#145)", 
   assert.equal(JSON.parse(refused.stdout).code, JSON.parse(oracleRefused.stdout).code);
 });
 
+test("metadata import previews and applies an envelope as the JavaScript CLI does (#145)", { skip }, () => {
+  // A source with notes, its envelope, and a clone to import into; each
+  // implementation imports into its own byte copy of the clone.
+  const root = path.join(outside, "import-twin");
+  const source = path.join(root, "source");
+  fs.mkdirSync(source, { recursive: true });
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv() });
+  const oracleIn = (cwd, args) => spawnSync(process.execPath, [oracle, ...args], {
+    cwd, encoding: "utf8", env: testEnv(neutral),
+  });
+  git(source, "init", "-q", "-b", "main");
+  git(source, "config", "user.name", "Import twin");
+  git(source, "config", "user.email", "import-twin@example.invalid");
+  fs.writeFileSync(path.join(source, "a.txt"), "a\n");
+  git(source, "add", "a.txt");
+  assert.equal(oracleIn(source, ["commit", "-m", "add a", "--generated-by", "agent"]).status, 0);
+  assert.equal(oracleIn(source, ["metadata", "export", path.join(root, "envelope")]).status, 0);
+  const clone = path.join(root, "clone-js");
+  git(root, "clone", "-q", "--no-local", source, clone);
+  git(clone, "config", "user.name", "Import twin");
+  git(clone, "config", "user.email", "import-twin@example.invalid");
+  const copy = path.join(root, "clone-rust");
+  fs.cpSync(clone, copy, { recursive: true });
+  for (const args of [["metadata", "import", "../envelope", "--dry-run"], ["metadata", "import", "../envelope", "--apply"], ["metadata", "import", "../envelope", "--apply"]]) {
+    const expected = oracleIn(clone, args);
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args);
+    assert.equal(actual.status, expected.status, "status of " + label);
+    assert.equal(actual.stderr, expected.stderr, "stderr of " + label);
+    assert.equal(actual.stdout, expected.stdout, "stdout of " + label);
+  }
+  assert.equal(git(copy, "notes", "--ref=causet", "show", "HEAD").stdout, git(clone, "notes", "--ref=causet", "show", "HEAD").stdout);
+  assert.equal(git(copy, "rev-parse", "refs/notes/causet").stdout, git(clone, "rev-parse", "refs/notes/causet").stdout);
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

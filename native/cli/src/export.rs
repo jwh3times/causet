@@ -14,7 +14,7 @@ use causet_model::json::{Object, Value, string, stringify_pretty};
 use causet_model::registry::EXCHANGE_FEATURES;
 
 /// `DETERMINISTIC_CARRIER_ENV`: envelope carriers hash the same everywhere.
-const DETERMINISTIC_ENV: [(&str, &str); 6] = [
+pub(crate) const DETERMINISTIC_ENV: [(&str, &str); 6] = [
   ("GIT_AUTHOR_NAME", "causet metadata envelope"),
   ("GIT_AUTHOR_EMAIL", "metadata-envelope@example.invalid"),
   ("GIT_AUTHOR_DATE", "2000-01-01T00:00:00Z"),
@@ -38,9 +38,9 @@ fn git(args: &[&str], cwd: &str, env: &[(String, String)], input: Option<Vec<u8>
 
 /// `groupRecords(entries)`: records by attachment, in first-seen attachment
 /// order, each group ordered by creation time, id, then canonical bytes.
-fn group_records(entries: &[(String, Value, String)]) -> Vec<(String, Vec<Value>)> {
+pub(crate) fn group_records(entries: &[(String, Value)]) -> Vec<(String, Vec<Value>)> {
   let mut grouped: Vec<(String, Vec<Value>)> = Vec::new();
-  for (attachment, record, _) in entries {
+  for (attachment, record) in entries {
     match grouped.iter_mut().find(|(known, _)| known == attachment) {
       Some((_, records)) => records.push(record.clone()),
       None => grouped.push((attachment.clone(), vec![record.clone()])),
@@ -62,7 +62,7 @@ fn group_records(entries: &[(String, Value, String)]) -> Vec<(String, Vec<Value>
 
 /// `temporaryDirectory(prefix)`: a fresh directory under the system temporary
 /// root, in canonical form.
-fn temporary_directory(prefix: &str) -> GitResult<String> {
+pub(crate) fn temporary_directory(prefix: &str) -> GitResult<String> {
   let root = std::env::temp_dir();
   for attempt in 0..100u32 {
     let suffix = causet_model::ids::new_id("t").map_err(GitError::uncoded)?;
@@ -83,12 +83,14 @@ fn temporary_directory(prefix: &str) -> GitResult<String> {
 }
 
 /// `buildNotesCommit(entries, cwd, { message, deterministic, parents })`,
-/// through a temporary index.
-fn build_notes_commit(entries: &[(String, Value, String)], cwd: &str, message: &str, parents: &[String]) -> GitResult<String> {
+/// through a temporary index: the tree and the commit.
+pub(crate) fn build_notes_commit(entries: &[(String, Value)], cwd: &str, message: &str, parents: &[String], deterministic: bool) -> GitResult<(String, String)> {
   let temporary = temporary_directory("vlab-metadata-index-")?;
   let mut env: Vec<(String, String)> = vec![("GIT_INDEX_FILE".into(), text::join(&temporary, "index"))];
-  env.extend(DETERMINISTIC_ENV.iter().map(|(name, value)| ((*name).to_string(), (*value).to_string())));
-  let result = (|| -> GitResult<String> {
+  if deterministic {
+    env.extend(DETERMINISTIC_ENV.iter().map(|(name, value)| ((*name).to_string(), (*value).to_string())));
+  }
+  let result = (|| -> GitResult<(String, String)> {
     git(&["read-tree", "--empty"], cwd, &env, None)?;
     for (attachment, records) in group_records(entries) {
       let mut note = Object::new();
@@ -128,7 +130,8 @@ fn build_notes_commit(entries: &[(String, Value, String)], cwd: &str, message: &
       args.push(parent);
     }
     args.extend(["-F", "-"]);
-    git(&args, cwd, &env, Some(format!("{message}\n").into_bytes()))
+    let commit = git(&args, cwd, &env, Some(format!("{message}\n").into_bytes()))?;
+    Ok((tree, commit))
   })();
   let _ = std::fs::remove_dir_all(&temporary);
   result
@@ -227,7 +230,7 @@ fn ref_entry(name: &str, bundle_ref: &str, oid: &str) -> Value {
 }
 
 /// `path.resolve(cwd, target)`.
-fn resolve_against(cwd: &str, target: &str) -> String {
+pub(crate) fn resolve_against(cwd: &str, target: &str) -> String {
   if std::path::Path::new(target).is_absolute() {
     text::resolve_path(target)
   } else {
@@ -283,7 +286,7 @@ pub fn export_metadata(envelope_path: &str, cwd: &str) -> GitResult<Value> {
         &format!("causet metadata objects {export_key}"),
         &DETERMINISTIC_ENV,
       )?;
-      let notes = build_notes_commit(&snapshot.records, &root, &format!("causet metadata export {export_key}"), &[carrier])?;
+      let (_, notes) = build_notes_commit(&entries, &root, &format!("causet metadata export {export_key}"), &[carrier], true)?;
       git(&["update-ref", &temporary_ref, &notes], &root, &[], None)?;
       refs.push(ref_entry(repository.notes_ref, &temporary_ref, &notes));
       bundle_refs.push(temporary_ref.clone());

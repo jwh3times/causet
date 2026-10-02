@@ -54,6 +54,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "init",
   "merge-plan",
   "metadata export",
+  "metadata import",
   "metadata retain",
   "metadata status",
   "metadata validate",
@@ -654,6 +655,7 @@ mod tests {
       &["init", "--json"],
       &["metadata", "retain", "--apply"],
       &["metadata", "export", "x"],
+      &["metadata", "import", "x", "--apply", "--park-conflicts"],
       &["commit", "-m", "x", "--generated-by", "agent", "--all"],
       &["capabilities", "--json"],
       &["metadata", "status"],
@@ -671,7 +673,7 @@ mod tests {
     }
     // A command is native per subcommand: these still delegate.
     for args in [
-      &["metadata", "import", "x", "--dry-run"][..],
+      &["metadata", "dispose", "r", "--keep-local"][..],
       &["resolve", "apply", "--all"],
       &["spec", "merge-plan", "f", "b", "o", "t"],
       &["rebase-forecast", "main"],

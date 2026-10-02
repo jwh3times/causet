@@ -397,15 +397,21 @@ pub fn commit_with_parents(tree: &str, parents: &[String], cwd: &str, message: &
   commit(&layer)
 }
 
-/// `buildNoteCommit(note, attachment, previous, cwd)`.
-fn build_note_commit(note: &Object, attachment: &str, previous: Option<&str>, cwd: &str) -> GitResult<String> {
+/// `buildNoteTree(note, attachment, previousTree, cwd)`: the notes tree with
+/// `attachment`'s note replaced.
+pub fn build_note_tree(note: &Object, attachment: &str, previous_tree: Option<&str>, cwd: &str) -> GitResult<String> {
   let blob = git(
     &["hash-object", "-w", "--stdin"],
     cwd,
     Some(format!("{}\n", stringify_pretty(&Value::Object(note.clone()))).into_bytes()),
   )?;
+  replace_note(previous_tree, attachment, &blob, cwd, attachment.len() / 2)
+}
+
+/// `buildNoteCommit(note, attachment, previous, cwd)`.
+fn build_note_commit(note: &Object, attachment: &str, previous: Option<&str>, cwd: &str) -> GitResult<String> {
   let previous_tree = previous.map(|previous| format!("{previous}^{{tree}}"));
-  let tree = replace_note(previous_tree.as_deref(), attachment, &blob, cwd, attachment.len() / 2)?;
+  let tree = build_note_tree(note, attachment, previous_tree.as_deref(), cwd)?;
   let parents: Vec<String> = previous.map(|previous| vec![previous.to_string()]).unwrap_or_default();
   commit_with_parents(&tree, &parents, cwd, "Publish causet causal note", &[])
 }

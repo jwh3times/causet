@@ -264,6 +264,18 @@ pub fn io_failure(error: &std::io::Error, syscall: &str, path: &str) -> GitError
 
 /// `readEnvelope(envelopePath)`: the validated manifest.
 pub fn read_envelope(envelope_path: &str) -> GitResult<Value> {
+  read_envelope_parts(envelope_path).map(|parts| parts.manifest)
+}
+
+/// `readEnvelope(envelopePath)` in full: the directory, the validated
+/// manifest, and the bundle when the manifest declares one.
+pub struct EnvelopeParts {
+  pub directory: String,
+  pub manifest: Value,
+  pub bundle_path: Option<String>,
+}
+
+pub fn read_envelope_parts(envelope_path: &str) -> GitResult<EnvelopeParts> {
   let directory = text::resolve_path(envelope_path);
   let manifest_path = text::join(&directory, ENVELOPE_MANIFEST);
   let not_found = || {
@@ -294,6 +306,7 @@ pub fn read_envelope(envelope_path: &str) -> GitResult<Value> {
     .map_err(|_| malformed("Metadata envelope manifest is not valid JSON."))?;
   validate_manifest_shape(&manifest)?;
   let payload = get(Some(&manifest), "payload");
+  let mut declared_bundle: Option<String> = None;
   if truthy(payload) {
     let file = match get(payload, "file") {
       Some(Value::String(units)) => lossy(units),
@@ -308,6 +321,7 @@ pub fn read_envelope(envelope_path: &str) -> GitResult<Value> {
       }
     };
     let bundle_path = text::join(&directory, &file);
+    declared_bundle = Some(bundle_path.clone());
     let bundle_exists = std::path::Path::new(&text::resolve_path(&bundle_path)).exists();
     if file != ENVELOPE_BUNDLE || !bundle_exists {
       return Err(malformed("Metadata envelope payload is missing."));
@@ -363,5 +377,5 @@ pub fn read_envelope(envelope_path: &str) -> GitResult<Value> {
       ));
     }
   }
-  Ok(manifest)
+  Ok(EnvelopeParts { directory, manifest, bundle_path: declared_bundle })
 }
