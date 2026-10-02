@@ -51,3 +51,25 @@ pub fn read_json(path: &str) -> GitResult<Option<Value>> {
     .details("Recover or remove the file; causet will not guess its contents.")
   })
 }
+
+/// `ensureLabRuntime(cwd)`: the runtime directory, created when missing.
+pub fn ensure_lab_runtime(cwd: &str) -> GitResult<String> {
+  let context = causet_engine::engine::repo_context(cwd)?;
+  let directory = causet_engine::locations::runtime_directory(&context.common_dir, cwd)?;
+  std::fs::create_dir_all(&directory)
+    .map_err(|error| crate::envelope::io_failure(&error, "mkdir", &directory))?;
+  Ok(directory)
+}
+
+/// `initLab(cwd)`: the runtime directory and the notes configuration, and the
+/// repository root it reports.
+pub fn init_lab(cwd: &str) -> GitResult<String> {
+  let context = causet_engine::engine::repo_context(cwd)?;
+  ensure_lab_runtime(cwd)?;
+  let notes_ref = causet_engine::locations::names(cwd)?.notes_ref;
+  for key in ["notes.displayRef", "notes.rewriteRef"] {
+    let args = ["config", key, notes_ref].map(String::from);
+    causet_engine::process::run_git(&args, &causet_engine::process::RunOptions::new(&context.root))?;
+  }
+  Ok(context.root)
+}

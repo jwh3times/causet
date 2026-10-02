@@ -50,6 +50,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "capabilities",
   "doctor",
   "graph",
+  "init",
   "merge-plan",
   "metadata status",
   "metadata validate",
@@ -632,8 +633,7 @@ mod tests {
   #[test]
   fn commands_that_need_the_repository_delegate() {
     for args in [
-      &["init"][..],
-      &["commit", "-m", "x"],
+      &["commit", "-m", "x"][..],
       &["rebase", "--status", "extra", "args"],
       &["resolve", "reject"],
       &["metadata", "dispose", "r", "--keep-local"],
@@ -649,6 +649,7 @@ mod tests {
   fn ported_commands_are_answered_natively_with_their_flag_selections() {
     for args in [
       &["doctor", "--benchmark"][..],
+      &["init", "--json"],
       &["capabilities", "--json"],
       &["metadata", "status"],
       &["metadata", "validate", "--strict"],
