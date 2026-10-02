@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0murcpqvy65baf9c8f764",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-export",
+      "sourceHead": "6e0909136049a22ad4a87db5213afb0ab8de06d2",
+      "sourceSubject": "feat: answer cst metadata export natively in the Rust CLI",
+      "targetBefore": "6ca10c98b2ba9f32636864aaa69aa860b6753a4d",
+      "landingCommit": "962242d83983eaf781b63350c5c76d9c247937b5",
+      "base": "6ca10c98b2ba9f32636864aaa69aa860b6753a4d",
+      "absorbedCommits": [
+        "6e0909136049a22ad4a87db5213afb0ab8de06d2"
+      ],
+      "absorbedChanges": [
+        "ch_0murarx5c5b99936cf96e"
+      ],
+      "resultTree": "676019eed23df414b77ec6650c338c2c15bf318d",
+      "createdAt": "2026-10-02T19:23:43.645Z"
+    }
+  ]
+}
