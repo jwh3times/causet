@@ -297,3 +297,24 @@ test("a pending operation journal under a legacy identifier is still resumable",
   assert.equal(aborted.status, 0, aborted.stderr);
   assert.equal(fs.existsSync(journal), false);
 });
+
+test("spec merge planning reads a manifest committed before cst migrate (#183)", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  const premigration = git(repo, "rev-parse", "HEAD");
+  assert.equal(cst(repo, ["migrate"]).status, 0);
+  git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
+  fs.appendFileSync(path.join(repo, "specs", "design.md"), "\n## Added after the migration\n\nNew text.\n");
+  const indexed = cst(repo, ["spec", "index", "specs/design.md"]);
+  assert.equal(indexed.status, 0, indexed.stderr);
+  git(repo, "add", "-A");
+  git(repo, "commit", "-q", "-m", "Extend the design");
+
+  // The base and ours predate the migration, so their manifests are only under
+  // .vcs-lab/specs; theirs has it under .causet/specs.
+  const planned = cst(repo, ["spec", "merge-plan", "specs/design.md", premigration, premigration, "HEAD", "--json"]);
+  assert.equal(planned.status, 0, planned.stderr);
+  const plan = JSON.parse(planned.stdout);
+  assert.equal(plan.status, "clean", planned.stdout);
+  assert.ok(plan.decisions.some((decision) => decision.outcome === "theirs-add"), planned.stdout);
+});

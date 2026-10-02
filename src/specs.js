@@ -780,14 +780,17 @@ function revisionStages(file, revisions, cwd) {
     `${revision}:${LEGACY_NAMES.specsDir}/${file}.json`,
   ]);
   const objects = readGitObjects(expressions, cwd);
-  return revisions.map((revision, index) =>
-    revisionStageFromObjects(
+  // A missing object is still a record (`exists: false`), never nullish, so the
+  // choice is made on existence (issue #183).
+  return revisions.map((revision, index) => {
+    const current = objects[index * 3 + 1];
+    return revisionStageFromObjects(
       file,
       revision,
       objects[index * 3],
-      objects[index * 3 + 1] ?? objects[index * 3 + 2],
-    ),
-  );
+      current.exists ? current : objects[index * 3 + 2],
+    );
+  });
 }
 
 function sameArray(left, right) {
