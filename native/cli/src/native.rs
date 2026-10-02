@@ -241,6 +241,15 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::plan::format_rebase_plan(&plan)), 0))
     }
+    "metadata" if parsed.positionals.first().map(String::as_str) == Some("retain") => {
+      let (result, failed) =
+        crate::retain::retain_metadata(parsed.truthy("dryRun"), parsed.truthy("apply"), cwd)?;
+      let exit = if failed { 1 } else { 0 };
+      if json {
+        return Ok((result, exit));
+      }
+      Ok((causet_model::json::string(&crate::retain::format_retention(&result)), exit))
+    }
     "metadata" => {
       let subcommand = parsed
         .positionals

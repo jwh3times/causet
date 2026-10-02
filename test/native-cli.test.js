@@ -283,6 +283,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     ["proof-bundle", "feature"], ["proof-bundle", "HEAD~1"], ["proof-bundle", "missing"],
     ["verify-proof", bundleFile], ["verify-proof", bundleFile, "--offline", "--json"], ["verify-proof", forgedFile],
     ["verify-proof", path.join(outside, "missing.json")],
+    ["metadata", "retain", "--dry-run"], ["metadata", "retain", "--dry-run", "--json"], ["metadata", "retain"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) vlabPrefix();
@@ -443,6 +444,51 @@ test("commit publishes the same commit and declared provenance natively (#145)",
     const notes = (side) => rename(side.git("log", "-1", "--format=%B", "refs/notes/causet").stdout
       + side.git("notes", "--ref=causet", "show", "HEAD").stdout);
     assert.equal(notes(rustSide), notes(oracleSide), "notes of " + label);
+  }
+});
+
+test("metadata retain --apply publishes the same backfill natively (#145)", { skip }, () => {
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"));
+  };
+  const twin = (name) => {
+    const repo = path.join(outside, name);
+    fs.mkdirSync(repo);
+    const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Retain twin");
+    git("config", "user.email", "retain-twin@example.invalid");
+    fs.writeFileSync(path.join(repo, "a.txt"), "a\n");
+    git("add", "a.txt");
+    const made = spawnSync(process.execPath, [oracle, "commit", "-m", "add a", "--generated-by", "agent"], {
+      cwd: repo, encoding: "utf8", env: testEnv(neutral),
+    });
+    assert.equal(made.status, 0, made.stderr);
+    return { repo, git };
+  };
+  for (const [index, args] of [["metadata", "retain", "--apply"], ["metadata", "retain", "--apply", "--json"]].entries()) {
+    const oracleSide = twin("retain-js-" + index);
+    const rustSide = twin("retain-rust-" + index);
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: oracleSide.repo, encoding: "utf8", env: testEnv(neutral),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args);
+    assert.equal(actual.status, expected.status, "status of " + label);
+    assert.equal(rename(actual.stdout + actual.stderr), rename(expected.stdout + expected.stderr), "output of " + label);
+    const retention = (side) => rename(side.git("log", "-1", "--format=%B%n%P", "refs/causet/retention").stdout);
+    assert.equal(retention(rustSide), retention(oracleSide), "retention of " + label);
   }
 });
 

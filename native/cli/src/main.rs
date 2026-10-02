@@ -25,6 +25,7 @@ mod proof;
 mod provenance;
 mod records;
 mod resolve;
+mod retain;
 mod spec;
 mod store;
 
