@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0murlg7t51f4b553ab5eb",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-dispose",
+      "sourceHead": "85f52e2c2d4a5fac6d50c7a7c8df8073c1afadaf",
+      "sourceSubject": "feat: answer cst metadata dispose natively in the Rust CLI",
+      "targetBefore": "477dd6e4bbca1f73856c16aac796c078049fef47",
+      "landingCommit": "a98311d982b89e6fdf9100bf27d405bce66d3d3d",
+      "base": "477dd6e4bbca1f73856c16aac796c078049fef47",
+      "absorbedCommits": [
+        "85f52e2c2d4a5fac6d50c7a7c8df8073c1afadaf"
+      ],
+      "absorbedChanges": [
+        "ch_0murip6u17c92656552c6"
+      ],
+      "resultTree": "14ee46d360ca78b7e4e4d2f766fbcfcf79aa3bb3",
+      "createdAt": "2026-10-02T23:28:15.619Z"
+    }
+  ]
+}
