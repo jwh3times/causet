@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Fixed: `cst metadata export` no longer flips a repository that has not run
+  `cst migrate` to the current names (#191). The export's transient ref lives
+  under `refs/causet/`, and Git leaves the ref's empty directories behind when
+  it deletes it. The name detection counted an existing `refs/causet`
+  directory as current-name evidence, so the repository then read as `mixed`
+  and its `vcs-lab` notes seemed to vanish. The detection now counts a loose
+  ref only when a ref file exists, never an empty directory or a `.lock` file.
+  This holds for every transient ref, not only the export's. The JavaScript and
+  Rust CLIs are fixed together.
 - The Rust CLI answers `cst metadata dispose <record-id>
   --keep-local|--replace-local` natively (#145). It ports the disposition of
   `src/dispositions.js`:
@@ -40,10 +49,7 @@
   - the `git` metrics block.
 
   A repository and a copy of it exported by each CLI give byte-identical
-  manifests and bundles. Porting it found #191: exporting from an
-  unmigrated repository leaves an empty `refs/causet` directory that flips
-  the repository to the current names. Both CLIs behave that way until the
-  JavaScript fix lands.
+  manifests and bundles. Porting it found #191, fixed above.
 - The Rust CLI answers `cst metadata retain --dry-run|--apply` natively
   (#145). It ports the retention backfill:
   - the portable-only metadata snapshot;

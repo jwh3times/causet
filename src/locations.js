@@ -97,7 +97,7 @@ function holdsAny(context, set) {
     return [set.notesRef, `${set.refsRoot}/`].some((pattern) => listRefs(pattern, context.root).length > 0);
   }
   const loose = [set.notesRef, set.refsRoot].some((ref) =>
-    fs.existsSync(path.join(context.commonDir, ...ref.split("/"))));
+    holdsLooseRef(path.join(context.commonDir, ...ref.split("/"))));
   if (loose) return true;
   let packed;
   try {
@@ -109,6 +109,23 @@ function holdsAny(context, set) {
     const ref = line.split(" ")[1];
     return ref === set.notesRef || ref?.startsWith(`${set.refsRoot}/`);
   });
+}
+
+/**
+ * Whether `location` is a loose ref or a directory holding one. Git deletes a
+ * loose ref but leaves its now-empty directories behind, so an empty directory
+ * is not evidence (#191). A `.lock` file is never a ref.
+ */
+function holdsLooseRef(location) {
+  let entries;
+  try {
+    entries = fs.readdirSync(location, { withFileTypes: true });
+  } catch (error) {
+    return error.code === "ENOTDIR";
+  }
+  return entries.some((entry) => entry.isDirectory()
+    ? holdsLooseRef(path.join(location, entry.name))
+    : !entry.name.endsWith(".lock"));
 }
 
 /** `<refs root>/<family>` for one of the ref families under the names in use. */
