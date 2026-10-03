@@ -206,6 +206,22 @@ Causal edges
       )?;
       Ok((result, 0))
     }
+    "branch" => {
+      let name = parsed.positionals.first().cloned().unwrap_or_default();
+      let report = crate::landing::branch(&name, parsed.positionals.get(1).map(String::as_str), cwd)?;
+      Ok((causet_model::json::string(&report), 0))
+    }
+    "merge" | "compact-merge" | "hard-squash" => {
+      // Always printed as JSON: the receipt is an object. `--compact` wins
+      // over `--hard-squash`.
+      let source = parsed.positionals.first().cloned().unwrap_or_default();
+      let mode = if !parsed.truthy("compact") && (command == "hard-squash" || parsed.truthy("hardSquash")) {
+        "hard-squash"
+      } else {
+        "compact"
+      };
+      Ok((crate::landing::land(&source, mode, parsed.value("message"), cwd)?, 0))
+    }
     "init" => {
       // Printed as text even under --json: `init` does not pass the flag on.
       let root = crate::store::init_lab(cwd)?;

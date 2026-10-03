@@ -22,7 +22,7 @@ pub struct Actor {
 
 /// `normalizeActors(actors)`: validated, deduplicated on the pair, and ordered
 /// so the same declaration always produces the same record bytes.
-fn normalize_actors(actors: &[Actor]) -> GitResult<Vec<Actor>> {
+pub(crate) fn normalize_actors(actors: &[Actor]) -> GitResult<Vec<Actor>> {
   let mut seen: Vec<Actor> = Vec::new();
   for entry in actors {
     let role = text::trim(&entry.role).to_string();
@@ -91,7 +91,13 @@ fn actors_value(actors: &[Actor]) -> Value {
 }
 
 /// `provenanceRecord(commit, changeId, actors, origin, carriedFrom)`.
-fn provenance_record(commit: &str, change_id: &str, actors: &[Actor]) -> GitResult<Value> {
+pub(crate) fn provenance_record(
+  commit: &str,
+  change_id: Option<&str>,
+  actors: &[Actor],
+  origin: &str,
+  carried_from: &[String],
+) -> GitResult<Value> {
   if !within_bound("provenanceActors", actors.len() as u64) {
     let limit = causet_model::registry::RESOURCE_BOUNDS
       .iter()
@@ -115,10 +121,10 @@ fn provenance_record(commit: &str, change_id: &str, actors: &[Actor]) -> GitResu
   record.set("type", string("provenance"));
   record.set("id", string(&host::new_id("prov")));
   record.set("commit", string(commit));
-  record.set("changeId", string(change_id));
+  record.set("changeId", change_id.map_or(Value::Null, string));
   record.set("actors", actors_value(actors));
-  record.set("origin", string("declared"));
-  record.set("carriedFrom", Value::Array(Vec::new()));
+  record.set("origin", string(origin));
+  record.set("carriedFrom", Value::Array(carried_from.iter().map(|commit| string(commit)).collect()));
   record.set("createdAt", string(&causet_engine::metrics::iso_now()));
   Ok(Value::Object(record))
 }
@@ -130,7 +136,7 @@ fn declare_provenance(commit: &str, change_id: &str, actors: &[Actor], cwd: &str
   if normalized.is_empty() {
     return Ok(None);
   }
-  let record = provenance_record(commit, change_id, &normalized)?;
+  let record = provenance_record(commit, Some(change_id), &normalized, "declared", &[])?;
   append_note(commit, &record, cwd, &[])?;
   Ok(Some(record))
 }

@@ -2,7 +2,9 @@
 //! notes and never derived (FR-TRUST-04), as `src/cli.js` and
 //! `src/provenance.js` answer it.
 
+use crate::commit::{Actor, normalize_actors, provenance_record};
 use crate::notes::read_notes;
+use crate::notes_write::append_note;
 use crate::parsed::Parsed;
 use crate::records::not_callable;
 use causet_engine::engine;
@@ -186,4 +188,62 @@ pub fn provenance(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
     return Ok(Value::Object(report));
   }
   Ok(string(&format_provenance(&entries)?))
+}
+
+/// `for (const actor of record.actors ?? [])`: an array's items, nothing for a
+/// missing or empty value, and a failure wherever JavaScript would throw. A
+/// string's characters have no `role`, so `normalizeActors` refuses them.
+fn carried_actor_entries(actors: Option<&Value>) -> GitResult<&[Value]> {
+  match actors {
+    None | Some(Value::Null) => Ok(&[]),
+    Some(Value::Array(items)) => Ok(items),
+    Some(Value::String(units)) if units.is_empty() => Ok(&[]),
+    Some(_) => Err(GitError::uncoded("record.actors is not a list of actors")),
+  }
+}
+
+/// `String(entry?.[name] ?? "")`.
+fn member_text(entry: &Value, name: &str) -> String {
+  let value = get(Some(entry), name);
+  if nullish(value) { String::new() } else { text(value) }
+}
+
+/// `carryProvenance(fromCommits, toCommit, changeId, cwd)`: the union of the
+/// sources' declared actors, attached to `to_commit` as a `carried` record
+/// naming its immediate sources, or `None` when no source declared anything.
+fn carry_provenance(from_commits: &[String], to_commit: &str, change_id: Option<&str>, cwd: &str) -> GitResult<Option<Value>> {
+  let mut sources: Vec<String> = from_commits.iter().filter(|commit| !commit.is_empty()).cloned().collect();
+  sources.sort();
+  sources.dedup();
+  let existing = provenance_for(&sources, cwd)?;
+  if existing.is_empty() {
+    return Ok(None);
+  }
+  let mut actors = Vec::new();
+  let mut carried_from = Vec::new();
+  for commit in &sources {
+    let Some((_, records)) = existing.iter().find(|(candidate, _)| candidate == commit) else {
+      continue;
+    };
+    carried_from.push(commit.clone());
+    for record in records {
+      for entry in carried_actor_entries(get(Some(record), "actors"))? {
+        actors.push(Actor { role: member_text(entry, "role"), actor: member_text(entry, "actor") });
+      }
+    }
+  }
+  let normalized = normalize_actors(&actors)?;
+  if normalized.is_empty() {
+    return Ok(None);
+  }
+  let record = provenance_record(to_commit, change_id, &normalized, "carried", &carried_from)?;
+  append_note(to_commit, &record, cwd, &[])?;
+  Ok(Some(record))
+}
+
+/// `carryProvenanceSafely(fromCommits, toCommit, changeId, cwd)`: a failure
+/// never loses the rewrite that already happened, so it is dropped here as
+/// every caller in `src/` drops the returned error.
+pub fn carry_provenance_safely(from_commits: &[String], to_commit: &str, change_id: Option<&str>, cwd: &str) {
+  let _ = carry_provenance(from_commits, to_commit, change_id, cwd);
 }

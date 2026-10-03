@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst branch` and the landings `cst merge`,
+  `compact-merge` and `hard-squash` natively (#146). It ports `land` of
+  `src/landings.js`:
+  - the landing inputs: the merge base, the absorbed commits and their change
+    ids;
+  - the `Landing-Mode`, `Source-Revision` and `Absorbs` trailers;
+  - the `--no-ff` or `--squash` merge with rerere disabled, refused with
+    `conflict-blocked` and no receipt on a conflict;
+  - the `causet.landing/v1` receipt;
+  - the absorbed commits' declared provenance, carried onto the landing as one
+    `carried` record, and dropped rather than failing the landing.
+
+  `--compact` still wins over `--hard-squash`, and `compact-merge
+  --hard-squash` still squashes, as in JavaScript. Receipts, landing commits
+  and carried records match the JavaScript CLI's once ids and times are
+  renamed.
 - Fixed: `cst metadata export` no longer flips a repository that has not run
   `cst migrate` to the current names (#191). The export's transient ref lives
   under `refs/causet/`, and Git leaves the ref's empty directories behind when
