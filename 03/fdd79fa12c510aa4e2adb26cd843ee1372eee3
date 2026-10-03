@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0musaw6ih96b1bc04d570",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-cherry-pick",
+      "sourceHead": "7c942e1395aa3f5de7f4c9b2493d347c1794c321",
+      "sourceSubject": "feat: answer cst cherry-pick natively in the Rust CLI",
+      "targetBefore": "7f36fb05528ca3f27fc4400649477dfd6559b72b",
+      "landingCommit": "03fdd79fa12c510aa4e2adb26cd843ee1372eee3",
+      "base": "7f36fb05528ca3f27fc4400649477dfd6559b72b",
+      "absorbedCommits": [
+        "7c942e1395aa3f5de7f4c9b2493d347c1794c321"
+      ],
+      "absorbedChanges": [
+        "ch_0murz8l322d1bafe90013"
+      ],
+      "resultTree": "b06d3376d4919ccf2e41ede33fa74ff39964d29d",
+      "createdAt": "2026-10-03T11:20:30.753Z"
+    }
+  ]
+}
