@@ -635,6 +635,104 @@ test("metadata dispose resolves a parked conflict as the JavaScript CLI does (#1
   }
 });
 
+test("branch and the landings publish the same commits, receipts and carried provenance natively (#146)", { skip }, () => {
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"));
+  };
+  // Fixed dates make both sides' Git commits identical; only record ids and
+  // times differ, and those are renamed.
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const base = path.join(outside, "landing-base");
+  fs.mkdirSync(base);
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => {
+    const made = spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+    assert.equal(made.status, 0, made.stderr);
+  };
+  const write = (name, text) => fs.writeFileSync(path.join(base, name), text);
+  git(base, "init", "-q", "-b", "main");
+  git(base, "config", "user.name", "Landing twin");
+  git(base, "config", "user.email", "landing-twin@example.invalid");
+  write("a.txt", "a\n");
+  git(base, "add", "a.txt");
+  cst(base, "commit", "-m", "add a");
+  git(base, "switch", "-q", "-c", "feature");
+  write("b.txt", "b\n");
+  git(base, "add", "b.txt");
+  cst(base, "commit", "-m", "add b", "--authored-by", "Ada", "--generated-by", "model-b");
+  write("c.txt", "c\n");
+  git(base, "add", "c.txt");
+  git(base, "commit", "-q", "-m", "add c without causet");
+  write("d.txt", "d\n");
+  git(base, "add", "d.txt");
+  cst(base, "commit", "-m", "add d", "--generated-by", "model-b", "--reviewed-by", "Émile");
+  git(base, "switch", "-q", "-c", "conflicting", "main");
+  write("a.txt", "theirs\n");
+  git(base, "commit", "-q", "-am", "change a there");
+  git(base, "switch", "-q", "main");
+  write("a.txt", "ours\n");
+  git(base, "commit", "-q", "-am", "change a here");
+
+  const cases = [
+    [["merge", "feature"]],
+    [["merge", "feature", "--hard-squash", "-m", "Squash the feature", "--json"]],
+    [["merge", "feature", "--hard-squash", "--compact"]],
+    [["compact-merge", "feature", "--hard-squash"]],
+    [["hard-squash", "feature", "--json"]],
+    [["merge", "main"]],
+    [["merge", "no-such-branch", "--json"]],
+    [["merge", "conflicting"]],
+    [["hard-squash", "conflicting", "--json"]],
+    [["merge", "feature"], (repo) => fs.writeFileSync(path.join(repo, "a.txt"), "dirty\n")],
+    [["branch", "topic"]],
+    [["branch", "topic", "feature", "--json"]],
+    [["branch", "feature"]],
+    [["branch", "topic", "no-such-revision"]],
+  ];
+  for (const [index, [args, prepare]] of cases.entries()) {
+    const sides = ["js", "rust"].map((name) => {
+      const repo = path.join(outside, `landing-${name}-${index}`);
+      fs.cpSync(base, repo, { recursive: true });
+      prepare?.(repo);
+      return repo;
+    });
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: sides[0], encoding: "utf8", env: testEnv(dated),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args);
+    assert.equal(actual.status, expected.status, "status of " + label);
+    assert.equal(rename(actual.stderr), rename(expected.stderr), "stderr of " + label);
+    assert.equal(rename(actual.stdout), rename(expected.stdout), "stdout of " + label);
+    const snapshot = (repo) => rename([
+      git(repo, "branch", "--show-current").stdout,
+      git(repo, "status", "--porcelain").stdout,
+      git(repo, "log", "-1", "--format=%H %P%n%B", "HEAD").stdout,
+      git(repo, "notes", "--ref=causet", "show", "HEAD").stdout,
+      git(repo, "log", "-1", "--format=%B", "refs/notes/causet").stdout,
+      spawnSync(process.execPath, [oracle, "provenance", "HEAD", "--json"], {
+        cwd: repo, encoding: "utf8", env: testEnv(dated),
+      }).stdout,
+    ].join("\n--\n"));
+    assert.equal(snapshot(sides[1]), snapshot(sides[0]), "repository after " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
