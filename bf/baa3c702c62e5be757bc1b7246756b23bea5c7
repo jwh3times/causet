@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0murv38jj0db23ad08790",
+      "mode": "compact",
+      "sourceRef": "jwh3times/fix-empty-refs-dir",
+      "sourceHead": "3118c26bc5bb8e044281c780e12b3ac3677f0529",
+      "sourceSubject": "fix: count only real refs as name evidence, never an empty directory",
+      "targetBefore": "a98311d982b89e6fdf9100bf27d405bce66d3d3d",
+      "landingCommit": "bfbaa3c702c62e5be757bc1b7246756b23bea5c7",
+      "base": "a98311d982b89e6fdf9100bf27d405bce66d3d3d",
+      "absorbedCommits": [
+        "3118c26bc5bb8e044281c780e12b3ac3677f0529"
+      ],
+      "absorbedChanges": [
+        "ch_0murtmroz0e5a83265f24"
+      ],
+      "resultTree": "f4b9dffa167e5c1bd2d14d8a607422842cea38d5",
+      "createdAt": "2026-10-03T03:58:06.158Z"
+    }
+  ]
+}
