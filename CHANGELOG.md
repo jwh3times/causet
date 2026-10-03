@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst cherry-pick <commit-or-change-id>` natively, with
+  `--fork` and `--repeat` (#146). It ports `cherryPick` of
+  `src/operations.js`:
+  - **Choosing the origin:** a `ch_*` argument resolves to the bearer that no
+    identity-preserving application record names as applied, else the
+    earliest bearer.
+  - **Recognizing coverage:** the target's history covers the change through
+    the origin commit, its `Change-Id`, an `Absorbs:` trailer read exactly
+    as the JavaScript expression reads it, or a validated application record
+    for a commit without a trailer. A covered change is a no-op unless
+    `--repeat` is given.
+  - **Applying:** `git cherry-pick -x`, or with `--fork` a new change id
+    with `Derived-From` and `Origin-Commit` trailers. Either is refused
+    with `conflict-blocked` on a conflict.
+  - **Recording:** the `causet.application/v1` record, and the origin's
+    declared provenance carried onto the result.
+
+  With this, every command #146 lists answers natively.
 - The Rust CLI answers `cst branch` and the landings `cst merge`,
   `compact-merge` and `hard-squash` natively (#146). It ports `land` of
   `src/landings.js`:

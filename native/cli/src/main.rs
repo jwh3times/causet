@@ -5,6 +5,7 @@
 
 mod audit;
 mod capabilities;
+mod cherry_pick;
 mod commit;
 mod delegate;
 mod dispose;
