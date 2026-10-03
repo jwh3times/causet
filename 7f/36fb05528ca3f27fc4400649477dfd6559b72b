@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0murx4t3j0440bc2e340f",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-landing",
+      "sourceHead": "2e276f595b9544a9fdcd79a179df553e68bf7fbf",
+      "sourceSubject": "feat: answer cst branch and the landings natively in the Rust CLI",
+      "targetBefore": "bfbaa3c702c62e5be757bc1b7246756b23bea5c7",
+      "landingCommit": "7f36fb05528ca3f27fc4400649477dfd6559b72b",
+      "base": "bfbaa3c702c62e5be757bc1b7246756b23bea5c7",
+      "absorbedCommits": [
+        "2e276f595b9544a9fdcd79a179df553e68bf7fbf"
+      ],
+      "absorbedChanges": [
+        "ch_0murwahwlfb31672bb622"
+      ],
+      "resultTree": "52f405c00dde692a6a72616ffbcd643ad9df79ff",
+      "createdAt": "2026-10-03T04:55:18.670Z"
+    }
+  ]
+}
