@@ -224,7 +224,7 @@ fn validate_manifest_shape(manifest: &Value) -> GitResult<()> {
 }
 
 /// Node's description of a non-string `path` argument.
-fn received(value: Option<&Value>) -> String {
+pub(crate) fn received(value: Option<&Value>) -> String {
   match value {
     None => "Received undefined".into(),
     Some(Value::Null) => "Received null".into(),

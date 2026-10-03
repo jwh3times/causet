@@ -73,6 +73,9 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "spec show",
   "spec status",
   "verify-proof",
+  "workspace checkpoint",
+  "workspace list",
+  "workspace prune",
 ];
 
 /// Whether this invocation is a ported command: the command, or for a command
@@ -646,7 +649,7 @@ mod tests {
       &["rebase", "--status", "extra", "args"][..],
       &["resolve", "reject"],
       &["spec", "index", "--all"],
-      &["workspace", "list"],
+      &["workspace", "move", "w", "d"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
@@ -681,6 +684,9 @@ mod tests {
       &["rebase-plan", "main", "feature", "--from", "base", "--squash", "a=b"],
       &["proof-bundle", "feature"],
       &["verify-proof", "bundle.json", "--offline", "--anchors-from", "origin"],
+      &["workspace", "list"],
+      &["workspace", "checkpoint", "--label", "x", "--json"],
+      &["workspace", "prune", "--apply"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }

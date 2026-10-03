@@ -840,6 +840,125 @@ test("cherry-pick applies, forks and recognizes covered changes natively (#146)"
   }
 });
 
+test("workspace list, checkpoint and prune answer natively as the JavaScript CLI does (#149)", { skip }, () => {
+  const rename = (text, side) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .split(side).join("<side>")
+      // A registered workspace id is random and enters the checkpoint commit.
+      .replace(/"shortId": "[0-9a-f]{12}"/g, "\"shortId\": \"<short>\"")
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\b(?:draft|lock)_[0-9a-z]+\b/g, swap("draft"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"))
+      .replace(/process \d+ on [^\n]+/g, "process <pid> on <host>");
+  };
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => {
+    const made = spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  // Both sides build the same repository; only the directory naming the side differs.
+  const build = (side) => {
+    const repo = path.join(outside, side, "repo");
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Workspace twin");
+    git(repo, "config", "user.email", "workspace-twin@example.invalid");
+    fs.mkdirSync(path.join(repo, "src"));
+    fs.writeFileSync(path.join(repo, "src", "a.txt"), "a\n");
+    fs.writeFileSync(path.join(repo, "top.txt"), "top\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "base");
+    cst(repo, "workspace", "create", "alpha");
+    cst(repo, "workspace", "create", "beta", "--cone", "src", "--owner", "Ada");
+    return { repo, alpha: path.join(outside, side, "repo.workspaces", "alpha"), beta: path.join(outside, side, "repo.workspaces", "beta") };
+  };
+  const runtime = (repo) => path.join(repo, ".git", "causet");
+  const editRegistry = (repo, change) => {
+    const file = path.join(runtime(repo), "workspaces.json");
+    const registry = JSON.parse(fs.readFileSync(file, "utf8"));
+    change(registry);
+    fs.writeFileSync(file, `${JSON.stringify(registry, null, 2)}\n`);
+  };
+  const cases = [
+    [["workspace", "list"]],
+    [["workspace", "list", "--json"], ({ alpha, beta }) => {
+      fs.writeFileSync(path.join(alpha, "dirty.txt"), "dirty\n");
+      fs.rmSync(beta, { recursive: true, force: true });
+    }],
+    [["workspace", "list"], ({ repo, beta }) => {
+      fs.rmSync(beta, { recursive: true, force: true });
+      fs.writeFileSync(beta, "not a directory\n");
+      editRegistry(repo, (registry) => {
+        registry.workspaces[0].lifecycle = "archived";
+        registry.workspaces.push({ schema: "causet.workspace/v1", id: "ws_custom", name: "gamma", path: 42 });
+      });
+    }],
+    [["workspace", "checkpoint"]],
+    [["workspace", "checkpoint", "--label", "Second", "--json"], ({ repo }) => {
+      fs.writeFileSync(path.join(repo, "untracked.txt"), "new\n");
+      cst(repo, "workspace", "checkpoint", "--label", "First");
+    }],
+    [["workspace", "checkpoint", "--label", "In alpha"], null, "alpha"],
+    [["workspace", "checkpoint"], ({ repo }) => editRegistry(repo, (registry) => {
+      registry.workspaces[0].lifecycle = "archived";
+    }), "alpha"],
+    [["workspace", "checkpoint"], ({ repo }) => editRegistry(repo, (registry) => {
+      registry.workspaces.unshift({ schema: "causet.workspace/v1", id: "ws_bad", name: "bad", path: null });
+    })],
+    [["workspace", "prune"], ({ beta }) => fs.rmSync(beta, { recursive: true, force: true })],
+    [["workspace", "prune", "--apply", "--json"], ({ beta }) => fs.rmSync(beta, { recursive: true, force: true })],
+    [["workspace", "prune", "--apply"]],
+    [["workspace", "prune", "--apply", "--dry-run"]],
+    [["workspace", "prune", "--apply"], ({ repo, beta }) => {
+      fs.rmSync(beta, { recursive: true, force: true });
+      fs.mkdirSync(path.join(repo, ".git", "worktrees", "alpha", "vcs-lab"), { recursive: true });
+      fs.writeFileSync(path.join(repo, ".git", "worktrees", "alpha", "vcs-lab", "rebase.json"), "{}\n");
+    }],
+    [["workspace", "list"], ({ repo }) => fs.writeFileSync(path.join(runtime(repo), "workspaces.json"), "{ not json")],
+    [["workspace", "list", "--json"], ({ repo }) => editRegistry(repo, (registry) => { registry.schema = "causet.workspaces/v9"; })],
+    [["workspace", "prune"], ({ repo }) => editRegistry(repo, (registry) => { registry.workspaces = {}; })],
+    [["workspace", "list"], ({ repo }) => editRegistry(repo, (registry) => { registry.workspaces[1].schema = "causet.note/v1"; })],
+  ];
+  for (const [index, [args, prepare, where]] of cases.entries()) {
+    const sides = ["js", "rust"].map((name) => {
+      const side = `ws-${name}-${index}`;
+      const fixture = build(side);
+      prepare?.(fixture);
+      return { side, ...fixture, cwd: where ? fixture[where] : fixture.repo };
+    });
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: sides[0].cwd, encoding: "utf8", env: testEnv(dated),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: sides[1].cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args) + " #" + index;
+    const [js, rs] = sides;
+    assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+    assert.equal(rename(actual.stderr, rs.side), rename(expected.stderr, js.side), "stderr of " + label);
+    assert.equal(rename(actual.stdout, rs.side), rename(expected.stdout, js.side), "stdout of " + label);
+    const snapshot = ({ repo, side }) => rename([
+      git(repo, "for-each-ref", "--format=%(refname) %(objectname)").stdout,
+      git(repo, "worktree", "list", "--porcelain").stdout,
+      fs.readFileSync(path.join(runtime(repo), "workspaces.json"), "utf8"),
+      fs.readdirSync(runtime(repo)).sort().join(","),
+    ].join("\n--\n"), side);
+    assert.equal(snapshot(rs), snapshot(js), "repository after " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
@@ -854,7 +973,7 @@ test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", {
 });
 
 test("CAUSET_DELEGATE=never refuses a command that is not ported", { skip }, () => {
-  const result = runRust(["workspace", "list"], { CAUSET_DELEGATE: "never" });
+  const result = runRust(["workspace", "create", "w"], { CAUSET_DELEGATE: "never" });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /^cst: 'workspace' is not ported to the Rust CLI yet/);

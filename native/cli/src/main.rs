@@ -33,6 +33,7 @@ mod resolve;
 mod retain;
 mod spec;
 mod store;
+mod workspaces;
 
 use front::Outcome;
 use std::{env, ffi::OsString, io::Write, process};
