@@ -222,6 +222,13 @@ Causal edges
       };
       Ok((crate::landing::land(&source, mode, parsed.value("message"), cwd)?, 0))
     }
+    "cherry-pick" => {
+      // Always printed as JSON: the result is an object.
+      let value = parsed.positionals.first().cloned().unwrap_or_default();
+      let result =
+        crate::cherry_pick::cherry_pick(&value, parsed.truthy("fork"), parsed.truthy("repeat"), cwd)?;
+      Ok((result, 0))
+    }
     "init" => {
       // Printed as text even under --json: `init` does not pass the flag on.
       let root = crate::store::init_lab(cwd)?;

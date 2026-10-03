@@ -146,6 +146,33 @@ fn is_application(record: &Value) -> bool {
   )
 }
 
+/// `identityPreservingEdges(records)` of `src/identity-audit.js`: `(origin,
+/// applied)` for each application record whose change id survived, the
+/// applied side being `appliedCommit ?? attachedTo`.
+pub(crate) fn identity_preserving_edges<'a>(records: &[&'a Value]) -> Vec<(&'a Value, &'a Value)> {
+  let mut edges = Vec::new();
+  for &record in records {
+    if !is_application(record) {
+      continue;
+    }
+    let member = |name: &str| get(Some(record), name);
+    let (origin, applied) = (member("originCommit"), or(member("appliedCommit"), member("attachedTo")));
+    let (Some(origin), Some(applied)) = (origin, applied) else {
+      continue;
+    };
+    if !truthy(Some(origin)) || !truthy(Some(applied)) {
+      continue;
+    }
+    if truthy(member("originChangeId"))
+      && truthy(member("appliedChangeId"))
+      && strict_equals(member("originChangeId"), member("appliedChangeId"))
+    {
+      edges.push((origin, applied));
+    }
+  }
+  edges
+}
+
 fn as_text(value: Option<&Value>) -> Option<String> {
   match value {
     Some(Value::String(units)) => Some(lossy(units)),
