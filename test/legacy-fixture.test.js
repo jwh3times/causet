@@ -318,3 +318,24 @@ test("spec merge planning reads a manifest committed before cst migrate (#183)",
   assert.equal(plan.status, "clean", planned.stdout);
   assert.ok(plan.decisions.some((decision) => decision.outcome === "theirs-add"), planned.stdout);
 });
+
+test("metadata export leaves an unmigrated repository unmigrated (#191)", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  const statusBefore = cst(repo, ["metadata", "status", "--json"]).stdout;
+  const first = cst(repo, ["metadata", "export", path.join(root, "first"), "--json"]);
+  assert.equal(first.status, 0, first.stderr);
+  assert.ok(JSON.parse(first.stdout).records > 0, first.stdout);
+
+  // The transient export ref is gone; any directories Git left are not evidence.
+  assert.equal(git(repo, "for-each-ref", "refs/causet/"), "");
+  const doctor = JSON.parse(cst(repo, ["doctor"]).stdout);
+  assert.equal(doctor.migration, "unmigrated");
+  assert.equal(doctor.notesRef, "refs/notes/vcs-lab");
+  assert.equal(cst(repo, ["metadata", "status", "--json"]).stdout, statusBefore);
+
+  const second = cst(repo, ["metadata", "export", path.join(root, "second"), "--json"]);
+  assert.equal(second.status, 0, second.stderr);
+  const manifest = (name) => JSON.parse(fs.readFileSync(path.join(root, name, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest("second").records, manifest("first").records);
+});

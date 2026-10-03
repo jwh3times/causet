@@ -92,7 +92,7 @@ fn holds_any(context: &RepoContext, set: &Names) -> GitResult<bool> {
   }
   if [set.notes_ref, set.refs_root]
     .iter()
-    .any(|name| under(&context.common_dir, name).exists())
+    .any(|name| holds_loose_ref(&under(&context.common_dir, name)))
   {
     return Ok(true);
   }
@@ -107,6 +107,22 @@ fn holds_any(context: &RepoContext, set: &Names) -> GitResult<bool> {
       .nth(1)
       .is_some_and(|name| name == set.notes_ref || name.starts_with(&prefix))
   }))
+}
+
+/// `holdsLooseRef`: whether `location` is a loose ref or a directory holding
+/// one. Git leaves a deleted loose ref's empty directories behind, so an empty
+/// directory is not evidence (#191). A `.lock` file is never a ref.
+fn holds_loose_ref(location: &Path) -> bool {
+  match std::fs::metadata(location) {
+    Err(_) => false,
+    Ok(metadata) if !metadata.is_dir() => true,
+    Ok(_) => std::fs::read_dir(location).is_ok_and(|entries| {
+      entries.flatten().any(|entry| match entry.file_type() {
+        Ok(kind) if kind.is_dir() => holds_loose_ref(&entry.path()),
+        _ => !entry.file_name().to_string_lossy().ends_with(".lock"),
+      })
+    }),
+  }
 }
 
 /// `repositoryNames(cwd)`: the state of the repository and the names it uses.
