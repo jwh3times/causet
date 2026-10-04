@@ -129,6 +129,14 @@ Causal edges
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
     "spec" => {
       let file = parsed.positionals.get(1).cloned().unwrap_or_default();
+      if parsed.positionals.first().map(String::as_str) == Some("resolve") {
+        let path = parsed.positionals.get(1).map(String::as_str);
+        let result = crate::spec::apply_pending_spec_merges(path, parsed.truthy("all"), cwd)?;
+        if json {
+          return Ok((result, 0));
+        }
+        return Ok((causet_model::json::string(&crate::spec::format_spec_merge_action(&result)), 0));
+      }
       if parsed.positionals.first().map(String::as_str) == Some("index") {
         let force = parsed.truthy("force");
         if parsed.truthy("all") {

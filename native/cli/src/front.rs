@@ -72,6 +72,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "resolve status",
   "spec index",
   "spec merge-plan",
+  "spec resolve",
   "spec show",
   "spec status",
   "verify-proof",
@@ -655,7 +656,7 @@ mod tests {
     for args in [
       &["rebase", "--status", "extra", "args"][..],
       &["resolve", "reject"],
-      &["spec", "resolve", "--all"],
+      &["spec", "benchmark", "--documents", "2"],
       &["workspace", "forecast", "a", "b"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
@@ -690,6 +691,7 @@ mod tests {
       &["spec", "merge-plan", "f", "b", "o", "t", "--json"],
       &["spec", "index", "f", "--force"],
       &["spec", "index", "--all", "--json"],
+      &["spec", "resolve", "specs/a.md", "--all"],
       &["merge-plan", "feature", "--json"],
       &["rebase-plan", "main", "feature", "--from", "base", "--squash", "a=b"],
       &["proof-bundle", "feature"],
