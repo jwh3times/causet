@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mut4l90a4dbb0b8a4bdb",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-workspaces-1",
+      "sourceHead": "081fd15ea2bdc770b226583903bffd4beafdd6a0",
+      "sourceSubject": "feat: answer cst workspace list, checkpoint and prune natively",
+      "targetBefore": "03fdd79fa12c510aa4e2adb26cd843ee1372eee3",
+      "landingCommit": "09ecaf81af851bbbd8109a5e995abf0a1dfdd5df",
+      "base": "03fdd79fa12c510aa4e2adb26cd843ee1372eee3",
+      "absorbedCommits": [
+        "081fd15ea2bdc770b226583903bffd4beafdd6a0"
+      ],
+      "absorbedChanges": [
+        "ch_0musd5wxbb3e9b3fffec9"
+      ],
+      "resultTree": "603d738a9d176b3a11cca40cc73fc3e7d7c8f7dc",
+      "createdAt": "2026-10-04T01:11:49.260Z"
+    }
+  ]
+}
