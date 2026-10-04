@@ -231,9 +231,27 @@ Causal edges
     }
     "workspace" => {
       // Every workspace result is an object or a list, printed as JSON.
+      let positional = |index: usize| parsed.positionals.get(index).cloned().unwrap_or_default();
       match parsed.positionals.first().map(String::as_str) {
         Some("list") => Ok((crate::workspaces::list_workspaces(cwd)?, 0)),
         Some("checkpoint") => Ok((crate::workspaces::checkpoint_workspace(parsed.value("label"), cwd)?, 0)),
+        Some("create") => {
+          let options = crate::workspaces::CreateOptions {
+            from: parsed.value("from"),
+            path: parsed.value("path"),
+            owner: parsed.value("owner"),
+            focus: parsed.value("focus"),
+            cone: parsed.value("cone"),
+          };
+          Ok((crate::workspaces::create_workspace(&positional(1), &options, cwd)?, 0))
+        }
+        Some("move") => Ok((crate::workspaces::move_workspace(&positional(1), &positional(2), cwd)?, 0)),
+        Some("archive") => Ok((crate::workspaces::archive_workspace(&positional(1), cwd)?, 0)),
+        Some("restore") => Ok((crate::workspaces::restore_workspace(&positional(1), parsed.value("path"), cwd)?, 0)),
+        Some("repair") => Ok((
+          crate::workspaces::repair_workspace(&positional(1), parsed.value("path").unwrap_or_default(), cwd)?,
+          0,
+        )),
         _ => Ok((
           crate::workspaces::prune_workspaces(parsed.truthy("apply"), parsed.truthy("dryRun"), cwd)?,
           0,

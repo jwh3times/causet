@@ -73,9 +73,14 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "spec show",
   "spec status",
   "verify-proof",
+  "workspace archive",
   "workspace checkpoint",
+  "workspace create",
   "workspace list",
+  "workspace move",
   "workspace prune",
+  "workspace repair",
+  "workspace restore",
 ];
 
 /// Whether this invocation is a ported command: the command, or for a command
@@ -649,7 +654,7 @@ mod tests {
       &["rebase", "--status", "extra", "args"][..],
       &["resolve", "reject"],
       &["spec", "index", "--all"],
-      &["workspace", "move", "w", "d"],
+      &["workspace", "forecast", "a", "b"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
@@ -687,12 +692,17 @@ mod tests {
       &["workspace", "list"],
       &["workspace", "checkpoint", "--label", "x", "--json"],
       &["workspace", "prune", "--apply"],
+      &["workspace", "create", "w", "--cone", "src", "--from", "main"],
+      &["workspace", "move", "w", "d"],
+      &["workspace", "archive", "w"],
+      &["workspace", "restore", "w", "--path", "p"],
+      &["workspace", "repair", "w", "--path", "p"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
     // A command is native per subcommand: these still delegate.
     for args in [
-      &["workspace", "create", "w"][..],
+      &["workspace", "forecast", "a", "b"][..],
       &["resolve", "apply", "--all"],
       &["spec", "merge-plan", "f", "b", "o", "t"],
       &["rebase-forecast", "main"],
