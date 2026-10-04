@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- The Rust CLI answers the workspace lifecycle natively (#149, second
+  increment): `cst workspace create` (with `--from`, `--path`, `--owner`,
+  `--focus` and `--cone`), `move`, `archive`, `restore` and `repair`. It
+  ports the rest of `src/workspaces.js` except `forecast`:
+  - **Create:** the slugged compatibility branch under the prefix in use, one
+    batched check of the base and the branch, the default path beside the
+    repository, and the sparse cone normalized and refused when it leaves the
+    repository.
+  - **Lifecycle checks:** the lifecycle and materialization preconditions, and
+    the refusal to change the worktree the command runs in.
+  - **Archive:** refused for a dirty worktree, ignored files, or an operation
+    journal.
+  - **Restore:** the cone reapplied.
+  - **Repair:** checks that the path is this repository's worktree on the
+    workspace's branch.
+  - **History:** `previousPaths` resolved and deduplicated.
+
+  Only `cst workspace forecast` still delegates, until forecasting is ported
+  (#147).
 - The Rust CLI answers `cst workspace list`, `cst workspace checkpoint` and
   `cst workspace prune --dry-run|--apply` natively (#149, first increment). It
   ports the registry side of `src/workspaces.js` and `src/workspace-lock.js`:

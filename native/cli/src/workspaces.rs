@@ -1,5 +1,5 @@
-//! `cst workspace list`, `checkpoint` and `prune`: `src/workspaces.js` and the
-//! registry lock of `src/workspace-lock.js`.
+//! `cst workspace` (every subcommand but `forecast`): `src/workspaces.js` and
+//! the registry lock of `src/workspace-lock.js`.
 
 use crate::envelope::{io_failure, received};
 use crate::host;
@@ -324,7 +324,8 @@ pub fn checkpoint_workspace(label: Option<&str>, cwd: &str) -> GitResult<Value> 
 fn assert_no_operation_journal(git_dir: &str, action: &str, recovery: &str) -> GitResult<()> {
   for set in [CURRENT_NAMES, LEGACY_NAMES] {
     for (file, command) in [("reconciliation.json", "reconcile"), ("rebase.json", "rebase")] {
-      let journal = text::join(&text::join(git_dir, set.runtime), file);
+      // `path.join` normalizes a Git-reported directory to native separators.
+      let journal = text::resolve_path(&text::join(&text::join(git_dir, set.runtime), file));
       match std::fs::symlink_metadata(&journal) {
         Ok(_) => {
           return Err(
@@ -507,4 +508,486 @@ fn with_registry_lock<T>(cwd: &str, action: impl FnOnce() -> GitResult<T>) -> Gi
 
 fn member_of<'a>(value: Option<&'a Value>, name: &str) -> Option<&'a Value> {
   causet_model::js::get(value, name)
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle writes
+// ---------------------------------------------------------------------------
+
+/// `findWorkspace(state, value)`: by name or id.
+fn find_workspace(state: &Object, value: &str) -> GitResult<(usize, Value)> {
+  workspaces_of(state)
+    .into_iter()
+    .enumerate()
+    .find(|(_, workspace)| is_text(member(workspace, "name"), value) || is_text(member(workspace, "id"), value))
+    .ok_or_else(|| GitError::new("not-found", format!("Workspace '{value}' was not found.")))
+}
+
+/// `requireLifecycle(workspace, lifecycle, action)`.
+fn require_lifecycle(workspace: &Value, expected: &str, action: &str) -> GitResult<()> {
+  if is_text(Some(&lifecycle(workspace)), expected) {
+    return Ok(());
+  }
+  Err(GitError::new(
+    "precondition-not-met",
+    format!(
+      "Workspace '{}' must be {expected} before it can be {action}.",
+      js_text(member(workspace, "name"))
+    ),
+  ))
+}
+
+/// `requireMaterialized(workspace, action)`.
+fn require_materialized(workspace: &Value, action: &str) -> GitResult<()> {
+  let inspected = inspect_workspace(workspace)?;
+  if is_text(member(&inspected, "pathStatus"), ACTIVE) {
+    return Ok(());
+  }
+  Err(GitError::new(
+    "precondition-not-met",
+    format!(
+      "Workspace '{}' is not a usable linked worktree. Repair or prune its stale path before {action}.",
+      js_text(member(workspace, "name"))
+    ),
+  ))
+}
+
+/// `assertCallerOutsideWorkspace(cwd, workspace, action)`.
+fn assert_caller_outside(cwd: &str, workspace: &Value, action: &str) -> GitResult<()> {
+  let root = text::resolve_path(&engine::repo_context(cwd)?.root);
+  if root == resolve_value(member(workspace, "path"))? {
+    return Err(GitError::new(
+      "precondition-not-met",
+      format!(
+        "Run workspace {action} from another linked worktree; the command changes '{}'.",
+        js_text(member(workspace, "path"))
+      ),
+    ));
+  }
+  Ok(())
+}
+
+/// `appendPreviousPath(workspace, previousPath)`: every earlier path,
+/// resolved, each once, in first-seen order. A string spreads into its
+/// characters, and anything else that is not a list throws as V8 does.
+fn append_previous_path(workspace: &Value, previous: Option<&Value>) -> GitResult<Value> {
+  let mut items: Vec<Value> = match member(workspace, "previousPaths") {
+    value if nullish(value) => Vec::new(),
+    Some(Value::Array(items)) => items.clone(),
+    Some(Value::String(units)) => lossy(units).chars().map(|c| string(&c.to_string())).collect(),
+    _ => return Err(GitError::uncoded("(workspace.previousPaths ?? []) is not iterable")),
+  };
+  items.push(previous.cloned().unwrap_or(Value::Null));
+  let mut resolved: Vec<String> = Vec::new();
+  for item in &items {
+    let path = resolve_value(Some(item))?;
+    if !resolved.contains(&path) {
+      resolved.push(path);
+    }
+  }
+  Ok(Value::Array(resolved.iter().map(|path| string(path)).collect()))
+}
+
+/// `updateWorkspace(state, index, updates, cwd)`: the entry with `updates`
+/// spread over it, saved with the whole registry.
+fn update_workspace(state: &mut Object, index: usize, updates: Vec<(&str, Value)>, cwd: &str) -> GitResult<Value> {
+  let mut workspaces = workspaces_of(state);
+  let mut updated = spread(&workspaces[index]);
+  for (name, value) in updates {
+    updated.set(name, value);
+  }
+  workspaces[index] = Value::Object(updated);
+  state.set("workspaces", Value::Array(workspaces.clone()));
+  save_workspaces(state, cwd)?;
+  Ok(workspaces.swap_remove(index))
+}
+
+/// `{ ...inspectWorkspace(workspace), changed }`.
+fn changed(workspace: &Value, changed: bool) -> GitResult<Value> {
+  let mut inspected = spread(&inspect_workspace(workspace)?);
+  inspected.set("changed", Value::Bool(changed));
+  Ok(Value::Object(inspected))
+}
+
+/// `path.dirname(path)` for an absolute path.
+fn dirname(path: &str) -> String {
+  let trimmed = path.trim_end_matches(['/', '\\']);
+  match trimmed.rfind(['/', '\\']) {
+    None => ".".into(),
+    Some(0) => path[..1].to_string(),
+    Some(index) if trimmed[..index].ends_with(':') => trimmed[..=index].to_string(),
+    Some(index) => trimmed[..index].to_string(),
+  }
+}
+
+fn make_parent(path: &str) -> GitResult<()> {
+  let parent = dirname(path);
+  std::fs::create_dir_all(&parent).map_err(|error| io_failure(&error, "mkdir", &parent))
+}
+
+/// `normalizeCone(cone)`: relative directory prefixes, each once, sorted, or
+/// `None`; a cone that leaves the repository is refused.
+fn normalize_cone(cone: Option<&Value>) -> GitResult<Option<Vec<String>>> {
+  if nullish(cone) {
+    return Ok(None);
+  }
+  let raw: Vec<String> = match cone {
+    Some(Value::Array(items)) => items.iter().map(|item| js_text(Some(item))).collect(),
+    other => js_text(other).split(',').map(str::to_string).collect(),
+  };
+  let entries: Vec<String> = raw
+    .iter()
+    .map(|entry| {
+      let entry = text::trim(entry).replace('\\', "/");
+      entry.strip_prefix("./").map(str::to_string).unwrap_or(entry)
+    })
+    .filter(|entry| !entry.is_empty())
+    .map(|entry| entry.trim_end_matches('/').to_string())
+    .collect();
+  if entries.is_empty() {
+    return Ok(None);
+  }
+  for entry in &entries {
+    let bytes = entry.as_bytes();
+    let drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+    if entry.starts_with('/') || drive {
+      return Err(GitError::new(
+        "path-outside-repository",
+        format!("Cone path must be relative to the repository root: '{entry}'"),
+      ));
+    }
+    if entry == ".." || entry.starts_with("../") || entry.contains("/../") {
+      return Err(GitError::new(
+        "path-outside-repository",
+        format!("Cone path must stay inside the repository: '{entry}'"),
+      ));
+    }
+  }
+  let mut unique: Vec<String> = Vec::new();
+  for entry in entries {
+    if !unique.contains(&entry) {
+      unique.push(entry);
+    }
+  }
+  text::sort(&mut unique);
+  Ok(Some(unique))
+}
+
+/// `addWorktree(context, worktreePath, addArgs, cone)`: a linked worktree,
+/// checked out only inside the cone when there is one.
+fn add_worktree(root: &str, worktree_path: &str, add_args: &[String], cone: Option<&[String]>) -> GitResult<()> {
+  let git = |args: Vec<String>, cwd: &str| run_git(&args, &RunOptions::new(cwd)).map(|_| ());
+  let added = (|| -> GitResult<()> {
+    let mut args = vec!["worktree".to_string(), "add".to_string()];
+    let Some(cone) = cone.filter(|cone| !cone.is_empty()) else {
+      args.extend(add_args.iter().cloned());
+      return git(args, root);
+    };
+    args.push("--no-checkout".into());
+    args.extend(add_args.iter().cloned());
+    git(args, root)?;
+    let mut sparse = vec!["sparse-checkout".to_string(), "set".to_string(), "--cone".to_string()];
+    sparse.extend(cone.iter().cloned());
+    git(sparse, worktree_path)?;
+    git(vec!["checkout".to_string()], worktree_path)
+  })();
+  added.map_err(|mut error| {
+    error.details = format!(
+      "{}\nWorkspace materialization failed at '{worktree_path}'. The workspace registry was not updated. Git may have created a worktree or branch; inspect them with git worktree list before repairing or removing partial materialization and retrying.",
+      error.details
+    );
+    error
+  })
+}
+
+/// What `cst workspace create` takes besides the name.
+pub struct CreateOptions<'a> {
+  pub from: Option<&'a str>,
+  pub path: Option<&'a str>,
+  pub owner: Option<&'a str>,
+  pub focus: Option<&'a str>,
+  pub cone: Option<&'a str>,
+}
+
+/// `createWorkspace(name, options)`: a linked worktree on a new compatibility
+/// branch at the base, registered as an active workspace.
+pub fn create_workspace(name: &str, options: &CreateOptions, cwd: &str) -> GitResult<Value> {
+  with_registry_lock(cwd, || create_locked(name, options, cwd))
+}
+
+fn create_locked(name: &str, options: &CreateOptions, cwd: &str) -> GitResult<Value> {
+  let context = engine::repo_context(cwd)?;
+  let target = options.from.unwrap_or("HEAD");
+  let safe_name = crate::spec::slug(name);
+  let branch = format!("{}{safe_name}", causet_engine::locations::names(cwd)?.workspace_branch_prefix);
+  let objects = engine::inspect_git_objects(&[format!("{target}^{{commit}}"), format!("refs/heads/{branch}")], cwd)?;
+  let (base, branch_object) = (&objects.records[0], &objects.records[1]);
+  if !base.exists || base.kind.as_deref() != Some("commit") {
+    return Err(GitError::new(
+      "revision-not-resolved",
+      format!("Git revision '{target}' did not resolve to a commit."),
+    ));
+  }
+  let base_snapshot = base.oid.clone().unwrap_or_default();
+
+  let mut state = read_mutation_state(cwd)?;
+  if workspaces_of(&state).iter().any(|workspace| is_text(member(workspace, "name"), name)) {
+    return Err(GitError::new("already-exists", format!("Workspace '{name}' already exists.")));
+  }
+  let workspace_path = match options.path {
+    Some(path) => text::resolve_path(path),
+    None => text::resolve_path(&format!(
+      "{}/{}.workspaces/{safe_name}",
+      dirname(&context.root),
+      basename(&context.root)
+    )),
+  };
+  if branch_object.exists {
+    return Err(GitError::new(
+      "already-exists",
+      format!("The compatibility branch '{branch}' already exists."),
+    ));
+  }
+  let cone = normalize_cone(options.cone.map(string).as_ref())?;
+  make_parent(&workspace_path)?;
+  add_worktree(
+    &context.root,
+    &workspace_path,
+    &["-b", &branch, &workspace_path, &base_snapshot].map(String::from),
+    cone.as_deref(),
+  )?;
+
+  let optional = |value: Option<&str>| value.map_or(Value::Null, string);
+  let mut workspace = Object::new();
+  workspace.set("schema", string("causet.workspace/v1"));
+  workspace.set("id", string(&host::new_id("ws")));
+  workspace.set("name", string(name));
+  workspace.set("path", string(&workspace_path));
+  workspace.set("compatibilityBranch", string(&branch));
+  workspace.set("target", string(target));
+  workspace.set("baseSnapshot", string(&base_snapshot));
+  workspace.set("createdAt", string(&causet_engine::metrics::iso_now()));
+  workspace.set("owner", optional(options.owner));
+  workspace.set("focus", optional(options.focus));
+  workspace.set(
+    "cone",
+    cone.map_or(Value::Null, |cone| Value::Array(cone.iter().map(|entry| string(entry)).collect())),
+  );
+  workspace.set("lifecycle", string(ACTIVE));
+  let workspace = Value::Object(workspace);
+  let mut workspaces = workspaces_of(&state);
+  workspaces.push(workspace.clone());
+  state.set("workspaces", Value::Array(workspaces));
+  save_workspaces(&state, cwd)?;
+  Ok(workspace)
+}
+
+/// `moveWorkspace(value, destination)`: `git worktree move`, with the old
+/// path kept in `previousPaths`.
+pub fn move_workspace(value: &str, destination: &str, cwd: &str) -> GitResult<Value> {
+  with_registry_lock(cwd, || {
+    let context = engine::repo_context(cwd)?;
+    let mut state = read_mutation_state(cwd)?;
+    let (index, workspace) = find_workspace(&state, value)?;
+    require_lifecycle(&workspace, ACTIVE, "moved")?;
+    require_materialized(&workspace, "moving it")?;
+    assert_caller_outside(cwd, &workspace, "move")?;
+    let next_path = text::resolve_path(destination);
+    if next_path == resolve_value(member(&workspace, "path"))? {
+      return changed(&workspace, false);
+    }
+    if std::path::Path::new(&next_path).exists() {
+      return Err(GitError::new(
+        "already-exists",
+        format!("Workspace destination already exists: {next_path}"),
+      ));
+    }
+    make_parent(&next_path)?;
+    let current = js_text(member(&workspace, "path"));
+    run_git(&["worktree", "move", &current, &next_path].map(String::from), &RunOptions::new(&context.root))?;
+    let now = string(&causet_engine::metrics::iso_now());
+    let previous = append_previous_path(&workspace, member(&workspace, "path"))?;
+    let updated = update_workspace(
+      &mut state,
+      index,
+      vec![("path", string(&next_path)), ("previousPaths", previous), ("movedAt", now.clone()), ("updatedAt", now)],
+      cwd,
+    )?;
+    changed(&updated, true)
+  })
+}
+
+/// `archiveWorkspace(value)`: a clean worktree removed, its branch and last
+/// HEAD kept so it can be restored.
+pub fn archive_workspace(value: &str, cwd: &str) -> GitResult<Value> {
+  with_registry_lock(cwd, || {
+    let context = engine::repo_context(cwd)?;
+    let mut state = read_mutation_state(cwd)?;
+    let (index, workspace) = find_workspace(&state, value)?;
+    require_lifecycle(&workspace, ACTIVE, "archived")?;
+    require_materialized(&workspace, "archiving it")?;
+    assert_caller_outside(cwd, &workspace, "archive")?;
+    let path = js_text(member(&workspace, "path"));
+    let name = js_text(member(&workspace, "name"));
+    assert_no_operation_journal(
+      &engine::repo_context(&path)?.git_dir,
+      &format!("archive workspace '{name}'"),
+      &format!("Recover the operation in '{path}'."),
+    )?;
+    let status = engine::porcelain_status(&path, false)?;
+    if !status.is_empty() {
+      return Err(
+        GitError::new(
+          "precondition-not-met",
+          format!("Workspace '{name}' has tracked or untracked changes. Commit or remove them before archiving."),
+        )
+        .details(status),
+      );
+    }
+    let ignored = engine::ignored_paths(&path)?;
+    if !ignored.is_empty() {
+      return Err(
+        GitError::new(
+          "precondition-not-met",
+          format!("Workspace '{name}' contains ignored files. Move or remove them before archiving."),
+        )
+        .details(ignored.join("\n")),
+      );
+    }
+    let last_head = engine::current_head(&path)?;
+    run_git(&["worktree", "remove", &path].map(String::from), &RunOptions::new(&context.root))?;
+    let now = string(&causet_engine::metrics::iso_now());
+    let updated = update_workspace(
+      &mut state,
+      index,
+      vec![
+        ("lifecycle", string(ARCHIVED)),
+        ("archivedAt", now.clone()),
+        ("archiveReason", string("user")),
+        ("lastHead", string(&last_head)),
+        ("updatedAt", now),
+      ],
+      cwd,
+    )?;
+    changed(&updated, true)
+  })
+}
+
+/// `restoreWorkspace(value, { path })`: the archived workspace materialized
+/// again from its branch, with the cone it was created with.
+pub fn restore_workspace(value: &str, path: Option<&str>, cwd: &str) -> GitResult<Value> {
+  with_registry_lock(cwd, || {
+    let context = engine::repo_context(cwd)?;
+    let mut state = read_mutation_state(cwd)?;
+    let (index, workspace) = find_workspace(&state, value)?;
+    require_lifecycle(&workspace, ARCHIVED, "restored")?;
+    let branch = js_text(member(&workspace, "compatibilityBranch"));
+    if !engine::ref_exists(&format!("refs/heads/{branch}"), cwd)? {
+      return Err(GitError::new(
+        "not-found",
+        format!("Workspace branch '{branch}' no longer exists."),
+      ));
+    }
+    let restored_path = match path {
+      Some(path) => text::resolve_path(path),
+      None => resolve_value(member(&workspace, "path"))?,
+    };
+    if std::path::Path::new(&restored_path).exists() {
+      return Err(GitError::new(
+        "already-exists",
+        format!("Workspace restore path already exists: {restored_path}"),
+      ));
+    }
+    make_parent(&restored_path)?;
+    let cone = normalize_cone(member(&workspace, "cone"))?;
+    add_worktree(&context.root, &restored_path, &[restored_path.clone(), branch], cone.as_deref())?;
+    let now = string(&causet_engine::metrics::iso_now());
+    let mut updates = vec![
+      ("path", string(&restored_path)),
+      ("lifecycle", string(ACTIVE)),
+      ("archivedAt", Value::Null),
+      ("archiveReason", Value::Null),
+      ("restoredAt", now.clone()),
+      ("updatedAt", now),
+    ];
+    if restored_path != resolve_value(member(&workspace, "path"))? {
+      updates.push(("previousPaths", append_previous_path(&workspace, member(&workspace, "path"))?));
+    }
+    let updated = update_workspace(&mut state, index, updates, cwd)?;
+    changed(&updated, true)
+  })
+}
+
+/// `repairWorkspace(value, destination)`: re-link a workspace whose worktree
+/// was moved outside causet, after checking it is this repository's worktree
+/// on the workspace's branch.
+pub fn repair_workspace(value: &str, destination: &str, cwd: &str) -> GitResult<Value> {
+  with_registry_lock(cwd, || {
+    let context = engine::repo_context(cwd)?;
+    let mut state = read_mutation_state(cwd)?;
+    let (index, workspace) = find_workspace(&state, value)?;
+    let repaired_path = text::resolve_path(destination);
+    if !std::path::Path::new(&repaired_path).exists() {
+      return Err(GitError::new(
+        "not-found",
+        format!("Workspace repair path does not exist: {repaired_path}"),
+      ));
+    }
+    let recorded_exists = match member(&workspace, "path") {
+      Some(Value::String(units)) => std::path::Path::new(&lossy(units)).exists(),
+      _ => false,
+    };
+    if resolve_value(member(&workspace, "path"))? != repaired_path && recorded_exists {
+      return Err(GitError::new(
+        "precondition-not-met",
+        format!(
+          "Recorded workspace path still exists: {}. Use workspace move instead.",
+          js_text(member(&workspace, "path"))
+        ),
+      ));
+    }
+    let repaired_context = engine::repo_context(&repaired_path).map_err(|_| {
+      GitError::new(
+        "precondition-not-met",
+        format!("Repair path is not a linked Git worktree: {repaired_path}"),
+      )
+    })?;
+    if text::resolve_path(&repaired_context.common_dir) != text::resolve_path(&context.common_dir) {
+      return Err(GitError::new(
+        "repository-mismatch",
+        "Repair path belongs to a different Git repository.",
+      ));
+    }
+    let head_ref = engine::symbolic_ref("HEAD", &repaired_path, false)?;
+    let branch = head_ref
+      .as_deref()
+      .and_then(|name| name.strip_prefix("refs/heads/"))
+      .unwrap_or("")
+      .to_string();
+    if !is_text(member(&workspace, "compatibilityBranch"), &branch) {
+      return Err(GitError::new(
+        "precondition-not-met",
+        format!(
+          "Repair path has branch '{}', expected '{}'.",
+          if branch.is_empty() { "(detached)" } else { &branch },
+          js_text(member(&workspace, "compatibilityBranch"))
+        ),
+      ));
+    }
+    run_git(&["worktree", "repair", &repaired_path].map(String::from), &RunOptions::new(&context.root))?;
+    let now = string(&causet_engine::metrics::iso_now());
+    let mut updates = vec![
+      ("path", string(&repaired_path)),
+      ("lifecycle", string(ACTIVE)),
+      ("archivedAt", Value::Null),
+      ("archiveReason", Value::Null),
+      ("repairedAt", now.clone()),
+      ("updatedAt", now),
+    ];
+    if repaired_path != resolve_value(member(&workspace, "path"))? {
+      updates.push(("previousPaths", append_previous_path(&workspace, member(&workspace, "path"))?));
+    }
+    let updated = update_workspace(&mut state, index, updates, cwd)?;
+    changed(&updated, true)
+  })
 }
