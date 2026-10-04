@@ -34,7 +34,7 @@ fn bound(name: &str) -> u64 {
 
 /// Besides `EEXIST`, Windows reports these while another process still has the
 /// lock file open as it is removed or renamed.
-fn transient(error: &std::io::Error) -> bool {
+pub(crate) fn transient(error: &std::io::Error) -> bool {
   matches!(
     error.kind(),
     std::io::ErrorKind::AlreadyExists

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst workspace list`, `cst workspace checkpoint` and
+  `cst workspace prune --dry-run|--apply` natively (#149, first increment). It
+  ports the registry side of `src/workspaces.js` and `src/workspace-lock.js`:
+  - **Reading the registry:** schema refusals for the registry and each entry,
+    and the inspection of each workspace's path, HEAD and dirty count.
+  - **Checkpoints:** the temporary-index snapshot of the worktree, the
+    draft change id, the trailers, and the checkpoint and history refs. This
+    covers the synthetic workspace for the main worktree.
+  - **Pruning:** the missing-path candidates, the refusal while any linked
+    worktree holds an operation journal under either runtime name, and the
+    archive written back to the registry.
+  - **The registry lock:** the claim file, the contention gate, and the
+    refusal that names the holder.
+
+  A registry written by either CLI is read by the other.
 - The Rust CLI answers `cst cherry-pick <commit-or-change-id>` natively, with
   `--fork` and `--repeat` (#146). It ports `cherryPick` of
   `src/operations.js`:

@@ -229,6 +229,17 @@ Causal edges
         crate::cherry_pick::cherry_pick(&value, parsed.truthy("fork"), parsed.truthy("repeat"), cwd)?;
       Ok((result, 0))
     }
+    "workspace" => {
+      // Every workspace result is an object or a list, printed as JSON.
+      match parsed.positionals.first().map(String::as_str) {
+        Some("list") => Ok((crate::workspaces::list_workspaces(cwd)?, 0)),
+        Some("checkpoint") => Ok((crate::workspaces::checkpoint_workspace(parsed.value("label"), cwd)?, 0)),
+        _ => Ok((
+          crate::workspaces::prune_workspaces(parsed.truthy("apply"), parsed.truthy("dryRun"), cwd)?,
+          0,
+        )),
+      }
+    }
     "init" => {
       // Printed as text even under --json: `init` does not pass the flag on.
       let root = crate::store::init_lab(cwd)?;
