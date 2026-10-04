@@ -70,6 +70,8 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "receipts",
   "resolve list",
   "resolve status",
+  "spec index",
+  "spec merge-plan",
   "spec show",
   "spec status",
   "verify-proof",
@@ -653,7 +655,7 @@ mod tests {
     for args in [
       &["rebase", "--status", "extra", "args"][..],
       &["resolve", "reject"],
-      &["spec", "index", "--all"],
+      &["spec", "resolve", "--all"],
       &["workspace", "forecast", "a", "b"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
@@ -685,6 +687,9 @@ mod tests {
       &["resolve", "list", "--json"],
       &["spec", "show", "a.md"],
       &["spec", "status"],
+      &["spec", "merge-plan", "f", "b", "o", "t", "--json"],
+      &["spec", "index", "f", "--force"],
+      &["spec", "index", "--all", "--json"],
       &["merge-plan", "feature", "--json"],
       &["rebase-plan", "main", "feature", "--from", "base", "--squash", "a=b"],
       &["proof-bundle", "feature"],
@@ -704,7 +709,7 @@ mod tests {
     for args in [
       &["workspace", "forecast", "a", "b"][..],
       &["resolve", "apply", "--all"],
-      &["spec", "merge-plan", "f", "b", "o", "t"],
+      &["spec", "benchmark"],
       &["rebase-forecast", "main"],
     ] {
       assert!(delegated(run(args)), "{args:?}");

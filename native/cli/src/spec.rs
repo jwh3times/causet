@@ -703,6 +703,641 @@ pub fn read_spec_manifest(file: &str, cwd: &str) -> GitResult<Value> {
   Ok(Value::Object(result))
 }
 
+/// A prior manifest as `buildManifest` takes it: the manifest, and for one
+/// migrated from an older parser the entity ids it may not reuse
+/// (`migrationReservedIds`).
+struct OldManifest {
+  value: Value,
+  reserved: Option<ValueMap>,
+}
+
+/// `buildManifest(source, raw, { oldManifest, artifactId, preferredIds,
+/// sourceBlob })`.
+fn build_manifest(
+  source: &str,
+  raw: &str,
+  old: Option<&OldManifest>,
+  artifact_id: Option<&Value>,
+  preferred: Option<&ValueMap>,
+  source_blob: Option<&str>,
+) -> GitResult<Value> {
+  let canonical = normalize_markdown(raw);
+  let old_value = old.map(|old| &old.value);
+  let artifact = match artifact_id.filter(|value| !matches!(value, Value::Null)) {
+    Some(value) => value.clone(),
+    None => match get(old_value, "artifactId") {
+      value if nullish(value) => string(&crate::host::new_id("artifact")),
+      value => value.cloned().unwrap_or(Value::Null),
+    },
+  };
+  let artifact_text = js_text(Some(&artifact));
+  let mut prior = manifest_override_map(old_value)?;
+  for block in iterate_or_empty(get(old_value, "blocks"))? {
+    prior.set(
+      get(Some(&block), "semanticKey").cloned().unwrap_or(Value::Null),
+      get(Some(&block), "id").cloned().unwrap_or(Value::Null),
+    );
+  }
+  if let Some(preferred) = preferred {
+    for (key, id) in &preferred.0 {
+      prior.set(key.clone(), id.clone());
+    }
+  }
+  let reserved = old.and_then(|old| old.reserved.as_ref());
+  let mut assigned = ValueMap::default();
+  for (_, id) in &prior.0 {
+    assigned.set(id.clone(), Value::Null);
+  }
+  let mut blocks = Vec::new();
+  for block in parse_blocks(&canonical, SPEC_PARSER) {
+    let key = string(&block.semantic_key);
+    let mut id = match prior.get(&key) {
+      Some(value) if !matches!(value, Value::Null) => value.clone(),
+      _ => string(&deterministic_entity_id(&artifact_text, &block.semantic_key)),
+    };
+    if let Some(reserved) = reserved {
+      if !prior.has(&key) && reserved.has(&id) {
+        id = string(&migration_entity_id(&artifact_text, &block.semantic_key, &|candidate| {
+          reserved.has(candidate) || assigned.has(candidate)
+        }));
+      }
+    }
+    assigned.set(id.clone(), Value::Null);
+    blocks.push(block_value(id, &block));
+  }
+  let mut overrides = Object::new();
+  for block in &blocks {
+    let key = js_text(get(Some(block), "semanticKey"));
+    let expected = string(&deterministic_entity_id(&artifact_text, &key));
+    if !strict_equals(get(Some(block), "id"), Some(&expected)) {
+      overrides.set(&key, get(Some(block), "id").cloned().unwrap_or(Value::Null));
+    }
+  }
+  let mut manifest = Object::new();
+  manifest.set("schema", string(SPEC_MANIFEST_SCHEMA));
+  manifest.set("artifactId", artifact);
+  manifest.set("source", string(source));
+  manifest.set("sourceHash", string(&sha256(&canonical)));
+  manifest.set("sourceBlob", source_blob.map_or(Value::Null, string));
+  manifest.set("sourceBytes", number(canonical.len()));
+  manifest.set("sourceLines", number(split_lines(&canonical).len()));
+  manifest.set("entityCount", number(blocks.len()));
+  manifest.set("representation", string("annotated-markdown"));
+  manifest.set("parser", string(SPEC_PARSER));
+  manifest.set("idAlgorithm", string(SPEC_ID_ALGORITHM));
+  manifest.set("idOverrides", Value::Object(overrides));
+  manifest.set("blocks", Value::Array(blocks));
+  Ok(Value::Object(manifest))
+}
+
+/// `serializeSpecManifest(manifest)`: the stored, sparse form.
+fn serialize_spec_manifest(manifest: &Value) -> GitResult<String> {
+  let member = |name: &str| get(Some(manifest), name);
+  let or = |name: &str, fallback: Value| match member(name) {
+    value if nullish(value) => fallback,
+    value => value.cloned().unwrap_or(Value::Null),
+  };
+  let mut stored = Object::new();
+  stored.set("schema", string(SPEC_MANIFEST_SCHEMA));
+  for name in ["artifactId", "source", "sourceHash"] {
+    if let Some(value) = member(name) {
+      stored.set(name, value.clone());
+    }
+  }
+  if truthy(member("sourceBlob")) {
+    stored.set("sourceBlob", member("sourceBlob").cloned().unwrap_or(Value::Null));
+  }
+  let entity_count = match member("entityCount") {
+    value if nullish(value) => match member("blocks") {
+      Some(Value::Array(items)) => number(items.len()),
+      Some(Value::String(units)) => number(units.len()),
+      _ => number(0),
+    },
+    value => value.cloned().unwrap_or(Value::Null),
+  };
+  stored.set("entityCount", entity_count);
+  stored.set("representation", or("representation", string("annotated-markdown")));
+  stored.set("parser", or("parser", string(SPEC_PARSER)));
+  stored.set("idAlgorithm", or("idAlgorithm", string(SPEC_ID_ALGORITHM)));
+  let declared = member("idOverrides");
+  let mut overrides = ValueMap::default();
+  for (key, value) in entries(if nullish(declared) { None } else { declared }) {
+    overrides.set(key, value);
+  }
+  stored.set("idOverrides", sorted_overrides(&overrides)?);
+  Ok(format!("{}\n", stringify_pretty(&Value::Object(stored))))
+}
+
+// ---------------------------------------------------------------------------
+// Indexing
+// ---------------------------------------------------------------------------
+
+/// `fs.readFileSync(path, "utf8")`, including Node's refusal of a directory.
+fn read_text(path: &str) -> GitResult<String> {
+  if std::fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()) {
+    return Err(GitError::node("EISDIR: illegal operation on a directory, read", "EISDIR"));
+  }
+  let bytes = std::fs::read(path).map_err(|error| crate::envelope::io_failure(&error, "open", path))?;
+  Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// `writeSpecManifest(file, manifest)`.
+fn write_spec_manifest(file: &str, manifest: &Value) -> GitResult<()> {
+  let text = serialize_spec_manifest(manifest)?;
+  assert_within_bound("specManifestBytes", text.len() as u64, &format!("Spec manifest '{file}'"))?;
+  let parent = std::path::Path::new(file).parent().map(|parent| parent.to_path_buf()).unwrap_or_default();
+  std::fs::create_dir_all(&parent)
+    .map_err(|error| crate::envelope::io_failure(&error, "mkdir", &parent.to_string_lossy()))?;
+  std::fs::write(file, text).map_err(|error| crate::envelope::io_failure(&error, "open", file))
+}
+
+/// `readStoredManifest(file)`: the stored manifest, or `None`.
+fn read_stored_manifest(file: &str) -> GitResult<Option<Value>> {
+  if let Ok(metadata) = std::fs::metadata(file) {
+    assert_within_bound("specManifestBytes", metadata.len(), &format!("Spec manifest '{file}'"))?;
+  }
+  Ok(read_json(file)?.filter(|value| truthy(Some(value))))
+}
+
+fn is_current(stored: Option<&Value>) -> bool {
+  let schema = as_text(get(stored, "schema")).map(|schema| canonical_schema(&schema));
+  schema.as_deref() == Some(SPEC_MANIFEST_SCHEMA)
+    && strict_equals(get(stored, "parser"), Some(&string(SPEC_PARSER)))
+    && strict_equals(get(stored, "idAlgorithm"), Some(&string(SPEC_ID_ALGORITHM)))
+}
+
+fn ids(blocks: &[Value]) -> Vec<Value> {
+  blocks.iter().map(|block| get(Some(block), "id").cloned().unwrap_or(Value::Null)).collect()
+}
+
+fn blocks_of(manifest: Option<&Value>) -> GitResult<Vec<Value>> {
+  iterate_or_empty(get(manifest, "blocks"))
+}
+
+/// `changesBetween(oldManifest, manifest)`.
+fn changes_between(old: Option<&Value>, manifest: &Value) -> GitResult<Value> {
+  let old_blocks = blocks_of(old)?;
+  let new_blocks = blocks_of(Some(manifest))?;
+  let mut old_by_key = ValueMap::default();
+  for block in &old_blocks {
+    old_by_key.set(get(Some(block), "semanticKey").cloned().unwrap_or(Value::Null), block.clone());
+  }
+  let mut new_keys = ValueMap::default();
+  for block in &new_blocks {
+    new_keys.set(get(Some(block), "semanticKey").cloned().unwrap_or(Value::Null), Value::Null);
+  }
+  let (mut added, mut removed, mut changed, mut moved, mut unchanged) =
+    (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+  for block in &new_blocks {
+    let id = get(Some(block), "id").cloned().unwrap_or(Value::Null);
+    let Some(previous) = old_by_key.get(&get(Some(block), "semanticKey").cloned().unwrap_or(Value::Null)) else {
+      added.push(id);
+      continue;
+    };
+    let same_hash = strict_equals(get(Some(previous), "contentHash"), get(Some(block), "contentHash"));
+    let same_line = strict_equals(get(Some(previous), "startLine"), get(Some(block), "startLine"));
+    if !same_hash {
+      changed.push(id.clone());
+    }
+    if !same_line {
+      moved.push(id.clone());
+    }
+    if same_hash && same_line {
+      unchanged.push(id);
+    }
+  }
+  for previous in &old_blocks {
+    if !new_keys.has(&get(Some(previous), "semanticKey").cloned().unwrap_or(Value::Null)) {
+      removed.push(get(Some(previous), "id").cloned().unwrap_or(Value::Null));
+    }
+  }
+  let mut changes = Object::new();
+  changes.set("added", Value::Array(added));
+  changes.set("removed", Value::Array(removed));
+  changes.set("changed", Value::Array(changed));
+  changes.set("moved", Value::Array(moved));
+  changes.set("unchanged", Value::Array(unchanged));
+  Ok(Value::Object(changes))
+}
+
+/// `unchangedChanges(manifest)`.
+fn unchanged_changes(manifest: &Value) -> GitResult<Value> {
+  let unchanged = match get(Some(manifest), "blocks") {
+    value if nullish(value) => Vec::new(),
+    Some(Value::Array(items)) => ids(items),
+    _ => return Err(GitError::uncoded("manifest.blocks?.map is not a function")),
+  };
+  let mut changes = Object::new();
+  for name in ["added", "removed", "changed", "moved"] {
+    changes.set(name, Value::Array(Vec::new()));
+  }
+  changes.set("unchanged", Value::Array(unchanged));
+  Ok(Value::Object(changes))
+}
+
+/// `priorManifestView(storedManifest, currentRaw, cwd)`: the stored manifest
+/// as the verified prior source materializes it, migrated when it predates
+/// the current parser.
+fn prior_manifest_view(stored: Option<&Value>, current_raw: &str, cwd: &str) -> GitResult<Option<OldManifest>> {
+  let Some(stored) = stored else {
+    return Ok(None);
+  };
+  manifest_parser(Some(stored))?;
+  let schema = as_text(get(Some(stored), "schema")).map(|schema| canonical_schema(&schema));
+  let migrating = schema.as_deref() != Some(SPEC_MANIFEST_SCHEMA);
+  let legacy_v1 = schema.as_deref() == Some("causet.spec-manifest/v1");
+  let source_hash = get(Some(stored), "sourceHash");
+  let matches = |raw: &str| {
+    strict_equals(Some(&string(&sha256(raw))), source_hash)
+      || legacy_v1 && strict_equals(Some(&string(&sha256(&raw.replace('\n', "\r\n")))), source_hash)
+  };
+  let mut prior: Option<String> = None;
+  if truthy(get(Some(stored), "sourceBlob")) {
+    let objects = engine::read_git_objects(&[js_text(get(Some(stored), "sourceBlob"))], cwd)?;
+    if let Some(object) = objects.records.first() {
+      if object.exists && object.kind.as_deref() == Some("blob") {
+        prior = Some(normalize_markdown(&String::from_utf8_lossy(object.content.as_deref().unwrap_or_default())));
+      }
+    }
+  }
+  if !prior.as_deref().is_some_and(matches) {
+    let source = js_text(get(Some(stored), "source"));
+    let candidates = engine::read_git_objects(&[format!(":{source}"), format!("HEAD:{source}")], cwd)?;
+    let matching = candidates.records.iter().find_map(|object| {
+      if !object.exists || object.kind.as_deref() != Some("blob") {
+        return None;
+      }
+      let text = normalize_markdown(&String::from_utf8_lossy(object.content.as_deref().unwrap_or_default()));
+      matches(&text).then_some(text)
+    });
+    if let Some(text) = matching {
+      prior = Some(text);
+    }
+  }
+  if !prior.as_deref().is_some_and(matches) && matches(current_raw) {
+    prior = Some(current_raw.to_string());
+  }
+  let Some(prior) = prior.filter(|prior| matches(prior)) else {
+    if migrating {
+      return Err(GitError::new(
+        "precondition-not-met",
+        "Cannot migrate specification without its verified prior source. Restore the source object from Git history or another clone and retry indexing.",
+      ));
+    }
+    let mut empty = match stored {
+      Value::Object(object) => object.clone(),
+      _ => Object::new(),
+    };
+    empty.set("blocks", Value::Array(Vec::new()));
+    return Ok(Some(OldManifest { value: Value::Object(empty), reserved: None }));
+  };
+  if migrating {
+    return migrate_manifest(&prior, stored).map(Some);
+  }
+  Ok(Some(OldManifest { value: materialize_manifest(&prior, stored)?, reserved: None }))
+}
+
+/// `hashSpecBlob(relative, raw, context, { sourceBlob })`.
+fn hash_spec_blob(relative: &str, raw: &str, root: &str, source_blob: Option<&str>) -> GitResult<String> {
+  if let Some(blob) = source_blob {
+    return Ok(blob.to_string());
+  }
+  let args = ["hash-object", "-w", &format!("--path={relative}"), "--stdin"].map(String::from);
+  let output = causet_engine::process::run_git(
+    &args,
+    &causet_engine::process::RunOptions::new(root).input(raw.as_bytes().to_vec()),
+  )?;
+  Ok(output.stdout)
+}
+
+/// What `indexSpecWithContext` takes from `cst spec index`.
+#[derive(Clone, Copy, Default)]
+struct IndexOptions<'a> {
+  force: bool,
+  lazy: bool,
+  source_blob: Option<&'a str>,
+}
+
+fn changes_counts(entity_count: &Value) -> Value {
+  let mut counts = Object::new();
+  for name in ["added", "removed", "changed", "moved"] {
+    counts.set(name, number(0));
+  }
+  counts.set("unchanged", entity_count.clone());
+  Value::Object(counts)
+}
+
+/// `indexSpecWithContext(file, context, cwd, options)`.
+fn index_spec_with_context(file: &str, root: &str, cwd: &str, options: IndexOptions) -> GitResult<Value> {
+  let absolute = text::resolve(cwd, file);
+  if !std::path::Path::new(&absolute).exists() {
+    return Err(GitError::new("not-found", format!("Spec not found: {file}")));
+  }
+  let relative = relative_spec_path(file, root, cwd)?;
+  let manifest_path = manifest_path_from_relative(&relative, root)?;
+  let stored = read_stored_manifest(&manifest_path)?;
+  if let Some(stored) = &stored {
+    manifest_parser(Some(stored))?;
+  }
+  let mut result = Object::new();
+  result.set("manifestPath", string(&manifest_path));
+
+  if !options.force
+    && options.lazy
+    && options.source_blob.is_some_and(|blob| !blob.is_empty())
+    && is_current(stored.as_ref())
+    && strict_equals(get(stored.as_ref(), "sourceBlob"), options.source_blob.map(string).as_ref())
+  {
+    let stored = stored.unwrap_or(Value::Null);
+    let entity_count = match get(Some(&stored), "entityCount") {
+      value if nullish(value) => number(0),
+      value => value.cloned().unwrap_or(Value::Null),
+    };
+    result.set("changes", unchanged_changes(&stored)?);
+    result.set("manifest", stored);
+    result.set("changeCounts", changes_counts(&entity_count));
+    result.set("entityCount", entity_count);
+    result.set("cacheHit", Value::Bool(true));
+    result.set("cacheMode", string("git-index-blob"));
+    result.set("contentRead", Value::Bool(false));
+    result.set("written", Value::Bool(false));
+    return Ok(reorder(result, &["manifestPath", "manifest", "changes", "changeCounts", "entityCount", "cacheHit", "cacheMode", "contentRead", "written"]));
+  }
+
+  let raw = normalize_markdown(&read_text(&absolute)?);
+  let source_hash = sha256(&raw);
+  if !options.force
+    && is_current(stored.as_ref())
+    && strict_equals(get(stored.as_ref(), "sourceHash"), Some(&string(&source_hash)))
+  {
+    let manifest = materialize_manifest(&raw, stored.as_ref().unwrap_or(&Value::Null))?;
+    result.set("changes", unchanged_changes(&manifest)?);
+    result.set("entityCount", get(Some(&manifest), "entityCount").cloned().unwrap_or(Value::Null));
+    result.set("manifest", manifest);
+    result.set("cacheHit", Value::Bool(true));
+    result.set("cacheMode", string("source-hash"));
+    result.set("contentRead", Value::Bool(true));
+    result.set("written", Value::Bool(false));
+    return Ok(reorder(result, &["manifestPath", "manifest", "changes", "entityCount", "cacheHit", "cacheMode", "contentRead", "written"]));
+  }
+
+  let old = prior_manifest_view(stored.as_ref(), &raw, cwd)?;
+  let source_blob = hash_spec_blob(&relative, &raw, root, options.source_blob)?;
+  let manifest = build_manifest(&relative, &raw, old.as_ref(), None, None, Some(&source_blob))?;
+  let changes = changes_between(old.as_ref().map(|old| &old.value), &manifest)?;
+  write_spec_manifest(&manifest_path, &manifest)?;
+  let stored_schema = get(stored.as_ref(), "schema");
+  let migrated_from = if truthy(stored_schema)
+    && as_text(stored_schema).map(|schema| canonical_schema(&schema)).as_deref() != Some(SPEC_MANIFEST_SCHEMA)
+  {
+    stored_schema.cloned().unwrap_or(Value::Null)
+  } else {
+    Value::Null
+  };
+  result.set("entityCount", get(Some(&manifest), "entityCount").cloned().unwrap_or(Value::Null));
+  result.set("manifest", manifest);
+  result.set("changes", changes);
+  result.set("cacheHit", Value::Bool(false));
+  result.set("cacheMode", Value::Null);
+  result.set("contentRead", Value::Bool(true));
+  result.set("migratedFrom", migrated_from);
+  result.set("written", Value::Bool(true));
+  Ok(reorder(result, &["manifestPath", "manifest", "changes", "entityCount", "cacheHit", "cacheMode", "contentRead", "migratedFrom", "written"]))
+}
+
+/// An object with its members in the order a JavaScript literal creates them.
+fn reorder(object: Object, order: &[&str]) -> Value {
+  let mut ordered = Object::new();
+  for name in order {
+    if let Some(value) = object.get(name) {
+      ordered.set(name, value.clone());
+    }
+  }
+  Value::Object(ordered)
+}
+
+/// `indexSpec(file, cwd, { force })`.
+pub fn index_spec(file: &str, force: bool, cwd: &str) -> GitResult<Value> {
+  let context = engine::repo_context(cwd)?;
+  index_spec_with_context(file, &context.root, cwd, IndexOptions { force, ..IndexOptions::default() })
+}
+
+/// `hashWorkingTreeSpecs(files, context)`.
+fn hash_working_tree_specs(files: &[String], root: &str) -> GitResult<Vec<(String, String)>> {
+  if files.is_empty() {
+    return Ok(Vec::new());
+  }
+  if files.iter().any(|file| file.contains(['\r', '\n'])) {
+    return Err(GitError::new(
+      "unsafe-input",
+      "Specification paths containing newlines are not supported.",
+    ));
+  }
+  let output = causet_engine::process::run_git(
+    &["hash-object", "-w", "--stdin-paths"].map(String::from),
+    &causet_engine::process::RunOptions::new(root)
+      .input(format!("{}\n", files.join("\n")).into_bytes())
+      .untrimmed(),
+  )?;
+  let blobs: Vec<String> = output
+    .stdout
+    .split('\n')
+    .map(|line| line.strip_suffix('\r').unwrap_or(line).to_string())
+    .filter(|line| !line.is_empty())
+    .collect();
+  if blobs.len() != files.len() {
+    return Err(GitError::new(
+      "git-response-malformed",
+      "Git did not return a blob identity for every specification.",
+    ));
+  }
+  Ok(files.iter().cloned().zip(blobs).collect())
+}
+
+/// `Number(value.toFixed(2))`.
+fn fixed(value: f64) -> Value {
+  Value::Number((value * 100.0).round() / 100.0)
+}
+
+/// `indexAllSpecs(cwd, { force })`: every Markdown file Git tracks or sees,
+/// re-indexed only where its blob no longer matches the stored manifest.
+pub fn index_all_specs(force: bool, cwd: &str) -> GitResult<Value> {
+  let total_started = std::time::Instant::now();
+  let context = engine::repo_context(cwd)?;
+  let root = context.root.clone();
+  let mut files: Vec<String> = Vec::new();
+  let mut blobs: Vec<(String, String)> = Vec::new();
+  let mut dirty: Vec<String> = Vec::new();
+  for entry in engine::path_inventory(&["*.md".to_string()], &root)? {
+    if !files.contains(&entry.path) {
+      files.push(entry.path.clone());
+    }
+    if entry.tag == "?" {
+      dirty.push(entry.path.clone());
+      continue;
+    }
+    if entry.stage == Some(0.0) {
+      let blob = entry.blob.clone().unwrap_or_default();
+      match blobs.iter_mut().find(|(path, _)| *path == entry.path) {
+        Some(existing) => existing.1 = blob,
+        None => blobs.push((entry.path.clone(), blob)),
+      }
+    }
+    if entry.tag != "H" {
+      dirty.push(entry.path.clone());
+    }
+  }
+  files.retain(|file| std::path::Path::new(&text::resolve_path(&text::join(&root, file))).exists());
+  text::sort(&mut files);
+  let known: Vec<(String, String)> = files
+    .iter()
+    .filter(|file| !dirty.contains(file))
+    .filter_map(|file| blobs.iter().find(|(path, _)| path == file).cloned())
+    .collect();
+  let mut rebuild = Vec::new();
+  for file in &files {
+    let stored = read_stored_manifest(&manifest_path_from_relative(file, &root)?)?;
+    if let Some(stored) = &stored {
+      manifest_parser(Some(stored))?;
+    }
+    let cached = is_current(stored.as_ref())
+      && truthy(get(stored.as_ref(), "sourceBlob"))
+      && known
+        .iter()
+        .find(|(path, _)| path == file)
+        .is_some_and(|(_, blob)| strict_equals(get(stored.as_ref(), "sourceBlob"), Some(&string(blob))));
+    if force || !cached {
+      rebuild.push(file.clone());
+    }
+  }
+  let working = hash_working_tree_specs(&rebuild, &root)?;
+  let started = std::time::Instant::now();
+  let mut results = Vec::new();
+  for file in &files {
+    let blob = known
+      .iter()
+      .chain(working.iter())
+      .find(|(path, _)| path == file)
+      .map(|(_, blob)| blob.as_str());
+    results.push(index_spec_with_context(
+      file,
+      &root,
+      &root,
+      IndexOptions { force, lazy: true, source_blob: blob },
+    )?);
+  }
+  let duration = started.elapsed().as_secs_f64() * 1000.0;
+  let flag = |result: &Value, name: &str| truthy(get(Some(result), name));
+  let count = |predicate: &dyn Fn(&Value) -> bool| number(results.iter().filter(|result| predicate(result)).count());
+  let mut summary = Object::new();
+  summary.set("files", number(results.len()));
+  summary.set("cacheHits", count(&|result| flag(result, "cacheHit")));
+  summary.set("manifestsWritten", count(&|result| flag(result, "written")));
+  let blocks: f64 = results
+    .iter()
+    .map(|result| match get(Some(result), "entityCount") {
+      Some(Value::Number(count)) => *count,
+      _ => 0.0,
+    })
+    .sum();
+  summary.set("blocks", Value::Number(blocks));
+  summary.set("contentReads", count(&|result| flag(result, "contentRead")));
+  summary.set(
+    "blobCacheHits",
+    count(&|result| as_text(get(Some(result), "cacheMode")).as_deref() == Some("git-index-blob")),
+  );
+  let mut changes = Object::new();
+  for name in ["added", "removed", "changed", "moved", "unchanged"] {
+    let total: f64 = results
+      .iter()
+      .map(|result| match get(get(Some(result), "changeCounts"), name) {
+        Some(Value::Number(count)) => *count,
+        _ => match get(get(Some(result), "changes"), name) {
+          Some(Value::Array(items)) => items.len() as f64,
+          _ => 0.0,
+        },
+      })
+      .sum();
+    changes.set(name, Value::Number(total));
+  }
+  summary.set("changes", Value::Object(changes));
+  summary.set("durationMs", fixed(duration));
+  let preparation = (started - total_started).as_secs_f64() * 1000.0;
+  summary.set("preparationMs", fixed(preparation));
+  summary.set("totalDurationMs", fixed(total_started.elapsed().as_secs_f64() * 1000.0));
+  summary.set("results", Value::Array(results));
+  Ok(Value::Object(summary))
+}
+
+/// `formatSpecResult(result)`.
+pub fn format_spec_result(result: &Value, cwd: &str) -> GitResult<String> {
+  let manifest = get(Some(result), "manifest");
+  let changes = get(Some(result), "changes");
+  let length = |name: &str| match get(changes, name) {
+    Some(Value::Array(items)) => items.len(),
+    _ => 0,
+  };
+  let blocks = match get(manifest, "blocks") {
+    Some(Value::Array(items)) => items.len(),
+    _ => return Err(GitError::uncoded("Cannot read properties of undefined (reading 'length')")),
+  };
+  let manifest_path = js_text(get(Some(result), "manifestPath"));
+  let index = if truthy(get(Some(result), "cacheHit")) {
+    format!("cache hit ({}); manifest unchanged", js_text(get(Some(result), "cacheMode")))
+  } else {
+    "manifest written".to_string()
+  };
+  let mut lines = vec![
+    format!("artifact     {}", js_text(get(manifest, "artifactId"))),
+    format!("source       {}", js_text(get(manifest, "source"))),
+    format!("manifest     {}", relative_path(&text::resolve_path(cwd), &manifest_path)),
+    format!("blocks       {blocks}"),
+    format!("index        {index}"),
+  ];
+  if truthy(get(Some(result), "migratedFrom")) {
+    lines.push(format!(
+      "migration    {} -> {}",
+      js_text(get(Some(result), "migratedFrom")),
+      js_text(get(manifest, "schema"))
+    ));
+  }
+  lines.push(format!(
+    "changes      {} added, {} changed, {} moved, {} removed",
+    length("added"),
+    length("changed"),
+    length("moved"),
+    length("removed")
+  ));
+  Ok(lines.join("\n"))
+}
+
+/// `formatSpecBatch(result)`.
+pub fn format_spec_batch(result: &Value) -> String {
+  let member = |name: &str| js_text(get(Some(result), name));
+  let change = |name: &str| js_text(get(get(Some(result), "changes"), name));
+  let fixed = |name: &str| match get(Some(result), name) {
+    Some(Value::Number(value)) => format!("{value:.2}"),
+    _ => String::new(),
+  };
+  [
+    "Specification index".to_string(),
+    format!("files        {}", member("files")),
+    format!("entities     {}", member("blocks")),
+    format!("cache hits   {}", member("cacheHits")),
+    format!("blob hits    {}; {} content reads", member("blobCacheHits"), member("contentReads")),
+    format!("written      {}", member("manifestsWritten")),
+    format!(
+      "changes      {} added, {} changed, {} moved, {} removed",
+      change("added"),
+      change("changed"),
+      change("moved"),
+      change("removed")
+    ),
+    format!("duration     {} ms ({} ms Git preparation)", fixed("totalDurationMs"), fixed("preparationMs")),
+  ]
+  .join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // The merge planner
 // ---------------------------------------------------------------------------
@@ -983,6 +1618,13 @@ fn migration_entity_id(artifact: &str, key: &str, taken: &dyn Fn(&Value) -> bool
 
 /// `migrateManifest(raw, storedManifest).blocks`.
 fn migrated_blocks(raw: &str, stored: &Value) -> GitResult<Vec<Value>> {
+  Ok(blocks_of(Some(&migrate_manifest(raw, stored)?.value))?)
+}
+
+/// `migrateManifest(raw, storedManifest)`: the manifest re-parsed with the
+/// fence-aware parser, keeping each block's id where its location is
+/// unchanged, with the historical ids reserved.
+fn migrate_manifest(raw: &str, stored: &Value) -> GitResult<OldManifest> {
   let historical = materialize_manifest(raw, stored)?;
   let historical_blocks = match get(Some(&historical), "blocks") {
     Some(Value::Array(items)) => items.clone(),
@@ -1056,7 +1698,23 @@ fn migrated_blocks(raw: &str, stored: &Value) -> GitResult<Vec<Value>> {
     assigned.set(id.clone(), Value::Null);
     blocks.push(block_value(id, &block));
   }
-  Ok(blocks)
+  let mut overrides = Object::new();
+  for block in &blocks {
+    let key = js_text(get(Some(block), "semanticKey"));
+    let expected = string(&deterministic_entity_id(&artifact, &key));
+    if !strict_equals(get(Some(block), "id"), Some(&expected)) {
+      overrides.set(&key, get(Some(block), "id").cloned().unwrap_or(Value::Null));
+    }
+  }
+  let mut manifest = match historical {
+    Value::Object(object) => object,
+    _ => Object::new(),
+  };
+  manifest.set("schema", string(SPEC_MANIFEST_SCHEMA));
+  manifest.set("parser", string(SPEC_PARSER));
+  manifest.set("idOverrides", Value::Object(overrides));
+  manifest.set("blocks", Value::Array(blocks));
+  Ok(OldManifest { value: Value::Object(manifest), reserved: Some(reserved) })
 }
 
 /// `contentDecision(id, base, ours, theirs)`: the outcome, the conflict and
@@ -1295,61 +1953,6 @@ fn merge_order(
     }
   }
   (order, decision, Vec::new())
-}
-
-/// `buildManifest(source, raw, { artifactId, preferredIds, sourceBlob })` and
-/// `serializeSpecManifest`: the stored text of a merged manifest.
-fn serialized_merge_manifest(
-  source: &str,
-  markdown: &str,
-  artifact: &Value,
-  preferred: &ValueMap,
-  blob: &str,
-) -> GitResult<String> {
-  let canonical = normalize_markdown(markdown);
-  let artifact_text = js_text(Some(artifact));
-  let mut overrides: Vec<(String, Value)> = Vec::new();
-  let blocks = parse_blocks(&canonical, SPEC_PARSER);
-  for block in &blocks {
-    let id = match preferred.get(&string(&block.semantic_key)) {
-      Some(value) if !matches!(value, Value::Null) => value.clone(),
-      _ => string(&deterministic_entity_id(
-        &artifact_text,
-        &block.semantic_key,
-      )),
-    };
-    let expected = string(&deterministic_entity_id(
-      &artifact_text,
-      &block.semantic_key,
-    ));
-    if !strict_equals(Some(&id), Some(&expected)) {
-      match overrides
-        .iter_mut()
-        .find(|(key, _)| *key == block.semantic_key)
-      {
-        Some(entry) => entry.1 = id,
-        None => overrides.push((block.semantic_key.clone(), id)),
-      }
-    }
-  }
-  let mut map = ValueMap::default();
-  for (key, value) in overrides {
-    map.set(string(&key), value);
-  }
-  let mut stored = Object::new();
-  stored.set("schema", string(SPEC_MANIFEST_SCHEMA));
-  stored.set("artifactId", artifact.clone());
-  stored.set("source", string(source));
-  stored.set("sourceHash", string(&sha256(&canonical)));
-  if !blob.is_empty() {
-    stored.set("sourceBlob", string(blob));
-  }
-  stored.set("entityCount", number(blocks.len()));
-  stored.set("representation", string("annotated-markdown"));
-  stored.set("parser", string(SPEC_PARSER));
-  stored.set("idAlgorithm", string(SPEC_ID_ALGORITHM));
-  stored.set("idOverrides", sorted_overrides(&map)?);
-  Ok(format!("{}\n", stringify_pretty(&Value::Object(stored))))
 }
 
 /// `gitBlobId(value, algorithm)`.
@@ -1688,9 +2291,11 @@ fn plan_spec_merge(file: &str, revisions: [Option<Value>; 3], cwd: &str) -> GitR
         );
       }
       let blob = git_blob_id(&markdown, &context.object_format);
-      let serialized =
-        serialized_merge_manifest(&relative, &markdown, &artifact, &preferred, &blob)?;
+      let manifest = build_manifest(&relative, &markdown, None, Some(&artifact), Some(&preferred), Some(&blob))?;
+      let serialized = serialize_spec_manifest(&manifest)?;
       outcome.set("deleted", Value::Bool(false));
+      outcome.set("markdown", string(&markdown));
+      outcome.set("manifest", manifest);
       outcome.set("markdownHash", string(&sha256(&markdown)));
       outcome.set("manifestHash", string(&sha256(&serialized)));
     }
@@ -1930,6 +2535,48 @@ pub fn format_spec_merge_status(status: &Value) -> String {
   {
     lines.push(String::new());
     lines.push("Apply deterministic suggestions with: cst spec resolve --all".into());
+  }
+  lines.join("\n")
+}
+
+/// `planSpecMerge(file, base, ours, theirs)` for `cst spec merge-plan`, whose
+/// revisions are names on the command line.
+pub fn spec_merge_plan(file: &str, base: &str, ours: &str, theirs: &str, cwd: &str) -> GitResult<Value> {
+  plan_spec_merge(file, [Some(string(base)), Some(string(ours)), Some(string(theirs))], cwd)
+}
+
+/// `formatSpecMergePlan(plan)`.
+pub fn format_spec_merge_plan(plan: &Value) -> String {
+  let member = |name: &str| get(Some(plan), name);
+  let artifact = match member("artifactId") {
+    value if nullish(value) => "incompatible".to_string(),
+    value => js_text(value),
+  };
+  let mut lines = vec![
+    "Semantic specification merge".to_string(),
+    format!("status       {}", js_text(member("status"))),
+    format!("source       {}", js_text(member("file"))),
+    format!("artifact     {artifact}"),
+    format!("signature    {}", short(member("signature"))),
+    format!("ordering     {}", js_text(get(member("ordering"), "decision"))),
+  ];
+  let decisions: Vec<String> = entries(member("counts"))
+    .iter()
+    .map(|(name, count)| format!("{} {}", js_text(Some(count)), js_text(Some(name))))
+    .collect();
+  if !decisions.is_empty() {
+    lines.push(format!("blocks       {}", decisions.join(", ")));
+  }
+  if let Some(Value::Array(conflicts)) = member("conflicts") {
+    for conflict in conflicts {
+      lines.push(format!("! {}", format_spec_conflict(conflict)));
+    }
+  }
+  if as_text(member("status")).as_deref() == Some("clean") {
+    lines.push(format!("result       {}", short(get(member("result"), "markdownHash"))));
+    lines.push("The plan is deterministic; no language model judgment was used.".into());
+  } else {
+    lines.push("Ambiguous blocks remain for explicit review.".into());
   }
   lines.join("\n")
 }

@@ -218,7 +218,7 @@ through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
 `rebase-plan`, `proof-bundle`, and `verify-proof`, #144; `init`, `commit`, and `metadata retain`, `export`, `import` and `dispose`, #145; `branch`, `merge`,
 `compact-merge`, `hard-squash` and `cherry-pick`, #146; `workspace list`,
 `checkpoint`, `prune`, `create`, `move`, `archive`, `restore` and `repair`,
-#149), it also compares their output in a repository. The only members allowed to differ are
+`spec index` and `spec merge-plan`, #149), it also compares their output in a repository. The only members allowed to differ are
 `implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 
