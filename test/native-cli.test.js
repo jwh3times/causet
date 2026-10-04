@@ -1274,6 +1274,114 @@ test("spec index writes the same manifests natively, single and --all (#149)", {
   }
 });
 
+test("spec resolve applies a paused step's deterministic merges natively (#149)", { skip }, () => {
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"));
+  };
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+  const must = (cwd, ...args) => {
+    const made = cst(cwd, ...args);
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const spec = (alpha, beta) => `# Alpha\n\n${alpha}\n\n# Beta\n\n${beta}\n`;
+  // A paused reconciliation of `feature` onto `main`, its spec conflicts
+  // given by `targetAlpha`: the same block as the source for a blocked plan.
+  const build = (name, { targetAlpha = "base alpha", second = false } = {}) => {
+    const repo = path.join(outside, name);
+    fs.mkdirSync(path.join(repo, "docs"), { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Resolve twin");
+    git(repo, "config", "user.email", "resolve-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    const files = second ? ["docs/spec.md", "docs/two.md"] : ["docs/spec.md"];
+    const stage = (alpha, beta, message) => {
+      for (const file of files) {
+        fs.writeFileSync(path.join(repo, file), spec(alpha, beta));
+        must(repo, "spec", "index", file);
+      }
+      git(repo, "add", ".");
+      must(repo, "commit", "-m", message);
+    };
+    stage("base alpha", "base beta", "base specification");
+    must(repo, "init");
+    git(repo, "switch", "-q", "-c", "feature");
+    stage("source alpha", "base beta", "source edits alpha");
+    git(repo, "switch", "-q", "main");
+    stage(targetAlpha, "target beta", "target edits");
+    assert.notEqual(cst(repo, "reconcile", "feature").status, 0);
+    return repo;
+  };
+  const journal = (repo) => path.join(repo, ".git", "causet", "reconciliation.json");
+  const editJournal = (repo, change) => {
+    const state = JSON.parse(fs.readFileSync(journal(repo), "utf8"));
+    change(state);
+    fs.writeFileSync(journal(repo), `${JSON.stringify(state, null, 2)}\n`);
+  };
+  const cases = [
+    [["spec", "resolve"]],
+    [["spec", "resolve", "--all", "--json"]],
+    [["spec", "resolve", "docs/spec.md"]],
+    [["spec", "resolve", "docs/other.md"], {}, null, /No semantic specification merge is pending/],
+    [["spec", "resolve", "--json"], { targetAlpha: "target alpha" }, null, /manual-review-required/],
+    [["spec", "resolve"], { second: true }, null, /Choose a spec path or pass --all/],
+    [["spec", "resolve", "--all"], { second: true }],
+    [["spec", "resolve", "docs/two.md", "--json"], { second: true }],
+    [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { state.current.semanticMerges = 5; }), /\(\(intermediate value\) \?\? \[\]\) is not iterable/],
+    [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => {
+      state.current.semanticMerges = [{ path: "docs/spec.md", algorithm: "stable-markdown-three-way/v2" }, { path: "keep.md", algorithm: "stable-markdown-three-way/v2" }];
+    })],
+    [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { state.approvedSpecMerges = [null]; }), /reading 'algorithm'/],
+    [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { state.steps = [{ semanticMerges: [{ algorithm: "stable-markdown-three-way/v1" }] }]; }), /unsupported merge algorithm/],
+    [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { state.forecastApproval = { applied: "x" }; }), /flatMap is not a function/],
+    [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { delete state.id; })],
+    [["spec", "resolve", "--all"], {}, (repo) => fs.rmSync(journal(repo)), /No VCS Lab conflict is pending/],
+  ];
+  const fixtures = new Map();
+  for (const [index, [args, options = {}, prepare, outcome]] of cases.entries()) {
+    const key = JSON.stringify(options);
+    if (!fixtures.has(key)) fixtures.set(key, build(`resolve-base-${fixtures.size}`, options));
+    const sides = ["js", "rust"].map((name) => {
+      const repo = path.join(outside, `resolve-${name}-${index}`);
+      fs.cpSync(fixtures.get(key), repo, { recursive: true });
+      prepare?.(repo);
+      return repo;
+    });
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: sides[0], encoding: "utf8", env: testEnv(dated),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args) + " #" + index;
+    // Each case must reach the path it is named for, not fail alike for another reason.
+    if (outcome) assert.match(expected.stdout + expected.stderr, outcome, label);
+    else assert.equal(expected.status, 0, `${label}\n${expected.stderr}`);
+    assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+    assert.equal(rename(actual.stderr), rename(expected.stderr), "stderr of " + label);
+    assert.equal(rename(actual.stdout), rename(expected.stdout), "stdout of " + label);
+    const snapshot = (repo) => rename([
+      git(repo, "status", "--porcelain=v1").stdout,
+      git(repo, "diff", "--cached").stdout,
+      fs.existsSync(journal(repo)) ? fs.readFileSync(journal(repo), "utf8") : "(no journal)",
+    ].join("\n--\n"));
+    assert.equal(snapshot(sides[1]), snapshot(sides[0]), "repository after " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

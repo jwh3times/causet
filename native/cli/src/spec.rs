@@ -2328,7 +2328,7 @@ fn plan_spec_merge(file: &str, revisions: [Option<Value>; 3], cwd: &str) -> GitR
 }
 
 /// `compactSpecMerge(plan)`.
-fn compact_spec_merge(plan: &Value) -> Value {
+fn compact_spec_merge(plan: &Value, selection_method: Value) -> Value {
   let member = |name: &str| get(Some(plan), name).cloned().unwrap_or(Value::Null);
   let result = get(Some(plan), "result");
   let hash = |name: &str| {
@@ -2356,7 +2356,7 @@ fn compact_spec_merge(plan: &Value) -> Value {
     "resolvedPaths",
     Value::Array(vec![member("file"), member("manifestFile")]),
   );
-  compact.set("selectionMethod", Value::Null);
+  compact.set("selectionMethod", selection_method);
   Value::Object(compact)
 }
 
@@ -2442,27 +2442,7 @@ fn operation_merge_endpoints(current: Option<&Value>, cwd: &str) -> GitResult<[O
 /// `pendingSpecMergeStatus()`.
 pub fn pending_spec_merge_status(cwd: &str) -> GitResult<Value> {
   let operation = read_pending_operation(cwd)?;
-  let current = get(operation.as_ref(), "current");
-  let mut plans = Vec::new();
-  if truthy(current) {
-    let conflicted = get(current, "conflictedPaths");
-    let empty = Value::Array(Vec::new());
-    let markdown = spec_files_for_conflict_paths(if nullish(conflicted) {
-      Some(&empty)
-    } else {
-      conflicted
-    })?;
-    let endpoints = operation_merge_endpoints(current, cwd)?;
-    for file in markdown {
-      let Value::String(units) = &file else {
-        return Err(GitError::node(
-          "The \"paths[1]\" argument must be of type string.",
-          "ERR_INVALID_ARG_TYPE",
-        ));
-      };
-      plans.push(plan_spec_merge(&lossy(units), endpoints.clone(), cwd)?);
-    }
-  }
+  let plans = spec_merge_plans_for_operation(operation.as_ref(), cwd)?;
   let mut status = Object::new();
   status.set("active", Value::Bool(!plans.is_empty()));
   let id = get(operation.as_ref(), "id");
@@ -2476,7 +2456,7 @@ pub fn pending_spec_merge_status(cwd: &str) -> GitResult<Value> {
   );
   status.set(
     "plans",
-    Value::Array(plans.iter().map(compact_spec_merge).collect()),
+    Value::Array(plans.iter().map(|plan| compact_spec_merge(plan, Value::Null)).collect()),
   );
   Ok(Value::Object(status))
 }
@@ -2578,6 +2558,270 @@ pub fn format_spec_merge_plan(plan: &Value) -> String {
   } else {
     lines.push("Ambiguous blocks remain for explicit review.".into());
   }
+  lines.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Applying pending merges
+// ---------------------------------------------------------------------------
+
+/// `specMergePlansForOperation(operation, cwd)`.
+fn spec_merge_plans_for_operation(operation: Option<&Value>, cwd: &str) -> GitResult<Vec<Value>> {
+  let current = get(operation, "current");
+  let mut plans = Vec::new();
+  if !truthy(current) {
+    return Ok(plans);
+  }
+  let conflicted = get(current, "conflictedPaths");
+  let empty = Value::Array(Vec::new());
+  let markdown = spec_files_for_conflict_paths(if nullish(conflicted) { Some(&empty) } else { conflicted })?;
+  let endpoints = operation_merge_endpoints(current, cwd)?;
+  for file in markdown {
+    let Value::String(units) = &file else {
+      return Err(GitError::node(
+        "The \"paths[1]\" argument must be of type string.",
+        "ERR_INVALID_ARG_TYPE",
+      ));
+    };
+    plans.push(plan_spec_merge(&lossy(units), endpoints.clone(), cwd)?);
+  }
+  Ok(plans)
+}
+
+/// `[...(value ?? [])]`, with V8's message for a value that is not iterable.
+fn spread_or_empty(value: Option<&Value>, expression: &str) -> GitResult<Vec<Value>> {
+  match value {
+    value if nullish(value) => Ok(Vec::new()),
+    Some(Value::Array(items)) => Ok(items.clone()),
+    Some(Value::String(units)) => Ok(lossy(units).chars().map(|c| string(&c.to_string())).collect()),
+    _ => Err(GitError::uncoded(format!("{expression} is not iterable"))),
+  }
+}
+
+/// `...(value ?? []).flatMap((step) => step.semanticMerges ?? [])`.
+fn step_merges(value: Option<&Value>, expression: &str) -> GitResult<Vec<Value>> {
+  let steps = match value {
+    value if nullish(value) => return Ok(Vec::new()),
+    Some(Value::Array(steps)) => steps,
+    _ => {
+      return Err(GitError::uncoded(format!(
+        "{expression}.flatMap is not a function or its return value is not iterable"
+      )));
+    }
+  };
+  let mut merges = Vec::new();
+  for step in steps {
+    if matches!(step, Value::Null) {
+      return Err(GitError::uncoded("Cannot read properties of null (reading 'semanticMerges')"));
+    }
+    match get(Some(step), "semanticMerges") {
+      value if nullish(value) => {}
+      Some(Value::Array(items)) => merges.extend(items.iter().cloned()),
+      Some(other) => merges.push(other.clone()),
+      None => {}
+    }
+  }
+  Ok(merges)
+}
+
+/// `assertCurrentSpecMerges(merges)`.
+fn assert_current_spec_merges(merges: &[Value]) -> GitResult<()> {
+  for merge in merges {
+    if matches!(merge, Value::Null) {
+      return Err(GitError::uncoded("Cannot read properties of null (reading 'algorithm')"));
+    }
+    if as_text(get(Some(merge), "algorithm")).as_deref() != Some(SPEC_MERGE_ALGORITHM) {
+      return Err(GitError::new(
+        "precondition-not-met",
+        "Stored semantic decisions use an unsupported merge algorithm. Regenerate the forecast, or abort the pending operation and retry.",
+      ));
+    }
+  }
+  Ok(())
+}
+
+/// `assertCurrentSpecDecisions(record)`: every semantic decision a journal or
+/// its forecast approval stores was made by this merge algorithm.
+fn assert_current_spec_decisions(record: Option<&Value>) -> GitResult<()> {
+  if !truthy(record) {
+    return Ok(());
+  }
+  let mut merges = spread_or_empty(get(record, "approvedSpecMerges"), "(record.approvedSpecMerges ?? [])")?;
+  merges.extend(spread_or_empty(
+    get(get(record, "current"), "semanticMerges"),
+    "((intermediate value) ?? [])",
+  )?);
+  merges.extend(step_merges(get(record, "steps"), "(record.steps ?? [])")?);
+  merges.extend(step_merges(get(record, "applied"), "(record.applied ?? [])")?);
+  assert_current_spec_merges(&merges)?;
+  let approval = get(record, "forecastApproval");
+  if truthy(approval) {
+    assert_current_spec_decisions(approval)?;
+  }
+  Ok(())
+}
+
+/// `materializeSpecMerge(plan, cwd)`: the merged Markdown and manifest
+/// written and staged, or both removed when the merge deletes the spec.
+fn materialize_spec_merge(plan: &Value, cwd: &str) -> GitResult<()> {
+  assert_current_spec_merges(std::slice::from_ref(plan))?;
+  let member = |name: &str| get(Some(plan), name);
+  let result = member("result");
+  let file = js_text(member("file"));
+  let manifest_file = js_text(member("manifestFile"));
+  if as_text(member("status")).as_deref() != Some("clean") || !truthy(result) {
+    return Err(GitError::new("manual-review-required", format!("Spec merge for '{file}' is not clean.")));
+  }
+  let git = |args: &[&str]| {
+    let args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+    causet_engine::process::run_git(&args, &causet_engine::process::RunOptions::new(cwd)).map(|_| ())
+  };
+  if truthy(get(result, "deleted")) {
+    return git(&["rm", "--ignore-unmatch", "--", &file, &manifest_file]);
+  }
+  let markdown_path = text::resolve(cwd, &file);
+  let manifest_path = text::resolve(cwd, &manifest_file);
+  for path in [&markdown_path, &manifest_path] {
+    if let Some(parent) = std::path::Path::new(path).parent() {
+      std::fs::create_dir_all(parent)
+        .map_err(|error| crate::envelope::io_failure(&error, "mkdir", &parent.to_string_lossy()))?;
+    }
+  }
+  std::fs::write(&markdown_path, js_text(get(result, "markdown")))
+    .map_err(|error| crate::envelope::io_failure(&error, "open", &markdown_path))?;
+  write_spec_manifest(&manifest_path, get(result, "manifest").unwrap_or(&Value::Null))?;
+  git(&["add", "--", &file, &manifest_file])
+}
+
+/// `writePendingOperation(operation, cwd)`: the journal its schema names,
+/// with `updatedAt` refreshed.
+fn write_pending_operation(operation: &Value, cwd: &str) -> GitResult<()> {
+  let schema = as_text(get(Some(operation), "schema")).map(|schema| canonical_schema(&schema));
+  let file = match schema.as_deref() {
+    Some("causet.reconciliation-operation/v4") => "reconciliation.json",
+    Some("causet.rebase-operation/v3") => "rebase.json",
+    _ => {
+      let declared = get(Some(operation), "schema");
+      return Err(GitError::new(
+        "unknown-schema-version",
+        format!(
+          "Cannot persist unknown pending operation schema '{}'.",
+          if nullish(declared) { "(missing)".to_string() } else { js_text(declared) }
+        ),
+      ));
+    }
+  };
+  let git_dir = engine::repo_context(cwd)?.git_dir;
+  let path = text::join(&causet_engine::locations::runtime_directory(&git_dir, cwd)?, file);
+  let mut updated = match operation {
+    Value::Object(object) => object.clone(),
+    _ => Object::new(),
+  };
+  updated.set("updatedAt", string(&causet_engine::metrics::iso_now()));
+  if let Some(parent) = std::path::Path::new(&path).parent() {
+    std::fs::create_dir_all(parent)
+      .map_err(|error| crate::envelope::io_failure(&error, "mkdir", &parent.to_string_lossy()))?;
+  }
+  let temporary = format!("{path}.tmp-{}", std::process::id());
+  std::fs::write(&temporary, format!("{}\n", stringify_pretty(&Value::Object(updated))))
+    .map_err(|error| crate::envelope::io_failure(&error, "open", &temporary))?;
+  std::fs::rename(&temporary, &path).map_err(|error| crate::envelope::io_failure(&error, "rename", &temporary))
+}
+
+/// `applyPendingSpecMerges({ path, all })`: the clean deterministic merges of
+/// the paused step, materialized and recorded on the journal.
+pub fn apply_pending_spec_merges(path: Option<&str>, all: bool, cwd: &str) -> GitResult<Value> {
+  let Some(mut operation) = read_pending_operation(cwd)?.filter(|operation| truthy(get(Some(operation), "current"))) else {
+    return Err(GitError::new("nothing-pending", "No VCS Lab conflict is pending in this worktree."));
+  };
+  assert_current_spec_decisions(Some(&operation))?;
+  let mut plans = spec_merge_plans_for_operation(Some(&operation), cwd)?;
+  if let Some(path) = path.filter(|path| !path.is_empty()) {
+    plans.retain(|plan| as_text(get(Some(plan), "file")).as_deref() == Some(path));
+  }
+  if plans.is_empty() {
+    return Err(GitError::new("nothing-pending", "No semantic specification merge is pending."));
+  }
+  if !all && path.is_none_or(str::is_empty) && plans.len() != 1 {
+    return Err(GitError::new("ambiguous-match", "Choose a spec path or pass --all."));
+  }
+  let blocked: Vec<String> = plans
+    .iter()
+    .filter(|plan| as_text(get(Some(plan), "status")).as_deref() != Some("clean"))
+    .map(|plan| {
+      let types: Vec<String> = match get(Some(plan), "conflicts") {
+        Some(Value::Array(conflicts)) => conflicts.iter().map(|conflict| js_text(get(Some(conflict), "type"))).collect(),
+        _ => Vec::new(),
+      };
+      format!("{}: {}", js_text(get(Some(plan), "file")), types.join(", "))
+    })
+    .collect();
+  if !blocked.is_empty() {
+    return Err(
+      GitError::new("manual-review-required", "One or more spec merges require manual review.")
+        .details(blocked.join("\n")),
+    );
+  }
+  let mut applied = Vec::new();
+  for plan in &plans {
+    materialize_spec_merge(plan, cwd)?;
+    applied.push(compact_spec_merge(plan, string("explicit-spec-merge")));
+  }
+  let current = get(Some(&operation), "current");
+  let existing = match get(current, "semanticMerges") {
+    value if nullish(value) => Vec::new(),
+    Some(Value::Array(items)) => items.clone(),
+    _ => {
+      return Err(GitError::uncoded(
+        "(operation.current.semanticMerges ?? []).filter is not a function or its return value is not iterable",
+      ));
+    }
+  };
+  let mut merges = Vec::new();
+  for item in existing {
+    if matches!(item, Value::Null) {
+      return Err(GitError::uncoded("Cannot read properties of null (reading 'path')"));
+    }
+    let replaced = applied
+      .iter()
+      .any(|done| strict_equals(get(Some(done), "path"), get(Some(&item), "path")));
+    if !replaced {
+      merges.push(item);
+    }
+  }
+  merges.extend(applied.iter().cloned());
+  if let Value::Object(object) = &mut operation {
+    if let Some(Value::Object(current)) = object.get("current").cloned().as_ref() {
+      let mut current = current.clone();
+      current.set("semanticMerges", Value::Array(merges));
+      object.set("current", Value::Object(current));
+    }
+  }
+  write_pending_operation(&operation, cwd)?;
+  let mut result = Object::new();
+  // `{ operationId: operation.id }`: JSON leaves out an undefined id.
+  if let Some(id) = get(Some(&operation), "id") {
+    result.set("operationId", id.clone());
+  }
+  result.set("applied", Value::Array(applied));
+  Ok(Value::Object(result))
+}
+
+/// `formatSpecMergeAction(result)`.
+pub fn format_spec_merge_action(result: &Value) -> String {
+  let applied = match get(Some(result), "applied") {
+    Some(Value::Array(items)) => items.clone(),
+    _ => Vec::new(),
+  };
+  let mut lines = vec![format!(
+    "Applied {} deterministic spec merge{}.",
+    applied.len(),
+    if applied.len() == 1 { "" } else { "s" }
+  )];
+  for item in &applied {
+    lines.push(format!("  {}", js_text(get(Some(item), "path"))));
+  }
+  lines.push("Inspect the staged Markdown and sidecars, then run: cst reconcile --continue".into());
   lines.join("\n")
 }
 

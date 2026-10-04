@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst spec resolve [<path>] [--all]` natively (#149,
+  fourth increment). It ports `applyPendingSpecMerges` of `src/specs.js`:
+  - **Checking the decisions:** every semantic decision the journal and its
+    forecast approval store must come from the current merge algorithm. A
+    malformed journal fails with V8's own errors.
+  - **Choosing the merges:** the paused step's plans, filtered by path, with
+    the refusals for nothing pending, an ambiguous choice, and plans that need
+    manual review.
+  - **Applying:** the merged Markdown and manifest written and staged, or both
+    removed for a deletion.
+  - **Recording:** the `explicit-spec-merge` decisions written back to the
+    reconciliation or rebase journal.
+
+  Every spec command now answers natively except `spec benchmark`.
 - The Rust CLI answers `cst spec index <file>`, `cst spec index --all` (each
   with `--force`) and `cst spec merge-plan <file> <base> <ours> <theirs>`
   natively (#149, third increment). It ports the indexing half of
