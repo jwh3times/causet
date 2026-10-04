@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mutadui94617ec96797c",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-workspaces-2",
+      "sourceHead": "bad94a2d28cf9d2cb5989752c535dc1c9c71c6e8",
+      "sourceSubject": "feat: answer the cst workspace lifecycle natively",
+      "targetBefore": "09ecaf81af851bbbd8109a5e995abf0a1dfdd5df",
+      "landingCommit": "d692a647ed84533496a56d2fb3e55cbb32dd0026",
+      "base": "09ecaf81af851bbbd8109a5e995abf0a1dfdd5df",
+      "absorbedCommits": [
+        "bad94a2d28cf9d2cb5989752c535dc1c9c71c6e8"
+      ],
+      "absorbedChanges": [
+        "ch_0mut6vlqj1ebdde983f26"
+      ],
+      "resultTree": "ad71eb07ecd47c7274e3d846e0ea3c72b83bdef4",
+      "createdAt": "2026-10-04T03:54:01.562Z"
+    }
+  ]
+}
