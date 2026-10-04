@@ -129,6 +129,29 @@ Causal edges
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
     "spec" => {
       let file = parsed.positionals.get(1).cloned().unwrap_or_default();
+      if parsed.positionals.first().map(String::as_str) == Some("index") {
+        let force = parsed.truthy("force");
+        if parsed.truthy("all") {
+          let result = crate::spec::index_all_specs(force, cwd)?;
+          if json {
+            return Ok((result, 0));
+          }
+          return Ok((causet_model::json::string(&crate::spec::format_spec_batch(&result)), 0));
+        }
+        let result = crate::spec::index_spec(&file, force, cwd)?;
+        if json {
+          return Ok((result, 0));
+        }
+        return Ok((causet_model::json::string(&crate::spec::format_spec_result(&result, cwd)?), 0));
+      }
+      if parsed.positionals.first().map(String::as_str) == Some("merge-plan") {
+        let at = |index: usize| parsed.positionals.get(index).cloned().unwrap_or_default();
+        let plan = crate::spec::spec_merge_plan(&file, &at(2), &at(3), &at(4), cwd)?;
+        if json {
+          return Ok((plan, 0));
+        }
+        return Ok((causet_model::json::string(&crate::spec::format_spec_merge_plan(&plan)), 0));
+      }
       if parsed.positionals.first().map(String::as_str) == Some("show") {
         // `print(readSpecManifest(file), true)`: JSON either way.
         return Ok((crate::spec::read_spec_manifest(&file, cwd)?, 0));

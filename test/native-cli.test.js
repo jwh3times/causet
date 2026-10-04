@@ -1093,6 +1093,187 @@ test("workspace create, move, archive, restore and repair answer natively as the
   }
 });
 
+test("spec merge-plan answers natively, byte for byte (#149)", { skip }, () => {
+  const repo = path.join(outside, "spec-plan-repo");
+  fs.mkdirSync(path.join(repo, "specs"), { recursive: true });
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() });
+  const cst = (...args) => {
+    const made = spawnSync(process.execPath, [oracle, ...args], { cwd: repo, encoding: "utf8", env: testEnv(neutral) });
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const write = (name, text) => fs.writeFileSync(path.join(repo, name), text);
+  const commitSpec = (message, ...files) => {
+    for (const file of files) cst("spec", "index", file);
+    git("add", "-A");
+    git("commit", "-q", "-m", message);
+  };
+  git("init", "-q", "-b", "main");
+  git("config", "user.name", "Spec twin");
+  git("config", "user.email", "spec-twin@example.invalid");
+  git("config", "core.autocrlf", "false");
+  const design = (intro, alpha, beta) => [
+    "# Design", "", intro, "",
+    "## Alpha", "", alpha, "",
+    "```md", "# Not a heading inside a fence", "```", "",
+    "## Beta", "", beta, "",
+    "- REQ-1: The system shall stay deterministic.", "",
+  ].join("\n");
+  write("specs/design.md", design("Intro.", "Alpha text.", "Beta text."));
+  write("notes.txt", "plain\n");
+  commitSpec("base", "specs/design.md");
+  git("switch", "-q", "-c", "ours");
+  write("specs/design.md", design("Intro.", "Alpha text, ours.", "Beta text."));
+  write("specs/added.md", "# Added\n\nOnly ours has it.\n");
+  commitSpec("ours", "specs/design.md", "specs/added.md");
+  git("switch", "-q", "-c", "theirs", "main");
+  write("specs/design.md", design("Intro.", "Alpha text.", "Beta text, theirs."));
+  commitSpec("theirs", "specs/design.md");
+  git("switch", "-q", "-c", "rival", "main");
+  write("specs/design.md", design("Intro.", "Alpha text, rival.", "Beta text."));
+  commitSpec("rival", "specs/design.md");
+  git("switch", "-q", "-c", "unindexed", "main");
+  write("specs/design.md", design("Intro, unindexed.", "Alpha text.", "Beta text."));
+  git("commit", "-q", "-am", "edit without indexing");
+  git("switch", "-q", "main");
+
+  const inRepo = (command, args, env) => spawnSync(command, args, {
+    cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, ...env }),
+  });
+  for (const args of [
+    ["spec", "merge-plan", "specs/design.md", "main", "ours", "theirs"],
+    ["spec", "merge-plan", "specs/design.md", "main", "ours", "theirs", "--json"],
+    ["spec", "merge-plan", "specs/design.md", "main", "ours", "rival"],
+    ["spec", "merge-plan", "specs/design.md", "main", "ours", "rival", "--json"],
+    ["spec", "merge-plan", "specs/design.md", "main", "main", "theirs"],
+    ["spec", "merge-plan", "specs/added.md", "main", "ours", "theirs", "--json"],
+    ["spec", "merge-plan", "specs/design.md", "main", "unindexed", "theirs"],
+    ["spec", "merge-plan", "specs/design.md", "main", "unindexed", "theirs", "--json"],
+    ["spec", "merge-plan", "notes.txt", "main", "ours", "theirs"],
+    ["spec", "merge-plan", "specs/design.md", "main", "no-such-revision", "theirs", "--json"],
+    ["spec", "merge-plan", "../outside.md", "main", "ours", "theirs"],
+    ["spec", "merge-plan", "specs/missing.md", "main", "ours", "theirs"],
+  ]) {
+    const expected = inRepo(process.execPath, [oracle, ...args], {});
+    if (rust === selectedCli) vlabPrefix();
+    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const label = JSON.stringify(args);
+    assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
+    assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
+    assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
+  }
+});
+
+test("spec index writes the same manifests natively, single and --all (#149)", { skip }, () => {
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      // Entity ids derive from the random artifact id.
+      .replace(/\bent_[0-9a-f]{24}\b/g, swap("entity"))
+      .replace(/("(?:durationMs|preparationMs|totalDurationMs)": )[\d.]+/g, "$1<ms>")
+      .replace(/duration {5}[\d.]+ ms \([\d.]+ ms/g, "duration     <ms> ms (<ms> ms");
+  };
+  const base = path.join(outside, "spec-index-base");
+  fs.mkdirSync(path.join(base, "specs"), { recursive: true });
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv() });
+  const cst = (cwd, ...args) => {
+    const made = spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(neutral) });
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const design = (alpha, extra = "") => [
+    "# Design", "", "Intro.", "",
+    "## Alpha", "", alpha, "",
+    "```md", "# Fenced, not a heading", "```", "",
+    extra,
+    "## Beta", "", "Beta text.", "",
+    "- REQ-1: The system shall stay deterministic.", "",
+  ].join("\n");
+  git(base, "init", "-q", "-b", "main");
+  git(base, "config", "user.name", "Spec twin");
+  git(base, "config", "user.email", "spec-twin@example.invalid");
+  git(base, "config", "core.autocrlf", "false");
+  fs.writeFileSync(path.join(base, "specs", "design.md"), design("Alpha text."));
+  fs.writeFileSync(path.join(base, "specs", "other.md"), "# Other\n\nText.\n");
+  fs.writeFileSync(path.join(base, "README.md"), "# Readme\n");
+  git(base, "add", "-A");
+  git(base, "commit", "-q", "-m", "base");
+  const manifestFile = (repo, name) => path.join(repo, ".causet", "specs", "specs", `${name}.json`);
+  const indexed = (repo) => {
+    cst(repo, "spec", "index", "specs/design.md");
+    cst(repo, "spec", "index", "specs/other.md");
+  };
+  const legacy = (repo, verifiable) => {
+    cst(repo, "spec", "index", "specs/design.md");
+    const file = manifestFile(repo, "design.md");
+    const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+    manifest.schema = "causet.spec-manifest/v2";
+    manifest.parser = "stable-markdown-blocks/v1";
+    if (!verifiable) {
+      manifest.sourceHash = "0".repeat(64);
+      delete manifest.sourceBlob;
+    }
+    fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+  };
+  const cases = [
+    [["spec", "index", "specs/design.md"]],
+    [["spec", "index", "specs/design.md", "--json"]],
+    [["spec", "index", "specs/design.md"], indexed],
+    [["spec", "index", "specs/design.md", "--json"], (repo) => {
+      indexed(repo);
+      fs.writeFileSync(path.join(repo, "specs", "design.md"), design("Alpha text, edited.", "## Gamma\n\nNew.\n\n"));
+    }],
+    [["spec", "index", "specs/design.md", "--force"], indexed],
+    [["spec", "index", "specs/design.md", "--json"], (repo) => legacy(repo, true)],
+    [["spec", "index", "specs/design.md"], (repo) => legacy(repo, false)],
+    [["spec", "index", "specs/design.md"], (repo) => {
+      fs.mkdirSync(path.join(repo, ".causet", "specs", "specs"), { recursive: true });
+      fs.writeFileSync(manifestFile(repo, "design.md"), "{\"schema\":\"causet.spec-manifest/v9\",\"artifactId\":\"a\",\"source\":\"s\"}\n");
+    }],
+    [["spec", "index", "specs/missing.md"]],
+    [["spec", "index", "../outside.md"]],
+    [["spec", "index", "specs"]],
+    [["spec", "index", "--all"]],
+    [["spec", "index", "--all", "--json"], (repo) => {
+      indexed(repo);
+      fs.writeFileSync(path.join(repo, "specs", "design.md"), design("Alpha text, dirty."));
+      fs.writeFileSync(path.join(repo, "specs", "untracked.md"), "# Untracked\n");
+    }],
+    [["spec", "index", "--all", "--force", "--json"], indexed],
+  ];
+  for (const [index, [args, prepare]] of cases.entries()) {
+    const sides = ["js", "rust"].map((name) => {
+      const repo = path.join(outside, `spec-index-${name}-${index}`);
+      fs.cpSync(base, repo, { recursive: true });
+      prepare?.(repo);
+      return repo;
+    });
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: sides[0], encoding: "utf8", env: testEnv(neutral),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: sides[1], encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args) + " #" + index;
+    const local = (text, repo) => rename(text.split(JSON.stringify(repo).slice(1, -1)).join("<repo>").split(repo).join("<repo>"));
+    assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+    assert.equal(local(actual.stderr, sides[1]), local(expected.stderr, sides[0]), "stderr of " + label);
+    assert.equal(local(actual.stdout, sides[1]), local(expected.stdout, sides[0]), "stdout of " + label);
+    const snapshot = (repo) => {
+      const directory = path.join(repo, ".causet", "specs", "specs");
+      const manifests = fs.existsSync(directory)
+        ? fs.readdirSync(directory).sort().map((name) => `${name}\n${fs.readFileSync(path.join(directory, name), "utf8")}`)
+        : [];
+      return rename([...manifests, git(repo, "count-objects", "-v").stdout.split("\n")[0]].join("\n--\n"));
+    };
+    assert.equal(snapshot(sides[1]), snapshot(sides[0]), "manifests after " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

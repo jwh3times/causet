@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst spec index <file>`, `cst spec index --all` (each
+  with `--force`) and `cst spec merge-plan <file> <base> <ours> <theirs>`
+  natively (#149, third increment). It ports the indexing half of
+  `src/specs.js`:
+  - **Building a manifest:** `buildManifest`, with ids kept from the prior
+    manifest, preferred ids, and migration-reserved ids.
+  - **The stored form:** the sparse serialization.
+  - **Verifying the prior source:** from the stored blob, the index, `HEAD`
+    or the working file.
+  - **Migration:** manifests from before the fence-aware parser (ADR-0026),
+    with each block's id kept where its location is unchanged.
+  - **Caches:** the source-hash cache for one file, and the Git-index blob
+    cache for `--all` across tracked, modified and untracked Markdown.
+  - **Changes:** the added, changed, moved and removed counts.
+
+  `spec merge-plan` now returns the merged Markdown and manifest in its
+  result as JavaScript does. `spec status` needed only their hashes, so the
+  Rust planner built only those.
 - The Rust CLI answers the workspace lifecycle natively (#149, second
   increment): `cst workspace create` (with `--from`, `--path`, `--owner`,
   `--focus` and `--cone`), `move`, `archive`, `restore` and `repair`. It
