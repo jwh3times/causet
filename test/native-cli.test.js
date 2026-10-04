@@ -959,6 +959,140 @@ test("workspace list, checkpoint and prune answer natively as the JavaScript CLI
   }
 });
 
+test("workspace create, move, archive, restore and repair answer natively as the JavaScript CLI does (#149)", { skip }, () => {
+  const rename = (text, side) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .split(side).join("<side>")
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, swap("time"));
+  };
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => {
+    const made = spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const build = (side) => {
+    const base = path.join(outside, side);
+    const repo = path.join(base, "repo");
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Workspace twin");
+    git(repo, "config", "user.email", "workspace-twin@example.invalid");
+    for (const directory of ["src", "lib", "docs"]) {
+      fs.mkdirSync(path.join(repo, directory));
+      fs.writeFileSync(path.join(repo, directory, "file.txt"), `${directory}\n`);
+    }
+    fs.writeFileSync(path.join(repo, ".gitignore"), "*.log\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "base");
+    cst(repo, "workspace", "create", "alpha");
+    cst(repo, "workspace", "create", "beta", "--cone", "src");
+    const workspaces = path.join(base, "repo.workspaces");
+    return { base, repo, alpha: path.join(workspaces, "alpha"), beta: path.join(workspaces, "beta") };
+  };
+  const editRegistry = (repo, change) => {
+    const file = path.join(repo, ".git", "causet", "workspaces.json");
+    const registry = JSON.parse(fs.readFileSync(file, "utf8"));
+    change(registry);
+    fs.writeFileSync(file, `${JSON.stringify(registry, null, 2)}\n`);
+  };
+  // [args (from the fixture), prepare, where to run]
+  const cases = [
+    [() => ["workspace", "create", "gamma"]],
+    [() => ["workspace", "create", "Delta Docs", "--cone", " docs/ ,./lib,src\\,docs", "--owner", "Ada", "--focus", "docs", "--json"]],
+    [(f) => ["workspace", "create", "custom", "--path", path.join(f.base, "elsewhere", "custom"), "--from", "HEAD~0"]],
+    [() => ["workspace", "create", "alpha"]],
+    [() => ["workspace", "create", "Alpha!"]],
+    [() => ["workspace", "create", "epsilon", "--from", "no-such-revision"]],
+    [() => ["workspace", "create", "zeta", "--cone", "../outside"]],
+    [() => ["workspace", "create", "eta", "--cone", "C:relative"]],
+    [() => ["workspace", "create", "theta", "--cone", " , "]],
+    [(f) => ["workspace", "move", "alpha", path.join(f.base, "moved", "alpha")]],
+    [(f) => ["workspace", "move", "alpha", f.alpha]],
+    [(f) => ["workspace", "move", "alpha", f.beta]],
+    [(f) => ["workspace", "move", "nobody", path.join(f.base, "x")]],
+    [(f) => ["workspace", "move", "alpha", path.join(f.base, "x")], null, "alpha"],
+    [(f) => ["workspace", "move", "alpha", path.join(f.base, "moved")], (f) => editRegistry(f.repo, (registry) => {
+      registry.workspaces[0].previousPaths = 5;
+    })],
+    [(f) => ["workspace", "move", "beta", path.join(f.base, "moved")], (f) => editRegistry(f.repo, (registry) => {
+      registry.workspaces[1].previousPaths = ["../relative", f.beta, "../relative"];
+    })],
+    [() => ["workspace", "archive", "alpha", "--json"]],
+    [() => ["workspace", "archive", "alpha"], (f) => fs.writeFileSync(path.join(f.alpha, "src", "file.txt"), "changed\n")],
+    [() => ["workspace", "archive", "alpha"], (f) => fs.writeFileSync(path.join(f.alpha, "debug.log"), "noise\n")],
+    [() => ["workspace", "archive", "alpha"], (f) => {
+      const journal = path.join(f.repo, ".git", "worktrees", "alpha", "causet");
+      fs.mkdirSync(journal, { recursive: true });
+      fs.writeFileSync(path.join(journal, "reconciliation.json"), "{}\n");
+    }],
+    [() => ["workspace", "archive", "alpha"], (f) => cst(f.repo, "workspace", "archive", "alpha")],
+    [() => ["workspace", "restore", "beta"], (f) => cst(f.repo, "workspace", "archive", "beta")],
+    [(f) => ["workspace", "restore", "beta", "--path", path.join(f.base, "restored")], (f) => cst(f.repo, "workspace", "archive", "beta")],
+    [() => ["workspace", "restore", "alpha"]],
+    [() => ["workspace", "restore", "beta"], (f) => {
+      cst(f.repo, "workspace", "archive", "beta");
+      git(f.repo, "branch", "-D", "causet/ws/beta");
+    }],
+    [() => ["workspace", "restore", "beta"], (f) => {
+      cst(f.repo, "workspace", "archive", "beta");
+      fs.mkdirSync(f.beta, { recursive: true });
+    }],
+    [(f) => ["workspace", "repair", "alpha", "--path", path.join(f.base, "relocated")], (f) => {
+      fs.renameSync(f.alpha, path.join(f.base, "relocated"));
+    }],
+    [(f) => ["workspace", "repair", "alpha", "--path", path.join(f.base, "missing")]],
+    [(f) => ["workspace", "repair", "alpha", "--path", f.beta]],
+    [(f) => ["workspace", "repair", "alpha", "--path", path.join(f.base, "plain")], (f) => {
+      fs.rmSync(f.alpha, { recursive: true, force: true });
+      fs.mkdirSync(path.join(f.base, "plain"));
+    }],
+    [(f) => ["workspace", "repair", "alpha", "--path", path.join(f.base, "relocated")], (f) => {
+      fs.renameSync(f.alpha, path.join(f.base, "relocated"));
+      git(path.join(f.base, "relocated"), "checkout", "-q", "--detach");
+    }],
+  ];
+  for (const [index, [argsOf, prepare, where]] of cases.entries()) {
+    const sides = ["js", "rust"].map((name) => {
+      const side = `wl-${name}-${index}`;
+      const fixture = build(side);
+      prepare?.(fixture);
+      return { side, ...fixture, args: argsOf(fixture), cwd: where ? fixture[where] : fixture.repo };
+    });
+    const [js, rs] = sides;
+    const expected = spawnSync(process.execPath, [oracle, ...js.args], {
+      cwd: js.cwd, encoding: "utf8", env: testEnv(dated),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, rs.args, {
+      cwd: rs.cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(js.args) + " #" + index;
+    assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+    assert.equal(rename(actual.stderr, rs.side), rename(expected.stderr, js.side), "stderr of " + label);
+    assert.equal(rename(actual.stdout, rs.side), rename(expected.stdout, js.side), "stdout of " + label);
+    const snapshot = ({ repo, side, base }) => rename([
+      git(repo, "for-each-ref", "--format=%(refname) %(objectname)").stdout,
+      git(repo, "worktree", "list", "--porcelain").stdout,
+      fs.readFileSync(path.join(repo, ".git", "causet", "workspaces.json"), "utf8"),
+      fs.readdirSync(path.join(repo, ".git", "causet")).sort().join(","),
+      fs.readdirSync(base, { recursive: true }).filter((entry) => !/[\\/]\.git|^repo[\\/]|^\.git/.test(entry)).sort().join(","),
+    ].join("\n--\n"), side);
+    assert.equal(snapshot(rs), snapshot(js), "repository after " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
@@ -973,7 +1107,7 @@ test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", {
 });
 
 test("CAUSET_DELEGATE=never refuses a command that is not ported", { skip }, () => {
-  const result = runRust(["workspace", "create", "w"], { CAUSET_DELEGATE: "never" });
+  const result = runRust(["workspace", "forecast", "a", "b"], { CAUSET_DELEGATE: "never" });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /^cst: 'workspace' is not ported to the Rust CLI yet/);

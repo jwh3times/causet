@@ -80,7 +80,7 @@ fn deterministic_entity_id(artifact_id: &str, semantic_key: &str) -> String {
 
 /// `slug(value)`: NFKD, lowercased, with every run of anything but `[a-z0-9]`
 /// as one `-`, trimmed of `-`, at most 80 characters, or `untitled`.
-fn slug(value: &str) -> String {
+pub(crate) fn slug(value: &str) -> String {
   let lowered = value.nfkd().collect::<String>().to_lowercase();
   let mut out = String::new();
   let mut pending = false;
