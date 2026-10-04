@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mutt0lcg33a4fd4f793d",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-spec-resolve",
+      "sourceHead": "330e89ab7e3a026ccc15ec0eeb138740ed9ef7e0",
+      "sourceSubject": "feat: answer cst spec resolve natively",
+      "targetBefore": "d7d6563c0cb4e1d5b04543eb3f5302a62e48a727",
+      "landingCommit": "005009ef1999385d2c45857540641185c161b487",
+      "base": "d7d6563c0cb4e1d5b04543eb3f5302a62e48a727",
+      "absorbedCommits": [
+        "330e89ab7e3a026ccc15ec0eeb138740ed9ef7e0"
+      ],
+      "absorbedChanges": [
+        "ch_0mutfnact3fd4e7ee7ab7"
+      ],
+      "resultTree": "164c57478c5dd5a02fa72a6037dafadfb2f927d6",
+      "createdAt": "2026-10-04T12:35:35.866Z"
+    }
+  ]
+}
