@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mutdi4yz4abb4e980175",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-spec-index",
+      "sourceHead": "b613b13cb0a6a0d9c37463a28e48f5794d4a13cb",
+      "sourceSubject": "feat: answer cst spec index and spec merge-plan natively",
+      "targetBefore": "d692a647ed84533496a56d2fb3e55cbb32dd0026",
+      "landingCommit": "d7d6563c0cb4e1d5b04543eb3f5302a62e48a727",
+      "base": "d692a647ed84533496a56d2fb3e55cbb32dd0026",
+      "absorbedCommits": [
+        "b613b13cb0a6a0d9c37463a28e48f5794d4a13cb"
+      ],
+      "absorbedChanges": [
+        "ch_0mutcwkcjd89183d89f2a"
+      ],
+      "resultTree": "f70ff06ae6125612d943fc2e11bee68ee9351996",
+      "createdAt": "2026-10-04T05:21:20.595Z"
+    }
+  ]
+}
