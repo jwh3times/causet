@@ -73,6 +73,9 @@ hardware is required.
 exact classifications, entities, rendered bytes, stable identity, and read-only
 repeatability. Parser v2 cases assert corrected fence behavior; historical v1
 views remain characterized and affected legacy plans must block migration.
+The adapter launches the CLI through `test-support/vlab-command.js`, so with
+`CAUSET_CLI` set the same fixtures drive that implementation's Markdown adapter;
+only the two catalog-validation tests stay module-level.
 `node --test test/spec-fences.test.js` covers migration identity, unknown-version
 refusal, syntax edges, old forecast rejection, and pending-operation recovery.
 
