@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The shared semantic-merge conformance suite now reaches the CLI that
+  `CAUSET_CLI` selects (#149). Its Markdown adapter launched `bin/vlab.js`
+  directly, so a `CAUSET_CLI` run reported all 84 fixture cases as
+  module-level and never exercised the Rust adapter. It now uses the shared
+  launcher, and the Rust CLI passes every case with `CAUSET_DELEGATE=never`.
 - The Rust CLI answers `cst spec resolve [<path>] [--all]` natively (#149,
   fourth increment). It ports `applyPendingSpecMerges` of `src/specs.js`:
   - **Checking the decisions:** every semantic decision the journal and its
