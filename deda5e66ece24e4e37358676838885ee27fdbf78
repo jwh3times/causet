@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muuhu4kw06f4df2df9e3",
+      "mode": "compact",
+      "sourceRef": "jwh3times/semantic-conformance-cli",
+      "sourceHead": "75aa62383fb17105b388ff8fa15af3dc10cfac56",
+      "sourceSubject": "test: drive semantic conformance through the selected CLI",
+      "targetBefore": "005009ef1999385d2c45857540641185c161b487",
+      "landingCommit": "deda5e66ece24e4e37358676838885ee27fdbf78",
+      "base": "005009ef1999385d2c45857540641185c161b487",
+      "absorbedCommits": [
+        "75aa62383fb17105b388ff8fa15af3dc10cfac56"
+      ],
+      "absorbedChanges": [
+        "ch_0muugxdet3bcbe1842280"
+      ],
+      "resultTree": "a8b2d304c3f39a0d1507d5a476da95f990820f56",
+      "createdAt": "2026-10-05T00:10:24.602Z"
+    }
+  ]
+}
