@@ -1440,6 +1440,10 @@ test("resolve apply and reject record decisions on a paused step natively (#147)
           continue;
         }
         write(repo, file, text);
+        // The worktree file is made executable too: where Git tracks file
+        // modes, a mode only the index holds is a change that blocks the next
+        // reconciliation.
+        if (result === "exec") fs.chmodSync(path.join(repo, file), 0o755);
         git(repo, "add", file);
         if (result === "exec") git(repo, "update-index", "--chmod=+x", file);
       }
@@ -1448,12 +1452,9 @@ test("resolve apply and reject record decisions on a paused step natively (#147)
     remember("one", "remembered\n");
     if (ambiguous) remember("two", "other\n");
     const last = pair("last");
-    if (rebase) {
-      git(repo, "switch", "-q", last);
-      assert.notEqual(cst(repo, "rebase", "target-last").status, 0);
-    } else {
-      assert.notEqual(cst(repo, "reconcile", last).status, 0);
-    }
+    if (rebase) git(repo, "switch", "-q", last);
+    const paused = rebase ? cst(repo, "rebase", "target-last") : cst(repo, "reconcile", last);
+    assert.match(paused.stderr, /paused/i, `${name} must pause on a conflict\n${paused.stderr}`);
     return repo;
   };
   const journalOf = (repo) => ["reconciliation.json", "rebase.json"]
