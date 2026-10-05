@@ -127,6 +127,19 @@ Causal edges
       ))
     }
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
+    "forecast" => {
+      let source = parsed.positionals.first().cloned().unwrap_or_default();
+      let forecast = crate::forecast::forecast_reconciliation(
+        &source,
+        parsed.truthy("targetCheckpoint"),
+        parsed.truthy("acceptCandidates"),
+        cwd,
+      )?;
+      if json {
+        return Ok((forecast, 0));
+      }
+      Ok((causet_model::json::string(&crate::forecast::format_forecast(&forecast)), 0))
+    }
     "spec" => {
       let file = parsed.positionals.get(1).cloned().unwrap_or_default();
       if parsed.positionals.first().map(String::as_str) == Some("resolve") {

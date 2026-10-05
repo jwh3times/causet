@@ -2028,7 +2028,7 @@ fn single(name: &str, count: usize) -> Value {
 }
 
 /// `planSpecMerge(file, base, ours, theirs)`.
-fn plan_spec_merge(file: &str, revisions: [Option<Value>; 3], cwd: &str) -> GitResult<Value> {
+pub(crate) fn plan_spec_merge(file: &str, revisions: [Option<Value>; 3], cwd: &str) -> GitResult<Value> {
   let context = engine::repo_context(cwd)?;
   let relative = relative_spec_path(file, &context.root, cwd)?;
   if !ascii_ends(&relative, ".md") {
@@ -2328,7 +2328,7 @@ fn plan_spec_merge(file: &str, revisions: [Option<Value>; 3], cwd: &str) -> GitR
 }
 
 /// `compactSpecMerge(plan)`.
-fn compact_spec_merge(plan: &Value, selection_method: Value) -> Value {
+pub(crate) fn compact_spec_merge(plan: &Value, selection_method: Value) -> Value {
   let member = |name: &str| get(Some(plan), name).cloned().unwrap_or(Value::Null);
   let result = get(Some(plan), "result");
   let hash = |name: &str| {
@@ -2362,7 +2362,7 @@ fn compact_spec_merge(plan: &Value, selection_method: Value) -> Value {
 
 /// `specFilesForConflictPaths(paths)`: the Markdown a conflict touches,
 /// directly or through its manifest under either directory.
-fn spec_files_for_conflict_paths(paths: Option<&Value>) -> GitResult<Vec<Value>> {
+pub(crate) fn spec_files_for_conflict_paths(paths: Option<&Value>) -> GitResult<Vec<Value>> {
   let items = match paths {
     Some(Value::Array(items)) => items.clone(),
     Some(Value::String(units)) => String::from_utf16_lossy(units)
@@ -2663,7 +2663,7 @@ fn assert_current_spec_decisions(record: Option<&Value>) -> GitResult<()> {
 
 /// `materializeSpecMerge(plan, cwd)`: the merged Markdown and manifest
 /// written and staged, or both removed when the merge deletes the spec.
-fn materialize_spec_merge(plan: &Value, cwd: &str) -> GitResult<()> {
+pub(crate) fn materialize_spec_merge(plan: &Value, cwd: &str) -> GitResult<()> {
   assert_current_spec_merges(std::slice::from_ref(plan))?;
   let member = |name: &str| get(Some(plan), name);
   let result = member("result");

@@ -1545,6 +1545,308 @@ test("resolve apply and reject record decisions on a paused step natively (#147)
   }
 });
 
+// A forecast's Git activity lists commands by elapsed time, which differs run
+// to run; ordered by name, the counts themselves must still agree.
+const steadyMetrics = (text) => {
+  let document;
+  try {
+    document = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  const byCommand = document?.timings?.git?.byCommand;
+  if (!Array.isArray(byCommand)) return text;
+  byCommand.sort((left, right) => left.command.localeCompare(right.command));
+  return `${JSON.stringify(document, null, 2)}\n`;
+};
+
+test("forecast simulates the same reconciliation natively under both engines (#147)", { skip }, () => {
+  const rename = (text, repo) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return steadyMetrics(text)
+      .split(JSON.stringify(repo).slice(1, -1)).join("<repo>")
+      .split(repo).join("<repo>")
+      .split(repo.replaceAll("\\", "/")).join("<repo>")
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<time>")
+      // Durations differ run to run; Git process and query counts must not.
+      .replace(/("[A-Za-z]*Ms": )-?[\d.e+-]+/g, "$1<ms>")
+      .replace(/forecast time [\d.]+ ms/g, "forecast time <ms> ms")
+      .replace(/queries \([\d.]+ ms\)/g, "queries (<ms> ms)");
+  };
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+  const must = (cwd, ...args) => {
+    const made = cst(cwd, ...args);
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const write = (repo, file, text) => {
+    fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    fs.writeFileSync(path.join(repo, file), text);
+  };
+  const commit = (repo, message, files) => {
+    for (const [file, text] of Object.entries(files)) write(repo, file, text);
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", message);
+  };
+  const spec = (alpha, beta) => `# Alpha\n\n${alpha}\n\n# Beta\n\n${beta}\n`;
+  // Every fixture reconciles `feature` into `main`, which is checked out.
+  const build = (kind) => {
+    const repo = path.join(outside, `forecast-base-${kind}`);
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Forecast twin");
+    git(repo, "config", "user.email", "forecast-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    const specs = kind.startsWith("spec");
+    if (specs) {
+      write(repo, "docs/spec.md", spec("base alpha", "base beta"));
+      must(repo, "spec", "index", "docs/spec.md");
+    }
+    commit(repo, "base", { "shared.txt": "base\n", "a.txt": "1\n" });
+    must(repo, "init");
+    const base = git(repo, "rev-parse", "HEAD").stdout.trim();
+    const conflictPair = (suffix) => {
+      git(repo, "switch", "-q", "-c", `source-${suffix}`, base);
+      commit(repo, `source ${suffix}`, { "shared.txt": "source\n" });
+      git(repo, "switch", "-q", "-c", `target-${suffix}`, base);
+      commit(repo, `target ${suffix}`, { "shared.txt": "target\n" });
+    };
+    const remember = (suffix, text) => {
+      conflictPair(suffix);
+      assert.notEqual(cst(repo, "reconcile", `source-${suffix}`).status, 0);
+      write(repo, "shared.txt", text);
+      git(repo, "add", "shared.txt");
+      must(repo, "reconcile", "--continue");
+    };
+    if (kind === "exact" || kind === "ambiguous") {
+      remember("one", "remembered\n");
+      if (kind === "ambiguous") remember("two", "other\n");
+      conflictPair("last");
+      git(repo, "branch", "-q", "-f", "feature", "source-last");
+      git(repo, "branch", "-q", "-f", "main", "target-last");
+      git(repo, "switch", "-q", "main");
+      return repo;
+    }
+    git(repo, "switch", "-q", "-c", "feature");
+    if (kind === "clean" || kind === "dirty" || kind === "paused") {
+      commit(repo, "feature adds b", { "b.txt": "b\n" });
+      commit(repo, "feature edits a", { "a.txt": "2\n" });
+    } else if (kind === "conflict") {
+      commit(repo, "feature edits shared", { "shared.txt": "source\n" });
+    } else if (kind === "spec-clean" || kind === "spec-blocked") {
+      write(repo, "docs/spec.md", spec("source alpha", "base beta"));
+      must(repo, "spec", "index", "docs/spec.md");
+      commit(repo, "feature edits alpha", {});
+    } else if (kind === "candidate") {
+      commit(repo, "feature edits a", { "a.txt": "2\n" });
+      commit(repo, "feature adds b", { "b.txt": "b\n" });
+    } else if (kind === "merge") {
+      commit(repo, "feature adds b", { "b.txt": "b\n" });
+      git(repo, "switch", "-q", "-c", "side", base);
+      commit(repo, "side adds c", { "c.txt": "c\n" });
+      git(repo, "switch", "-q", "feature");
+      git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side");
+    } else if (kind === "attributes") {
+      commit(repo, "feature adds attributes", { ".gitattributes": "*.txt text eol=lf\n" });
+      commit(repo, "feature adds b", { "b.txt": "b\n" });
+    } else if (kind === "empty") {
+      commit(repo, "feature edits a", { "a.txt": "2\n" });
+    }
+    git(repo, "switch", "-q", "main");
+    if (kind === "conflict" || kind === "paused") {
+      commit(repo, "main edits shared", { "shared.txt": "target\n" });
+      if (kind === "paused") {
+        commit(repo, "main edits a", { "a.txt": "3\n" });
+        assert.notEqual(cst(repo, "reconcile", "feature").status, 0);
+      }
+    } else if (kind === "spec-clean" || kind === "spec-blocked") {
+      write(repo, "docs/spec.md", spec(kind === "spec-clean" ? "base alpha" : "target alpha", "target beta"));
+      must(repo, "spec", "index", "docs/spec.md");
+      commit(repo, "main edits the spec", {});
+    } else if (kind === "candidate") {
+      // The same patch as `feature edits a`, under another message: a
+      // patch-id candidate, not a proven one.
+      write(repo, "a.txt", "2\n");
+      git(repo, "commit", "-q", "-am", "main makes the same edit");
+    } else if (kind === "empty") {
+      // The feature's edit is already here, inside a larger commit, so the
+      // pick applies nothing.
+      commit(repo, "main edits a and adds d", { "a.txt": "2\n", "d.txt": "d\n" });
+    } else {
+      commit(repo, "main adds c", { "z.txt": "z\n" });
+    }
+    if (kind === "dirty") write(repo, "untracked.txt", "dirty\n");
+    return repo;
+  };
+  const by = (engines) => (engine) => engines[engine];
+  const cases = [
+    [["forecast", "feature"], "clean", /status {7}complete/],
+    [["forecast", "feature", "--json"], "clean", /"status": "complete"/],
+    [["forecast", "main"], "clean", /No new source changes require simulation/],
+    [["forecast", "feature"], "dirty", /target dirty 1 files ignored/],
+    [["forecast", "feature", "--json"], "conflict", /missing-exact-resolution/],
+    [["forecast", "feature"], "conflict", by({ worktree: /blocked by {3}missing-exact-resolution/, "merge-tree": /conflicted-step/ })],
+    [["forecast", "feature"], "exact", /1 exact resolution/],
+    [["forecast", "feature", "--json"], "exact", /"selectionMethod": "forecast-batch"/],
+    [["forecast", "feature"], "ambiguous", /ambiguous-exact-resolution/],
+    [["forecast", "feature", "--json"], "spec-clean", /"outcome": "semantic-spec-merge"/],
+    [["forecast", "feature"], "spec-clean", /deterministic spec merge/],
+    [["forecast", "feature", "--json"], "spec-blocked", /semantic-spec-conflict/],
+    [["forecast", "feature"], "candidate", /status {7}review-required/],
+    [["forecast", "feature", "--accept-candidates", "--json"], "candidate", /"acceptCandidates": true/],
+    [["forecast", "feature", "--json"], "merge", by({ worktree: /git-application-error/, "merge-tree": /"reason": "merge-commit"/ })],
+    [["forecast", "feature"], "attributes", by({ worktree: /status {7}complete/, "merge-tree": /attributes-changed at step 1/ })],
+    [["forecast", "feature", "--json"], "empty", by({ worktree: /git-application-error/, "merge-tree": /"reason": "empty-step"/ })],
+    [["forecast", "feature"], "paused", /Finish or abort the current VCS Lab operation/],
+    [["forecast", "no-such-branch"], "clean", /did not resolve every requested object expression/],
+    [["forecast", "feature", "--target-checkpoint", "--json"], "clean", /needs a registered workspace/],
+  ];
+  const fixtures = new Map();
+  const forecasts = (repo) => {
+    const directory = path.join(repo, ".git", "causet", "forecasts");
+    return fs.existsSync(directory)
+      ? fs.readdirSync(directory).sort().map((file) => steadyMetrics(fs.readFileSync(path.join(directory, file), "utf8"))).join("\n--\n")
+      : "(none)";
+  };
+  for (const engine of ["worktree", "merge-tree"]) {
+    for (const [index, [args, kind, outcome]] of cases.entries()) {
+      if (!fixtures.has(kind)) fixtures.set(kind, build(kind));
+      const sides = ["js", "rust"].map((name) => {
+        const repo = path.join(outside, `forecast-${name}-${engine}-${index}`);
+        fs.cpSync(fixtures.get(kind), repo, { recursive: true });
+        return repo;
+      });
+      const env = { ...dated, CAUSET_FORECAST_ENGINE: engine };
+      const expected = spawnSync(process.execPath, [oracle, ...args], {
+        cwd: sides[0], encoding: "utf8", env: testEnv(env),
+      });
+      if (rust === selectedCli) vlabPrefix();
+      const actual = spawnSync(rust, args, {
+        cwd: sides[1], encoding: "utf8", env: testEnv({ ...env, CAUSET_DELEGATE: "never" }),
+      });
+      const label = `${engine} ${JSON.stringify(args)} on ${kind} #${index}`;
+      // Each case must reach the path it is named for, not fail alike for another reason.
+      const pinned = typeof outcome === "function" ? outcome(engine) : outcome;
+      assert.match(expected.stdout + expected.stderr, pinned, label);
+      assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+      assert.equal(rename(actual.stderr, sides[1]), rename(expected.stderr, sides[0]), "stderr of " + label);
+      assert.equal(rename(actual.stdout, sides[1]), rename(expected.stdout, sides[0]), "stdout of " + label);
+      const snapshot = (repo) => rename([
+        git(repo, "rev-parse", "HEAD").stdout,
+        git(repo, "status", "--porcelain=v1").stdout,
+        git(repo, "worktree", "list", "--porcelain").stdout,
+        git(repo, "for-each-ref").stdout,
+        forecasts(repo),
+      ].join("\n--\n"), repo);
+      assert.equal(snapshot(sides[1]), snapshot(sides[0]), "repository after " + label);
+    }
+  }
+});
+
+test("forecast --target-checkpoint carries the same overlay natively (#147)", { skip }, () => {
+  const rename = (text, side) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return steadyMetrics(text)
+      .split(side).join("<side>")
+      .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\bdraft_[0-9a-f]{64}\b/g, swap("draft"))
+      // Each side commits with its own Change-Id, so the plan fingerprint and
+      // short hashes differ too.
+      .replace(/\b[0-9a-f]{64}\b/g, swap("digest"))
+      .replace(/\bdraft_[0-9a-f]{12}\b/g, swap("draft"))
+      .replace(/\b[0-9a-f]{12}\b/g, swap("short"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<time>")
+      .replace(/("[A-Za-z]*Ms": )-?[\d.e+-]+/g, "$1<ms>")
+      .replace(/forecast time [\d.]+ ms/g, "forecast time <ms> ms")
+      .replace(/queries \([\d.]+ ms\)/g, "queries (<ms> ms)");
+  };
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => {
+    const made = spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  // A workspace `alpha` on `main`, with `feature` to reconcile into it and a
+  // draft in its worktree; `overlay` names what the checkpoint holds.
+  const build = (side, { overlay = "draft", checkpoint = true, moved = false } = {}) => {
+    const base = path.join(outside, side);
+    const repo = path.join(base, "repo");
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Overlay twin");
+    git(repo, "config", "user.email", "overlay-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    fs.writeFileSync(path.join(repo, "a.txt"), "1\n");
+    fs.writeFileSync(path.join(repo, "notes.txt"), "base\n");
+    git(repo, "add", "-A");
+    cst(repo, "commit", "-m", "base");
+    cst(repo, "init");
+    git(repo, "switch", "-q", "-c", "feature");
+    fs.writeFileSync(path.join(repo, "a.txt"), "2\n");
+    git(repo, "add", "-A");
+    cst(repo, "commit", "-m", "feature edits a");
+    git(repo, "switch", "-q", "main");
+    cst(repo, "workspace", "create", "alpha", "--from", "main");
+    const alpha = path.join(base, "repo.workspaces", "alpha");
+    if (overlay === "draft") fs.writeFileSync(path.join(alpha, "notes.txt"), "draft\n");
+    if (overlay === "conflict") fs.writeFileSync(path.join(alpha, "a.txt"), "draft\n");
+    if (checkpoint) cst(alpha, "workspace", "checkpoint", "--label", "before");
+    if (moved) {
+      fs.writeFileSync(path.join(alpha, "later.txt"), "later\n");
+      git(alpha, "add", "later.txt");
+      git(alpha, "commit", "-q", "-m", "moved on");
+    }
+    return alpha;
+  };
+  const cases = [
+    [["forecast", "feature", "--target-checkpoint"], {}, /overlay after [0-9a-f]{40}/],
+    [["forecast", "feature", "--target-checkpoint", "--json"], {}, /"rematerialized": "uncommitted"/],
+    [["forecast", "feature", "--target-checkpoint", "--json"], { overlay: "conflict" }, /blocked-target-overlay/],
+    [["forecast", "feature", "--target-checkpoint"], { overlay: "none" }, /holds no draft beyond the committed head/],
+    [["forecast", "feature", "--target-checkpoint"], { checkpoint: false }, /has no checkpoint to carry/],
+    [["forecast", "feature", "--target-checkpoint", "--json"], { moved: true }, /stale-input/],
+  ];
+  for (const [index, [args, options, outcome]] of cases.entries()) {
+    const sides = ["js", "rust"].map((name) => build(`overlay-${name}-${index}`, options));
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: sides[0], encoding: "utf8", env: testEnv(dated),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(args) + " #" + index;
+    assert.match(expected.stdout + expected.stderr, outcome, label);
+    assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+    assert.equal(rename(actual.stderr, `overlay-rust-${index}`), rename(expected.stderr, `overlay-js-${index}`), "stderr of " + label);
+    assert.equal(rename(actual.stdout, `overlay-rust-${index}`), rename(expected.stdout, `overlay-js-${index}`), "stdout of " + label);
+    const state = (alpha) => [
+      git(alpha, "status", "--porcelain=v1").stdout,
+      fs.readFileSync(path.join(alpha, "notes.txt"), "utf8"),
+    ].join("\n--\n");
+    assert.equal(state(sides[1]), state(sides[0]), "workspace after " + label);
+  }
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.

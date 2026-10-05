@@ -991,3 +991,80 @@ pub fn repair_workspace(value: &str, destination: &str, cwd: &str) -> GitResult<
     changed(&updated, true)
   })
 }
+
+/// `latestWorkspaceCheckpoint(workspace, cwd)`: the workspace's newest
+/// checkpoint, checked against its own trailers, or `None` without one.
+pub(crate) fn latest_workspace_checkpoint(workspace: &Value, cwd: &str) -> GitResult<Option<Value>> {
+  let reference = format!(
+    "{}/{}",
+    ref_family("checkpoints", cwd)?,
+    js_text(member(workspace, "id"))
+  );
+  if !engine::ref_exists(&reference, cwd)? {
+    return Ok(None);
+  }
+  let id = engine::resolve_revision(&reference, cwd)?;
+  let message = engine::commit_message(&id, cwd)?;
+  let trailer = |name: &str| text::extract_trailer(&message, name);
+  let workspace_id = trailer("Workspace-Id");
+  let base_head = trailer("Workspace-Base");
+  let recorded_tree = trailer("Workspace-Tree");
+  let draft_change_id = trailer("Change-Id");
+  let checkpoint_tree = engine::tree_id(&id, cwd)?;
+  let text_or_null = |value: &Option<String>| value.as_deref().map_or(Value::Null, string);
+  if !causet_model::js::strict_equals(Some(&text_or_null(&workspace_id)), member(workspace, "id")) {
+    return Err(GitError::new(
+      "repository-mismatch",
+      format!(
+        "Checkpoint '{id}' does not belong to workspace '{}'.",
+        js_text(member(workspace, "name"))
+      ),
+    ));
+  }
+  let Some(base_head) = base_head.filter(|head| !head.is_empty()) else {
+    return Err(GitError::new(
+      "precondition-not-met",
+      format!("Checkpoint '{id}' has no Workspace-Base identity."),
+    ));
+  };
+  let Some(recorded_tree) = recorded_tree.filter(|tree| !tree.is_empty()) else {
+    return Err(GitError::new(
+      "unknown-schema-version",
+      format!(
+        "Checkpoint '{id}' predates checkpoint tree identity. Capture a new checkpoint before forecasting it."
+      ),
+    ));
+  };
+  if recorded_tree != checkpoint_tree {
+    return Err(GitError::new(
+      "malformed-input",
+      format!("Checkpoint '{id}' has inconsistent tree metadata."),
+    ));
+  }
+  // `/^draft_[0-9a-f]{64}$/`.
+  let valid_draft = draft_change_id.as_deref().is_some_and(|draft| {
+    draft.len() == 70
+      && draft.starts_with("draft_")
+      && draft[6..].bytes().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+  });
+  if !valid_draft {
+    return Err(GitError::new(
+      "precondition-not-met",
+      format!(
+        "Checkpoint '{id}' has no valid draft Change-Id. Capture a new checkpoint before forecasting it."
+      ),
+    ));
+  }
+  let mut checkpoint = Object::new();
+  checkpoint.set("id", string(&id));
+  checkpoint.set("ref", string(&reference));
+  checkpoint.set("tree", string(&checkpoint_tree));
+  checkpoint.set("workspaceId", text_or_null(&workspace_id));
+  checkpoint.set("baseHead", string(&base_head));
+  checkpoint.set("draftChangeId", text_or_null(&draft_change_id));
+  checkpoint.set(
+    "previousCheckpoint",
+    text_or_null(&trailer("Workspace-Previous-Checkpoint")),
+  );
+  Ok(Some(Value::Object(checkpoint)))
+}
