@@ -13,6 +13,7 @@ mod doctor;
 mod envelope;
 mod environment;
 mod export;
+mod forecast;
 mod front;
 mod host;
 mod import;
@@ -33,6 +34,7 @@ mod resolve;
 mod retain;
 mod spec;
 mod store;
+mod target_overlay;
 mod workspaces;
 
 use front::Outcome;

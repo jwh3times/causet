@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst forecast <source>` natively, with
+  `--target-checkpoint` and `--accept-candidates` (#147, second increment). It
+  ports `forecastReconciliation` of `src/forecasts.js` and the part of the
+  simulator a reconciliation uses:
+  - **Both engines:** the merge-tree engine, with every fallback to the
+    temporary-worktree simulator, and the worktree simulator itself
+    (ADR-0016).
+  - **Settling conflicts:** a deterministic spec merge or an exact retained
+    resolution, through the read half of resolution memory
+    (`captureConflictDescriptors` and `captureResolutionOutcomes`).
+  - **Target overlays:** the checkpoint a workspace carries, and its predicted
+    tree or conflict (ADR-0028).
+  - **The forecast:** the document, saved under the runtime directory as the
+    JavaScript CLI saves it, with the same Git activity.
+
+  A causal rebase's program (recreated merges, absorbed changes, `edit`)
+  stays with #148.
 - The Rust CLI answers `cst resolve apply` and `cst resolve reject` natively
   (#147, first increment). They port `applyResolution` and `rejectResolution`
   of `src/resolutions.js`:
@@ -12,7 +29,6 @@
     executable mode), or the path removed for a retained deletion.
   - **Recording:** the decision written back to the reconciliation or
     rebase journal. A malformed journal fails with V8's own errors.
-
 - The shared semantic-merge conformance suite now reaches the CLI that
   `CAUSET_CLI` selects (#149). Its Markdown adapter launched `bin/vlab.js`
   directly, so a `CAUSET_CLI` run reported all 84 fixture cases as

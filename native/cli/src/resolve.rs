@@ -207,7 +207,7 @@ pub fn format_resolution_catalog(records: &[Value]) -> String {
 
 /// One journal under this worktree's runtime directory, refused when this
 /// build does not read its version (ADR-0020).
-fn read_journal(cwd: &str, file: &str, family: &str, kind: &str) -> GitResult<Option<Value>> {
+pub(crate) fn read_journal(cwd: &str, file: &str, family: &str, kind: &str) -> GitResult<Option<Value>> {
   let git_dir = engine::repo_context(cwd)?.git_dir;
   let path = text::join(&runtime_directory(&git_dir, cwd)?, file);
   let state = match read_json(&path)? {
@@ -499,7 +499,7 @@ fn git(cwd: &str, args: &[&str]) -> GitResult<()> {
 
 /// `materializeResolutionCandidate(conflict, candidate, cwd)`: the retained
 /// result written and staged, or the path removed for a deletion.
-fn materialize_resolution_candidate(
+pub(crate) fn materialize_resolution_candidate(
   conflict: Option<&Value>,
   candidate: Option<&Value>,
   cwd: &str,
@@ -722,4 +722,177 @@ pub fn format_resolution_action(result: &Value, action: &str) -> String {
     "Resolve the files manually, stage them, then continue reconciliation.".into()
   });
   lines.join("\n")
+}
+
+/// `{ mode, blob }` of an index entry, or `null` without one.
+fn compact_stage(entry: Option<&causet_engine::types::IndexEntry>) -> Value {
+  let Some(entry) = entry else {
+    return Value::Null;
+  };
+  let mut compact = Object::new();
+  if let Some(mode) = &entry.mode {
+    compact.set("mode", string(mode));
+  }
+  if let Some(blob) = &entry.blob {
+    compact.set("blob", string(blob));
+  }
+  Value::Object(compact)
+}
+
+/// `conflictStages(filePath, cwd)`: the base, ours and theirs index stages.
+fn conflict_stages(file: &str, cwd: &str) -> GitResult<Object> {
+  let entries = engine::index_entries(
+    cwd,
+    &causet_engine::types::IndexOptions {
+      unmerged_only: true,
+      paths: vec![file.to_string()],
+    },
+  )?;
+  // `new Map(entries.map(...))`: the last entry of a stage wins.
+  let stage = |number: f64| entries.iter().rev().find(|entry| entry.stage == number);
+  let mut stages = Object::new();
+  stages.set("base", compact_stage(stage(1.0)));
+  stages.set("ours", compact_stage(stage(2.0)));
+  stages.set("theirs", compact_stage(stage(3.0)));
+  Ok(stages)
+}
+
+/// `compactResolution(record)`: a catalog record as a conflict candidate.
+fn compact_resolution(record: &Value) -> Value {
+  let member = |name: &str| get(Some(record), name);
+  let or_null = |name: &str| match member(name) {
+    value if nullish(value) => Value::Null,
+    value => value.cloned().unwrap_or(Value::Null),
+  };
+  let mut compact = Object::new();
+  if let Some(id) = member("id") {
+    compact.set("id", id.clone());
+  }
+  if let Some(signature) = member("signature") {
+    compact.set("signature", signature.clone());
+  }
+  compact.set("resultBlob", or_null("resultBlob"));
+  compact.set("resultMode", or_null("resultMode"));
+  if let Some(reference) = member("ref") {
+    compact.set("ref", reference.clone());
+  }
+  compact.set("originalPath", or_null("originalPath"));
+  compact.set("createdAt", or_null("createdAt"));
+  Value::Object(compact)
+}
+
+/// `captureConflictDescriptors(paths, cwd)`: each conflicted path with its
+/// stages, signature and the retained resolutions that match it exactly.
+pub(crate) fn capture_conflict_descriptors(paths: &[String], cwd: &str) -> GitResult<Vec<Value>> {
+  if paths.is_empty() {
+    return Ok(Vec::new());
+  }
+  // The catalog is scanned once per capture, not once per path.
+  let catalog = list_resolution_records(cwd)?;
+  let mut descriptors = Vec::new();
+  for file in paths {
+    let stages = conflict_stages(file, cwd)?;
+    let stages_value = Value::Object(stages.clone());
+    // The stages are always an object here, which the signature never refuses.
+    let signature = resolution_signature(Some(&stages_value))
+      .map_err(|_| GitError::uncoded("The conflict stages could not be signed."))?;
+    let wanted = string(&signature);
+    let candidates: Vec<Value> = catalog
+      .iter()
+      .filter(|record| strict_equals(get(Some(record), "signature"), Some(&wanted)))
+      .map(compact_resolution)
+      .collect();
+    let mut descriptor = Object::new();
+    descriptor.set("path", string(file));
+    descriptor.set("signature", wanted);
+    descriptor.set(
+      "algorithm",
+      string(causet_model::registry::RESOLUTION_SIGNATURE_ALGORITHM),
+    );
+    for name in ["base", "ours", "theirs"] {
+      descriptor.set(name, stages.get(name).cloned().unwrap_or(Value::Null));
+    }
+    descriptor.set("candidates", Value::Array(candidates));
+    descriptor.set("selectedResolutionId", Value::Null);
+    descriptor.set("decisionOverride", Value::Null);
+    descriptors.push(Value::Object(descriptor));
+  }
+  Ok(descriptors)
+}
+
+/// `stagedResult(filePath, cwd)`: the stage-0 mode and blob, or nulls.
+fn staged_result(file: &str, cwd: &str) -> GitResult<(Value, Value)> {
+  let entries = engine::index_entries(
+    cwd,
+    &causet_engine::types::IndexOptions {
+      unmerged_only: false,
+      paths: vec![file.to_string()],
+    },
+  )?;
+  let text_or_null = |value: &Option<String>| value.as_deref().map_or(Value::Null, string);
+  Ok(match entries.iter().find(|entry| entry.stage == 0.0) {
+    Some(entry) => (text_or_null(&entry.mode), text_or_null(&entry.blob)),
+    None => (Value::Null, Value::Null),
+  })
+}
+
+/// `captureResolutionOutcomes(conflicts, cwd)`: what each conflict resolved
+/// to, and how that relates to its candidates.
+pub(crate) fn capture_resolution_outcomes(conflicts: &[Value], cwd: &str) -> GitResult<Vec<Value>> {
+  let mut outcomes = Vec::new();
+  for conflict in conflicts {
+    let member = |name: &str| get(Some(conflict), name);
+    let path = js_text(member("path"));
+    let (result_mode, result_blob) = staged_result(&path, cwd)?;
+    let candidates = match member("candidates") {
+      Some(Value::Array(items)) => items.clone(),
+      _ => Vec::new(),
+    };
+    let matching = candidates
+      .iter()
+      .find(|candidate| strict_equals(get(Some(candidate), "resultBlob"), Some(&result_blob)));
+    let selected = candidates.iter().find(|candidate| {
+      strict_equals(get(Some(candidate), "id"), member("selectedResolutionId"))
+    });
+    let mut decision = "created";
+    if !candidates.is_empty() {
+      decision = if as_text(member("decisionOverride")).as_deref() == Some("rejected") {
+        "rejected"
+      } else if let Some(selected) = selected {
+        if strict_equals(get(Some(selected), "resultBlob"), Some(&result_blob)) {
+          "accepted"
+        } else {
+          "modified"
+        }
+      } else if matching.is_some() {
+        "accepted"
+      } else {
+        "rejected"
+      };
+    }
+    let id_of = |candidate: Option<&Value>| match get(candidate, "id") {
+      value if nullish(value) => Value::Null,
+      value => value.cloned().unwrap_or(Value::Null),
+    };
+    let mut outcome = Object::new();
+    for name in ["path", "signature", "algorithm", "base", "ours", "theirs"] {
+      if let Some(value) = member(name) {
+        outcome.set(name, value.clone());
+      }
+    }
+    outcome.set("resultMode", result_mode);
+    outcome.set("resultBlob", result_blob);
+    outcome.set("decision", string(decision));
+    outcome.set(
+      "selectionMethod",
+      match member("selectionMethod") {
+        value if nullish(value) => Value::Null,
+        value => value.cloned().unwrap_or(Value::Null),
+      },
+    );
+    outcome.set("selectedResolutionId", id_of(selected));
+    outcome.set("reusedResolutionId", id_of(matching));
+    outcomes.push(Value::Object(outcome));
+  }
+  Ok(outcomes)
 }
