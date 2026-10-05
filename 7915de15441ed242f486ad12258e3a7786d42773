@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muv62j1yf1bb1dc7dd3a",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-resolve-apply",
+      "sourceHead": "bfa0de92ca1f234152f5558b5f22d96ab95c8a66",
+      "sourceSubject": "test: make the executable resolution fixture pause where Git tracks modes",
+      "targetBefore": "deda5e66ece24e4e37358676838885ee27fdbf78",
+      "landingCommit": "7915de15441ed242f486ad12258e3a7786d42773",
+      "base": "deda5e66ece24e4e37358676838885ee27fdbf78",
+      "absorbedCommits": [
+        "2667277ad44423c557ae11cf504665cf8016b097",
+        "bfa0de92ca1f234152f5558b5f22d96ab95c8a66"
+      ],
+      "absorbedChanges": [
+        "ch_0muun7xzb6c1c1731ef89",
+        "ch_0muunkuflffc36a713a54"
+      ],
+      "resultTree": "48f569b4a4824b3cb15650dcf90e88d9eba3393d",
+      "createdAt": "2026-10-05T11:28:47.390Z"
+    }
+  ]
+}
