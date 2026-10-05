@@ -175,7 +175,25 @@ Causal edges
     }
     "resolve" => {
       // `positionals[0] ?? "status"`.
-      if parsed.positionals.first().map(String::as_str) == Some("list") {
+      let subcommand = parsed.positionals.first().map(String::as_str);
+      if let Some(action @ ("apply" | "reject")) = subcommand {
+        let file = parsed.positionals.get(1).map(String::as_str);
+        let all = parsed.truthy("all");
+        let resolution = parsed.value("resolution").filter(|id| !id.is_empty());
+        let (result, verb) = if action == "apply" {
+          (crate::resolve::apply_resolution(file, all, resolution, cwd)?, "applied")
+        } else {
+          (crate::resolve::reject_resolution(file, all, resolution, cwd)?, "rejected")
+        };
+        if json {
+          return Ok((result, 0));
+        }
+        return Ok((
+          causet_model::json::string(&crate::resolve::format_resolution_action(&result, verb)),
+          0,
+        ));
+      }
+      if subcommand == Some("list") {
         let records = crate::resolve::list_resolution_records(cwd)?;
         if json {
           return Ok((Value::Array(records), 0));

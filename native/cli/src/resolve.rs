@@ -1,6 +1,7 @@
-//! `cst resolve list` and `cst resolve status`: the retained resolution
-//! catalog of `src/resolutions.js` (`listResolutionRecords`) and the pending
-//! operation's conflicts (`pendingResolutionStatus`), with their renderings in
+//! `cst resolve`: the retained resolution catalog of `src/resolutions.js`
+//! (`listResolutionRecords`), the pending operation's conflicts
+//! (`pendingResolutionStatus`), and the explicit decisions on them
+//! (`applyResolution` and `rejectResolution`), with their renderings in
 //! `src/cli.js`.
 
 use crate::metadata::{duplicated_record_ids, object_lookup};
@@ -9,9 +10,12 @@ use crate::records::{not_callable, short};
 use crate::store::read_json;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::locations::{local_ref, ref_family, runtime_directory};
+use causet_engine::process::{RunOptions, run_git};
 use causet_engine::session::with_object_session;
 use causet_engine::{engine, text};
-use causet_model::js::{get, length, locale_compare, nullish, text as js_text, truthy};
+use causet_model::js::{
+  get, length, locale_compare, nullish, strict_equals, text as js_text, to_number, truthy,
+};
 use causet_model::json::{Object, Value, lossy, string};
 use causet_model::schemas::{
   assert_readable_schema, referenced_objects, resolution_signature, validate_note_record,
@@ -355,4 +359,367 @@ pub fn format_resolution_status(status: &Value) -> GitResult<String> {
     lines.push("Apply a suggestion with: cst resolve apply --all".into());
   }
   Ok(lines.join("\n"))
+}
+
+/// `currentResolutionOperation(cwd)`: the pending operation, when its paused
+/// step has conflicts (`operation?.current?.conflicts?.length`).
+fn current_resolution_operation(cwd: &str) -> GitResult<Value> {
+  let operation = read_pending_operation(cwd)?;
+  let pending = truthy(length(get(get(operation.as_ref(), "current"), "conflicts")).as_ref());
+  match operation {
+    Some(operation) if pending => Ok(operation),
+    _ => Err(GitError::new(
+      "nothing-pending",
+      "No reusable conflict resolutions are pending in this worktree.",
+    )),
+  }
+}
+
+/// Where a selected conflict lives in the journal, so a decision recorded on
+/// it is written back as JavaScript's mutation of the same object would be.
+enum Slot {
+  /// `conflicts[index]` of an array.
+  Index(usize),
+  /// `conflicts[0]` of an object whose `length` is 1.
+  Member,
+  /// `conflicts[0]` of a one-character string, which nothing can record on.
+  Detached(Value),
+}
+
+/// What `selectConflicts` returns: slots, or a value that is not an array
+/// (which `--all` hands on as it is, for `selected.map` to refuse).
+enum Selected {
+  Slots(Vec<Slot>),
+  NotArray,
+}
+
+/// `selectConflicts(operation, filePath, all)`.
+fn select_conflicts(operation: &Value, file: Option<&str>, all: bool) -> GitResult<Selected> {
+  let conflicts = get(get(Some(operation), "current"), "conflicts");
+  if all {
+    return Ok(match conflicts {
+      Some(Value::Array(items)) => Selected::Slots((0..items.len()).map(Slot::Index).collect()),
+      _ => Selected::NotArray,
+    });
+  }
+  if let Some(file) = file.filter(|file| !file.is_empty()) {
+    let Some(Value::Array(items)) = conflicts else {
+      return Err(not_callable("operation.current.conflicts", "find", conflicts));
+    };
+    let wanted = string(file);
+    for (index, conflict) in items.iter().enumerate() {
+      if matches!(conflict, Value::Null) {
+        return Err(GitError::uncoded("Cannot read properties of null (reading 'path')"));
+      }
+      if strict_equals(get(Some(conflict), "path"), Some(&wanted)) {
+        return Ok(Selected::Slots(vec![Slot::Index(index)]));
+      }
+    }
+    return Err(GitError::new(
+      "no-match",
+      format!("'{file}' is not a current conflict path."),
+    ));
+  }
+  if strict_equals(length(conflicts).as_ref(), Some(&Value::Number(1.0))) {
+    let slot = match conflicts {
+      Some(Value::Array(_)) => Slot::Index(0),
+      Some(Value::String(units)) => Slot::Detached(Value::String(units[..1].to_vec())),
+      _ => Slot::Member,
+    };
+    return Ok(Selected::Slots(vec![slot]));
+  }
+  Err(GitError::new("ambiguous-match", "Choose a conflict path or pass --all."))
+}
+
+/// The value a slot names.
+fn slot_value<'a>(conflicts: Option<&'a Value>, slot: &'a Slot) -> Option<&'a Value> {
+  match slot {
+    Slot::Index(index) => match conflicts {
+      Some(Value::Array(items)) => items.get(*index),
+      _ => None,
+    },
+    Slot::Member => get(conflicts, "0"),
+    Slot::Detached(value) => Some(value),
+  }
+}
+
+/// `value[0]`: an array's first item, a string's first code unit, or an
+/// object's `0` member.
+fn first_of(value: Option<&Value>) -> Option<Value> {
+  match value {
+    Some(Value::Array(items)) => items.first().cloned(),
+    Some(Value::String(units)) if !units.is_empty() => Some(Value::String(units[..1].to_vec())),
+    Some(Value::Object(object)) => object.get("0").cloned(),
+    _ => None,
+  }
+}
+
+/// `chooseCandidate(conflict, resolutionId)`. `None` is `undefined`.
+fn choose_candidate(conflict: Option<&Value>, resolution_id: Option<&str>) -> GitResult<Option<Value>> {
+  let candidates = member(conflict, "candidates")?;
+  let path = || js_text(get(conflict, "path"));
+  if let Some(id) = resolution_id {
+    let Some(Value::Array(items)) = candidates else {
+      return Err(not_callable("conflict.candidates", "find", candidates));
+    };
+    let wanted = string(id);
+    for item in items {
+      if matches!(item, Value::Null) {
+        return Err(GitError::uncoded("Cannot read properties of null (reading 'id')"));
+      }
+      if strict_equals(get(Some(item), "id"), Some(&wanted)) {
+        return Ok(Some(item.clone()));
+      }
+    }
+    return Err(GitError::new(
+      "no-match",
+      format!("Resolution '{id}' is not a candidate for '{}'.", path()),
+    ));
+  }
+  let count = member(candidates, "length").map(|_| length(candidates))?;
+  if strict_equals(count.as_ref(), Some(&Value::Number(0.0))) {
+    return Err(GitError::new(
+      "no-match",
+      format!("No prior resolution matches '{}'.", path()),
+    ));
+  }
+  if count.as_ref().is_some_and(|count| to_number(count) > 1.0) {
+    return Err(
+      GitError::new("ambiguous-match", format!("Multiple resolutions match '{}'.", path()))
+        .details("Choose one with --resolution <id>."),
+    );
+  }
+  Ok(first_of(candidates))
+}
+
+fn git(cwd: &str, args: &[&str]) -> GitResult<()> {
+  let args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+  run_git(&args, &RunOptions::new(cwd)).map(|_| ())
+}
+
+/// `materializeResolutionCandidate(conflict, candidate, cwd)`: the retained
+/// result written and staged, or the path removed for a deletion.
+fn materialize_resolution_candidate(
+  conflict: Option<&Value>,
+  candidate: Option<&Value>,
+  cwd: &str,
+) -> GitResult<()> {
+  let file = match get(conflict, "path") {
+    Some(Value::String(units)) => lossy(units),
+    other => {
+      return Err(GitError::node(
+        format!(
+          "The \"paths[1]\" argument must be of type string. {}",
+          crate::envelope::received(other)
+        ),
+        "ERR_INVALID_ARG_TYPE",
+      ));
+    }
+  };
+  let absolute = text::resolve(cwd, &file);
+  let blob = member(candidate, "resultBlob")?;
+  if !truthy(blob) {
+    return git(cwd, &["rm", "--ignore-unmatch", "--", &file]);
+  }
+  let mode = get(candidate, "resultMode");
+  let executable = match mode {
+    Some(Value::String(units)) if lossy(units) == "100644" => false,
+    Some(Value::String(units)) if lossy(units) == "100755" => true,
+    _ => {
+      return Err(GitError::new(
+        "unsupported-feature",
+        format!(
+          "Resolution mode '{}' is not supported by this prototype.",
+          js_text(mode)
+        ),
+      ));
+    }
+  };
+  if let Some(parent) = std::path::Path::new(&absolute).parent() {
+    std::fs::create_dir_all(parent)
+      .map_err(|error| crate::envelope::io_failure(&error, "mkdir", &parent.to_string_lossy()))?;
+  }
+  let contents = engine::read_git_blob(&js_text(blob), cwd)?;
+  std::fs::write(&absolute, contents)
+    .map_err(|error| crate::envelope::io_failure(&error, "open", &absolute))?;
+  git(cwd, &["add", "--", &file])?;
+  if executable {
+    git(cwd, &["update-index", "--chmod=+x", "--", &file])?;
+  }
+  Ok(())
+}
+
+/// Records a decision on the conflict a slot names, as assigning to that
+/// object's members does in JavaScript.
+fn record_on(operation: &mut Value, slot: &Slot, change: impl FnOnce(&mut Object)) {
+  let Value::Object(root) = operation else {
+    return;
+  };
+  let Some(Value::Object(mut current)) = root.get("current").cloned() else {
+    return;
+  };
+  let Some(mut conflicts) = current.get("conflicts").cloned() else {
+    return;
+  };
+  match (slot, &mut conflicts) {
+    (Slot::Index(index), Value::Array(items)) => match items.get_mut(*index) {
+      Some(Value::Object(conflict)) => change(conflict),
+      _ => return,
+    },
+    (Slot::Member, Value::Object(object)) => match object.get("0").cloned() {
+      Some(Value::Object(mut conflict)) => {
+        change(&mut conflict);
+        object.set("0", Value::Object(conflict));
+      }
+      _ => return,
+    },
+    _ => return,
+  }
+  current.set("conflicts", conflicts);
+  root.set("current", Value::Object(current));
+}
+
+/// `obj.name = value`, where an `undefined` value is one `JSON.stringify`
+/// leaves out.
+fn assign(object: &mut Object, name: &str, value: Option<&Value>) {
+  match value {
+    Some(value) => object.set(name, value.clone()),
+    None => object.remove(name),
+  }
+}
+
+/// `{ operationId: operation.id, <action>: items }`.
+fn action_result(operation: &Value, action: &str, items: Vec<Value>) -> Value {
+  let mut result = Object::new();
+  if let Some(id) = get(Some(operation), "id") {
+    result.set("operationId", id.clone());
+  }
+  result.set(action, Value::Array(items));
+  Value::Object(result)
+}
+
+/// `applyResolution({ path, all, resolutionId })`.
+pub fn apply_resolution(
+  file: Option<&str>,
+  all: bool,
+  resolution_id: Option<&str>,
+  cwd: &str,
+) -> GitResult<Value> {
+  let mut operation = current_resolution_operation(cwd)?;
+  let Selected::Slots(slots) = select_conflicts(&operation, file, all)? else {
+    return Err(GitError::uncoded("selected.map is not a function"));
+  };
+  let conflicts = get(get(Some(&operation), "current"), "conflicts").cloned();
+  let mut choices = Vec::new();
+  for slot in slots {
+    let conflict = slot_value(conflicts.as_ref(), &slot).cloned();
+    let candidate = choose_candidate(conflict.as_ref(), resolution_id)?;
+    choices.push((slot, conflict, candidate));
+  }
+  let mut applied = Vec::new();
+  for (slot, conflict, candidate) in choices {
+    materialize_resolution_candidate(conflict.as_ref(), candidate.as_ref(), cwd)?;
+    let id = get(candidate.as_ref(), "id").cloned();
+    record_on(&mut operation, &slot, |conflict| {
+      assign(conflict, "selectedResolutionId", id.as_ref());
+      conflict.set("decisionOverride", Value::Null);
+      conflict.set("selectionMethod", string("explicit"));
+      conflict.set("suggestionAppliedAt", string(&causet_engine::metrics::iso_now()));
+    });
+    let mut item = Object::new();
+    if let Some(path) = get(conflict.as_ref(), "path") {
+      item.set("path", path.clone());
+    }
+    if let Some(candidate) = candidate {
+      item.set("resolution", candidate);
+    }
+    applied.push(Value::Object(item));
+  }
+  crate::spec::write_pending_operation(&operation, cwd)?;
+  Ok(action_result(&operation, "applied", applied))
+}
+
+/// `rejectResolution({ path, all, resolutionId })`.
+pub fn reject_resolution(
+  file: Option<&str>,
+  all: bool,
+  resolution_id: Option<&str>,
+  cwd: &str,
+) -> GitResult<Value> {
+  let mut operation = current_resolution_operation(cwd)?;
+  let Selected::Slots(slots) = select_conflicts(&operation, file, all)? else {
+    return Err(GitError::uncoded("selected.map is not a function"));
+  };
+  let conflicts = get(get(Some(&operation), "current"), "conflicts").cloned();
+  let mut choices = Vec::new();
+  for slot in slots {
+    let conflict = slot_value(conflicts.as_ref(), &slot).cloned();
+    let candidate = match resolution_id {
+      Some(id) => choose_candidate(conflict.as_ref(), Some(id))?,
+      None => None,
+    };
+    choices.push((slot, conflict, candidate));
+  }
+  // Every decision is checked before the journal is written, as a refusal part
+  // way through the JavaScript loop leaves its in-memory edits unwritten.
+  let mut decisions = Vec::new();
+  for (slot, conflict, candidate) in choices {
+    let candidates = member(conflict.as_ref(), "candidates")?;
+    let count = member(candidates, "length").map(|_| length(candidates))?;
+    if strict_equals(count.as_ref(), Some(&Value::Number(0.0))) {
+      return Err(GitError::new(
+        "no-match",
+        format!(
+          "No prior resolution matches '{}'.",
+          js_text(get(conflict.as_ref(), "path"))
+        ),
+      ));
+    }
+    let id = match get(candidate.as_ref(), "id") {
+      value if nullish(value) => Value::Null,
+      value => value.cloned().unwrap_or(Value::Null),
+    };
+    let mut item = Object::new();
+    if let Some(path) = get(conflict.as_ref(), "path") {
+      item.set("path", path.clone());
+    }
+    if let Some(count) = count {
+      item.set("candidates", count);
+    }
+    decisions.push((slot, id, Value::Object(item)));
+  }
+  let mut rejected = Vec::new();
+  for (slot, id, item) in decisions {
+    record_on(&mut operation, &slot, |conflict| {
+      conflict.set("decisionOverride", string("rejected"));
+      conflict.set("selectedResolutionId", id);
+      conflict.set("selectionMethod", string("explicit"));
+    });
+    rejected.push(item);
+  }
+  crate::spec::write_pending_operation(&operation, cwd)?;
+  Ok(action_result(&operation, "rejected", rejected))
+}
+
+/// `formatResolutionAction(result, action)`.
+pub fn format_resolution_action(result: &Value, action: &str) -> String {
+  let items = match get(Some(result), action) {
+    Some(Value::Array(items)) => items.clone(),
+    _ => Vec::new(),
+  };
+  let mut lines = vec![format!(
+    "{} {} resolution suggestion{}.",
+    if action == "applied" { "Applied" } else { "Rejected" },
+    items.len(),
+    if items.len() == 1 { "" } else { "s" }
+  )];
+  for item in &items {
+    lines.push(format!("  {}", js_text(get(Some(item), "path"))));
+  }
+  lines.push(if action == "applied" {
+    "Continue with: cst reconcile --continue".into()
+  } else {
+    "Resolve the files manually, stage them, then continue reconciliation.".into()
+  });
+  lines.join("\n")
 }

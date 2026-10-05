@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst resolve apply` and `cst resolve reject` natively
+  (#147, first increment). They port `applyResolution` and `rejectResolution`
+  of `src/resolutions.js`:
+  - **Choosing:** the paused step's conflicts by path, `--all`, or the only
+    one, and a candidate by `--resolution <id>` or as the only match, with
+    the same refusals for no match, an ambiguous match, and nothing pending.
+  - **Applying:** the retained result written and staged (with its
+    executable mode), or the path removed for a retained deletion.
+  - **Recording:** the decision written back to the reconciliation or
+    rebase journal. A malformed journal fails with V8's own errors.
+
 - The shared semantic-merge conformance suite now reaches the CLI that
   `CAUSET_CLI` selects (#149). Its Markdown adapter launched `bin/vlab.js`
   directly, so a `CAUSET_CLI` run reported all 84 fixture cases as
