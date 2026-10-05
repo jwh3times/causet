@@ -68,7 +68,9 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "provenance",
   "rebase-plan",
   "receipts",
+  "resolve apply",
   "resolve list",
+  "resolve reject",
   "resolve status",
   "spec index",
   "spec merge-plan",
@@ -655,7 +657,6 @@ mod tests {
   fn commands_that_need_the_repository_delegate() {
     for args in [
       &["rebase", "--status", "extra", "args"][..],
-      &["resolve", "reject"],
       &["spec", "benchmark", "--documents", "2"],
       &["workspace", "forecast", "a", "b"],
       &["commit", "--authoredBy", "--authored-by", "a"],
@@ -686,6 +687,8 @@ mod tests {
       &["metadata", "validate", "--strict"],
       &["resolve"],
       &["resolve", "list", "--json"],
+      &["resolve", "apply", "--all"],
+      &["resolve", "reject", "f", "--resolution", "res_x", "--json"],
       &["spec", "show", "a.md"],
       &["spec", "status"],
       &["spec", "merge-plan", "f", "b", "o", "t", "--json"],
@@ -710,7 +713,7 @@ mod tests {
     // A command is native per subcommand: these still delegate.
     for args in [
       &["workspace", "forecast", "a", "b"][..],
-      &["resolve", "apply", "--all"],
+      &["reconcile", "--status"],
       &["spec", "benchmark"],
       &["rebase-forecast", "main"],
     ] {

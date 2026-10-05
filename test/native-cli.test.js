@@ -155,7 +155,7 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
   // Outside a repository these succeed or fail exactly as the JavaScript CLI
   // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["resolve", "apply", "--all"], ["--trace-git", "workspace", "list"]]) {
+  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["reconcile", "--status"], ["--trace-git", "workspace", "list"]]) {
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
@@ -1378,6 +1378,168 @@ test("spec resolve applies a paused step's deterministic merges natively (#149)"
       git(repo, "diff", "--cached").stdout,
       fs.existsSync(journal(repo)) ? fs.readFileSync(journal(repo), "utf8") : "(no journal)",
     ].join("\n--\n"));
+    assert.equal(snapshot(sides[1]), snapshot(sides[0]), "repository after " + label);
+  }
+});
+
+test("resolve apply and reject record decisions on a paused step natively (#147)", { skip }, () => {
+  const rename = (text) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    return text
+      .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      // Two writes in one millisecond share a time in one CLI and not the other.
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<time>");
+  };
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+  const must = (cwd, ...args) => {
+    const made = cst(cwd, ...args);
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const write =(repo, file, text) => fs.writeFileSync(path.join(repo, file), text);
+  // A step paused on conflicts whose signatures match retained resolutions:
+  // each pair edits the same files the same way from the same base, so every
+  // pair's conflict has one signature, and resolving the first retains it.
+  const build = (name, { files = ["shared.txt"], result = "text", ambiguous = false, rebase = false } = {}) => {
+    const repo = path.join(outside, name);
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Resolve twin");
+    git(repo, "config", "user.email", "resolve-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    for (const file of files) write(repo, file, "base\n");
+    git(repo, "add", ".");
+    must(repo, "commit", "-m", "base");
+    must(repo, "init");
+    const base = git(repo, "rev-parse", "HEAD").stdout.trim();
+    const pair = (suffix) => {
+      git(repo, "switch", "-q", "-c", `source-${suffix}`, base);
+      for (const file of files) write(repo, file, "source\n");
+      git(repo, "add", ".");
+      must(repo, "commit", "-m", `source ${suffix}`);
+      git(repo, "switch", "-q", "-c", `target-${suffix}`, base);
+      for (const file of files) write(repo, file, "target\n");
+      git(repo, "add", ".");
+      must(repo, "commit", "-m", `target ${suffix}`);
+      return `source-${suffix}`;
+    };
+    const remember = (suffix, text) => {
+      assert.notEqual(cst(repo, "reconcile", pair(suffix)).status, 0);
+      for (const file of files) {
+        if (result === "delete") {
+          git(repo, "rm", "-q", file);
+          continue;
+        }
+        write(repo, file, text);
+        git(repo, "add", file);
+        if (result === "exec") git(repo, "update-index", "--chmod=+x", file);
+      }
+      must(repo, "reconcile", "--continue");
+    };
+    remember("one", "remembered\n");
+    if (ambiguous) remember("two", "other\n");
+    const last = pair("last");
+    if (rebase) {
+      git(repo, "switch", "-q", last);
+      assert.notEqual(cst(repo, "rebase", "target-last").status, 0);
+    } else {
+      assert.notEqual(cst(repo, "reconcile", last).status, 0);
+    }
+    return repo;
+  };
+  const journalOf = (repo) => ["reconciliation.json", "rebase.json"]
+    .map((file) => path.join(repo, ".git", "causet", file))
+    .find((file) => fs.existsSync(file));
+  const editJournal = (change) => (repo) => {
+    const file = journalOf(repo);
+    const state = JSON.parse(fs.readFileSync(file, "utf8"));
+    change(state);
+    fs.writeFileSync(file, `${JSON.stringify(state, null, 2)}\n`);
+  };
+  const two = { files: ["shared.txt", "other.txt"] };
+  const cases = [
+    [["resolve", "apply"]],
+    [["resolve", "apply", "--json"]],
+    [["resolve", "apply", "shared.txt", "--json"]],
+    [["resolve", "apply", "missing.txt"], {}, null, /'missing\.txt' is not a current conflict path/],
+    [["resolve", "apply", "--all", "--resolution", "resolution_nope"], {}, null, /is not a candidate for 'shared\.txt'/],
+    [["resolve", "apply", "--all", "--resolution", "<candidate>", "--json"]],
+    [["resolve", "apply", "--all"], { ambiguous: true }, null, /Multiple resolutions match 'shared\.txt'/],
+    [["resolve", "apply", "--all", "--resolution", "<candidate>"], { ambiguous: true }],
+    [["resolve", "apply"], two, null, /Choose a conflict path or pass --all/],
+    [["resolve", "apply", "--all", "--json"], two],
+    [["resolve", "apply", "other.txt"], two],
+    [["resolve", "apply", "--all"], { result: "delete" }],
+    [["resolve", "apply", "--all", "--json"], { result: "exec" }],
+    [["resolve", "apply", "--all", "--json"], { rebase: true }],
+    [["resolve", "reject"]],
+    [["resolve", "reject", "shared.txt", "--json"]],
+    [["resolve", "reject", "--all", "--resolution", "<candidate>", "--json"]],
+    [["resolve", "reject", "--all", "--resolution", "resolution_nope"], {}, null, /is not a candidate/],
+    [["resolve", "reject", "--all"], two],
+    [["resolve", "reject", "--all", "--json"], { rebase: true }],
+    [["resolve", "apply", "--all"], {}, (repo) => fs.rmSync(journalOf(repo)), /No reusable conflict resolutions are pending/],
+    [["resolve", "reject"], {}, editJournal((state) => { state.current.conflicts = []; }), /No reusable conflict resolutions are pending/],
+    [["resolve", "apply"], {}, editJournal((state) => { state.current.conflicts = "x"; }), /reading 'length'/],
+    [["resolve", "apply", "--all"], {}, editJournal((state) => { state.current.conflicts = { length: 1, 0: state.current.conflicts[0] }; }), /selected\.map is not a function/],
+    [["resolve", "apply", "--json"], {}, editJournal((state) => { state.current.conflicts = { length: 1, 0: state.current.conflicts[0] }; })],
+    [["resolve", "apply", "shared.txt"], {}, editJournal((state) => { state.current.conflicts = [null]; }), /reading 'path'/],
+    [["resolve", "apply", "shared.txt"], {}, editJournal((state) => { state.current.conflicts = { length: 1 }; }), /conflicts\.find is not a function/],
+    [["resolve", "apply", "--all", "--resolution", "x"], {}, editJournal((state) => { state.current.conflicts[0].candidates = [null]; }), /reading 'id'/],
+    [["resolve", "apply", "--all"], {}, editJournal((state) => { state.current.conflicts[0].candidates = 5; }), /reading 'resultBlob'/],
+    [["resolve", "apply", "--all"], {}, editJournal((state) => { state.current.conflicts[0].candidates = "ab"; }), /Multiple resolutions match/],
+    [["resolve", "apply", "--all"], {}, editJournal((state) => { state.current.conflicts[0].candidates[0].resultMode = "120000"; }), /Resolution mode '120000' is not supported/],
+    [["resolve", "apply", "--all"], {}, editJournal((state) => { state.current.conflicts[0].path = 5; }), /"paths\[1\]" argument must be of type string\. Received type number \(5\)/],
+    [["resolve", "reject", "--all"], {}, editJournal((state) => { state.current.conflicts[0].candidates = []; }), /No prior resolution matches 'shared\.txt'/],
+    [["resolve", "reject", "--all", "--json"], {}, editJournal((state) => { delete state.id; })],
+    [["resolve", "reject", "--all"], two, editJournal((state) => { state.current.conflicts[1].candidates = null; }), /reading 'length'/],
+  ];
+  const fixtures = new Map();
+  for (const [index, [template, options = {}, prepare, outcome]] of cases.entries()) {
+    const key = JSON.stringify(options);
+    if (!fixtures.has(key)) fixtures.set(key, build(`resolution-base-${fixtures.size}`, options));
+    const fixture = fixtures.get(key);
+    const candidate = JSON.parse(cst(fixture, "resolve", "status", "--json").stdout)
+      .conflicts[0].candidates.at(-1)?.id;
+    const args = template.map((arg) => arg === "<candidate>" ? candidate : arg);
+    const sides = ["js", "rust"].map((name) => {
+      const repo = path.join(outside, `resolution-${name}-${index}`);
+      fs.cpSync(fixture, repo, { recursive: true });
+      prepare?.(repo);
+      return repo;
+    });
+    const expected = spawnSync(process.execPath, [oracle, ...args], {
+      cwd: sides[0], encoding: "utf8", env: testEnv(dated),
+    });
+    if (rust === selectedCli) vlabPrefix();
+    const actual = spawnSync(rust, args, {
+      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+    });
+    const label = JSON.stringify(template) + " #" + index;
+    // Each case must reach the path it is named for, not fail alike for another reason.
+    if (outcome) assert.match(expected.stdout + expected.stderr, outcome, label);
+    else assert.equal(expected.status, 0, `${label}\n${expected.stderr}`);
+    assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+    assert.equal(rename(actual.stderr), rename(expected.stderr), "stderr of " + label);
+    assert.equal(rename(actual.stdout), rename(expected.stdout), "stdout of " + label);
+    const snapshot = (repo) => {
+      const journal = journalOf(repo);
+      return rename([
+        git(repo, "status", "--porcelain=v1").stdout,
+        git(repo, "ls-files", "--stage").stdout,
+        git(repo, "diff").stdout,
+        journal ? fs.readFileSync(journal, "utf8") : "(no journal)",
+      ].join("\n--\n"));
+    };
     assert.equal(snapshot(sides[1]), snapshot(sides[0]), "repository after " + label);
   }
 });

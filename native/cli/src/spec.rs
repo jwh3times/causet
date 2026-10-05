@@ -2695,7 +2695,7 @@ fn materialize_spec_merge(plan: &Value, cwd: &str) -> GitResult<()> {
 
 /// `writePendingOperation(operation, cwd)`: the journal its schema names,
 /// with `updatedAt` refreshed.
-fn write_pending_operation(operation: &Value, cwd: &str) -> GitResult<()> {
+pub(crate) fn write_pending_operation(operation: &Value, cwd: &str) -> GitResult<()> {
   let schema = as_text(get(Some(operation), "schema")).map(|schema| canonical_schema(&schema));
   let file = match schema.as_deref() {
     Some("causet.reconciliation-operation/v4") => "reconciliation.json",
