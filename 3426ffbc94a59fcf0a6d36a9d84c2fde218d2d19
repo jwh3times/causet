@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muvari5gc4a99f7d1a42",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-forecast",
+      "sourceHead": "46fea37e011641eec05533f06b00294352d48484",
+      "sourceSubject": "feat: answer cst forecast natively",
+      "targetBefore": "7915de15441ed242f486ad12258e3a7786d42773",
+      "landingCommit": "3426ffbc94a59fcf0a6d36a9d84c2fde218d2d19",
+      "base": "7915de15441ed242f486ad12258e3a7786d42773",
+      "absorbedCommits": [
+        "46fea37e011641eec05533f06b00294352d48484"
+      ],
+      "absorbedChanges": [
+        "ch_0muv9o856eed1a7c97fd0"
+      ],
+      "resultTree": "2b1eae6f62c3a4fd3d7df96e4a5ca6bbdd5bb896",
+      "createdAt": "2026-10-05T13:40:11.109Z"
+    }
+  ]
+}
