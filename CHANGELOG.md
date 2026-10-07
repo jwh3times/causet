@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The suites no longer let Git's automatic maintenance run in their fixtures
+  (#203). `git commit` starts a detached `git maintenance run --auto`, which
+  in newer Git removes `objects/maintenance.lock` only after the commit has
+  returned, so a fixture copied right after it was built could fail with
+  `ENOENT` on Ubuntu. The isolated Git
+  configuration in `test-support/git-environment.js` now sets
+  `maintenance.auto=false`.
 - The Rust CLI answers `cst reconcile <source>`, `cst reconcile --status` and
   `cst reconcile --abort` natively (#147, third increment, first part). They
   port `reconcile`, `reconciliationStatus` and `abortReconciliation` of

@@ -14,6 +14,13 @@ import { cliInvocations, resetCliInvocations, selectedCli } from "./vlab-command
  * fixture. Fixtures set `user.name` and `user.email` locally. The CLI itself
  * is not changed: outside the suite it reads the user's real configuration.
  *
+ * The one setting the file does carry turns off Git's automatic maintenance.
+ * `git commit` otherwise starts `git maintenance run --auto --detach`, and
+ * where Git can detach, newer versions leave `objects/maintenance.lock` for
+ * the detached process to remove a few milliseconds after the commit has
+ * returned. A suite that copies a fixture right after building it could list
+ * that file and then fail to copy it (#203).
+ *
  * This module lives beside `test/` rather than inside it because `node --test`
  * runs every JavaScript file under a directory named `test` as a test file
  * (Node 20 by the directory's name, Node 22 and later by its `test/**` glob),
@@ -25,7 +32,7 @@ export const isolatedGitConfigDir = fs.realpathSync.native(
   fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-gitconfig-")),
 );
 export const isolatedGitConfig = path.join(isolatedGitConfigDir, "gitconfig");
-fs.writeFileSync(isolatedGitConfig, "");
+fs.writeFileSync(isolatedGitConfig, "[maintenance]\n\tauto = false\n");
 after(() => fs.rmSync(isolatedGitConfigDir, { recursive: true, force: true }));
 
 export function testEnv(overrides = {}) {

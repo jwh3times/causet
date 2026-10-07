@@ -92,11 +92,13 @@ npm test
 
 Every suite file spawns Git and the CLI through `testEnv` from
 `test-support/git-environment.js`, which sets `GIT_CONFIG_NOSYSTEM=1` and
-points `GIT_CONFIG_GLOBAL` at an empty file created for the run, so a host's
+points `GIT_CONFIG_GLOBAL` at a file created for the run, so a host's
 global `commit.gpgsign`, `core.hooksPath`, `init.defaultBranch`, or
 `core.autocrlf` cannot reach a fixture; fixtures set their own identity and
-line-ending settings. The CLI itself still reads the user's real
-configuration. The helper lives beside `test/` rather than inside it because
+line-ending settings. That file sets only `maintenance.auto=false`, so no
+detached `git maintenance` process is still removing its lock from a
+fixture's `objects` directory while a suite copies it (#203). The CLI itself still reads the
+user's real configuration. The helper lives beside `test/` rather than inside it because
 `node --test` runs every JavaScript file under a directory named `test` as a
 test file, so a shared module there would be executed as one.
 
