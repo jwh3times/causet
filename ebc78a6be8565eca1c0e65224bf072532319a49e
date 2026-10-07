@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muxyyetr8009ac97cd18",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-reconcile-start",
+      "sourceHead": "7d957f2cf33b305ca79865ab6bfffb74bff71039",
+      "sourceSubject": "test: fit the reconcile comparisons into the Windows suite job",
+      "targetBefore": "3426ffbc94a59fcf0a6d36a9d84c2fde218d2d19",
+      "landingCommit": "ebc78a6be8565eca1c0e65224bf072532319a49e",
+      "base": "3426ffbc94a59fcf0a6d36a9d84c2fde218d2d19",
+      "absorbedCommits": [
+        "96c3d759b344833ae56c7ef76a424096c43b51cf",
+        "7d957f2cf33b305ca79865ab6bfffb74bff71039"
+      ],
+      "absorbedChanges": [
+        "ch_0muxlb2540abe878b5c75",
+        "ch_0muxmre1ed472574b3329"
+      ],
+      "resultTree": "2adc18638e33ab99b29158af8a4da7576deae490",
+      "createdAt": "2026-10-07T10:32:56.512Z"
+    }
+  ]
+}
