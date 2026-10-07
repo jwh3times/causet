@@ -2101,6 +2101,8 @@ test("reconcile starts, reports and aborts natively, and shares its journal and 
   const status = [A, "reconcile", "--status"];
   const abort = [A, "reconcile", "--abort"];
   const approved = [B, "reconcile", "feature", "--use-forecast", "<forecast>"];
+  // A refusal does not depend on who wrote the forecast, so it runs one role.
+  const unpaired = [A, "reconcile", "feature", "--use-forecast", "<forecast>"];
   const cases = [
     { kind: "clean", steps: [start], outcome: /Reconciliation complete\./ },
     { kind: "clean", steps: [[...start, "--json"]], outcome: /"schema": "causet\.reconciliation\/v6"/ },
@@ -2138,39 +2140,38 @@ test("reconcile starts, reports and aborts natively, and shares its journal and 
     { kind: "conflict", steps: [start, write("shared.txt", "settled\n"), ["git", "add", "shared.txt"], ["js", "reconcile", "--continue", "--json"]], outcome: /"decision": "created"/ },
     { kind: "exact", steps: [start, ["js", "resolve", "apply", "--all"], ["js", "reconcile", "--continue"]], outcome: /resolutions {2}1 accepted/ },
     // A forecast one CLI writes, the other consumes.
-    { kind: "clean", steps: [[A, "forecast", "feature", "--json"], approved], outcome: /forecast {5}<id\d+>/ },
+    { bothEngines: true, kind: "clean", steps: [[A, "forecast", "feature", "--json"], approved], outcome: /forecast {5}<id\d+>/ },
     { kind: "clean", steps: [[A, "forecast", "feature"], [...approved, "--json"]], outcome: /"forecastId": "<id\d+>"/ },
-    { kind: "exact", steps: [[A, "forecast", "feature", "--json"], [...approved, "--json"]], outcome: /"selectionMethod": "forecast-batch"[^]*"schema": "causet\.reconciliation\/v6"/ },
+    { bothEngines: true, kind: "exact", steps: [[A, "forecast", "feature", "--json"], [...approved, "--json"]], outcome: /"selectionMethod": "forecast-batch"[^]*"schema": "causet\.reconciliation\/v6"/ },
     { kind: "exact", steps: [[A, "forecast", "feature"], approved], outcome: /resolutions {2}1 accepted/ },
-    { kind: "spec", steps: [[A, "forecast", "feature"], approved], outcome: /spec merges {2}1 deterministic/ },
+    { bothEngines: true, kind: "spec", steps: [[A, "forecast", "feature"], approved], outcome: /spec merges {2}1 deterministic/ },
     { kind: "spec", steps: [[A, "forecast", "feature", "--json"], [...approved, "--json"]], outcome: /"actualMarkdownHash"/ },
-    { kind: "conflict", steps: [[A, "forecast", "feature"], approved, [B, "reconcile", "--status"]], outcome: /Reconciliation paused while applying/ },
+    { bothEngines: true, kind: "conflict", steps: [[A, "forecast", "feature"], approved, [B, "reconcile", "--status"]], outcome: /Reconciliation paused while applying/ },
     { kind: "candidate", steps: [[A, "forecast", "feature", "--accept-candidates"], approved], outcome: /Reconciliation complete\./ },
     { kind: "candidate", steps: [[A, "forecast", "feature"], approved], outcome: /heuristic patch-equivalence candidates/ },
-    { kind: "clean", steps: [[A, "forecast", "feature"], ["git", "commit", "-q", "--allow-empty", "-m", "main moves"], approved], outcome: /no longer matches this reconciliation/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], ["git", "commit", "-q", "--allow-empty", "-m", "main moves"], unpaired], outcome: /no longer matches this reconciliation/ },
     { kind: "clean", steps: [[A, "reconcile", "feature", "--use-forecast", "forecast_missing"]], outcome: /Forecast 'forecast_missing' was not found/ },
     { kind: "clean", steps: [[A, "reconcile", "feature", "--use-forecast", "Forecast_1", "--json"]], outcome: /"code": "invalid-identifier"/ },
-    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.schema = "causet.forecast/v99"; }), approved], outcome: /Forecast '<id\d+>' carries unsupported schema "causet\.forecast\/v99"/ },
-    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.id = "forecast_other"; }), [...approved, "--json"]], outcome: /has invalid metadata/ },
-    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.predictedResultTree = "0".repeat(40); }), approved, [B, "reconcile", "--status"], [B, "reconcile", "--abort"]], outcome: /does not match forecast[^]*cannot be published[^]*"aborted": true/ },
-    { kind: "exact", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedResolutions[0].resultBlob = "0".repeat(40); }), approved, [B, "reconcile", "--status", "--json"], [B, "reconcile", "--abort"]], outcome: /no longer matches 'shared\.txt'[^]*"aborted": true/ },
-    { kind: "exact", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedResolutions.push({ ...document.approvedResolutions[0], path: "other.txt" }); }), approved], outcome: /no longer matches the current conflicts/ },
-    { kind: "spec", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedSpecMerges[0].resultMarkdownHash = "0".repeat(64); }), approved], outcome: /no longer matches 'docs\/spec\.md'/ },
-    { kind: "spec", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedSpecMerges[0].algorithm = "other/v1"; }), approved], outcome: /unsupported merge algorithm/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.schema = "causet.forecast/v99"; }), unpaired], outcome: /Forecast '<id\d+>' carries unsupported schema "causet\.forecast\/v99"/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.id = "forecast_other"; }), [...unpaired, "--json"]], outcome: /has invalid metadata/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.predictedResultTree = "0".repeat(40); }), unpaired, [A, "reconcile", "--status"], [A, "reconcile", "--abort"]], outcome: /does not match forecast[^]*cannot be published[^]*"aborted": true/ },
+    { kind: "exact", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedResolutions[0].resultBlob = "0".repeat(40); }), unpaired, [A, "reconcile", "--status", "--json"], [A, "reconcile", "--abort"]], outcome: /no longer matches 'shared\.txt'[^]*"aborted": true/ },
+    { kind: "exact", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedResolutions.push({ ...document.approvedResolutions[0], path: "other.txt" }); }), unpaired], outcome: /no longer matches the current conflicts/ },
+    { kind: "spec", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedSpecMerges[0].resultMarkdownHash = "0".repeat(64); }), unpaired], outcome: /no longer matches 'docs\/spec\.md'/ },
+    { kind: "spec", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedSpecMerges[0].algorithm = "other/v1"; }), unpaired], outcome: /unsupported merge algorithm/ },
   ];
   const forecasts = (repo) => {
     const directory = path.join(repo, ".git", "causet", "forecasts");
     return fs.existsSync(directory) ? `${fs.readdirSync(directory).length} forecasts` : "no forecasts";
   };
-  const forecasted = (item) => item.steps.some((step) => Array.isArray(step) && step[1] === "forecast");
-  reconcileTwins("reconcile", cases.filter((item) => !forecasted(item)), build, { extra: forecasts });
-  // A forecast from either engine is consumed alike (ADR-0016).
-  for (const engine of ["worktree", "merge-tree"]) {
-    reconcileTwins(`reconcile-${engine}`, cases.filter(forecasted), build, {
-      extra: forecasts,
-      env: { CAUSET_FORECAST_ENGINE: engine },
-    });
-  }
+  reconcileTwins("reconcile", cases, build, { extra: forecasts });
+  // A forecast from either engine is consumed alike (ADR-0016). The cases above
+  // ran under this platform's default engine; these run under the other one.
+  const other = process.platform === "win32" ? "worktree" : "merge-tree";
+  reconcileTwins(`reconcile-${other}`, cases.filter((item) => item.bothEngines), build, {
+    extra: forecasts,
+    env: { CAUSET_FORECAST_ENGINE: other },
+  });
 });
 
 test("reconcile carries a target overlay through and back natively (#147)", { skip }, () => {
@@ -2210,12 +2211,14 @@ test("reconcile carries a target overlay through and back natively (#147)", { sk
   };
   const forecast = [A, "forecast", "feature", "--target-checkpoint"];
   const approved = [B, "reconcile", "feature", "--use-forecast", "<forecast>"];
+  // A refusal does not depend on who wrote the forecast, so it runs one role.
+  const unpaired = [A, "reconcile", "feature", "--use-forecast", "<forecast>"];
   const write = (file, text) => ({ repo }) => fs.writeFileSync(path.join(repo, file), text);
   const cases = [
     { kind: {}, steps: [forecast, approved], outcome: /re-materialized uncommitted as/ },
-    { kind: {}, steps: [[...forecast, "--json"], [...approved, "--json"]], outcome: /"rematerialized": true/ },
-    { kind: {}, steps: [forecast, write("notes.txt", "drifted\n"), approved], outcome: /The worktree has changed since the target overlay was captured/ },
-    { kind: {}, steps: [forecast, ["git", "commit", "-q", "--allow-empty", "-m", "alpha moves"], [...approved, "--json"]], outcome: /"code": "stale-forecast"/ },
+    { kind: {}, steps: [[...forecast, "--json"], [...unpaired, "--json"]], outcome: /"rematerialized": true/ },
+    { kind: {}, steps: [forecast, write("notes.txt", "drifted\n"), unpaired], outcome: /The worktree has changed since the target overlay was captured/ },
+    { kind: {}, steps: [forecast, ["git", "commit", "-q", "--allow-empty", "-m", "alpha moves"], [...unpaired, "--json"]], outcome: /"code": "stale-forecast"/ },
     { kind: { overlay: "conflict" }, steps: [forecast, approved, [B, "reconcile", "--status"], [B, "reconcile", "--abort"]], outcome: /no longer merges with the committed result[^]*"restored": true/ },
   ];
   const journalOf = (repo, git) =>
