@@ -92,6 +92,11 @@ pub const NATIVE_COMMANDS: &[&str] = &[
 /// Whether this invocation is a ported command: the command, or for a command
 /// with subcommands, the command and its subcommand.
 fn is_native(command: &str, parsed: &Parsed) -> bool {
+  // `cst reconcile` has actions rather than subcommands: starting, `--status`
+  // and `--abort` are ported, and `--continue` is not yet.
+  if command == "reconcile" {
+    return !parsed.truthy("continue");
+  }
   // `cst resolve` alone is `cst resolve status` (`positionals[0] ?? "status"`).
   let default = (command == "resolve").then_some("status");
   NATIVE_COMMANDS.contains(&command)
@@ -709,13 +714,18 @@ mod tests {
       &["workspace", "archive", "w"],
       &["workspace", "restore", "w", "--path", "p"],
       &["workspace", "repair", "w", "--path", "p"],
+      &["reconcile", "feature", "--accept-candidates", "--use-forecast", "forecast_x"],
+      &["reconcile", "--status", "--json"],
+      &["reconcile", "--abort"],
+      &["reconcile", "feature", "--fork"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
     // A command is native per subcommand: these still delegate.
     for args in [
       &["workspace", "forecast", "a", "b"][..],
-      &["reconcile", "--status"],
+      &["reconcile", "--continue"],
+      &["reconcile", "--continue", "--fork", "--json"],
       &["spec", "benchmark"],
       &["rebase-forecast", "main"],
     ] {

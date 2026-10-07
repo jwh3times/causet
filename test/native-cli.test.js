@@ -155,7 +155,7 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
   // Outside a repository these succeed or fail exactly as the JavaScript CLI
   // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["reconcile", "--status"], ["--trace-git", "workspace", "list"]]) {
+  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["reconcile", "--continue"], ["--trace-git", "workspace", "list"]]) {
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
@@ -1845,6 +1845,385 @@ test("forecast --target-checkpoint carries the same overlay natively (#147)", { 
     ].join("\n--\n");
     assert.equal(state(sides[1]), state(sides[0]), "workspace after " + label);
   }
+});
+
+// A reconciliation's journal and receipt list Git activity by elapsed time at
+// any depth; ordered by name, the counts themselves must still agree.
+const steadyActivity = (text) => {
+  let document;
+  try {
+    document = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  const visit = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node.byCommand)) {
+      node.byCommand.sort((left, right) => String(left.command).localeCompare(String(right.command)));
+    }
+    for (const value of Object.values(node)) visit(value);
+  };
+  visit(document);
+  return `${JSON.stringify(document, null, 2)}\n`;
+};
+
+// Who runs a step: `A` and `B` are the JavaScript CLI on the expected side and
+// each take either CLI on the others, so a case naming both also proves that
+// what one CLI wrote the other reads.
+const A = "a";
+const B = "b";
+
+/**
+ * Run each case's steps with the JavaScript CLI and again with the Rust CLI in
+ * every role the case names, and require the same output and the same
+ * repository afterwards. A step is `[who, ...args]` for a CLI (`A`, `B`, or
+ * `"js"`), `["git", ...args]`, or a function of the side's context.
+ */
+function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra = () => "", env = {} } = {}) {
+  const dated = {
+    ...neutral,
+    ...env,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const launch = (who, cwd, args) => {
+    if (who === "js") {
+      return spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+    }
+    if (rust === selectedCli) vlabPrefix();
+    return spawnSync(rust, args, { cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }) });
+  };
+  const rename = (text, repo, side) => {
+    const seen = new Map();
+    const swap = (kind) => (match) => {
+      if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
+      return seen.get(match);
+    };
+    let renamed = text
+      .split(JSON.stringify(repo).slice(1, -1)).join("<repo>")
+      .split(repo).join("<repo>")
+      .split(repo.replaceAll("\\", "/")).join("<repo>")
+      .split(side).join("<side>")
+      .replace(/\b[a-z]+(?:_[a-z]+)*_[0-9a-z]{9}[0-9a-f]{12}\b/g, swap("id"))
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<time>")
+      // Durations differ run to run; Git process and query counts must not.
+      .replace(/("[A-Za-z]*Ms": )-?[\d.e+-]+/g, "$1<ms>")
+      .replace(/(forecast time|active time {2}) ?[\d.]+ ms/g, "$1 <ms> ms")
+      .replace(/queries \([\d.]+ ms\)/g, "queries (<ms> ms)");
+    if (perSide) {
+      // Each side commits with its own Change-Id, so every hash differs too.
+      renamed = renamed
+        .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
+        .replace(/\bdraft_[0-9a-f]{64}\b/g, swap("draft"))
+        .replace(/\b[0-9a-f]{64}\b/g, swap("digest"))
+        .replace(/\bdraft_[0-9a-f]{12}\b/g, swap("draft"))
+        .replace(/\b[0-9a-f]{12}\b/g, swap("short"))
+        .replace(/\b[0-9a-f]{7}\b/g, swap("abbrev"));
+    }
+    return renamed;
+  };
+  const fixtures = new Map();
+  for (const [index, { kind, steps, outcome }] of cases.entries()) {
+    const crossed = steps.some((step) => Array.isArray(step) && step[0] === B);
+    const variants = [{ a: "js", b: "js" }, { a: "rust", b: "rust" }];
+    if (crossed) variants.push({ a: "js", b: "rust" }, { a: "rust", b: "js" });
+    const key = JSON.stringify(kind);
+    if (!perSide && !fixtures.has(key)) {
+      fixtures.set(key, build(`${label}-base-${fixtures.size}`, kind, { git, launch }));
+    }
+    const results = variants.map((variant, number) => {
+      const side = `${label}-${index}-${number}`;
+      let repo;
+      if (perSide) {
+        repo = build(side, kind, { git, launch });
+      } else {
+        repo = path.join(outside, side);
+        fs.cpSync(fixtures.get(key), repo, { recursive: true });
+      }
+      const context = { repo, git, forecast: null };
+      const transcript = [];
+      for (const step of steps) {
+        if (typeof step === "function") {
+          step(context);
+          continue;
+        }
+        const [who, ...template] = step;
+        const args = template.map((arg) => arg === "<forecast>" ? context.forecast : arg);
+        if (who === "git") {
+          git(repo, ...args);
+          continue;
+        }
+        const ran = launch(variant[who] ?? who, repo, args);
+        assert.equal(ran.error, undefined, `${side} ${args.join(" ")}`);
+        if (args[0] === "forecast") context.forecast = /forecast_[0-9a-z]+/.exec(ran.stdout)?.[0] ?? null;
+        transcript.push(`$ ${template.join(" ")} -> ${ran.status}\n${steadyActivity(ran.stdout)}\n${ran.stderr}`);
+      }
+      const journal = journalOf ? journalOf(repo, git) : path.join(repo, ".git", "causet", "reconciliation.json");
+      const state = [
+        git(repo, "rev-parse", "HEAD").stdout,
+        git(repo, "status", "--porcelain=v1").stdout,
+        git(repo, "ls-files", "--stage").stdout,
+        git(repo, "for-each-ref", "--format=%(refname)").stdout,
+        steadyActivity(launch("js", repo, ["receipts", "--json"]).stdout),
+        fs.existsSync(journal) ? steadyActivity(fs.readFileSync(journal, "utf8")) : "(no journal)",
+        extra(repo),
+      ].join("\n--\n");
+      return {
+        variant,
+        transcript: rename(transcript.join("\n"), repo, side),
+        state: rename(state, repo, side),
+      };
+    });
+    const [expected, ...others] = results;
+    const commands = steps.filter(Array.isArray).map((step) => step.slice(1).join(" ")).join("; ");
+    const name = `${JSON.stringify(kind)} ${commands} #${index}`;
+    // Each case must reach the path it is named for, not fail alike for another reason.
+    assert.match(expected.transcript, outcome, name);
+    for (const actual of others) {
+      const who = `${name} with ${JSON.stringify(actual.variant)}`;
+      assert.equal(actual.transcript, expected.transcript, "output of " + who);
+      assert.equal(actual.state, expected.state, "repository after " + who);
+    }
+  }
+}
+
+test("reconcile starts, reports and aborts natively, and shares its journal and forecasts with the JavaScript CLI (#147)", { skip }, () => {
+  const spec = (alpha, beta) => `# Alpha\n\n${alpha}\n\n# Beta\n\n${beta}\n`;
+  // Every fixture reconciles `feature` into `main`, which is checked out.
+  const build = (name, kind, { git, launch }) => {
+    const repo = path.join(outside, name);
+    const must = (...args) => {
+      const made = launch("js", repo, args);
+      assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+    };
+    const write = (file, text) => {
+      fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+      fs.writeFileSync(path.join(repo, file), text);
+    };
+    const commit = (message, files) => {
+      for (const [file, text] of Object.entries(files)) write(file, text);
+      git(repo, "add", "-A");
+      must("commit", "-m", message);
+    };
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Reconcile twin");
+    git(repo, "config", "user.email", "reconcile-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    if (kind === "spec") {
+      write("docs/spec.md", spec("base alpha", "base beta"));
+      must("spec", "index", "docs/spec.md");
+    }
+    commit("base", { "shared.txt": "base\n", "a.txt": "1\n" });
+    must("init");
+    const base = git(repo, "rev-parse", "HEAD").stdout.trim();
+    if (kind === "exact") {
+      // Two pairs that conflict alike, the first resolved and so remembered.
+      const pair = (suffix) => {
+        git(repo, "switch", "-q", "-c", `source-${suffix}`, base);
+        commit(`source ${suffix}`, { "shared.txt": "source\n" });
+        git(repo, "switch", "-q", "-c", `target-${suffix}`, base);
+        commit(`target ${suffix}`, { "shared.txt": "target\n" });
+      };
+      pair("one");
+      assert.notEqual(launch("js", repo, ["reconcile", "source-one"]).status, 0);
+      write("shared.txt", "remembered\n");
+      git(repo, "add", "shared.txt");
+      must("reconcile", "--continue");
+      pair("last");
+      git(repo, "branch", "-q", "-f", "feature", "source-last");
+      git(repo, "branch", "-q", "-f", "main", "target-last");
+      git(repo, "switch", "-q", "main");
+      return repo;
+    }
+    git(repo, "switch", "-q", "-c", "feature");
+    if (kind === "clean" || kind === "dirty") {
+      commit("feature adds b", { "b.txt": "b\n" });
+      commit("feature edits a", { "a.txt": "2\n" });
+    } else if (kind === "conflict" || kind === "paused") {
+      commit("feature adds b", { "b.txt": "b\n" });
+      commit("feature edits a", { "a.txt": "2\n" });
+      commit("feature edits shared", { "shared.txt": "source\n" });
+    } else if (kind === "spec") {
+      write("docs/spec.md", spec("source alpha", "base beta"));
+      must("spec", "index", "docs/spec.md");
+      commit("feature edits alpha", {});
+    } else if (kind === "candidate") {
+      commit("feature edits a", { "a.txt": "2\n" });
+      commit("feature adds b", { "b.txt": "b\n" });
+    } else if (kind === "merge") {
+      commit("feature adds b", { "b.txt": "b\n" });
+      git(repo, "switch", "-q", "-c", "side", base);
+      commit("side adds c", { "c.txt": "c\n" });
+      git(repo, "switch", "-q", "feature");
+      git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side");
+    } else if (kind === "empty") {
+      commit("feature edits a", { "a.txt": "2\n" });
+    }
+    git(repo, "switch", "-q", "main");
+    if (kind === "conflict" || kind === "paused") {
+      commit("main edits shared", { "shared.txt": "target\n" });
+      if (kind === "paused") {
+        const paused = launch("js", repo, ["reconcile", "feature"]);
+        assert.match(paused.stderr, /paused/i, `the paused fixture must pause\n${paused.stderr}`);
+      }
+    } else if (kind === "spec") {
+      write("docs/spec.md", spec("base alpha", "target beta"));
+      must("spec", "index", "docs/spec.md");
+      commit("main edits the spec", {});
+    } else if (kind === "candidate") {
+      // The same patch as `feature edits a`, under another message.
+      write("a.txt", "2\n");
+      git(repo, "commit", "-q", "-am", "main makes the same edit");
+    } else if (kind === "empty") {
+      commit("main edits a and adds d", { "a.txt": "2\n", "d.txt": "d\n" });
+    } else {
+      commit("main adds z", { "z.txt": "z\n" });
+    }
+    if (kind === "dirty") write("untracked.txt", "dirty\n");
+    return repo;
+  };
+  const journalFile = (repo) => path.join(repo, ".git", "causet", "reconciliation.json");
+  const editJournal = (change) => ({ repo }) => {
+    const state = JSON.parse(fs.readFileSync(journalFile(repo), "utf8"));
+    change(state);
+    fs.writeFileSync(journalFile(repo), `${JSON.stringify(state, null, 2)}\n`);
+  };
+  const editForecast = (change) => ({ repo, forecast }) => {
+    const file = path.join(repo, ".git", "causet", "forecasts", `${forecast}.json`);
+    const document = JSON.parse(fs.readFileSync(file, "utf8"));
+    change(document);
+    fs.writeFileSync(file, `${JSON.stringify(document, null, 2)}\n`);
+  };
+  const write = (file, text) => ({ repo }) => fs.writeFileSync(path.join(repo, file), text);
+  const start = [A, "reconcile", "feature"];
+  const status = [A, "reconcile", "--status"];
+  const abort = [A, "reconcile", "--abort"];
+  const approved = [B, "reconcile", "feature", "--use-forecast", "<forecast>"];
+  const cases = [
+    { kind: "clean", steps: [start], outcome: /Reconciliation complete\./ },
+    { kind: "clean", steps: [[...start, "--json"]], outcome: /"schema": "causet\.reconciliation\/v6"/ },
+    { kind: "clean", steps: [[A, "reconcile", "main", "--json"]], outcome: /"applied": \[\]/ },
+    { kind: "conflict", steps: [start], outcome: /Reconciliation paused while applying/ },
+    { kind: "conflict", steps: [[...start, "--json"]], outcome: /"code": "conflict-paused"/ },
+    { kind: "dirty", steps: [start], outcome: /The worktree must be clean/ },
+    { kind: "exact", steps: [start], outcome: /1 prior resolution candidate found/ },
+    { kind: "spec", steps: [start], outcome: /1 deterministic spec merge available/ },
+    { kind: "candidate", steps: [[...start, "--json"]], outcome: /"code": "approval-required"/ },
+    { kind: "candidate", steps: [[...start, "--accept-candidates"]], outcome: /Reconciliation complete\./ },
+    { kind: "paused", steps: [start], outcome: /already in progress in this worktree/ },
+    { kind: "clean", steps: [[A, "reconcile", "no-such-branch"]], outcome: /did not resolve every requested object expression/ },
+    { kind: "merge", steps: [[...start, "--json"], status], outcome: /state {8}blocked/ },
+    { kind: "empty", steps: [start, [...status, "--json"]], outcome: /"state": "blocked"/ },
+    // Status and abort.
+    { kind: "clean", steps: [status], outcome: /No reconciliation is in progress/ },
+    { kind: "clean", steps: [[...status, "--json"]], outcome: /"state": "idle"/ },
+    { kind: "paused", steps: [status], outcome: /progress {5}2\/3 applied/ },
+    { kind: "paused", steps: [[...status, "--json"]], outcome: /"gitCherryPickHead": "[0-9a-f]{40}"/ },
+    { kind: "paused", steps: [abort], outcome: /"aborted": true/ },
+    { kind: "clean", steps: [[...abort, "--json"]], outcome: /"code": "no-operation-pending"/ },
+    { kind: "paused", steps: [["git", "checkout", "-q", "-f", "feature"], [...status, "--json"], abort], outcome: /belongs to branch 'main', not 'feature'/ },
+    { kind: "paused", steps: [["git", "checkout", "-q", "-f", "--detach"], abort], outcome: /belongs to branch 'main', not a detached HEAD/ },
+    { kind: "paused", steps: [editJournal((state) => { state.targetBranchRef = null; }), abort], outcome: /belongs to a detached HEAD, not main\./ },
+    { kind: "paused", steps: [editJournal((state) => { delete state.targetBranchRef; }), [...status, "--json"], abort], outcome: /"branchMatches": null[^]*"aborted": true/ },
+    { kind: "paused", steps: [editJournal((state) => { delete state.targetBranchRef; }), ["git", "cherry-pick", "--abort"], abort], outcome: /does not record its branch/ },
+    { kind: "paused", steps: [["git", "cherry-pick", "--abort"], status, abort], outcome: /"aborted": true/ },
+    { kind: "paused", steps: [["git", "cherry-pick", "--abort"], write("stray.txt", "stray\n"), abort], outcome: /The worktree must be clean/ },
+    { kind: "paused", steps: [editJournal((state) => { state.schema = "causet.reconciliation-operation/v99"; }), status, [...abort, "--json"]], outcome: /reconciliation journal at/ },
+    { kind: "paused", steps: [editJournal((state) => { delete state.queue; }), status], outcome: /reading 'length'/ },
+    { kind: "paused", steps: [editJournal((state) => { delete state.id; state.current = null; delete state.timings; }), [...status, "--json"], status], outcome: /"timings": null/ },
+    // A journal one CLI starts, the other reports on, aborts or continues.
+    { kind: "conflict", steps: [start, [B, "reconcile", "--status", "--json"], [B, "reconcile", "--abort"]], outcome: /"aborted": true/ },
+    { kind: "conflict", steps: [start, write("shared.txt", "settled\n"), ["git", "add", "shared.txt"], ["js", "reconcile", "--continue", "--json"]], outcome: /"decision": "created"/ },
+    { kind: "exact", steps: [start, ["js", "resolve", "apply", "--all"], ["js", "reconcile", "--continue"]], outcome: /resolutions {2}1 accepted/ },
+    // A forecast one CLI writes, the other consumes.
+    { kind: "clean", steps: [[A, "forecast", "feature", "--json"], approved], outcome: /forecast {5}<id\d+>/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], [...approved, "--json"]], outcome: /"forecastId": "<id\d+>"/ },
+    { kind: "exact", steps: [[A, "forecast", "feature", "--json"], [...approved, "--json"]], outcome: /"selectionMethod": "forecast-batch"[^]*"schema": "causet\.reconciliation\/v6"/ },
+    { kind: "exact", steps: [[A, "forecast", "feature"], approved], outcome: /resolutions {2}1 accepted/ },
+    { kind: "spec", steps: [[A, "forecast", "feature"], approved], outcome: /spec merges {2}1 deterministic/ },
+    { kind: "spec", steps: [[A, "forecast", "feature", "--json"], [...approved, "--json"]], outcome: /"actualMarkdownHash"/ },
+    { kind: "conflict", steps: [[A, "forecast", "feature"], approved, [B, "reconcile", "--status"]], outcome: /Reconciliation paused while applying/ },
+    { kind: "candidate", steps: [[A, "forecast", "feature", "--accept-candidates"], approved], outcome: /Reconciliation complete\./ },
+    { kind: "candidate", steps: [[A, "forecast", "feature"], approved], outcome: /heuristic patch-equivalence candidates/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], ["git", "commit", "-q", "--allow-empty", "-m", "main moves"], approved], outcome: /no longer matches this reconciliation/ },
+    { kind: "clean", steps: [[A, "reconcile", "feature", "--use-forecast", "forecast_missing"]], outcome: /Forecast 'forecast_missing' was not found/ },
+    { kind: "clean", steps: [[A, "reconcile", "feature", "--use-forecast", "Forecast_1", "--json"]], outcome: /"code": "invalid-identifier"/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.schema = "causet.forecast/v99"; }), approved], outcome: /Forecast '<id\d+>' carries unsupported schema "causet\.forecast\/v99"/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.id = "forecast_other"; }), [...approved, "--json"]], outcome: /has invalid metadata/ },
+    { kind: "clean", steps: [[A, "forecast", "feature"], editForecast((document) => { document.predictedResultTree = "0".repeat(40); }), approved, [B, "reconcile", "--status"], [B, "reconcile", "--abort"]], outcome: /does not match forecast[^]*cannot be published[^]*"aborted": true/ },
+    { kind: "exact", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedResolutions[0].resultBlob = "0".repeat(40); }), approved, [B, "reconcile", "--status", "--json"], [B, "reconcile", "--abort"]], outcome: /no longer matches 'shared\.txt'[^]*"aborted": true/ },
+    { kind: "exact", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedResolutions.push({ ...document.approvedResolutions[0], path: "other.txt" }); }), approved], outcome: /no longer matches the current conflicts/ },
+    { kind: "spec", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedSpecMerges[0].resultMarkdownHash = "0".repeat(64); }), approved], outcome: /no longer matches 'docs\/spec\.md'/ },
+    { kind: "spec", steps: [[A, "forecast", "feature"], editForecast((document) => { document.approvedSpecMerges[0].algorithm = "other/v1"; }), approved], outcome: /unsupported merge algorithm/ },
+  ];
+  const forecasts = (repo) => {
+    const directory = path.join(repo, ".git", "causet", "forecasts");
+    return fs.existsSync(directory) ? `${fs.readdirSync(directory).length} forecasts` : "no forecasts";
+  };
+  const forecasted = (item) => item.steps.some((step) => Array.isArray(step) && step[1] === "forecast");
+  reconcileTwins("reconcile", cases.filter((item) => !forecasted(item)), build, { extra: forecasts });
+  // A forecast from either engine is consumed alike (ADR-0016).
+  for (const engine of ["worktree", "merge-tree"]) {
+    reconcileTwins(`reconcile-${engine}`, cases.filter(forecasted), build, {
+      extra: forecasts,
+      env: { CAUSET_FORECAST_ENGINE: engine },
+    });
+  }
+});
+
+test("reconcile carries a target overlay through and back natively (#147)", { skip }, () => {
+  // A workspace `alpha` on `main` holding a checkpointed draft, with `feature`
+  // to reconcile into it.
+  const build = (side, { overlay = "draft" }, { git, launch }) => {
+    const base = path.join(outside, side);
+    const repo = path.join(base, "repo");
+    const must = (cwd, ...args) => {
+      const made = launch("js", cwd, args);
+      assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+    };
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Overlay twin");
+    git(repo, "config", "user.email", "overlay-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    fs.writeFileSync(path.join(repo, "a.txt"), "1\n");
+    fs.writeFileSync(path.join(repo, "notes.txt"), "base\n");
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", "base");
+    must(repo, "init");
+    git(repo, "switch", "-q", "-c", "feature");
+    fs.writeFileSync(path.join(repo, "a.txt"), "2\n");
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", "feature edits a");
+    git(repo, "switch", "-q", "main");
+    must(repo, "workspace", "create", "alpha", "--from", "main");
+    const alpha = path.join(base, "repo.workspaces", "alpha");
+    if (overlay === "draft") {
+      fs.writeFileSync(path.join(alpha, "notes.txt"), "draft\n");
+      fs.writeFileSync(path.join(alpha, "new.txt"), "new\n");
+    }
+    if (overlay === "conflict") fs.writeFileSync(path.join(alpha, "a.txt"), "draft\n");
+    must(alpha, "workspace", "checkpoint", "--label", "before");
+    return alpha;
+  };
+  const forecast = [A, "forecast", "feature", "--target-checkpoint"];
+  const approved = [B, "reconcile", "feature", "--use-forecast", "<forecast>"];
+  const write = (file, text) => ({ repo }) => fs.writeFileSync(path.join(repo, file), text);
+  const cases = [
+    { kind: {}, steps: [forecast, approved], outcome: /re-materialized uncommitted as/ },
+    { kind: {}, steps: [[...forecast, "--json"], [...approved, "--json"]], outcome: /"rematerialized": true/ },
+    { kind: {}, steps: [forecast, write("notes.txt", "drifted\n"), approved], outcome: /The worktree has changed since the target overlay was captured/ },
+    { kind: {}, steps: [forecast, ["git", "commit", "-q", "--allow-empty", "-m", "alpha moves"], [...approved, "--json"]], outcome: /"code": "stale-forecast"/ },
+    { kind: { overlay: "conflict" }, steps: [forecast, approved, [B, "reconcile", "--status"], [B, "reconcile", "--abort"]], outcome: /no longer merges with the committed result[^]*"restored": true/ },
+  ];
+  const journalOf = (repo, git) =>
+    path.join(git(repo, "rev-parse", "--absolute-git-dir").stdout.trim(), "causet", "reconciliation.json");
+  const files = (repo) => ["a.txt", "notes.txt", "new.txt"]
+    .map((file) => fs.existsSync(path.join(repo, file)) ? fs.readFileSync(path.join(repo, file), "utf8") : "(absent)")
+    .join("|");
+  reconcileTwins("overlay-reconcile", cases, build, { perSide: true, journalOf, extra: files });
 });
 
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {

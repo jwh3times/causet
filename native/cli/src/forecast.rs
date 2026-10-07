@@ -948,7 +948,7 @@ fn forecast_in_session(
 }
 
 /// `value.toFixed(2)` of a timing.
-fn fixed(value: Option<&Value>) -> String {
+pub(crate) fn fixed(value: Option<&Value>) -> String {
   match value {
     Some(Value::Number(number)) => to_fixed(*number, 2),
     _ => js_text(value),
@@ -988,7 +988,7 @@ pub(crate) fn format_forecast_engine(forecast: &Value) -> Vec<String> {
 }
 
 /// `formatGitActivity(git)`.
-fn git_activity(git: Option<&Value>) -> Option<String> {
+pub(crate) fn git_activity(git: Option<&Value>) -> Option<String> {
   if !truthy(git) {
     return None;
   }

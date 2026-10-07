@@ -140,6 +140,30 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::forecast::format_forecast(&forecast)), 0))
     }
+    "reconcile" => {
+      if parsed.truthy("status") {
+        let status = crate::reconcile::reconciliation_status(cwd)?;
+        if json {
+          return Ok((status, 0));
+        }
+        return Ok((causet_model::json::string(&crate::reconcile::format_reconciliation_status(&status)), 0));
+      }
+      if parsed.truthy("abort") {
+        // Always printed as JSON: the result is an object.
+        return Ok((crate::reconcile::abort_reconciliation(cwd)?, 0));
+      }
+      let source = parsed.positionals.first().cloned().unwrap_or_default();
+      let result = crate::reconcile::reconcile(
+        &source,
+        parsed.truthy("acceptCandidates"),
+        parsed.value("useForecast").filter(|id| !id.is_empty()),
+        cwd,
+      )?;
+      if json {
+        return Ok((result, 0));
+      }
+      Ok((causet_model::json::string(&crate::reconcile::format_reconciliation_result(&result)), 0))
+    }
     "spec" => {
       let file = parsed.positionals.get(1).cloned().unwrap_or_default();
       if parsed.positionals.first().map(String::as_str) == Some("resolve") {
