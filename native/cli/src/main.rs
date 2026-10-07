@@ -29,6 +29,7 @@ mod parsed;
 mod plan;
 mod proof;
 mod provenance;
+mod reconcile;
 mod records;
 mod resolve;
 mod retain;

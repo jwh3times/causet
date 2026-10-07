@@ -504,6 +504,12 @@ impl ObjectSession {
       return;
     }
     self.closed = true;
+    if self.process.is_none() {
+      // A session that never started its process, as one that never created
+      // its worker: a refusal before the first object read.
+      metrics::diagnostic("session-close-no-worker", vec![("sessionId", string(&self.session_id))]);
+      return;
+    }
     self.shut_down("session-close-terminated");
   }
 

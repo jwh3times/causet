@@ -222,7 +222,10 @@ through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
 `compact-merge`, `hard-squash` and `cherry-pick`, #146; `workspace list`,
 `checkpoint`, `prune`, `create`, `move`, `archive`, `restore` and `repair`,
 `spec index`, `spec merge-plan` and `spec resolve`, #149; `resolve apply`,
-`resolve reject` and `forecast`, #147), it also compares their output in a repository. The only members allowed to differ are
+`resolve reject`, `forecast`, and `reconcile` except `--continue`, #147), it also compares their output in a repository. For `reconcile` a case
+that names two roles runs with either CLI in each, so a forecast one CLI wrote
+(under each forecast engine) is consumed by the other, and a journal one
+started is reported on or aborted by the other. The only members allowed to differ are
 `implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.
 
@@ -961,7 +964,7 @@ and unknown paths still run suites. Renames consider both paths; a missing
 comparison commit or empty diff conservatively runs the routine suites.
 There is no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
-Static jobs have a five-minute timeout and suites a 25-minute timeout.
+Static jobs have a five-minute timeout and suites a 35-minute timeout.
 
 Run full qualification before each release and before merging changes to Git
 session transports, forecast engines, native read routing, platform-specific

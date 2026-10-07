@@ -10,6 +10,12 @@ pub fn parses(text: &str) -> bool {
   parse(text.as_bytes()).is_some()
 }
 
+/// `Date.parse(text)` for a timestamp in the ECMAScript format: milliseconds
+/// since the epoch, or `None` where JavaScript answers `NaN`.
+pub fn parse_ms(text: &str) -> Option<f64> {
+  parse(text.as_bytes())
+}
+
 fn number(bytes: &[u8], at: &mut usize, width: usize) -> Option<i64> {
   let digits = bytes.get(*at..*at + width)?;
   if !digits.iter().all(u8::is_ascii_digit) {

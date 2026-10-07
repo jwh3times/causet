@@ -2566,7 +2566,7 @@ pub fn format_spec_merge_plan(plan: &Value) -> String {
 // ---------------------------------------------------------------------------
 
 /// `specMergePlansForOperation(operation, cwd)`.
-fn spec_merge_plans_for_operation(operation: Option<&Value>, cwd: &str) -> GitResult<Vec<Value>> {
+pub(crate) fn spec_merge_plans_for_operation(operation: Option<&Value>, cwd: &str) -> GitResult<Vec<Value>> {
   let current = get(operation, "current");
   let mut plans = Vec::new();
   if !truthy(current) {
@@ -2642,7 +2642,7 @@ fn assert_current_spec_merges(merges: &[Value]) -> GitResult<()> {
 
 /// `assertCurrentSpecDecisions(record)`: every semantic decision a journal or
 /// its forecast approval stores was made by this merge algorithm.
-fn assert_current_spec_decisions(record: Option<&Value>) -> GitResult<()> {
+pub(crate) fn assert_current_spec_decisions(record: Option<&Value>) -> GitResult<()> {
   if !truthy(record) {
     return Ok(());
   }
@@ -2659,6 +2659,72 @@ fn assert_current_spec_decisions(record: Option<&Value>) -> GitResult<()> {
     assert_current_spec_decisions(approval)?;
   }
   Ok(())
+}
+
+/// `captureSpecMergeOutcomes(merges, cwd)`: what each recorded spec merge was
+/// staged as, and whether that is still the result the merge planned.
+pub(crate) fn capture_spec_merge_outcomes(merges: &[Value], cwd: &str) -> GitResult<Vec<Value>> {
+  assert_current_spec_merges(merges)?;
+  let expressions: Vec<String> = merges
+    .iter()
+    .flat_map(|merge| {
+      [
+        format!(":{}", js_text(get(Some(merge), "path"))),
+        format!(":{}", js_text(get(Some(merge), "manifestPath"))),
+      ]
+    })
+    .collect();
+  let objects = engine::read_git_objects(&expressions, cwd)?.records;
+  let staged = |index: usize| {
+    objects.get(index).filter(|object| object.exists).map(|object| {
+      normalize_markdown(&String::from_utf8_lossy(object.content.as_deref().unwrap_or_default()))
+    })
+  };
+  let mut outcomes = Vec::new();
+  for (index, merge) in merges.iter().enumerate() {
+    let path = js_text(get(Some(merge), "path"));
+    let markdown = staged(index * 2);
+    let manifest = staged(index * 2 + 1);
+    if markdown.is_none() != manifest.is_none() {
+      return Err(GitError::new(
+        "precondition-not-met",
+        format!("Staged spec '{path}' and its manifest must be added or deleted together."),
+      ));
+    }
+    if let (Some(markdown), Some(manifest)) = (&markdown, &manifest) {
+      let stored = parse(manifest).map_err(|_| {
+        GitError::new("malformed-input", format!("Staged manifest for '{path}' is invalid JSON."))
+      })?;
+      if matches!(stored, Value::Null) {
+        return Err(GitError::uncoded("Cannot read properties of null (reading 'source')"));
+      }
+      if !strict_equals(get(Some(&stored), "source"), get(Some(merge), "path"))
+        || !strict_equals(get(Some(&stored), "sourceHash"), Some(&string(&sha256(markdown))))
+      {
+        return Err(
+          GitError::new("stale-manifest", format!("Staged manifest for '{path}' is stale."))
+            .details(format!("Run 'cst spec index {path}', stage both files, and continue again.")),
+        );
+      }
+      let parsed = materialize_manifest(markdown, &stored)?;
+      primary_blocks(markdown, &parsed)?;
+    }
+    let hash = |text: &Option<String>| text.as_deref().map_or(Value::Null, |text| string(&sha256(text)));
+    let actual_markdown = hash(&markdown);
+    let actual_manifest = hash(&manifest);
+    let planned = |name: &str| get(Some(merge), name);
+    let accepted = strict_equals(Some(&actual_markdown), planned("resultMarkdownHash"))
+      && strict_equals(Some(&actual_manifest), planned("resultManifestHash"));
+    let mut outcome = match merge {
+      Value::Object(object) => object.clone(),
+      _ => Object::new(),
+    };
+    outcome.set("decision", string(if accepted { "accepted" } else { "modified" }));
+    outcome.set("actualMarkdownHash", actual_markdown);
+    outcome.set("actualManifestHash", actual_manifest);
+    outcomes.push(Value::Object(outcome));
+  }
+  Ok(outcomes)
 }
 
 /// `materializeSpecMerge(plan, cwd)`: the merged Markdown and manifest
@@ -2711,6 +2777,12 @@ pub(crate) fn write_pending_operation(operation: &Value, cwd: &str) -> GitResult
       ));
     }
   };
+  write_journal(file, operation, cwd)
+}
+
+/// One journal under this worktree's runtime directory, written whole or not
+/// at all, with `updatedAt` refreshed.
+pub(crate) fn write_journal(file: &str, operation: &Value, cwd: &str) -> GitResult<()> {
   let git_dir = engine::repo_context(cwd)?.git_dir;
   let path = text::join(&causet_engine::locations::runtime_directory(&git_dir, cwd)?, file);
   let mut updated = match operation {

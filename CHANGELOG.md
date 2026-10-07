@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst reconcile <source>`, `cst reconcile --status` and
+  `cst reconcile --abort` natively (#147, third increment, first part). They
+  port `reconcile`, `reconciliationStatus` and `abortReconciliation` of
+  `src/operations.js`:
+  - **Starting:** the queue applied one pick per new change, with
+    `--accept-candidates`, the pause on a conflict, and the applications and
+    the `causet.reconciliation/v6` receipt published with the same Git
+    activity.
+  - **Forecasts:** `--use-forecast <id>` with every staleness check of
+    `forecastForPlan`, the approved exact resolutions and spec merges applied
+    as a batch, and the result checked against the predicted tree.
+  - **Target overlays:** the worktree checked against the overlay, reduced to
+    the committed head, and the draft put back uncommitted afterwards or
+    restored on abort (ADR-0028).
+  - **The journal:** `causet.reconciliation-operation/v4`, as the JavaScript
+    CLI writes it. A reconciliation one CLI starts, the other reports on or
+    aborts; one the Rust CLI starts, the JavaScript CLI continues; and a
+    forecast one writes, under either engine, the other consumes.
+
+  `cst reconcile --continue` still delegates to the JavaScript CLI.
 - The Rust CLI answers `cst forecast <source>` natively, with
   `--target-checkpoint` and `--accept-candidates` (#147, second increment). It
   ports `forecastReconciliation` of `src/forecasts.js` and the part of the

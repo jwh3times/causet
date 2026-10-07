@@ -211,11 +211,28 @@ fn member_text(entry: &Value, name: &str) -> String {
 /// `carryProvenance(fromCommits, toCommit, changeId, cwd)`: the union of the
 /// sources' declared actors, attached to `to_commit` as a `carried` record
 /// naming its immediate sources, or `None` when no source declared anything.
-fn carry_provenance(from_commits: &[String], to_commit: &str, change_id: Option<&str>, cwd: &str) -> GitResult<Option<Value>> {
+///
+/// `known` is a read of many commits' provenance a publication loop already
+/// made, so the notes ref is listed once for the loop rather than once per
+/// application (ADR-0013).
+fn carry_provenance(
+  from_commits: &[String],
+  to_commit: &str,
+  change_id: Option<&str>,
+  cwd: &str,
+  known: Option<&[(String, Vec<Value>)]>,
+) -> GitResult<Option<Value>> {
   let mut sources: Vec<String> = from_commits.iter().filter(|commit| !commit.is_empty()).cloned().collect();
   sources.sort();
   sources.dedup();
-  let existing = provenance_for(&sources, cwd)?;
+  let read;
+  let existing = match known {
+    Some(known) => known,
+    None => {
+      read = provenance_for(&sources, cwd)?;
+      &read
+    }
+  };
   if existing.is_empty() {
     return Ok(None);
   }
@@ -245,5 +262,27 @@ fn carry_provenance(from_commits: &[String], to_commit: &str, change_id: Option<
 /// never loses the rewrite that already happened, so it is dropped here as
 /// every caller in `src/` drops the returned error.
 pub fn carry_provenance_safely(from_commits: &[String], to_commit: &str, change_id: Option<&str>, cwd: &str) {
-  let _ = carry_provenance(from_commits, to_commit, change_id, cwd);
+  let _ = carry_provenance(from_commits, to_commit, change_id, cwd, None);
+}
+
+/// `carryProvenanceForApplications(applications, cwd)`: provenance carried for
+/// a whole publication loop from one read of the notes ref. Each application
+/// names its origin, its result and the change the result bears.
+pub fn carry_provenance_for_applications(applications: &[(String, String, Option<String>)], cwd: &str) -> GitResult<()> {
+  if applications.is_empty() {
+    return Ok(());
+  }
+  let origins: Vec<String> = applications
+    .iter()
+    .map(|(origin, ..)| origin.clone())
+    .filter(|origin| !origin.is_empty())
+    .collect();
+  let known = provenance_for(&origins, cwd)?;
+  if known.is_empty() {
+    return Ok(());
+  }
+  for (origin, applied, change_id) in applications {
+    let _ = carry_provenance(std::slice::from_ref(origin), applied, change_id.as_deref(), cwd, Some(&known));
+  }
+  Ok(())
 }
