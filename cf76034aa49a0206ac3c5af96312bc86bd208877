@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muyv3bkj9a996ea4cad5",
+      "mode": "compact",
+      "sourceRef": "jwh3times/fix-fixture-copy-flake",
+      "sourceHead": "cbe2e861dc7a2d05318e87fa20070a3a2433c4fa",
+      "sourceSubject": "fix: keep Git's automatic maintenance out of suite fixtures",
+      "targetBefore": "ebc78a6be8565eca1c0e65224bf072532319a49e",
+      "landingCommit": "cf76034aa49a0206ac3c5af96312bc86bd208877",
+      "base": "ebc78a6be8565eca1c0e65224bf072532319a49e",
+      "absorbedCommits": [
+        "cbe2e861dc7a2d05318e87fa20070a3a2433c4fa"
+      ],
+      "absorbedChanges": [
+        "ch_0muyfa1gr934099da8cac"
+      ],
+      "resultTree": "4a4e44097bc8eb33e393fc499dc7a98e7b83ae8f",
+      "createdAt": "2026-10-08T01:32:33.403Z"
+    }
+  ]
+}
