@@ -396,6 +396,33 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::plan::format_merge_plan(&plan)), 0))
     }
+    "rebase" => {
+      if parsed.truthy("status") {
+        let status = crate::rebase::rebase_status(cwd)?;
+        if json {
+          return Ok((status, 0));
+        }
+        return Ok((causet_model::json::string(&crate::rebase::format_rebase_status(&status)), 0));
+      }
+      if parsed.truthy("abort") {
+        return Ok((crate::rebase::abort_rebase(cwd)?, 0));
+      }
+      let result = if parsed.truthy("continue") {
+        crate::rebase::continue_rebase(parsed.truthy("fork"), parsed.value("message"), cwd)?
+      } else {
+        let options = crate::rebase::StartOptions {
+          accept_candidates: parsed.truthy("acceptCandidates"),
+          forecast_id: parsed.value("useForecast"),
+          plan: rebase_options(parsed),
+        };
+        let onto = parsed.positionals.first().cloned().unwrap_or_default();
+        crate::rebase::start_rebase(&onto, &options, cwd)?
+      };
+      if json {
+        return Ok((result, 0));
+      }
+      Ok((causet_model::json::string(&crate::rebase::format_rebase_result(&result)), 0))
+    }
     "rebase-forecast" => {
       let options = crate::rebase_forecast::ForecastOptions {
         accept_candidates: parsed.truthy("acceptCandidates"),

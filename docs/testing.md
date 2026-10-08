@@ -224,7 +224,7 @@ through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
 `compact-merge`, `hard-squash` and `cherry-pick`, #146; `workspace list`,
 `checkpoint`, `prune`, `create`, `move`, `archive`, `restore` and `repair`,
 `spec index`, `spec merge-plan` and `spec resolve`, #149; `resolve apply`,
-`resolve reject`, `forecast`, and `reconcile`, #147; `workspace forecast`, #149; `rebase-forecast`, #148), it also compares their output in a repository. For `reconcile` a case
+`resolve reject`, `forecast`, and `reconcile`, #147; `workspace forecast`, #149; `rebase-forecast` and `rebase`, #148), it also compares their output in a repository. For `reconcile` and `rebase` a case
 that names two roles runs with either CLI in each, so a forecast one CLI wrote
 (under each forecast engine, or by `workspace forecast --source-checkpoint`) is
 consumed by the other, and a journal one

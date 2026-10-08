@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst rebase` natively: `cst rebase <onto>` with
+  `--from`, `--accept-candidates`, `--use-forecast` and the declared
+  `--reword`, `--edit`, `--squash` and `--fixup` actions, and `--status`,
+  `--continue` (with `--fork` and `-m`) and `--abort` (#148, second increment),
+  so every rebase command is native. It ports `src/rebase-operations.js`:
+  - **The journal:** `causet.rebase-operation/v3`, as the JavaScript CLI
+    writes it. A rebase either CLI starts, the other reports on, continues or
+    aborts, and a forecast either writes the other applies.
+  - **The program:** picks, recreated merges committed under an identity
+    minted before the commit exists and anchored under `refs/causet/rebase/`,
+    and omitted commits collapsed out (ADR-0034).
+  - **Interactive steps:** the pauses for a `reword` message and for `edit`
+    content, amendments for content that diverged, and absorptions, including
+    one that pauses on a conflict and resumes at the change that stopped
+    (ADR-0035).
+  - **Approval:** every staleness check of `rebaseForecastForPlan`, the
+    per-step tree and outcome checks, and the approved resolutions and spec
+    merges applied as a batch.
+  - **Publication:** the applications, retained resolutions, amendments,
+    absorptions and the `causet.rebase/v3` receipt, with the same fault points
+    and the same Git activity.
+  - **Caller overlays:** reduced to the committed head, re-materialized after
+    the rewrite, and restored on abort (ADR-0028).
+
+  What still delegates is `cst migrate`, `cst metadata benchmark` and
+  `cst spec benchmark`.
 - The Rust CLI answers `cst rebase-forecast <onto> [<source>]` natively, with
   `--from`, `--accept-candidates`, `--target-checkpoint` and the declared
   `--reword`, `--edit`, `--squash` and `--fixup` actions (#148, first
@@ -17,8 +43,6 @@
     with the same recorded reason (ADR-0016).
   - **The caller:** the HEAD, branch, index, status and worktree-list
     evidence, digested as the JavaScript CLI digests it.
-
-  `cst rebase` still delegates.
 - The Rust CLI answers `cst workspace forecast <target> <source>` natively,
   with `--source-checkpoint` and `--accept-candidates` (#149, last command), so
   every `cst workspace` subcommand is native. It ports `forecastWorkspaces` of

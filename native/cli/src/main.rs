@@ -29,6 +29,7 @@ mod parsed;
 mod plan;
 mod proof;
 mod provenance;
+mod rebase;
 mod rebase_forecast;
 mod rebase_program;
 mod reconcile;

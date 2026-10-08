@@ -27,6 +27,25 @@ pub(crate) struct ProgramItem {
 }
 
 impl ProgramItem {
+  /// The step as the rebase journal holds it.
+  pub fn to_value(&self) -> Value {
+    let mut item = Object::new();
+    item.set("kind", string(self.kind));
+    if self.kind == "pick" {
+      if let Some(action) = &self.action {
+        item.set("action", string(action));
+      }
+    }
+    if let Some(step) = &self.step {
+      item.set("step", step.clone());
+    }
+    item.set("change", self.change.clone());
+    if self.kind == "pick" && self.step.is_some() {
+      item.set("absorbs", Value::Array(self.absorbs.clone()));
+    }
+    Value::Object(item)
+  }
+
   /// A step of a plain queue: `{ kind: "pick", change }`.
   pub fn pick(change: &Value) -> Self {
     ProgramItem {
@@ -146,6 +165,8 @@ pub(crate) fn rebase_program(plan: &Value) -> Vec<ProgramItem> {
 
 /// A step's new parent: where it comes from, and the commit that is.
 pub(crate) struct Parent {
+  pub source: Value,
+  pub origin: Value,
   pub commit: String,
 }
 
@@ -159,16 +180,17 @@ pub(crate) fn resolve_step_parents(
   items(get(Some(step), "parents"))
     .iter()
     .map(|parent| {
+      let resolved = |commit: &str| Parent {
+        source: get(Some(parent), "source").cloned().unwrap_or(Value::Null),
+        origin: get(Some(parent), "origin").cloned().unwrap_or(Value::Null),
+        commit: commit.to_string(),
+      };
       if as_text(get(Some(parent), "source")).as_deref() == Some("new-base") {
-        return Ok(Parent {
-          commit: onto_head.to_string(),
-        });
+        return Ok(resolved(onto_head));
       }
       let origin = js_text(get(Some(parent), "origin"));
       match rewritten.get(&origin).filter(|commit| !commit.is_empty()) {
-        Some(commit) => Ok(Parent {
-          commit: commit.clone(),
-        }),
+        Some(commit) => Ok(resolved(commit)),
         None => Err(GitError::new(
           "internal-invariant",
           format!(
@@ -253,7 +275,6 @@ fn declared_identities(message: &str) -> Vec<String> {
 
 /// `rewordedMessage(text, changeId)`: the message a `reword` commits, which
 /// must not declare another identity and cannot be empty.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn reworded_message(message: &str, change_id: &str) -> GitResult<String> {
   if declared_identities(message).iter().any(|value| value != change_id) {
     return Err(

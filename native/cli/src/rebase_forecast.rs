@@ -13,7 +13,10 @@ use crate::target_overlay::{predict_overlay_tree, resolve_target_overlay};
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::session::with_object_session;
 use causet_engine::types::IndexOptions;
-use causet_engine::{engine, metrics};
+use crate::spec::assert_current_spec_decisions;
+use causet_engine::locations::runtime_directory;
+use causet_engine::{engine, metrics, text};
+use causet_model::schemas::assert_readable_schema;
 use causet_model::js::{get, length, nullish, strict_equals, text as js_text, truthy};
 use causet_model::json::{Object, Value, lossy, string, stringify};
 use std::time::Instant;
@@ -398,6 +401,121 @@ fn forecast_in_session(
   forecast.set("createdAt", string(&metrics::iso_now()));
   let forecast = Value::Object(forecast);
   save_forecast(&forecast, &id, cwd)?;
+  Ok(forecast)
+}
+
+/// `readRebaseForecast(id, cwd)`.
+pub(crate) fn read_rebase_forecast(id: &str, cwd: &str) -> GitResult<Value> {
+  // `/^rebase_forecast_[a-z0-9]+$/`.
+  let valid = id
+    .strip_prefix("rebase_forecast_")
+    .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9')));
+  if !valid {
+    return Err(GitError::new(
+      "invalid-identifier",
+      format!("Invalid rebase forecast ID '{id}'."),
+    ));
+  }
+  let git_dir = engine::repo_context(cwd)?.git_dir;
+  let directory = text::join(&runtime_directory(&git_dir, cwd)?, "forecasts");
+  match crate::store::read_json(&text::join(&directory, &format!("{id}.json")))? {
+    Some(forecast) if truthy(Some(&forecast)) => Ok(forecast),
+    _ => Err(GitError::new(
+      "not-found",
+      format!("Rebase forecast '{id}' was not found in this worktree."),
+    )),
+  }
+}
+
+/// `rebaseForecastForPlan(id, plan, cwd)`: the forecast, if it is a complete
+/// approval of exactly this plan.
+pub(crate) fn rebase_forecast_for_plan(id: &str, plan: &Value, cwd: &str) -> GitResult<Value> {
+  let forecast = read_rebase_forecast(id, cwd)?;
+  let member = |name: &str| get(Some(&forecast), name);
+  let planned = |name: &str| get(Some(plan), name);
+  assert_readable_schema(
+    as_text(member("schema")).as_deref(),
+    &format!("Rebase forecast '{id}'"),
+    Some("causet.rebase-forecast"),
+    "Generate a new rebase forecast with: cst rebase-forecast",
+  )
+  .map_err(|refusal| GitError::new(refusal.code, refusal.message).details(refusal.details))?;
+  assert_current_spec_decisions(Some(&forecast))?;
+  let status = as_text(member("status"));
+  if !strict_equals(member("id"), Some(&string(id)))
+    || status.as_deref() != Some("complete")
+    || !truthy(member("predictedResultTree"))
+  {
+    // An `edit` has no predictable result tree, so a program containing one
+    // cannot be pre-approved; saying so is a reason a caller can act on.
+    return Err(
+      GitError::new(
+        "operation-state-invalid",
+        format!("Rebase forecast '{id}' is not a complete application approval."),
+      )
+      .details(if status.as_deref() == Some("pauses-for-content") {
+        "The program declares an --edit, whose result a forecast cannot predict. Run the rebase without --use-forecast; it will pause for the content and verify the rest of the queue as it goes."
+      } else {
+        ""
+      }),
+    );
+  }
+  let base = |value: Option<&Value>| or_null(get(get(value, "range"), "base").filter(|base| !nullish(Some(base))));
+  let forecast_base = base(Some(&forecast));
+  let plan_base = base(Some(plan));
+  let range_moved = !strict_equals(Some(&forecast_base), Some(&plan_base));
+  if !strict_equals(member("sourceHead"), planned("sourceHead"))
+    || !strict_equals(member("sourceTree"), planned("sourceTree"))
+    || !strict_equals(member("ontoHead"), planned("ontoHead"))
+    || !strict_equals(member("ontoTree"), planned("ontoTree"))
+    || !strict_equals(member("planFingerprint"), planned("fingerprint"))
+    || !strict_equals(get(member("plan"), "fingerprint"), planned("fingerprint"))
+    || range_moved
+  {
+    let named = |base: &Value| match base {
+      Value::Null => "the merge base".to_string(),
+      base => js_text(Some(base)),
+    };
+    return Err(
+      GitError::new("stale-forecast", format!("Rebase forecast '{id}' is stale.")).details(if range_moved {
+        format!(
+          "The forecast approved the range from {}, not {}. Generate and review a new rebase forecast.",
+          named(&forecast_base),
+          named(&plan_base)
+        )
+      } else {
+        "The source, onto target, or causal metadata changed. Generate and review a new rebase forecast."
+          .to_string()
+      }),
+    );
+  }
+  // `{ commit, changeId, proof }` of each candidate, compared as JSON.
+  let identities = |candidates: &[Value]| {
+    stringify(&Value::Array(
+      candidates
+        .iter()
+        .map(|candidate| {
+          let mut identity = Object::new();
+          for name in ["commit", "changeId", "proof"] {
+            if let Some(value) = get(Some(candidate), name) {
+              identity.set(name, value.clone());
+            }
+          }
+          Value::Object(identity)
+        })
+        .collect(),
+    ))
+  };
+  let candidates = items(planned("candidates"));
+  if !candidates.is_empty()
+    && (!truthy(member("acceptCandidates"))
+      || identities(items(member("acceptedCandidates"))) != identities(candidates))
+  {
+    return Err(GitError::new(
+      "stale-forecast",
+      format!("Rebase forecast '{id}' does not approve the current heuristic candidates."),
+    ));
+  }
   Ok(forecast)
 }
 
