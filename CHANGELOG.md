@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- The package set of ADR-0038 can be built and is installed in CI (#150).
+  Nothing is published yet, and this checkout's own `package.json` keeps the
+  JavaScript CLI as its command until the cutover (#152).
+  - **`scripts/pack-release.mjs`** packs one package per platform
+    (`@holland-vip/causet-win32-x64`, `@holland-vip/causet-linux-x64-gnu`)
+    holding a prebuilt `cst`, and the main package with exact pins on them,
+    recorded SHA-256 digests, and `cst` pointed at `bin/native/cst.exe`.
+  - **`bin/native/`** holds the Node launcher published as `cst.exe` and the
+    `preinstall` copy that replaces it with the executable, so the installed
+    `cst` starts no Node process. Both refuse an executable whose digest or
+    version is not this release's.
+  - **`.github/workflows/release.yml`** builds on a Windows and a Linux
+    runner, packs, and runs the installed command on each with Node absent
+    from `PATH`. A `v*` tag drafts the GitHub release and can publish to npm
+    through trusted publishing.
+  - **`cst doctor` reports `launcher`:** `"node"` when the installed command
+    is the Node launcher, `null` otherwise, in both implementations.
+    `CAUSET_LAUNCHER` and the test-only `CAUSET_RELEASE_SET` are new
+    variables.
+  - **npm 12 runs no install script unless told to,** so a plain
+    `npm install -g @holland-vip/causet` there keeps the launcher. Add
+    `--allow-scripts=@holland-vip/causet` for the Node-free command.
 - The Rust CLI answers `cst metadata benchmark` and `cst spec benchmark`
   natively (#212), so every command is ported. What the Rust CLI still hands
   to the JavaScript CLI is an argument shape the JavaScript parser itself

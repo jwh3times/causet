@@ -914,7 +914,10 @@ A release candidate is eligible only when:
 7. no causet Node or Git process remains after completion;
 8. version constants, package metadata, changelog, and release tag agree; and
 9. the packed artifact passes an install and smoke test outside the source
-   checkout; and
+   checkout, and so does the package set of ADR-0038: a green
+   `.github/workflows/release.yml` run on the release commit installs the
+   main and platform packages on a Windows and a Linux runner and runs the
+   installed `cst` with Node absent from `PATH`; and
 10. `npm run test:benchmark -- --host lab-windows-a` passes on the matching
     identified Windows qualification machine in `benchmarks/baseline.json`.
     Current release latency qualification covers this machine only. Skipped
@@ -944,6 +947,52 @@ New schemas, migration behavior, replay algorithms, or performance decisions
 require focused disposable-repository coverage in addition to this general
 gate. Release qualification does not establish production readiness, security
 review, service-level objectives, or broad platform performance.
+
+## Release packaging
+
+`scripts/pack-release.mjs` assembles what a release publishes (ADR-0038): one
+package per platform holding a prebuilt `cst`, and the main package whose
+`cst` command is that executable. It publishes nothing.
+
+```bash
+node scripts/build-native.mjs
+node scripts/pack-release.mjs --out dist --executable linux-x64-gnu=native/target/release/cst
+```
+
+The main package it writes differs from this checkout's `package.json` in
+`bin`, `scripts.preinstall` and `optionalDependencies`, and adds
+`bin/native/checksums.json`. The checkout's own manifest keeps the JavaScript
+CLI as its command until the cutover (#152).
+
+How the installed command reaches the executable:
+
+- **With install scripts,** `bin/native/preinstall.js` copies the platform
+  package's executable over `bin/native/cst.exe` before npm links the command,
+  so `cst` is the executable and no Node process starts.
+- **Without them,** `bin/native/cst.exe` stays the Node launcher. It runs the
+  executable itself, and `cst doctor` reports `"launcher": "node"`.
+- **npm 12 runs no install script unless told to.** `npm install -g
+  --allow-scripts=@holland-vip/causet @holland-vip/causet` allows this one.
+  Without the flag the install succeeds and `cst` starts through Node.
+- **A mismatch is refused.** The launcher and the copy both check the
+  executable's SHA-256 against `checksums.json` and its `--version` against
+  the main package's version.
+- **Without a platform package,** the launcher runs the JavaScript CLI and
+  says why on stderr.
+
+`test/release-packaging.test.js` packs this host's set from the workspace's
+release build, installs it globally under a scratch prefix in each of those
+ways, and runs the release gate's smoke sequence through the installed
+command with only Git on `PATH`. With `CAUSET_RELEASE_SET=<directory>` it
+installs tarballs already packed there instead.
+
+`.github/workflows/release.yml` builds the executable on a Windows and a Linux
+runner, packs the set, and runs that test against it on each. A pull request
+that touches the packaging and a manual dispatch stop there. A `v*` tag also
+drafts a GitHub release with one archive per platform, the npm tarballs and
+`SHA256SUMS`, and publishes to npm through trusted publishing when the
+repository variable `NPM_PUBLISH` is `true`. Each package's first publish is
+manual, from the run's artifacts (#139).
 
 ## Continuous integration
 

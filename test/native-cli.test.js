@@ -2938,6 +2938,8 @@ test("the benchmarks report the same counts natively, timings and the named esti
   const human = (text) => text
     .replace(/[\d.]+ ms/g, "<ms> ms")
     .replace(/\([\d.]+ cold\)/g, "(<ms> cold)");
+  // Which phases are over budget depends on how long they took, so every
+  // case keeps a budget no run exceeds.
   const small = ["--history", "6", "--workspaces", "2", "--notes", "8", "--resolutions", "3", "--samples", "2", "--areas", "2", "--files-per-area", "3"];
   const cases = [
     [["spec", "benchmark", "--documents", "3", "--blocks", "4"], /"schema": "causet\.spec-benchmark\/v3"/],
@@ -2946,7 +2948,7 @@ test("the benchmarks report the same counts natively, timings and the named esti
     [["spec", "benchmark", "--documents", "1000", "--blocks", "1000", "--json"], /limited to 100,000 generated blocks/],
     [["metadata", "benchmark", ...small, "--json"], /"schema": "causet\.repository-scale-benchmark\/v1"[^]*"unexpectedGitFailures": 0/],
     [["metadata", "benchmark", ...small], /Repository scale benchmark[^]*next action/],
-    [["metadata", "benchmark", "--history", "2", "--workspaces", "0", "--notes", "0", "--resolutions", "0", "--samples", "1", "--areas", "1", "--files-per-area", "1", "--budget-ms", "1", "--json"], /"profile": "custom-v1"/],
+    [["metadata", "benchmark", "--history", "2", "--workspaces", "0", "--notes", "0", "--resolutions", "0", "--samples", "1", "--areas", "1", "--files-per-area", "1", "--budget-ms", "60000", "--json"], /"interactiveBudgetMs": 60000/],
     [["metadata", "benchmark", "--samples", "0"], /--samples must be an integer between 1 and 10/],
     [["metadata", "benchmark", "--notes", "5000", "--resolutions", "1", "--json"], /limited to 5,000 total note and resolution records/],
   ];
