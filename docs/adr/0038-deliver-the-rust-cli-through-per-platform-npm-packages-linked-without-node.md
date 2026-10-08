@@ -1,6 +1,6 @@
 # ADR-0038: Deliver the Rust CLI through per-platform npm packages, linked without Node
 
-- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name)
+- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name); a third amendment is **proposed** 2026-10-08 (primary install channel) and not yet decided
 - **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers
@@ -376,3 +376,123 @@ Decided by the owner on 2026-09-28:
   default to private.
 - **Released as v0.19.1.** v0.19.0 was tagged with the name `causet` and was never published.
   Publishing it under another name would have made the published package differ from its tag.
+
+## Proposed amendment 2026-10-08: GitHub releases become the primary install channel
+
+**Status: proposed. The owner has not decided this.** Nothing below is in force until an owner
+decision is recorded at the end of this section. Implementation is
+[#218](https://github.com/jwh3times/causet/issues/218), which waits on that decision.
+
+### What changed since 2026-09-27
+
+1. **npm 12 runs no install script unless told to.** §2 puts the executable at the `bin` target
+   with a `preinstall` copy, and names "a package manager that blocks dependency scripts" as the
+   case where the Node launcher stays. Measured while building #150, with npm 12.2.0:
+   - `npm install -g @holland-vip/causet` succeeds, warns that the script was blocked, and leaves
+     the launcher. Every command then starts through Node;
+   - `npm install -g --allow-scripts=@holland-vip/causet @holland-vip/causet` runs the copy.
+
+   The fallback case is now the default one for anyone on a current npm. The first of this
+   ADR's three constraints, that startup is the point of the program, is therefore not met by
+   the default install.
+2. **npm offers no script-free route to the same result.** `bin` must name a file inside the
+   top-level package (Context, "How npm links a `bin`"), and only a top-level package's `bin` is
+   linked. The executable lives in a dependency. Without a script, the only layouts that work are
+   the two this ADR already rejected: a JavaScript launcher always, or a separate main package
+   per platform.
+3. **The cutover happened.** From v0.21.0 `cst` needs no Node.js to run (ADR-0037, #152). npm
+   is now the only reason a user needs Node.js at all.
+4. **The other channel already exists.** §7 has every release attach one archive per platform and
+   `SHA256SUMS`, and `.github/workflows/release.yml` builds them (#150).
+
+### Proposed decision
+
+1. **The primary way to install `cst` is an install script over the GitHub release assets.**
+   - `install.sh` (Linux, and macOS once built) and `install.ps1` (Windows) download the host's
+     archive and `SHA256SUMS` from a release, refuse an archive whose SHA-256 is not the listed
+     one, and place `cst` in a user-writable directory with no elevation.
+   - Both scripts are themselves release assets, so a pinned version is installed by the script
+     of that version.
+   - The README leads with this method. It needs neither Node.js nor npm.
+2. **npm stays, unchanged, as the second channel.** §1 to §3 and §6 stand as written: the same
+   package set, the same `preinstall` copy, the same launcher, lockstep versions.
+   - It suits a team that pins tools in a `package.json`, and it is the only channel that carries
+     the JavaScript CLI: the oracle of ADR-0037 §6 (`CAUSET_DELEGATE=always`), and the
+     implementation that runs on a platform with no published executable.
+   - The README states its cost plainly: it works as installed, and
+     `--allow-scripts=@holland-vip/causet` gives the Node-free command on npm 12 and later.
+3. **Release archives carry build provenance.** The release workflow attests every archive with
+   GitHub artifact attestations, and the README gives the `gh attestation verify` command. This
+   is the download path's counterpart to the provenance npm's trusted publishing gives the
+   packages (§5).
+4. **Package managers follow, each as its own issue:** winget and Scoop first, because Windows is
+   the reference platform, then Homebrew with the third wave. Each is a manifest that points at
+   the same release assets and digests.
+5. **"Installation never downloads or compiles anything" becomes a statement about npm.** It was
+   written for a package install, where a nested download breaks offline and mirrored installs.
+   An install script downloads by definition, from one named host, one file, checked against a
+   published digest. The constraint is reworded: *an npm install* never downloads or compiles
+   anything outside npm's own resolution.
+
+### What this does not change
+
+- The names (§4), the platform matrix and its qualification rule (§3), and lockstep versioning
+  with a refusal on mismatch (§6).
+- v0.21.0, which ships through npm as prepared. This amendment, if accepted, takes effect with
+  the release that delivers #218.
+- `cst doctor`'s `launcher` field: `null` for an executable installed either way, `"node"` for
+  the launcher.
+
+### Consequences
+
+**Positive**
+
+- The default install gives the command the program was built to give: no Node process at
+  startup, on Windows and POSIX alike, with no flag to know.
+- A user needs no Node.js at any point, which is what "standalone" in #136 means.
+- No new hosting: the assets, the digests and the workflow already exist.
+
+**Negative**
+
+- **A second channel to keep working.** Each release has to install by script and by npm, and
+  both are smoke-tested in CI.
+- **A download script is a trust decision the user makes.** `curl | sh` runs what the URL
+  serves. The README has to give the download, read, then run form beside the one-liner, and
+  the scripts have to stay short enough to read.
+- **Windows SmartScreen.** A downloaded `.exe` is treated with more suspicion than one npm
+  unpacked. §5 defers Authenticode signing "until friction is observed"; this channel makes that
+  friction likely at the first release that uses it. Signing is a certificate with a recurring
+  cost and a human action.
+- **Upgrades are the user's to run.** npm has `npm update`; a script install is re-run. `cst`
+  gains no self-update under this amendment.
+
+### Alternatives considered
+
+- **Keep npm as the only channel and document the flag.** This is what v0.21.0 does. It costs
+  nothing, and it leaves the default install on the slow path for every user on npm 12 or
+  later, with Node.js still required to install.
+- **A launcher that replaces itself on first run.** On POSIX the command is a symlink to the
+  launcher file, so the launcher could copy the executable over itself. On Windows the `.cmd`
+  shim already names `node`, and nothing the launcher rewrites changes that. It fixes the
+  platform that needed it least.
+- **A separate main package per platform,** whose `bin` is the executable. Script-free, and
+  already rejected above: the user has to know their platform, and the install command differs
+  between machines.
+- **`cargo install`.** It needs a Rust toolchain and compiles on the user's machine, which is
+  the opposite of a prebuilt executable. `cargo binstall` avoids the compile and still needs
+  Cargo.
+- **Package managers only, with no script.** winget and Homebrew reviews take time the project
+  does not control, and neither covers Linux distributions. They are added in decision 4, not
+  relied on.
+
+### What the owner must decide
+
+1. **The primary channel:** install scripts over the GitHub release assets, with npm second
+   (decisions 1 and 2), or npm alone with the flag documented.
+2. **Attestations** on the release archives (decision 3).
+3. **The reworded constraint** (decision 5).
+4. **Whether Windows signing should be decided now** or left to §5's "on observed friction".
+
+### Owner decision
+
+Not yet recorded.
