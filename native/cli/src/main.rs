@@ -48,9 +48,9 @@ use std::{env, ffi::OsString, io::Write, process};
 const HELP: &str = include_str!(concat!(env!("OUT_DIR"), "/help.txt"));
 const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
 
-/// Chooses between the native answer and the JavaScript CLI: `always`
-/// delegates every invocation, so a ported command can be compared with the
-/// oracle; `never` refuses to delegate, so a test can prove what is native.
+/// `always` hands every invocation to the JavaScript CLI, the oracle a native
+/// answer can be compared with (ADR-0037 §6). `auto` and `never` both answer
+/// natively: every command is ported, so there is nothing left to delegate.
 const DELEGATE_VARIABLE: &str = "CAUSET_DELEGATE";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -116,12 +116,7 @@ fn main() {
       let _ = writeln!(stderr, "cst: {}", failure.message);
       1
     }
-    Outcome::Delegate { command } => {
-      if delegation == Delegation::Never {
-        exit_with(&format!(
-          "cst: '{command}' is not ported to the Rust CLI yet, and {DELEGATE_VARIABLE}=never forbids delegating it.\n"
-        ));
-      }
+    Outcome::Delegate { .. } => {
       let _ = stdout.flush();
       drop(stdout);
       drop(stderr);
@@ -141,26 +136,22 @@ fn main() {
   process::exit(code);
 }
 
-/// The front end sees what the JavaScript CLI would see. Arguments or
-/// selector variables that are not valid Unicode reach Node with replacement
-/// characters, which `front` does not model, so those invocations delegate.
+/// The front end sees what the JavaScript CLI would see. Node decodes an
+/// argument or a variable that is not valid Unicode with replacement
+/// characters, and so does this.
 fn decide(raw: &[OsString]) -> Outcome {
-  let Some(args) = raw
+  let args: Vec<String> = raw
     .iter()
-    .map(|item| item.clone().into_string().ok())
-    .collect::<Option<Vec<_>>>()
-  else {
-    return Outcome::Delegate {
-      command: String::new(),
-    };
-  };
-  let names = ["FORECAST_ENGINE", "ENGINE"];
-  if names.iter().any(|name| environment::value(name).is_err()) {
-    return Outcome::Delegate {
-      command: String::new(),
-    };
-  }
-  front::decide(&args, &|name| environment::value(name).ok().flatten(), HELP)
+    .map(|item| item.to_string_lossy().into_owned())
+    .collect();
+  front::decide(
+    &args,
+    &|name| match environment::value(name) {
+      Ok(value) => value,
+      Err(raw) => Some(raw.to_string_lossy().into_owned()),
+    },
+    HELP,
+  )
 }
 
 fn exit_with(message: &str) -> ! {

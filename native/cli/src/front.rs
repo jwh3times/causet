@@ -2,9 +2,9 @@
 //! command touches the repository. It reproduces the JavaScript CLI's global
 //! flags, environment checks, help, version, generic option parsing, and each
 //! command's argument-only usage checks, in the same order, so those outcomes
-//! can be answered natively byte for byte. Whatever needs the repository is
-//! `Delegate`, and so is any input whose JavaScript behavior this module does
-//! not model exactly: when in doubt, the oracle answers.
+//! are answered natively byte for byte. Every command is ported, so nothing
+//! here chooses the JavaScript CLI: `Delegate` is only what
+//! `CAUSET_DELEGATE=always` asks for.
 
 use crate::parsed::{Opt, Parsed};
 
@@ -29,7 +29,8 @@ pub enum Outcome {
     failure: Failure,
     json: bool,
   },
-  /// The command needs the JavaScript CLI; `command` names it for diagnostics.
+  /// The JavaScript CLI answers, because `CAUSET_DELEGATE=always` asked for the
+  /// oracle (ADR-0037 §6).
   Delegate {
     command: String,
   },
@@ -212,12 +213,7 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
     return Outcome::Version;
   }
   let parsed = match parse_args(&args[1..]) {
-    Ok(Some(parsed)) => parsed,
-    Ok(None) => {
-      return Outcome::Delegate {
-        command: command.to_string(),
-      };
-    }
+    Ok(parsed) => parsed,
     Err(failure) => {
       return Outcome::Fail {
         failure,
@@ -233,9 +229,11 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
       parsed,
       settings,
     },
-    None => Outcome::Delegate {
-      command: command.to_string(),
-    },
+    None => fail(
+      format!("'{command}' passed its usage checks but has no native implementation."),
+      "internal-invariant",
+      json,
+    ),
   }
 }
 
@@ -292,10 +290,10 @@ fn option_key(item: &str) -> String {
   key
 }
 
-/// `parseArgs` in `src/cli.js`. `Ok(None)` means the JavaScript CLI would not
-/// behave as modeled here (a repeatable flag spreading a non-array value
-/// throws a `TypeError`), so the caller delegates.
-fn parse_args(args: &[&str]) -> Result<Option<Parsed>, Failure> {
+/// `parseArgs` in `src/cli.js`, including the one input it fails on by
+/// accident: a repeatable flag spelled in camel case first leaves `true`
+/// under its key, and the spread of that is a `TypeError`.
+fn parse_args(args: &[&str]) -> Result<Parsed, Failure> {
   let mut parsed = Parsed::default();
   let mut index = 0;
   while index < args.len() {
@@ -321,7 +319,13 @@ fn parse_args(args: &[&str]) -> Result<Option<Parsed>, Failure> {
               .insert(key, Opt::Values(vec![value.to_string()]));
           }
           Some(Opt::Values(values)) => values.push(value.to_string()),
-          Some(_) => return Ok(None),
+          Some(_) => {
+            // V8's own wording; it is printed as prose, never as an envelope.
+            return Err(Failure {
+              message: "(options[key] ?? []) is not iterable".to_string(),
+              code: "internal-invariant",
+            });
+          }
         }
       } else {
         parsed.options.insert(key, Opt::Value(value.to_string()));
@@ -335,7 +339,7 @@ fn parse_args(args: &[&str]) -> Result<Option<Parsed>, Failure> {
       index += 1;
     }
   }
-  Ok(Some(parsed))
+  Ok(parsed)
 }
 
 fn missing(usage: &str) -> Failure {
@@ -662,11 +666,23 @@ mod tests {
   }
 
   #[test]
-  fn commands_that_need_the_repository_delegate() {
-    // Every command is ported; what is left is an argument shape the
-    // JavaScript parser itself fails on.
-    for args in [&["commit", "--authoredBy", "--authored-by", "a"][..]] {
-      assert!(delegated(run(args)), "{args:?}");
+  fn nothing_is_delegated_by_the_front_end() {
+    // The input the JavaScript parser fails on by accident fails the same
+    // way here, as prose even with --json.
+    for args in [
+      &["commit", "--authoredBy", "--authored-by", "a"][..],
+      &["commit", "--json", "--generatedBy", "--generated-by", "a"],
+    ] {
+      match run(args) {
+        Outcome::Fail { failure, json } => {
+          assert_eq!(failure.message, "(options[key] ?? []) is not iterable");
+          assert!(!json);
+        }
+        other => panic!("{args:?} gave {other:?}"),
+      }
+    }
+    for args in [&["commit", "-m", "x"][..], &["spec", "benchmark"], &["migrate"]] {
+      assert!(!delegated(run(args)), "{args:?}");
     }
   }
 
