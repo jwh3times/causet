@@ -12,6 +12,24 @@
       "targetBefore": "06a1c4407476308963cc67685b773d40ff4f6a46",
       "relation": "same-logical-change",
       "createdAt": "2026-10-08T17:19:04.761Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0muzswk7icebb2975af37",
+      "commit": "55399445e5666bc235d8784e96d054399a02816e",
+      "changeId": "ch_0muzswj1n9ea00502e61c",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "a2cdc4339b9086012a171823e7c80fc3fb50de4c"
+      ],
+      "createdAt": "2026-10-08T17:19:04.782Z"
     }
   ]
 }
