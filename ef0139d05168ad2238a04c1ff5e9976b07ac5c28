@@ -1,0 +1,29 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muzvdd532a79cf00ec47",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-benchmarks",
+      "sourceHead": "7467ab5a4d7955ebe6fae8ee97c47a17b3c4e128",
+      "sourceSubject": "docs: state the fifty-minute suite timeout",
+      "targetBefore": "4d1ae8d22b63e5c95afc93b5788f4bac3b320ed2",
+      "landingCommit": "ef0139d05168ad2238a04c1ff5e9976b07ac5c28",
+      "base": "0e1ba728a7a798c8c5f12e72f5c1a449ddd2daec",
+      "absorbedCommits": [
+        "06a1c4407476308963cc67685b773d40ff4f6a46",
+        "55399445e5666bc235d8784e96d054399a02816e",
+        "7467ab5a4d7955ebe6fae8ee97c47a17b3c4e128"
+      ],
+      "absorbedChanges": [
+        "ch_0muzscfn23c9c609f081c",
+        "ch_0muzswj1n9ea00502e61c",
+        "ch_0muzswsrcfb7cc597b060"
+      ],
+      "resultTree": "c1ce99b5afc3fa92db7aff3da32e1ae5b29b3263",
+      "createdAt": "2026-10-08T18:28:08.009Z"
+    }
+  ]
+}
