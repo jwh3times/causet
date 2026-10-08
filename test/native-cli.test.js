@@ -1949,14 +1949,17 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
           continue;
         }
         const [who, ...template] = step;
-        const args = template.map((arg) => arg === "<forecast>" ? context.forecast : arg);
+        const args = template.map((arg) => arg.replace(/^<(\w+)>$/, (whole, name) => context[name] ?? whole));
         if (who === "git") {
           git(repo, ...args);
           continue;
         }
         const ran = launch(variant[who] ?? who, repo, args);
         assert.equal(ran.error, undefined, `${side} ${args.join(" ")}`);
-        if (args[0] === "forecast") context.forecast = /forecast_[0-9a-z]+/.exec(ran.stdout)?.[0] ?? null;
+        if (args.includes("forecast")) {
+          context.forecast = /forecast_[0-9a-z]+/.exec(ran.stdout)?.[0] ?? null;
+          context.source = /^source {7}(\S+) @|"sourceRef": "([^"]+)"/m.exec(ran.stdout)?.slice(1).find(Boolean) ?? null;
+        }
         transcript.push(`$ ${template.join(" ")} -> ${ran.status}\n${steadyActivity(ran.stdout)}\n${ran.stderr}`);
       }
       const journal = journalOf ? journalOf(repo, git) : path.join(repo, ".git", "causet", "reconciliation.json");
@@ -2256,6 +2259,100 @@ test("reconcile carries a target overlay through and back natively (#147)", { sk
   reconcileTwins("overlay-reconcile", cases, build, { perSide: true, journalOf, extra: files });
 });
 
+test("workspace forecast compares two workspaces natively, and its checkpoint forecasts are shared with the JavaScript CLI (#149)", { skip }, () => {
+  // Workspaces `alpha` (the target, where every step runs) and `beta` (the
+  // source, one commit ahead), both from `main`.
+  const build = (side, kind, { git, launch }) => {
+    const { draft = false, checkpoint = draft, conflict = false, twin = false, targetDraft = false, archived = false } = kind;
+    const base = path.join(outside, side);
+    const repo = path.join(base, "repo");
+    const must = (cwd, ...args) => {
+      const made = launch("js", cwd, args);
+      assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+    };
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Workspace twin");
+    git(repo, "config", "user.email", "workspace-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    fs.writeFileSync(path.join(repo, "a.txt"), "1\n");
+    fs.writeFileSync(path.join(repo, "notes.txt"), "base\n");
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", "base");
+    must(repo, "init");
+    must(repo, "workspace", "create", "alpha", "--from", "main");
+    must(repo, "workspace", "create", "beta", "--from", "main");
+    const [alpha, beta] = ["alpha", "beta"].map((name) => path.join(base, "repo.workspaces", name));
+    fs.writeFileSync(path.join(beta, "a.txt"), "2\n");
+    git(beta, "add", "-A");
+    must(beta, "commit", "-m", "beta edits a");
+    if (conflict || twin) {
+      fs.writeFileSync(path.join(alpha, "a.txt"), twin ? "2\n" : "3\n");
+      git(alpha, "add", "-A");
+      must(alpha, "commit", "-m", "alpha edits a");
+    }
+    if (draft) fs.writeFileSync(path.join(beta, "notes.txt"), "beta draft\n");
+    if (checkpoint) must(beta, "workspace", "checkpoint", "--label", "reviewed");
+    if (targetDraft) {
+      fs.writeFileSync(path.join(alpha, "notes.txt"), "alpha draft\n");
+      must(alpha, "workspace", "checkpoint", "--label", "before");
+    }
+    if (archived) must(repo, "workspace", "archive", "beta");
+    return alpha;
+  };
+  const beta = (repo) => path.join(repo, "..", "beta");
+  const forecast = (...flags) => [A, "workspace", "forecast", "alpha", "beta", ...flags];
+  const approved = [B, "reconcile", "<source>", "--use-forecast", "<forecast>"];
+  // A refusal does not depend on who wrote the forecast, so it runs one role.
+  const unpaired = [A, "reconcile", "<source>", "--use-forecast", "<forecast>", "--json"];
+  const identify = (context) => {
+    const common = context.git(context.repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.trim();
+    const registry = JSON.parse(fs.readFileSync(path.join(common, "causet", "workspaces.json"), "utf8"));
+    for (const workspace of registry.workspaces) context[workspace.name] = workspace.id;
+  };
+  const cases = [
+    { kind: {}, steps: [forecast()], outcome: /scope {8}committed heads only[^]*\[clean\]/ },
+    { kind: {}, steps: [forecast("--json")], outcome: /"scope": "committed-heads"[^]*"ignoredDirtyFiles": 0/ },
+    { kind: {}, steps: [identify, [A, "workspace", "forecast", "<alpha>", "<beta>", "--accept-candidates"]], outcome: /status {7}complete/ },
+    { kind: { conflict: true }, steps: [forecast()], outcome: /\[blocked\]/ },
+    // The same edit made on both sides is a heuristic candidate to review.
+    { kind: { twin: true }, steps: [forecast()], outcome: /cst workspace forecast alpha beta --accept-candidates/ },
+    { kind: { twin: true, draft: true }, steps: [forecast("--source-checkpoint")], outcome: /cst workspace forecast alpha beta --source-checkpoint --accept-candidates/ },
+    // The flag is accepted and not read: a workspace forecast carries no target overlay.
+    { kind: { targetDraft: true }, steps: [forecast("--target-checkpoint", "--json")], outcome: /"scope": "committed-heads"[^]*"targetOverlay": null[^]*"ignoredDirtyFiles": 1/ },
+    { kind: { draft: true }, steps: [forecast("--source-checkpoint"), approved], outcome: /scope {8}immutable source checkpoint[^]* -> 0\n/ },
+    { kind: { draft: true }, steps: [forecast("--source-checkpoint", "--json"), [...approved, "--json"]], outcome: /"scope": "source-checkpoint"[^]*"draftChangeId": "/ },
+    {
+      kind: { draft: true },
+      steps: [
+        forecast("--source-checkpoint"),
+        ({ repo, git }) => git(beta(repo), "commit", "-q", "--allow-empty", "-m", "beta moves"),
+        unpaired,
+      ],
+      outcome: /no longer matches its source workspace head/,
+    },
+    { kind: {}, steps: [forecast("--source-checkpoint")], outcome: /has no checkpoint\. Capture one/ },
+    { kind: { checkpoint: true }, steps: [forecast("--source-checkpoint", "--json")], outcome: /contains no draft overlay beyond the committed workspace head/ },
+    {
+      kind: { draft: true },
+      steps: [
+        ({ repo, git }) => git(beta(repo), "commit", "-q", "--allow-empty", "-m", "beta moves"),
+        forecast("--source-checkpoint", "--json"),
+      ],
+      outcome: /"code": "stale-input"/,
+    },
+    { kind: {}, steps: [[A, "workspace", "forecast", "alpha", "alpha"]], outcome: /Choose two different workspaces/ },
+    { kind: {}, steps: [[A, "workspace", "forecast", "alpha", "gamma", "--json"]], outcome: /Source workspace 'gamma' was not found/ },
+    { kind: { archived: true }, steps: [forecast()], outcome: /Source workspace 'beta' is not active/ },
+  ];
+  const journalOf = (repo, git) =>
+    path.join(git(repo, "rev-parse", "--absolute-git-dir").stdout.trim(), "causet", "reconciliation.json");
+  const files = (repo) => ["a.txt", "notes.txt"]
+    .map((file) => fs.readFileSync(path.join(repo, file), "utf8"))
+    .join("|");
+  reconcileTwins("workspace-forecast", cases, build, { perSide: true, journalOf, extra: files });
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
@@ -2270,10 +2367,10 @@ test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", {
 });
 
 test("CAUSET_DELEGATE=never refuses a command that is not ported", { skip }, () => {
-  const result = runRust(["workspace", "forecast", "a", "b"], { CAUSET_DELEGATE: "never" });
+  const result = runRust(["spec", "benchmark"], { CAUSET_DELEGATE: "never" });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /^cst: 'workspace' is not ported to the Rust CLI yet/);
+  assert.match(result.stderr, /^cst: 'spec' is not ported to the Rust CLI yet/);
   const invalid = runRust(["--version"], { CAUSET_DELEGATE: "sometimes" });
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /^cst: Unknown delegation mode 'sometimes'/);

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst workspace forecast <target> <source>` natively,
+  with `--source-checkpoint` and `--accept-candidates` (#149, last command), so
+  every `cst workspace` subcommand is native. It ports `forecastWorkspaces` of
+  `src/forecasts.js` and the workspace lines of `formatForecast`. A
+  source-checkpoint forecast either CLI writes, the other's
+  `cst reconcile --use-forecast` consumes or refuses as stale.
 - The Rust CLI answers `cst reconcile --continue` natively, with `--fork`
   (#147, third increment, second part), so every `cst reconcile` action is
   native. It ports `continueReconciliation` of `src/operations.js`:

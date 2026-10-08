@@ -1,5 +1,6 @@
-//! `cst workspace` (every subcommand but `forecast`): `src/workspaces.js` and
-//! the registry lock of `src/workspace-lock.js`.
+//! `cst workspace` (every subcommand but `forecast`, which is in
+//! `forecast.rs`): `src/workspaces.js` and the registry lock of
+//! `src/workspace-lock.js`.
 
 use crate::envelope::{io_failure, received};
 use crate::host;

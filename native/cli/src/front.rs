@@ -83,6 +83,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "workspace archive",
   "workspace checkpoint",
   "workspace create",
+  "workspace forecast",
   "workspace list",
   "workspace move",
   "workspace prune",
@@ -660,7 +661,6 @@ mod tests {
     for args in [
       &["rebase", "--status", "extra", "args"][..],
       &["spec", "benchmark", "--documents", "2"],
-      &["workspace", "forecast", "a", "b"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
@@ -710,6 +710,7 @@ mod tests {
       &["workspace", "archive", "w"],
       &["workspace", "restore", "w", "--path", "p"],
       &["workspace", "repair", "w", "--path", "p"],
+      &["workspace", "forecast", "a", "b", "--source-checkpoint"],
       &["reconcile", "feature", "--accept-candidates", "--use-forecast", "forecast_x"],
       &["reconcile", "--status", "--json"],
       &["reconcile", "--abort"],
@@ -721,8 +722,7 @@ mod tests {
     }
     // A command is native per subcommand: these still delegate.
     for args in [
-      &["workspace", "forecast", "a", "b"][..],
-      &["rebase", "--continue"],
+      &["rebase", "--continue"][..],
       &["spec", "benchmark"],
       &["rebase-forecast", "main"],
     ] {
