@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muzu1jm6f8ea88ba1052",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-migrate",
+      "sourceHead": "a2cdc4339b9086012a171823e7c80fc3fb50de4c",
+      "sourceSubject": "chore: give the suite jobs fifty minutes",
+      "targetBefore": "331551809030d5406c433eb2b5fa275d61176bab",
+      "landingCommit": "4d1ae8d22b63e5c95afc93b5788f4bac3b320ed2",
+      "base": "331551809030d5406c433eb2b5fa275d61176bab",
+      "absorbedCommits": [
+        "0e1ba728a7a798c8c5f12e72f5c1a449ddd2daec",
+        "a2cdc4339b9086012a171823e7c80fc3fb50de4c"
+      ],
+      "absorbedChanges": [
+        "ch_0muzqvgm1b009c79eeafb",
+        "ch_0muzswj1n9ea00502e61c"
+      ],
+      "resultTree": "b52002641a310223a5c33c6e43b5f35277b87fe1",
+      "createdAt": "2026-10-08T17:50:56.913Z"
+    }
+  ]
+}
