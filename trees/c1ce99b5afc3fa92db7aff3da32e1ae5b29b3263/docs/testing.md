@@ -968,7 +968,7 @@ and unknown paths still run suites. Renames consider both paths; a missing
 comparison commit or empty diff conservatively runs the routine suites.
 There is no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
-Static jobs have a five-minute timeout and suites a 35-minute timeout.
+Static jobs have a five-minute timeout and suites a 50-minute timeout.
 
 Run full qualification before each release and before merging changes to Git
 session transports, forecast engines, native read routing, platform-specific
