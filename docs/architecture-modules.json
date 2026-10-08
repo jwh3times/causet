@@ -3,6 +3,14 @@
     "responsibility": "Minimal executable entry point and error/exit boundary",
     "dependencies": "`src/cli.js`"
   },
+  "bin/native/platform.js": {
+    "responsibility": "Locate the installed platform package's `cst` executable and refuse one whose digest or version is not this release's (ADR-0038)",
+    "dependencies": "Node built-ins only; `bin/native/checksums.json` as packed"
+  },
+  "bin/native/preinstall.js": {
+    "responsibility": "Install-time copy of the platform executable over the published launcher, so npm links `cst` to it",
+    "dependencies": "`bin/native/platform.js`"
+  },
   "src/cli.js": {
     "responsibility": "Argument parsing, command dispatch, human and JSON presentation, benchmarks",
     "dependencies": "All domain modules"

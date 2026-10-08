@@ -120,6 +120,8 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 <!-- generated:modules:start -->
 | File | Responsibility | Important dependencies |
 | --- | --- | --- |
+| `bin/native/platform.js` | Locate the installed platform package's `cst` executable and refuse one whose digest or version is not this release's (ADR-0038) | Node built-ins only; `bin/native/checksums.json` as packed |
+| `bin/native/preinstall.js` | Install-time copy of the platform executable over the published launcher, so npm links `cst` to it | `bin/native/platform.js` |
 | `bin/vlab.js` | Minimal executable entry point and error/exit boundary | `src/cli.js` |
 | `src/canonical-json.js` | The frozen `causet.canonical-json/v1` profile: RFC 8785 restricted to UTF-16-code-unit-sorted members and safe integers, refusing what it cannot serialize byte-identically | None |
 | `src/capabilities.js` | The `causet.capabilities/v1` document projected from the runtime registries, and negotiation as a pure function of two such documents (ADR-0033) | `src/schemas.js`, `src/metadata.js`, `src/metadata-envelope.js`, `src/canonical-json.js` |
