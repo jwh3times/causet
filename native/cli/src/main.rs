@@ -36,6 +36,7 @@ mod reconcile;
 mod records;
 mod resolve;
 mod retain;
+mod scale_benchmark;
 mod spec;
 mod store;
 mod target_overlay;

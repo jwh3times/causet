@@ -516,6 +516,7 @@ function main() {
     recordedAt: new Date().toISOString().slice(0, 10),
     git: scale.environment.git,
     node: scale.environment.node,
+    implementation: scale.environment.implementation ?? "javascript",
     phases: scale.phases,
     materialization: scale.materialization,
     forecast,
@@ -557,7 +558,7 @@ function main() {
       passed: regressions.length === 0,
     }, null, 2));
   } else {
-    console.log(`Benchmark ${latencySkipped ? "deterministic-only" : "regression"} check using ${reference} against the ${entry.recordedAt} baseline (${entry.git}, Node ${entry.node})`);
+    console.log(`Benchmark ${latencySkipped ? "deterministic-only" : "regression"} check using ${reference} against the ${entry.recordedAt} baseline (${entry.git}, ${entry.node ? `Node ${entry.node}` : `${entry.implementation ?? "native"} CLI`})`);
     console.log(formatFindings(findings));
     const equivalents = formatGitEquivalents(current.phases);
     if (equivalents) console.log(equivalents);

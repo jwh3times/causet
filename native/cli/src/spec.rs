@@ -1159,6 +1159,46 @@ fn fixed(value: f64) -> Value {
   Value::Number((value * 100.0).round() / 100.0)
 }
 
+/// `summarizeIndexResults(results, durationMs)`.
+fn summarize_index_results(results: &[Value], duration: f64) -> Object {
+  let flag = |result: &Value, name: &str| truthy(get(Some(result), name));
+  let count = |predicate: &dyn Fn(&Value) -> bool| number(results.iter().filter(|result| predicate(result)).count());
+  let mut summary = Object::new();
+  summary.set("files", number(results.len()));
+  summary.set("cacheHits", count(&|result| flag(result, "cacheHit")));
+  summary.set("manifestsWritten", count(&|result| flag(result, "written")));
+  let blocks: f64 = results
+    .iter()
+    .map(|result| match get(Some(result), "entityCount") {
+      Some(Value::Number(count)) => *count,
+      _ => 0.0,
+    })
+    .sum();
+  summary.set("blocks", Value::Number(blocks));
+  summary.set("contentReads", count(&|result| flag(result, "contentRead")));
+  summary.set(
+    "blobCacheHits",
+    count(&|result| as_text(get(Some(result), "cacheMode")).as_deref() == Some("git-index-blob")),
+  );
+  let mut changes = Object::new();
+  for name in ["added", "removed", "changed", "moved", "unchanged"] {
+    let total: f64 = results
+      .iter()
+      .map(|result| match get(get(Some(result), "changeCounts"), name) {
+        Some(Value::Number(count)) => *count,
+        _ => match get(get(Some(result), "changes"), name) {
+          Some(Value::Array(items)) => items.len() as f64,
+          _ => 0.0,
+        },
+      })
+      .sum();
+    changes.set(name, Value::Number(total));
+  }
+  summary.set("changes", Value::Object(changes));
+  summary.set("durationMs", fixed(duration));
+  summary
+}
+
 /// `indexAllSpecs(cwd, { force })`: every Markdown file Git tracks or sees,
 /// re-indexed only where its blob no longer matches the stored manifest.
 pub fn index_all_specs(force: bool, cwd: &str) -> GitResult<Value> {
@@ -1226,47 +1266,227 @@ pub fn index_all_specs(force: bool, cwd: &str) -> GitResult<Value> {
       IndexOptions { force, lazy: true, source_blob: blob },
     )?);
   }
-  let duration = started.elapsed().as_secs_f64() * 1000.0;
-  let flag = |result: &Value, name: &str| truthy(get(Some(result), name));
-  let count = |predicate: &dyn Fn(&Value) -> bool| number(results.iter().filter(|result| predicate(result)).count());
-  let mut summary = Object::new();
-  summary.set("files", number(results.len()));
-  summary.set("cacheHits", count(&|result| flag(result, "cacheHit")));
-  summary.set("manifestsWritten", count(&|result| flag(result, "written")));
-  let blocks: f64 = results
-    .iter()
-    .map(|result| match get(Some(result), "entityCount") {
-      Some(Value::Number(count)) => *count,
-      _ => 0.0,
-    })
-    .sum();
-  summary.set("blocks", Value::Number(blocks));
-  summary.set("contentReads", count(&|result| flag(result, "contentRead")));
-  summary.set(
-    "blobCacheHits",
-    count(&|result| as_text(get(Some(result), "cacheMode")).as_deref() == Some("git-index-blob")),
-  );
-  let mut changes = Object::new();
-  for name in ["added", "removed", "changed", "moved", "unchanged"] {
-    let total: f64 = results
-      .iter()
-      .map(|result| match get(get(Some(result), "changeCounts"), name) {
-        Some(Value::Number(count)) => *count,
-        _ => match get(get(Some(result), "changes"), name) {
-          Some(Value::Array(items)) => items.len() as f64,
-          _ => 0.0,
-        },
-      })
-      .sum();
-    changes.set(name, Value::Number(total));
-  }
-  summary.set("changes", Value::Object(changes));
-  summary.set("durationMs", fixed(duration));
+  let mut summary = summarize_index_results(&results, started.elapsed().as_secs_f64() * 1000.0);
   let preparation = (started - total_started).as_secs_f64() * 1000.0;
   summary.set("preparationMs", fixed(preparation));
   summary.set("totalDurationMs", fixed(total_started.elapsed().as_secs_f64() * 1000.0));
   summary.set("results", Value::Array(results));
   Ok(Value::Object(summary))
+}
+
+/// `corpusDocument(documentIndex, blocks)`.
+fn corpus_document(document: usize, blocks: usize) -> String {
+  let sections: Vec<String> = (0..blocks)
+    .map(|block| {
+      format!(
+        "## Capability {document}-{block}\n\nREQ-D{document}-B{block}: The capability must remain deterministic.\n\nGenerated design context for block {block}."
+      )
+    })
+    .collect();
+  format!("# Specification {document}\n\n{}\n", sections.join("\n\n"))
+}
+
+/// `deflateSync(value).length`: the size of the zlib stream at the default
+/// level. This is an estimate, and one of the few figures allowed to differ
+/// from the JavaScript CLI's: Node's zlib and this one choose matches
+/// differently (ADR-0037 §5).
+fn deflated_length(bytes: &[u8]) -> GitResult<usize> {
+  let mut buffer = vec![0u8; zlib_rs::compress_bound(bytes.len())];
+  let (compressed, code) = zlib_rs::compress_slice(&mut buffer, bytes, zlib_rs::DeflateConfig::default());
+  if code != zlib_rs::ReturnCode::Ok {
+    return Err(GitError::new(
+      "internal-invariant",
+      format!("The specification benchmark could not compress a document ({code:?})."),
+    ));
+  }
+  Ok(compressed.len())
+}
+
+/// `benchmarkSpecIndex({ documents, blocks })`: a generated corpus indexed
+/// cold, unchanged, and with one block changed, in a repository of its own.
+pub fn benchmark_spec_index(documents: Option<&str>, blocks: Option<&str>) -> GitResult<Value> {
+  let read_size = |value: Option<&str>, fallback: f64, name: &str| {
+    let size = value.map_or(fallback, text::number);
+    if size.fract() != 0.0 || !size.is_finite() || !(1.0..=1000.0).contains(&size) {
+      return Err(GitError::new(
+        "usage-invalid-option-value",
+        format!("{name} must be an integer between 1 and 1000."),
+      ));
+    }
+    Ok(size as usize)
+  };
+  let documents = read_size(documents, 25.0, "--documents")?;
+  let blocks_per_document = read_size(blocks, 40.0, "--blocks")?;
+  if documents * blocks_per_document > 100_000 {
+    return Err(GitError::new(
+      "usage-invalid-option-value",
+      "The benchmark is limited to 100,000 generated blocks.",
+    ));
+  }
+  let temporary = crate::export::temporary_directory("vcs-lab-spec-benchmark-")?;
+  let outcome = benchmark_in(&temporary, documents, blocks_per_document);
+  match std::fs::remove_dir_all(&temporary) {
+    Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+      outcome.and(Err(crate::envelope::io_failure(&error, "rm", &temporary)))
+    }
+    _ => outcome,
+  }
+}
+
+fn benchmark_in(temporary: &str, documents: usize, blocks_per_document: usize) -> GitResult<Value> {
+  let read = |path: &str| std::fs::read(path).map_err(|error| crate::envelope::io_failure(&error, "open", path));
+  let elapsed = |started: std::time::Instant| started.elapsed().as_secs_f64() * 1000.0;
+  causet_engine::process::run_git(
+    &["init", "-q", "-b", "main"].map(String::from),
+    &causet_engine::process::RunOptions::new(temporary),
+  )?;
+  let root = engine::repo_context(temporary)?.root;
+  let mut files = Vec::new();
+  for index in 0..documents {
+    let relative = format!("docs/generated-{index}.md");
+    let absolute = text::join(temporary, &relative);
+    if let Some(parent) = std::path::Path::new(&absolute).parent() {
+      std::fs::create_dir_all(parent)
+        .map_err(|error| crate::envelope::io_failure(&error, "mkdir", &parent.to_string_lossy()))?;
+    }
+    std::fs::write(&absolute, corpus_document(index, blocks_per_document))
+      .map_err(|error| crate::envelope::io_failure(&error, "open", &absolute))?;
+    files.push(relative);
+  }
+  let blob_started = std::time::Instant::now();
+  let mut source_blobs = hash_working_tree_specs(&files, &root)?;
+  let initial_preparation = elapsed(blob_started);
+  let run = |source_blobs: &[(String, String)], preparation: f64| -> GitResult<(Vec<Value>, Value)> {
+    let started = std::time::Instant::now();
+    let mut results = Vec::new();
+    for file in &files {
+      let blob = source_blobs.iter().find(|(path, _)| path == file).map(|(_, blob)| blob.as_str());
+      results.push(index_spec_with_context(
+        file,
+        &root,
+        temporary,
+        IndexOptions { force: false, lazy: true, source_blob: blob },
+      )?);
+    }
+    let mut summary = summarize_index_results(&results, elapsed(started));
+    let duration = match summary.get("durationMs") {
+      Some(Value::Number(duration)) => *duration,
+      _ => 0.0,
+    };
+    summary.set("preparationMs", fixed(preparation));
+    summary.set("totalDurationMs", fixed(preparation + duration));
+    Ok((results, Value::Object(summary)))
+  };
+  let (cold_results, cold) = run(&source_blobs, initial_preparation)?;
+  let (_, unchanged) = run(&source_blobs, 0.0)?;
+  let changed_file = files[files.len() / 2].clone();
+  let changed_path = text::join(temporary, &changed_file);
+  let original = String::from_utf8_lossy(&read(&changed_path)?).into_owned();
+  std::fs::write(
+    &changed_path,
+    original.replacen(
+      "The capability must remain deterministic.",
+      "The capability must remain deterministic and auditable.",
+      1,
+    ),
+  )
+  .map_err(|error| crate::envelope::io_failure(&error, "open", &changed_path))?;
+  let changed_blob_started = std::time::Instant::now();
+  let rehashed = hash_working_tree_specs(std::slice::from_ref(&changed_file), &root)?;
+  if let (Some(slot), Some((_, blob))) = (
+    source_blobs.iter_mut().find(|(path, _)| *path == changed_file),
+    rehashed.into_iter().next(),
+  ) {
+    slot.1 = blob;
+  }
+  let (_, one_block_changed) = run(&source_blobs, elapsed(changed_blob_started))?;
+
+  let mut source_files = Vec::new();
+  let mut manifest_files = Vec::new();
+  for file in &files {
+    source_files.push(read(&text::join(temporary, file))?);
+  }
+  for file in &files {
+    manifest_files.push(read(&manifest_path_from_relative(file, &root)?)?);
+  }
+  let total = |values: &[Vec<u8>]| values.iter().map(Vec::len).sum::<usize>();
+  let deflated = |values: &[Vec<u8>]| -> GitResult<usize> {
+    let mut size = 0;
+    for value in values {
+      size += deflated_length(value)?;
+    }
+    Ok(size)
+  };
+  let source_bytes = total(&source_files);
+  let manifest_bytes = total(&manifest_files);
+  let compressed_source = deflated(&source_files)?;
+  let compressed_manifest = deflated(&manifest_files)?;
+  let legacy_files: Vec<Vec<u8>> = cold_results
+    .iter()
+    .map(|result| {
+      let manifest = get(Some(result), "manifest");
+      let mut legacy = Object::new();
+      legacy.set("schema", string("causet.spec-manifest/v2"));
+      for name in [
+        "artifactId",
+        "source",
+        "sourceHash",
+        "sourceBytes",
+        "sourceLines",
+        "representation",
+        "parser",
+        "blocks",
+      ] {
+        if let Some(value) = get(manifest, name) {
+          legacy.set(name, value.clone());
+        }
+      }
+      format!("{}\n", causet_model::json::stringify_pretty(&Value::Object(legacy))).into_bytes()
+    })
+    .collect();
+  let legacy_bytes = total(&legacy_files);
+  let compressed_legacy = deflated(&legacy_files)?;
+  let rounded = |value: f64, digits: u32| match causet_model::js::to_fixed(value, digits).parse::<f64>() {
+    Ok(number) => Value::Number(number),
+    Err(_) => Value::Null,
+  };
+  let entities = match get(Some(&cold), "blocks") {
+    Some(Value::Number(count)) => *count,
+    _ => 0.0,
+  };
+  let mut result = Object::new();
+  result.set("schema", string("causet.spec-benchmark/v3"));
+  result.set("manifestSchema", string(SPEC_MANIFEST_SCHEMA));
+  result.set("documents", number(documents));
+  result.set("blocksPerDocument", number(blocks_per_document));
+  result.set("semanticEntities", Value::Number(entities));
+  result.set("sourceBytes", number(source_bytes));
+  result.set("manifestBytes", number(manifest_bytes));
+  result.set(
+    "manifestToSourceRatio",
+    rounded(manifest_bytes as f64 / source_bytes as f64, 3),
+  );
+  result.set("estimatedCompressedSourceBytes", number(compressed_source));
+  result.set("estimatedCompressedManifestBytes", number(compressed_manifest));
+  result.set(
+    "estimatedCompressedManifestToSourceRatio",
+    rounded(compressed_manifest as f64 / compressed_source as f64, 3),
+  );
+  result.set("legacyV2EquivalentBytes", number(legacy_bytes));
+  result.set(
+    "metadataReductionPercent",
+    rounded((1.0 - manifest_bytes as f64 / legacy_bytes as f64) * 100.0, 2),
+  );
+  result.set("estimatedCompressedLegacyV2Bytes", number(compressed_legacy));
+  result.set(
+    "estimatedCompressedMetadataReductionPercent",
+    rounded((1.0 - compressed_manifest as f64 / compressed_legacy as f64) * 100.0, 2),
+  );
+  result.set("bytesPerEntity", rounded(manifest_bytes as f64 / entities, 2));
+  result.set("cold", cold);
+  result.set("unchanged", unchanged);
+  result.set("oneBlockChanged", one_block_changed);
+  Ok(Value::Object(result))
 }
 
 /// `formatSpecResult(result)`.

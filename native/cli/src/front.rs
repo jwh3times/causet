@@ -59,6 +59,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "init",
   "merge",
   "merge-plan",
+  "metadata benchmark",
   "metadata dispose",
   "metadata export",
   "metadata import",
@@ -77,6 +78,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "resolve list",
   "resolve reject",
   "resolve status",
+  "spec benchmark",
   "spec index",
   "spec merge-plan",
   "spec resolve",
@@ -661,11 +663,9 @@ mod tests {
 
   #[test]
   fn commands_that_need_the_repository_delegate() {
-    for args in [
-      &["metadata", "benchmark", "--history", "5"][..],
-      &["spec", "benchmark", "--documents", "2"],
-      &["commit", "--authoredBy", "--authored-by", "a"],
-    ] {
+    // Every command is ported; what is left is an argument shape the
+    // JavaScript parser itself fails on.
+    for args in [&["commit", "--authoredBy", "--authored-by", "a"][..]] {
       assert!(delegated(run(args)), "{args:?}");
     }
   }
@@ -719,6 +719,9 @@ mod tests {
       &["rebase", "--status", "--json"],
       &["rebase", "--continue", "--fork", "-m", "words"],
       &["rebase", "--abort"],
+      &["migrate", "--dry-run"],
+      &["metadata", "benchmark", "--history", "5", "--files-per-area", "2"],
+      &["spec", "benchmark", "--documents", "2"],
       &["reconcile", "feature", "--accept-candidates", "--use-forecast", "forecast_x"],
       &["reconcile", "--status", "--json"],
       &["reconcile", "--abort"],
@@ -727,13 +730,6 @@ mod tests {
       &["reconcile", "--continue", "--fork", "--json"],
     ] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
-    }
-    // A command is native per subcommand: these still delegate.
-    for args in [
-      &["metadata", "benchmark"][..],
-      &["spec", "benchmark"],
-    ] {
-      assert!(delegated(run(args)), "{args:?}");
     }
     let Outcome::Native {
       settings, parsed, ..

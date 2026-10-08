@@ -210,8 +210,9 @@ as it does with `CAUSET_CLI` unset; that run proves the indirection adds nothing
 modes is the qualification a ported command needs before it stops delegating
 (ADR-0037 decision 4).
 
-The Rust CLI (`native/cli`, #141) delegates each command it has not ported to
-the JavaScript CLI. `CAUSET_DELEGATE=always` forces delegation of everything, to
+The Rust CLI (`native/cli`, #141) answers every command itself (#212). The one
+thing it still hands to the JavaScript CLI is an argument shape that CLI's own
+parser fails on, so the failure stays the oracle's. `CAUSET_DELEGATE=always` forces delegation of everything, to
 compare a ported command with the oracle, and `CAUSET_DELEGATE=never` refuses
 delegation, so what remains is only what the Rust CLI answers itself.
 `test/native-cli.test.js` uses `never` to compare every native answer (help,
@@ -224,7 +225,7 @@ through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
 `compact-merge`, `hard-squash` and `cherry-pick`, #146; `workspace list`,
 `checkpoint`, `prune`, `create`, `move`, `archive`, `restore` and `repair`,
 `spec index`, `spec merge-plan` and `spec resolve`, #149; `resolve apply`,
-`resolve reject`, `forecast`, and `reconcile`, #147; `workspace forecast`, #149; `rebase-forecast` and `rebase`, #148; `migrate`, #212), it also compares their output in a repository. For `reconcile` and `rebase` a case
+`resolve reject`, `forecast`, and `reconcile`, #147; `workspace forecast`, #149; `rebase-forecast` and `rebase`, #148; `migrate`, `metadata benchmark` and `spec benchmark`, #212), it also compares their output in a repository. For `reconcile` and `rebase` a case
 that names two roles runs with either CLI in each, so a forecast one CLI wrote
 (under each forecast engine, or by `workspace forecast --source-checkpoint`) is
 consumed by the other, and a journal one

@@ -207,6 +207,13 @@ Causal edges
         }
         return Ok((causet_model::json::string(&crate::spec::format_spec_merge_action(&result)), 0));
       }
+      if parsed.positionals.first().map(String::as_str) == Some("benchmark") {
+        // Printed as JSON whether or not `--json` is given.
+        return Ok((
+          crate::spec::benchmark_spec_index(parsed.value("documents"), parsed.value("blocks"))?,
+          0,
+        ));
+      }
       if parsed.positionals.first().map(String::as_str) == Some("index") {
         let force = parsed.truthy("force");
         if parsed.truthy("all") {
@@ -506,6 +513,25 @@ Causal edges
         return Ok((result, exit));
       }
       Ok((causet_model::json::string(&crate::retain::format_retention(&result)), exit))
+    }
+    "metadata" if parsed.positionals.first().map(String::as_str) == Some("benchmark") => {
+      let result = crate::scale_benchmark::benchmark_repository_scale(&crate::scale_benchmark::Options {
+        history: parsed.value("history"),
+        workspaces: parsed.value("workspaces"),
+        notes: parsed.value("notes"),
+        resolutions: parsed.value("resolutions"),
+        samples: parsed.value("samples"),
+        budget_ms: parsed.value("budgetMs"),
+        areas: parsed.value("areas"),
+        files_per_area: parsed.value("filesPerArea"),
+      })?;
+      if json {
+        return Ok((result, 0));
+      }
+      Ok((
+        causet_model::json::string(&crate::scale_benchmark::format_scale_benchmark(&result)),
+        0,
+      ))
     }
     "metadata" => {
       let subcommand = parsed
