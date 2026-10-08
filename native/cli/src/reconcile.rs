@@ -1,13 +1,13 @@
-//! `cst reconcile`: starting a reconciliation, reporting on one, and aborting
-//! one, as `reconcile`, `reconciliationStatus` and `abortReconciliation` of
+//! `cst reconcile`: starting a reconciliation, reporting on one, continuing
+//! one and aborting one, as `reconcile`, `reconciliationStatus`,
+//! `continueReconciliation` and `abortReconciliation` of
 //! `src/operations.js` do, with the journal of `src/reconcile-state.js`,
 //! `forecastForPlan` of `src/forecasts.js`, `publishResolution` of
 //! `src/resolutions.js`, and their renderings in `src/cli.js`.
 //!
-//! `cst reconcile --continue` is the rest of this file's source and still
-//! belongs to the JavaScript CLI. Both CLIs read and write the same journal
-//! (`causet.reconciliation-operation/v4`), so an operation this CLI starts
-//! the JavaScript CLI continues, and either reports on or aborts the other's.
+//! Both CLIs read and write the same journal
+//! (`causet.reconciliation-operation/v4`), so an operation one starts the
+//! other reports on, continues or aborts.
 
 use crate::forecast::{fixed, git_activity, plan_fingerprint};
 use crate::host::{fault_point, new_id};
@@ -548,20 +548,37 @@ fn timings_of(operation: &Object) -> Object {
 }
 
 /// `accumulateGitMetrics(operation, metrics)`: one phase's Git activity added
-/// to what the journal already holds, command by command.
-fn accumulate_git_metrics(operation: &mut Object, metrics: &Metrics) {
+/// to what the journal already holds, command by command. A journal whose
+/// counts are missing adds up as JavaScript adds `undefined`: to `NaN`, which
+/// is written as `null`.
+fn accumulate_git_metrics(operation: &mut Object, metrics: &Metrics) -> GitResult<()> {
   let mut timings = timings_of(operation);
   let existing = timings.get("git").filter(|git| !nullish(Some(git))).cloned();
   let existing = existing.as_ref();
-  let stored = |name: &str, fallback: Option<&str>| {
-    let value = get(existing, name);
-    match fallback {
-      Some(fallback) if nullish(value) => number_or(get(existing, fallback), 0.0),
-      _ => number_or(value, 0.0),
+  // A member of `existing`, which is all zeros when the journal holds none.
+  let stored = |name: &str| match existing {
+    Some(_) => number(get(existing, name)),
+    None => 0.0,
+  };
+  // `existing.<name> ?? fallback`.
+  let stored_or = |name: &str, fallback: f64| match get(existing, name) {
+    value if nullish(value) => fallback,
+    value => number(value),
+  };
+  // `existing.byCommand.map(...)`.
+  let recorded = match (existing, get(existing, "byCommand")) {
+    (None, _) => Vec::new(),
+    (_, Some(Value::Array(recorded))) => recorded.clone(),
+    (_, None) => {
+      return Err(GitError::uncoded("Cannot read properties of undefined (reading 'map')"));
     }
+    (_, Some(Value::Null)) => {
+      return Err(GitError::uncoded("Cannot read properties of null (reading 'map')"));
+    }
+    _ => return Err(GitError::uncoded("existing.byCommand.map is not a function")),
   };
   let mut by_command: Vec<(Value, Object)> = Vec::new();
-  for item in items(get(existing, "byCommand")) {
+  for item in recorded {
     let Value::Object(mut entry) = item else {
       continue;
     };
@@ -625,21 +642,22 @@ fn accumulate_git_metrics(operation: &mut Object, metrics: &Metrics) {
       .unwrap_or(std::cmp::Ordering::Equal)
   });
   let mut git = Object::new();
-  git.set("count", Value::Number(stored("count", None) + metrics.count as f64));
+  git.set("count", Value::Number(stored("count") + metrics.count as f64));
   git.set(
     "processes",
-    Value::Number(stored("processes", Some("count")) + metrics.processes as f64),
+    Value::Number(stored_or("processes", stored("count")) + metrics.processes as f64),
   );
   git.set(
     "sessionQueries",
-    Value::Number(stored("sessionQueries", None) + metrics.session_queries as f64),
+    Value::Number(stored_or("sessionQueries", 0.0) + metrics.session_queries as f64),
   );
-  git.set("cacheHits", Value::Number(stored("cacheHits", None) + metrics.cache_hits as f64));
-  git.set("totalMs", rounded(stored("totalMs", None) + metrics.total_ms));
-  git.set("failed", Value::Number(stored("failed", None) + metrics.failed as f64));
+  git.set("cacheHits", Value::Number(stored_or("cacheHits", 0.0) + metrics.cache_hits as f64));
+  git.set("totalMs", rounded(stored("totalMs") + metrics.total_ms));
+  git.set("failed", Value::Number(stored("failed") + metrics.failed as f64));
   git.set("byCommand", Value::Array(commands.into_iter().map(Value::Object).collect()));
   timings.set("git", Value::Object(git));
   operation.set("timings", Value::Object(timings));
+  Ok(())
 }
 
 /// A phase of active application: when it began, and the collector counting
@@ -656,7 +674,7 @@ fn finish_phase(operation: &mut Object, phase: &mut Phase, persist: bool, cwd: &
   let active = number(timings.get("activeApplicationMs")) + elapsed(started);
   timings.set("activeApplicationMs", Value::Number(active));
   operation.set("timings", Value::Object(timings));
-  accumulate_git_metrics(operation, &metrics::end(collector));
+  accumulate_git_metrics(operation, &metrics::end(collector))?;
   if persist {
     write_state(operation, cwd)?;
   }
@@ -1481,4 +1499,129 @@ pub fn abort_reconciliation(cwd: &str) -> GitResult<Value> {
   result.set("restoredHead", string(&engine::current_head(cwd)?));
   result.set("overlay", overlay);
   Ok(Value::Object(result))
+}
+
+// ---------------------------------------------------------------------------
+// Continuing
+// ---------------------------------------------------------------------------
+
+/// `forkMergeMessage(operation, cwd)`: the pending pick's message rewritten so
+/// the commit it becomes is a new change derived from the one being applied,
+/// under a Change-Id the journal remembers across attempts.
+fn fork_merge_message(operation: &mut Object, cwd: &str) -> GitResult<()> {
+  if !truthy(get(operation.get("current"), "forkChangeId")) {
+    let id = string(&new_id("ch"));
+    edit_current(operation, |current| current.set("forkChangeId", id));
+  }
+  let current = operation.get("current");
+  // `mergeMessagePath(cwd)`: the sequencer's own state, which
+  // `cherry-pick --continue` reads.
+  let path = text::join(&engine::repo_context(cwd)?.git_dir, "MERGE_MSG");
+  let original = std::fs::read(&path).map_err(|error| crate::envelope::io_failure(&error, "open", &path))?;
+  let original = String::from_utf8_lossy(&original);
+  // `original.split(/\r?\n/).filter((line) => !/^Change-Id:\s*/i.test(line))`.
+  let retained: Vec<&str> = text::split_lines(&original)
+    .into_iter()
+    .filter(|line| {
+      !line
+        .get(.."change-id:".len())
+        .is_some_and(|start| start.eq_ignore_ascii_case("change-id:"))
+    })
+    .collect();
+  let retained = retained.join("\n");
+  let retained = retained.trim_end_matches(text::is_space);
+  let trailers = [
+    format!("Change-Id: {}", js_text(get(current, "forkChangeId"))),
+    format!("Derived-From: {}", js_text(get(current, "sourceChangeId"))),
+    format!("Origin-Commit: {}", js_text(get(current, "sourceCommit"))),
+  ];
+  std::fs::write(&path, format!("{retained}\n\n{}\n", trailers.join("\n")))
+    .map_err(|error| crate::envelope::io_failure(&error, "open", &path))?;
+  write_state(operation, cwd)
+}
+
+/// `continueReconciliation({ fork })`: the paused step committed as the
+/// worktree now has it, and the rest of the queue applied. With `fork`, the
+/// step becomes a new change derived from the one it applies.
+pub fn continue_reconciliation(fork: bool, cwd: &str) -> GitResult<Value> {
+  with_object_session(cwd, || continue_in_session(fork, cwd))
+}
+
+fn continue_in_session(fork: bool, cwd: &str) -> GitResult<Value> {
+  let phase_started = Instant::now();
+  let Some(journal) = read_state(cwd)? else {
+    return Err(GitError::new(
+      "no-operation-pending",
+      "No reconciliation is in progress in this worktree.",
+    ));
+  };
+  assert_current_spec_decisions(Some(&journal))?;
+  require_reconciliation_branch(&journal, cwd)?;
+  if !truthy(get(Some(&journal), "current")) {
+    return Err(GitError::new(
+      "no-operation-pending",
+      "The pending reconciliation has no current change.",
+    ));
+  }
+  let unresolved = engine::unmerged_paths(cwd)?;
+  if !unresolved.is_empty() {
+    return Err(
+      GitError::new("conflict-blocked", "Reconciliation still has unresolved paths.").details(unresolved.join("\n")),
+    );
+  }
+  let Some(pending) = engine::pseudo_ref_target("CHERRY_PICK_HEAD", cwd)?.filter(|commit| !commit.is_empty()) else {
+    return Err(
+      GitError::new("out-of-band-change", "Git no longer has a cherry-pick to continue.").details(
+        "If Git was continued manually, abort this pending cst operation and start a new reconciliation plan.",
+      ),
+    );
+  };
+  let source = get(get(Some(&journal), "current"), "sourceCommit");
+  if !strict_equals(Some(&string(&pending)), source) {
+    return Err(GitError::new(
+      "out-of-band-change",
+      "Git's pending cherry-pick does not match the cst operation.",
+    ));
+  }
+  let mut operation = match journal {
+    Value::Object(operation) => operation,
+    _ => Object::new(),
+  };
+
+  let merges = items(get(operation.get("current"), "semanticMerges"));
+  let captured = capture_spec_merge_outcomes(&merges, cwd)?;
+  let semantically_resolved: Vec<Value> = captured
+    .iter()
+    .flat_map(|merge| items(get(Some(merge), "resolvedPaths")))
+    .collect();
+  edit_current(&mut operation, |current| current.set("semanticMerges", Value::Array(captured)));
+  let decided: Vec<Value> = items(get(operation.get("current"), "conflicts"))
+    .into_iter()
+    .filter(|conflict| {
+      let path = get(Some(conflict), "path");
+      !semantically_resolved.iter().any(|resolved| strict_equals(Some(resolved), path))
+    })
+    .collect();
+  let outcomes = capture_resolution_outcomes(&decided, cwd)?;
+  edit_current(&mut operation, |current| current.set("resolutionOutcomes", Value::Array(outcomes)));
+  write_state(&operation, cwd)?;
+
+  if fork || truthy(get(operation.get("current"), "forkChangeId")) {
+    fork_merge_message(&mut operation, cwd)?;
+  }
+  let mut finish = GIT_NO_RERERE.to_vec();
+  finish.extend(["-c", "core.editor=true", "cherry-pick", "--continue"]);
+  let result = git_allowing_failure(&finish, cwd)?;
+  if !result.ok {
+    return Err(
+      GitError::new("conflict-blocked", "Git could not continue the reconciliation.").details(result.output),
+    );
+  }
+  let relation = if truthy(get(operation.get("current"), "forkChangeId")) {
+    "contextual-fork"
+  } else {
+    "contextual-application"
+  };
+  record_successful_application(&mut operation, relation, cwd)?;
+  run_queue(&mut operation, cwd, phase_started)
 }

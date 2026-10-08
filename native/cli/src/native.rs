@@ -148,6 +148,13 @@ Causal edges
         }
         return Ok((causet_model::json::string(&crate::reconcile::format_reconciliation_status(&status)), 0));
       }
+      if parsed.truthy("continue") {
+        let result = crate::reconcile::continue_reconciliation(parsed.truthy("fork"), cwd)?;
+        if json {
+          return Ok((result, 0));
+        }
+        return Ok((causet_model::json::string(&crate::reconcile::format_reconciliation_result(&result)), 0));
+      }
       if parsed.truthy("abort") {
         // Always printed as JSON: the result is an object.
         return Ok((crate::reconcile::abort_reconciliation(cwd)?, 0));
