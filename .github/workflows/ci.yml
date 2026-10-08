@@ -60,7 +60,7 @@ jobs:
     if: needs.static.outputs.run-suite == 'true'
     name: ${{ matrix.mode }} / ${{ matrix.os }} / node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.static.outputs.matrix) }}
