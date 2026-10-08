@@ -6,7 +6,7 @@
 | --- | --- |
 | Product | causet (command `cst`; formerly vcs-lab) / causal source-control laboratory |
 | Document version | 1.0 |
-| Product baseline | v0.20.0 release |
+| Product baseline | v0.21.0 release |
 | Status | Active product baseline |
 | Last updated | 2026-09-29 |
 | Primary audience | Maintainers, contributors, protocol designers, and AI coding agents |
@@ -288,7 +288,7 @@ coverage where it changes observable behavior (§14 gates 7 and 8).
 
 Priorities use **P0** (required invariant), **P1** (core product), **P2**
 (important expansion), and **P3** (exploratory). Status is **Implemented**,
-**Partial**, **Planned**, or **Deferred** at the v0.20.0 release baseline.
+**Partial**, **Planned**, or **Deferred** at the v0.21.0 release baseline.
 
 ### 9.1 Git compatibility and repository adoption
 
@@ -454,7 +454,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 
 | ID | Requirement |
 | --- | --- |
-| NFR-PORT-01 | Supported baseline is Node.js 20+ and Git 2.40+ (raised from 2.38 on 2026-08-28 by ADR-0015 for `git merge-tree --merge-base`) until changed by a documented release decision; the merge-tree forecast engine (the default on Windows since the 2026-08-30 ADR-0016 amendment, opt-in elsewhere) additionally needs Git 2.49 (`merge-tree --stdin` flushes each record only from there) and falls back to the worktree simulator below it (ADR-0016). |
+| NFR-PORT-01 | From v0.21.0 the installed `cst` is a Rust executable, published for Windows x64 and Linux x64 (glibc), that needs no Node.js to run (ADR-0037, ADR-0038). Node.js 20+ is still needed to install it through npm, to run the JavaScript CLI on a platform with no published executable or when install scripts did not run, and to develop. The Git baseline is 2.40+ (raised from 2.38 on 2026-08-28 by ADR-0015 for `git merge-tree --merge-base`) until changed by a documented release decision; the merge-tree forecast engine (the default on Windows since the 2026-08-30 ADR-0016 amendment, opt-in elsewhere) additionally needs Git 2.49 (`merge-tree --stdin` flushes each record only from there) and falls back to the worktree simulator below it (ADR-0016). |
 | NFR-PORT-02 | Tests shall run on Windows and a POSIX platform; newline-sensitive behavior shall state whether LF normalization is semantic. |
 | NFR-PORT-03 | Paths stored for portable identity shall use repository-relative normalized form; local materialization paths may remain platform-specific. |
 | NFR-PORT-04 | Repositories using SHA-1 or SHA-256 object formats shall not be rejected by hard-coded OID length assumptions. |
@@ -940,7 +940,7 @@ not open automatically, and phases 5 and 6 remain Gate B questions under
 | 4 In-memory forecasts and native mutation | Gate A; remains gated on its own scope decision | Ref transactions and object writes for checkpoints and retained resolutions; virtual three-way merge applying exact-resolution memory and Markdown section merge, with `git merge-tree` as co-oracle | Predicted-tree equality on the suite plus at least 1,000 generated three-way cases; divergence always surfaces as a blocker; FR-REC-06 apply-time check retained | Flag; droppable after 0a evidence. |
 | 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/causet/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/causet/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
 | 6 Gateway; service only if the row below fires | Gate B | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/causet/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/causet/issues/37)), actor trust ([#38](https://github.com/jwh3times/causet/issues/38)), then landing policy ([#39](https://github.com/jwh3times/causet/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
-| CLI port (a track beside phases 1–6) | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/causet/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `cst` that runs without Node.js ([#152](https://github.com/jwh3times/causet/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
+| CLI port (a track beside phases 1–6); delivered in v0.21.0 | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/causet/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `cst` that runs without Node.js ([#152](https://github.com/jwh3times/causet/issues/152)). Performance is reported, not gating | The JavaScript CLI stays the oracle until two minor releases after cutover. |
 
 ### Decision rows: what evidence permits which next step
 

@@ -7,8 +7,8 @@
 //     --executable linux-x64-gnu=<path> --executable win32-x64=<path> \
 //     [--notices <platform>=<path> ...]
 //
-// The repository's own `package.json` keeps the JavaScript CLI as its command
-// until the cutover (#152). The main package written here differs from it in
+// The repository's own `package.json` keeps the JavaScript CLI as its command,
+// for development. The main package written here differs from it in
 // exactly three members: `bin`, `scripts.preinstall` and
 // `optionalDependencies`, plus the generated `bin/native/checksums.json`.
 

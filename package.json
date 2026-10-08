@@ -1,6 +1,6 @@
 {
   "name": "@holland-vip/causet",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Git-backed causal source control: records how changes move between Git histories, with verifiable receipts, declared provenance, and portable metadata.",
   "type": "module",
   "repository": {

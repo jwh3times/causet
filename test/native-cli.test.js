@@ -4,9 +4,8 @@
  * The Rust `cst` answers every command itself (#212). This suite runs each
  * invocation through both CLIs, with the Rust CLI forbidden to delegate
  * (`CAUSET_DELEGATE=never`), and requires byte-identical stdout, stderr and exit
- * status, apart from what ADR-0037 §5 names. It then checks the delegation
- * path, which remains for an argument shape the JavaScript parser fails on and
- * for `CAUSET_DELEGATE=always`.
+ * status, apart from what ADR-0037 §5 names. It then checks
+ * `CAUSET_DELEGATE=always`, the one way left to reach the JavaScript CLI.
  *
  * This is the one suite that launches the JavaScript CLI directly rather than
  * through `test-support/vlab-command.js`: the JavaScript CLI is the oracle here,
@@ -152,14 +151,19 @@ test("every argument-only usage failure is answered natively, human and JSON", {
   }
 });
 
-test("an argument shape the parser itself fails on is delegated with its output and exit status intact", { skip }, () => {
-  // Every command is ported. What still reaches the JavaScript CLI is a
-  // repeated option under two spellings, which its parser fails on; the
-  // failure passes through unchanged.
-  for (const args of [["commit", "--authoredBy", "--authored-by", "a"], ["--trace-git", "commit", "--authoredBy", "--authored-by", "a"]]) {
-    assertSame(args, {}, {});
+test("the input the JavaScript parser fails on by accident fails the same way natively", { skip }, () => {
+  // A repeatable flag spelled in camel case first leaves `true` under its
+  // key, and spreading that is a TypeError the JavaScript CLI prints as prose,
+  // even with --json. It was the last input the Rust CLI delegated (#152).
+  for (const args of [
+    ["commit", "--authoredBy", "--authored-by", "a"],
+    ["--trace-git", "commit", "--authoredBy", "--authored-by", "a"],
+    ["commit", "--json", "--generatedBy", "--generated-by", "a"],
+  ]) {
+    const expected = assertSame(args);
+    assert.equal(expected.status, 1);
+    assert.equal(expected.stderr, "cst: (options[key] ?? []) is not iterable\n");
   }
-  assert.equal(assertSame(["commit", "--authoredBy", "--authored-by", "a", "--json"], {}, {}).status, 1);
 });
 
 test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, () => {
@@ -2980,11 +2984,13 @@ test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", {
   assertSame(["no-such-command", "--json"], {}, { CAUSET_DELEGATE: "always" });
 });
 
-test("CAUSET_DELEGATE=never refuses what it would have to delegate", { skip }, () => {
-  const result = runRust(["commit", "--authoredBy", "--authored-by", "a"], { CAUSET_DELEGATE: "never" });
-  assert.equal(result.status, 1);
-  assert.equal(result.stdout, "");
-  assert.match(result.stderr, /^cst: 'commit' is not ported to the Rust CLI yet/);
+test("CAUSET_DELEGATE accepts auto, always and never, and nothing else", { skip }, () => {
+  // Every command is ported, so `never` and `auto` answer alike.
+  for (const mode of ["never", "auto", ""]) {
+    const result = runRust(["--version"], { CAUSET_DELEGATE: mode });
+    assert.equal(result.status, 0, mode);
+    assert.match(result.stdout, /^causet \d/);
+  }
   const invalid = runRust(["--version"], { CAUSET_DELEGATE: "sometimes" });
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /^cst: Unknown delegation mode 'sometimes'/);

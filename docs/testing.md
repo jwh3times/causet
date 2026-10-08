@@ -6,7 +6,7 @@ run history-changing manual experiments in a valuable repository.
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20 or newer, which runs the suites and the JavaScript CLI they use as the oracle; the installed `cst` itself needs none
 - Git 2.40 or newer (Git 2.49 or newer to exercise the merge-tree forecast
   engine; the merge-tree scenarios skip on older Git, where one scenario
   verifies the immediate `git-too-old` fallback instead)
@@ -962,7 +962,8 @@ node scripts/pack-release.mjs --out dist --executable linux-x64-gnu=native/targe
 The main package it writes differs from this checkout's `package.json` in
 `bin`, `scripts.preinstall` and `optionalDependencies`, and adds
 `bin/native/checksums.json`. The checkout's own manifest keeps the JavaScript
-CLI as its command until the cutover (#152).
+CLI as its command, for development: a release is what this script packs,
+never a plain `npm pack` of the checkout.
 
 How the installed command reaches the executable:
 
