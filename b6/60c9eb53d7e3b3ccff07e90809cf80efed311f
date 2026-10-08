@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muzkerqw3836ac6c110d",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-workspace-forecast",
+      "sourceHead": "1b84a0fa2562065f3c2c876a9016c24c57033769",
+      "sourceSubject": "feat: answer cst workspace forecast natively",
+      "targetBefore": "5376a9d5451797914d92d2ea882c844d50d81ea0",
+      "landingCommit": "b660c9eb53d7e3b3ccff07e90809cf80efed311f",
+      "base": "5376a9d5451797914d92d2ea882c844d50d81ea0",
+      "absorbedCommits": [
+        "1b84a0fa2562065f3c2c876a9016c24c57033769"
+      ],
+      "absorbedChanges": [
+        "ch_0muzfcihq372b326b8b35"
+      ],
+      "resultTree": "4a034fcd1410e00626752f301b30b6e28870bbba",
+      "createdAt": "2026-10-08T13:21:17.820Z"
+    }
+  ]
+}
