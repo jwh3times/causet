@@ -213,7 +213,6 @@ fn short_or_commit(change: &Value) -> String {
 fn require_pending(cwd: &str) -> GitResult<Object> {
   match read_state(cwd)? {
     Some(Value::Object(operation)) => Ok(operation),
-    Some(operation) if truthy(Some(&operation)) => Ok(Object::new()),
     _ => Err(GitError::new(
       "no-operation-pending",
       "No causal rebase is in progress in this worktree.",
