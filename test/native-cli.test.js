@@ -155,7 +155,7 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
   // Outside a repository these succeed or fail exactly as the JavaScript CLI
   // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["reconcile", "--continue"], ["--trace-git", "workspace", "list"]]) {
+  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["rebase", "--continue"], ["--trace-git", "workspace", "list"]]) {
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
@@ -1894,7 +1894,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
     if (rust === selectedCli) vlabPrefix();
     return spawnSync(rust, args, { cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }) });
   };
-  const rename = (text, repo, side) => {
+  const rename = (text, repo, side, hashes) => {
     const seen = new Map();
     const swap = (kind) => (match) => {
       if (!seen.has(match)) seen.set(match, "<" + kind + seen.size + ">");
@@ -1911,7 +1911,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
       .replace(/("[A-Za-z]*Ms": )-?[\d.e+-]+/g, "$1<ms>")
       .replace(/(forecast time|active time {2}) ?[\d.]+ ms/g, "$1 <ms> ms")
       .replace(/queries \([\d.]+ ms\)/g, "queries (<ms> ms)");
-    if (perSide) {
+    if (hashes) {
       // Each side commits with its own Change-Id, so every hash differs too.
       renamed = renamed
         .replace(/\b[0-9a-f]{40}\b/g, swap("oid"))
@@ -1924,7 +1924,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
     return renamed;
   };
   const fixtures = new Map();
-  for (const [index, { kind, steps, outcome }] of cases.entries()) {
+  for (const [index, { kind, steps, outcome, forks = false }] of cases.entries()) {
     const crossed = steps.some((step) => Array.isArray(step) && step[0] === B);
     const variants = [{ a: "js", b: "js" }, { a: "rust", b: "rust" }];
     if (crossed) variants.push({ a: "js", b: "rust" }, { a: "rust", b: "js" });
@@ -1962,6 +1962,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
       const journal = journalOf ? journalOf(repo, git) : path.join(repo, ".git", "causet", "reconciliation.json");
       const state = [
         git(repo, "rev-parse", "HEAD").stdout,
+        git(repo, "log", "-1", "--format=%B").stdout,
         git(repo, "status", "--porcelain=v1").stdout,
         git(repo, "ls-files", "--stage").stdout,
         git(repo, "for-each-ref", "--format=%(refname)").stdout,
@@ -1971,8 +1972,8 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
       ].join("\n--\n");
       return {
         variant,
-        transcript: rename(transcript.join("\n"), repo, side),
-        state: rename(state, repo, side),
+        transcript: rename(transcript.join("\n"), repo, side, perSide || forks),
+        state: rename(state, repo, side, perSide || forks),
       };
     });
     const [expected, ...others] = results;
@@ -1988,7 +1989,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
   }
 }
 
-test("reconcile starts, reports and aborts natively, and shares its journal and forecasts with the JavaScript CLI (#147)", { skip }, () => {
+test("reconcile starts, reports, continues and aborts natively, and shares its journal and forecasts with the JavaScript CLI (#147)", { skip }, () => {
   const spec = (alpha, beta) => `# Alpha\n\n${alpha}\n\n# Beta\n\n${beta}\n`;
   // Every fixture reconciles `feature` into `main`, which is checked out.
   const build = (name, kind, { git, launch }) => {
@@ -2045,6 +2046,10 @@ test("reconcile starts, reports and aborts natively, and shares its journal and 
       commit("feature adds b", { "b.txt": "b\n" });
       commit("feature edits a", { "a.txt": "2\n" });
       commit("feature edits shared", { "shared.txt": "source\n" });
+    } else if (kind === "middle") {
+      // The conflicting change is followed by one that applies cleanly.
+      commit("feature edits shared", { "shared.txt": "source\n" });
+      commit("feature adds b", { "b.txt": "b\n" });
     } else if (kind === "spec") {
       write("docs/spec.md", spec("source alpha", "base beta"));
       must("spec", "index", "docs/spec.md");
@@ -2062,7 +2067,7 @@ test("reconcile starts, reports and aborts natively, and shares its journal and 
       commit("feature edits a", { "a.txt": "2\n" });
     }
     git(repo, "switch", "-q", "main");
-    if (kind === "conflict" || kind === "paused") {
+    if (kind === "conflict" || kind === "paused" || kind === "middle") {
       commit("main edits shared", { "shared.txt": "target\n" });
       if (kind === "paused") {
         const paused = launch("js", repo, ["reconcile", "feature"]);
@@ -2100,6 +2105,8 @@ test("reconcile starts, reports and aborts natively, and shares its journal and 
   const start = [A, "reconcile", "feature"];
   const status = [A, "reconcile", "--status"];
   const abort = [A, "reconcile", "--abort"];
+  const proceed = [A, "reconcile", "--continue"];
+  const settle = [write("shared.txt", "settled\n"), ["git", "add", "shared.txt"]];
   const approved = [B, "reconcile", "feature", "--use-forecast", "<forecast>"];
   // A refusal does not depend on who wrote the forecast, so it runs one role.
   const unpaired = [A, "reconcile", "feature", "--use-forecast", "<forecast>"];
@@ -2137,8 +2144,28 @@ test("reconcile starts, reports and aborts natively, and shares its journal and 
     { kind: "paused", steps: [editJournal((state) => { delete state.id; state.current = null; delete state.timings; }), [...status, "--json"], status], outcome: /"timings": null/ },
     // A journal one CLI starts, the other reports on, aborts or continues.
     { kind: "conflict", steps: [start, [B, "reconcile", "--status", "--json"], [B, "reconcile", "--abort"]], outcome: /"aborted": true/ },
-    { kind: "conflict", steps: [start, write("shared.txt", "settled\n"), ["git", "add", "shared.txt"], ["js", "reconcile", "--continue", "--json"]], outcome: /"decision": "created"/ },
-    { kind: "exact", steps: [start, ["js", "resolve", "apply", "--all"], ["js", "reconcile", "--continue"]], outcome: /resolutions {2}1 accepted/ },
+    { kind: "conflict", steps: [start, ...settle, [B, "reconcile", "--continue", "--json"]], outcome: /"decision": "created"/ },
+    { kind: "exact", steps: [start, [A, "resolve", "apply", "--all"], [B, "reconcile", "--continue"]], outcome: /resolutions {2}1 accepted/ },
+    { kind: "conflict", forks: true, steps: [start, ...settle, [B, "reconcile", "--continue", "--fork", "--json"]], outcome: /"relation": "contextual-fork"/ },
+    // Continuing: the decisions it records and the refusals it makes.
+    { kind: "paused", steps: [...settle, proceed], outcome: /Reconciliation complete\.[^]*resolutions {2}1 created/ },
+    { kind: "paused", forks: true, steps: [...settle, [...proceed, "--fork"], [A, "reconcile", "--status"]], outcome: /contextual {3}1/ },
+    { kind: "exact", steps: [start, [A, "resolve", "apply", "--all"], ...settle, [...proceed, "--json"]], outcome: /"decision": "modified"/ },
+    { kind: "exact", steps: [start, [A, "resolve", "reject", "--all"], ...settle, proceed], outcome: /resolutions {2}1 rejected/ },
+    { kind: "spec", steps: [start, [A, "spec", "resolve", "--all"], proceed], outcome: /spec merges {2}1 deterministic/ },
+    { kind: "middle", steps: [start, ...settle, [B, "reconcile", "--continue"]], outcome: /coverage {5}2 covered; 2 applied/ },
+    { kind: "paused", forks: true, steps: [...settle, editJournal((state) => { state.current.forkChangeId = "ch_0muxlb2540abe878b5c75"; }), proceed], outcome: /contextual {3}1/ },
+    { kind: "paused", steps: [write("shared.txt", "target\n"), ["git", "add", "shared.txt"], proceed], outcome: /Git could not continue the reconciliation/ },
+    { kind: "paused", steps: [...settle, editJournal((state) => { delete state.timings.git.count; delete state.timings.git.processes; }), [...proceed, "--json"]], outcome: /"count": null,\n {8}"processes": null/ },
+    { kind: "paused", steps: [...settle, editJournal((state) => { delete state.timings.git.byCommand; }), proceed], outcome: /reading 'map'/ },
+    { kind: "paused", steps: [proceed], outcome: /Reconciliation still has unresolved paths/ },
+    { kind: "clean", steps: [[...proceed, "--json"]], outcome: /"code": "no-operation-pending"/ },
+    { kind: "paused", steps: [["git", "cherry-pick", "--abort"], proceed], outcome: /Git no longer has a cherry-pick to continue/ },
+    { kind: "paused", steps: [["git", "checkout", "-q", "-f", "feature"], proceed], outcome: /belongs to branch 'main', not 'feature'/ },
+    { kind: "paused", steps: [editJournal((state) => { state.current = null; }), proceed], outcome: /has no current change/ },
+    { kind: "paused", steps: [...settle, editJournal((state) => { state.current.sourceCommit = "0".repeat(40); }), [...proceed, "--json"]], outcome: /pending cherry-pick does not match/ },
+    { kind: "paused", steps: [...settle, editJournal((state) => { delete state.timings; }), [...proceed, "--json"]], outcome: /"schema": "causet\.reconciliation\/v6"/ },
+    { kind: "paused", steps: [...settle, editJournal((state) => { state.current.semanticMerges = [{ algorithm: "other/v1" }]; }), proceed], outcome: /unsupported merge algorithm/ },
     // A forecast one CLI writes, the other consumes.
     { bothEngines: true, kind: "clean", steps: [[A, "forecast", "feature", "--json"], approved], outcome: /forecast {5}<id\d+>/ },
     { kind: "clean", steps: [[A, "forecast", "feature"], [...approved, "--json"]], outcome: /"forecastId": "<id\d+>"/ },

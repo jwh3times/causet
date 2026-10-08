@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst reconcile --continue` natively, with `--fork`
+  (#147, third increment, second part), so every `cst reconcile` action is
+  native. It ports `continueReconciliation` of `src/operations.js`:
+  - **Recording:** what each conflict and each spec merge of the paused step
+    was resolved to, as created, accepted, modified or rejected.
+  - **Forking:** the pending pick's message rewritten so the step becomes a
+    new change derived from the one it applies.
+  - **Publishing:** a newly made resolution retained under its signature and
+    result, with the Windows ref-lock path-length diagnosis.
+
+  A reconciliation either CLI starts, the other continues.
 - The suites no longer let Git's automatic maintenance run in their fixtures
   (#203). `git commit` starts a detached `git maintenance run --auto`, which
   in newer Git removes `objects/maintenance.lock` only after the commit has
@@ -27,8 +38,6 @@
     CLI writes it. A reconciliation one CLI starts, the other reports on or
     aborts; one the Rust CLI starts, the JavaScript CLI continues; and a
     forecast one writes, under either engine, the other consumes.
-
-  `cst reconcile --continue` still delegates to the JavaScript CLI.
 - The Rust CLI answers `cst forecast <source>` natively, with
   `--target-checkpoint` and `--accept-candidates` (#147, second increment). It
   ports `forecastReconciliation` of `src/forecasts.js` and the part of the
