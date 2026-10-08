@@ -1,0 +1,26 @@
+[package]
+name = "causet-model"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+# The record model the ported commands share (issue #142, ADR-0037): canonical
+# JSON, identifiers, the record-family registry and validators, and the error
+# vocabulary. `src/` in the JavaScript CLI stays the authority; the cross-check
+# test (`test/rust-model.test.js`) runs both against the same inputs.
+
+[dependencies]
+# Already in the workspace through gix; used only for identifier entropy.
+getrandom = "=0.4.3"
+# Already in the workspace through gix; `localeCompare` compares text after
+# compatibility decomposition, as ICU does.
+unicode-normalization = "=0.1.25"
+
+[[bin]]
+name = "model-probe"
+path = "src/bin/model-probe.rs"
+
+[[bin]]
+name = "fuzz-model"
+path = "src/bin/fuzz-model.rs"

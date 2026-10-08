@@ -1,0 +1,15 @@
+# Every text file in this repository is LF, in the index and in the working
+# tree.
+#
+# `text=auto` on its own normalises what Git stores but leaves the checkout to
+# the platform, so a Windows working tree gets CRLF. Pinning `eol` per extension
+# fixed that for the three that were listed and silently missed everything else:
+# `scripts/*.mjs` were CRLF while `src/*.js` were LF, `LICENSE` and this file
+# were CRLF, and `.gitignore` had ended up with mixed endings. That inconsistency
+# is a real hazard rather than a cosmetic one — a patch script written for one
+# convention corrupts a file written in the other.
+#
+# Setting `eol` on the default rule covers every text file, including ones with
+# extensions nobody has thought of yet, which is why there are no per-extension
+# rules here any more.
+* text=auto eol=lf
