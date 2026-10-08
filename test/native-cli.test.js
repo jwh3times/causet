@@ -1867,6 +1867,26 @@ const steadyActivity = (text) => {
   return `${JSON.stringify(document, null, 2)}\n`;
 };
 
+// `cst receipts` lists records by `createdAt`, which has millisecond
+// resolution. A step creates its amendment, then its application, then its
+// absorption with no Git process between them, so a fast CLI can stamp them
+// alike and the listing falls back to note order. This restores the order
+// they were created in.
+const creationRank = { amendment: 0, "rebase-application": 1, "interactive-absorption": 2 };
+const inCreationOrder = (text) => {
+  let records;
+  try {
+    records = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (!Array.isArray(records)) return text;
+  const rank = (record) => creationRank[record?.type] ?? 3;
+  records.sort((left, right) =>
+    String(left?.createdAt ?? "").localeCompare(String(right?.createdAt ?? "")) || rank(left) - rank(right));
+  return `${JSON.stringify(records, null, 2)}\n`;
+};
+
 // Who runs a step: `A` and `B` are the JavaScript CLI on the expected side and
 // each take either CLI on the others, so a case naming both also proves that
 // what one CLI wrote the other reads.
@@ -1969,7 +1989,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
         git(repo, "status", "--porcelain=v1").stdout,
         git(repo, "ls-files", "--stage").stdout,
         git(repo, "for-each-ref", "--format=%(refname)").stdout,
-        steadyActivity(launch("js", repo, ["receipts", "--json"]).stdout),
+        inCreationOrder(steadyActivity(launch("js", repo, ["receipts", "--json"]).stdout)),
         fs.existsSync(journal) ? steadyActivity(fs.readFileSync(journal, "utf8")) : "(no journal)",
         extra(repo),
       ].join("\n--\n");
