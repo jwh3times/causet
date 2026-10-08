@@ -1,0 +1,31 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0muzkfanx12f250030d97",
+      "mode": "compact",
+      "sourceRef": "jwh3times/port-rebase-forecast",
+      "sourceHead": "8c64645720f94c6582fe544c0cd1e396904d0829",
+      "sourceSubject": "test: compare rebase receipts in the order their records were created",
+      "targetBefore": "b660c9eb53d7e3b3ccff07e90809cf80efed311f",
+      "landingCommit": "331551809030d5406c433eb2b5fa275d61176bab",
+      "base": "1b84a0fa2562065f3c2c876a9016c24c57033769",
+      "absorbedCommits": [
+        "f8f178745685ddd4b37f4ce082adba0516aa1be0",
+        "6181914f5e6a584d2513ad67d48e108cc1300302",
+        "d7309b45dafde846917c413b622f6e8ee9eca072",
+        "8c64645720f94c6582fe544c0cd1e396904d0829"
+      ],
+      "absorbedChanges": [
+        "ch_0muzfqguv6c350efbe8d5",
+        "ch_0muzgf69va75822d12ccb",
+        "ch_0muzgha8gd5735ddad637",
+        "ch_0muziic3592694fd2301f"
+      ],
+      "resultTree": "344585f967bdae8553ea929171c82dcb78b0754a",
+      "createdAt": "2026-10-08T13:21:42.336Z"
+    }
+  ]
+}
