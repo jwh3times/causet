@@ -98,6 +98,14 @@ fn answer(command: &str, parsed: &Parsed, cwd: &str) -> GitResult<(Value, i32)> 
   let json = parsed.truthy("json");
   match command {
     "doctor" => Ok((crate::doctor::doctor(parsed, cwd)?, 0)),
+    "migrate" => {
+      let result = crate::migration::migrate_repository(parsed.truthy("dryRun"), cwd)?;
+      let exit = if causet_model::js::truthy(causet_model::js::get(Some(&result), "refused")) { 1 } else { 0 };
+      if json {
+        return Ok((result, exit));
+      }
+      Ok((causet_model::json::string(&crate::migration::format_migration(&result)), exit))
+    }
     "capabilities" => {
       use crate::capabilities::*;
       use causet_model::js::{get, truthy};

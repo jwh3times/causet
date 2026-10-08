@@ -153,13 +153,13 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 });
 
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
-  // Outside a repository these succeed or fail exactly as the JavaScript CLI
-  // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["migrate", "--json"], ["migrate", "--apply"], ["--trace-git", "migrate"]]) {
+  // These fail exactly as the JavaScript CLI does, which is all a delegation
+  // has to show: it ran with these arguments here.
+  for (const args of [["spec", "benchmark", "--documents", "0"], ["metadata", "benchmark", "--history", "x", "--json"], ["--trace-git", "metadata", "benchmark", "--samples", "0"]]) {
     assertSame(args, {}, {});
   }
-  // Git's own exit status, passed through the JavaScript CLI and then this one.
-  assert.equal(assertSame(["migrate"], {}, {}).status, 128);
+  // The JavaScript CLI's exit status, passed through this one.
+  assert.equal(assertSame(["metadata", "benchmark", "--samples", "0"], {}, {}).status, 1);
 });
 
 test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, () => {
@@ -2830,6 +2830,80 @@ test("rebase carries a caller overlay through and back natively (#148)", { skip 
     .map((file) => fs.existsSync(path.join(repo, file)) ? fs.readFileSync(path.join(repo, file), "utf8") : "(absent)")
     .join("|");
   reconcileTwins("overlay-rebase", cases, build, { perSide: true, journalOf, extra: files });
+});
+
+test("migrate moves a v0.19.1 repository natively, and either CLI finishes what the other planned (#212)", { skip }, () => {
+  const source = path.join(projectRoot, "test", "fixtures", "legacy-0.19.1");
+  const fixture = JSON.parse(fs.readFileSync(path.join(source, "fixture.json"), "utf8"));
+  const rooted = (value, root) => {
+    if (typeof value === "string" && value.startsWith("<ROOT>")) {
+      return path.join(root, ...value.slice("<ROOT>".length).split(/[\\/]/).filter(Boolean));
+    }
+    if (Array.isArray(value)) return value.map((item) => rooted(item, root));
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rooted(item, root)]));
+    }
+    return value;
+  };
+  // The released build's repository, as `test/legacy-fixture.test.js` restores it.
+  const build = (side, kind, { git }) => {
+    const root = path.join(outside, side);
+    const repo = path.join(root, "repo");
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Legacy Fixture");
+    git(repo, "config", "user.email", "legacy@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    const bundle = path.join(root, "repo.bundle");
+    fs.writeFileSync(bundle, Buffer.from(fixture.bundle, "base64"));
+    git(repo, "fetch", "-q", "--update-head-ok", bundle, "+refs/*:refs/*");
+    git(repo, "reset", "-q", "--hard", fixture.head);
+    git(repo, "config", "notes.displayRef", "refs/notes/vcs-lab");
+    git(repo, "config", "notes.rewriteRef", "refs/notes/vcs-lab");
+    git(repo, "worktree", "add", "-q", rooted(fixture.workspace.path, root), fixture.workspace.branch);
+    for (const [relative, text] of Object.entries(fixture.state)) {
+      const file = path.join(repo, ".git", "vcs-lab", ...relative.split("/"));
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `${JSON.stringify(rooted(JSON.parse(text), root), null, 2)}\n`);
+    }
+    if (kind === "journal") {
+      fs.writeFileSync(path.join(repo, ".git", "vcs-lab", "rebase.json"), "{}\n");
+    }
+    if (kind === "transient") git(repo, "update-ref", "refs/vcs-lab/exports/pending", "HEAD");
+    return repo;
+  };
+  // A commit on top of a ref, so the ref has somewhere to advance to.
+  const advance = (name) => ({ repo, git }) => {
+    const tip = git(repo, "rev-parse", name).stdout.trim();
+    const next = git(repo, "commit-tree", `${tip}^{tree}`, "-p", tip, "-m", `advance ${name}`).stdout.trim();
+    git(repo, "update-ref", name, next);
+  };
+  const cases = [
+    { kind: "plain", steps: [[A, "migrate", "--dry-run"], [B, "migrate"], [A, "migrate"], ["js", "doctor", "--json"]], outcome: /Would migrate metadata[^]*Migrated metadata[^]*state {8}migrated -> migrated/ },
+    { kind: "plain", steps: [[A, "migrate", "--dry-run", "--json"], [B, "migrate", "--json"], [A, "migrate", "--dry-run", "--json"]], outcome: /"mode": "dry-run"[^]*"mode": "apply"[^]*"action": "present"/ },
+    { kind: "plain", steps: [[A, "migrate"], advance("refs/notes/vcs-lab"), [B, "metadata", "status"], [B, "migrate", "--dry-run"], [B, "migrate", "--json"]], outcome: /fast-forward/ },
+    {
+      kind: "plain",
+      steps: [[A, "migrate"], advance("refs/notes/vcs-lab"), advance("refs/notes/causet"), [B, "migrate", "--dry-run", "--json"], [B, "migrate"]],
+      outcome: /"action": "conflict"[^]*will not choose between them/,
+    },
+    { kind: "journal", steps: [[A, "migrate", "--dry-run"], [A, "migrate", "--json"]], outcome: /refused {6}A rebase operation is in progress[^]*"code": "operation-in-progress"/ },
+    { kind: "transient", steps: [[A, "migrate", "--dry-run", "--json"], [A, "migrate"]], outcome: /belongs to an unfinished operation/ },
+  ];
+  const settled = (repo) => {
+    const read = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv(neutral) }).stdout;
+    const listed = (directory) => fs.existsSync(directory) ? fs.readdirSync(directory).sort().join(",") : "(absent)";
+    const marker = path.join(repo, ".git", "causet", "migration.json");
+    return [
+      read("config", "--get-regexp", "^notes\\."),
+      read("status", "--porcelain=v1"),
+      listed(path.join(repo, ".git", "vcs-lab")),
+      listed(path.join(repo, ".git", "causet")),
+      fs.existsSync(marker) ? fs.readFileSync(marker, "utf8") : "(no marker)",
+    ].join("\n--\n");
+  };
+  const journalOf = (repo) => path.join(repo, ".git", "causet", "no-journal.json");
+  reconcileTwins("migrate", cases, build, { perSide: true, journalOf, extra: settled });
 });
 
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {

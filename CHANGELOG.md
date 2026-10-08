@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst migrate` natively, with `--dry-run` (#212, first
+  command). It ports `migrateRepository` of `src/migration.js`: the plan and
+  its refusals, the one-transaction ref creation and fast-forward, the notes
+  configuration, the runtime directories, the staged manifest move and the
+  marker. A dry run by either CLI predicts what the other applies. What still
+  delegates is `cst metadata benchmark` and `cst spec benchmark`.
 - The Rust CLI answers `cst rebase` natively: `cst rebase <onto>` with
   `--from`, `--accept-candidates`, `--use-forecast` and the declared
   `--reword`, `--edit`, `--squash` and `--fixup` actions, and `--status`,
@@ -25,9 +31,6 @@
     and the same Git activity.
   - **Caller overlays:** reduced to the committed head, re-materialized after
     the rewrite, and restored on abort (ADR-0028).
-
-  What still delegates is `cst migrate`, `cst metadata benchmark` and
-  `cst spec benchmark`.
 - The Rust CLI answers `cst rebase-forecast <onto> [<source>]` natively, with
   `--from`, `--accept-candidates`, `--target-checkpoint` and the declared
   `--reword`, `--edit`, `--squash` and `--fixup` actions (#148, first
