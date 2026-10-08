@@ -155,11 +155,11 @@ test("every argument-only usage failure is answered natively, human and JSON", {
 test("a repository command is delegated with its output and exit status intact", { skip }, () => {
   // Outside a repository these succeed or fail exactly as the JavaScript CLI
   // does, which is all a delegation has to show: it ran with these arguments here.
-  for (const args of [["workspace", "list", "--json"], ["cherry-pick", "x"], ["rebase", "--continue"], ["--trace-git", "workspace", "list"]]) {
+  for (const args of [["migrate", "--json"], ["migrate", "--apply"], ["--trace-git", "migrate"]]) {
     assertSame(args, {}, {});
   }
   // Git's own exit status, passed through the JavaScript CLI and then this one.
-  assert.equal(assertSame(["workspace", "list"], {}, {}).status, 128);
+  assert.equal(assertSame(["migrate"], {}, {}).status, 128);
 });
 
 test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, () => {
@@ -1867,6 +1867,26 @@ const steadyActivity = (text) => {
   return `${JSON.stringify(document, null, 2)}\n`;
 };
 
+// `cst receipts` lists records by `createdAt`, which has millisecond
+// resolution. A step creates its amendment, then its application, then its
+// absorption with no Git process between them, so a fast CLI can stamp them
+// alike and the listing falls back to note order. This restores the order
+// they were created in.
+const creationRank = { amendment: 0, "rebase-application": 1, "interactive-absorption": 2 };
+const inCreationOrder = (text) => {
+  let records;
+  try {
+    records = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (!Array.isArray(records)) return text;
+  const rank = (record) => creationRank[record?.type] ?? 3;
+  records.sort((left, right) =>
+    String(left?.createdAt ?? "").localeCompare(String(right?.createdAt ?? "")) || rank(left) - rank(right));
+  return `${JSON.stringify(records, null, 2)}\n`;
+};
+
 // Who runs a step: `A` and `B` are the JavaScript CLI on the expected side and
 // each take either CLI on the others, so a case naming both also proves that
 // what one CLI wrote the other reads.
@@ -1949,15 +1969,15 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
           continue;
         }
         const [who, ...template] = step;
-        const args = template.map((arg) => arg.replace(/^<(\w+)>$/, (whole, name) => context[name] ?? whole));
+        const args = template.map((arg) => arg.replace(/<(\w+)>/g, (whole, name) => context[name] ?? whole));
         if (who === "git") {
           git(repo, ...args);
           continue;
         }
         const ran = launch(variant[who] ?? who, repo, args);
         assert.equal(ran.error, undefined, `${side} ${args.join(" ")}`);
-        if (args.includes("forecast")) {
-          context.forecast = /forecast_[0-9a-z]+/.exec(ran.stdout)?.[0] ?? null;
+        if (args.some((arg) => /forecast$/.test(arg))) {
+          context.forecast = /(?:rebase_)?forecast_[0-9a-z]+/.exec(ran.stdout)?.[0] ?? null;
           context.source = /^source {7}(\S+) @|"sourceRef": "([^"]+)"/m.exec(ran.stdout)?.slice(1).find(Boolean) ?? null;
         }
         transcript.push(`$ ${template.join(" ")} -> ${ran.status}\n${steadyActivity(ran.stdout)}\n${ran.stderr}`);
@@ -1969,7 +1989,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
         git(repo, "status", "--porcelain=v1").stdout,
         git(repo, "ls-files", "--stage").stdout,
         git(repo, "for-each-ref", "--format=%(refname)").stdout,
-        steadyActivity(launch("js", repo, ["receipts", "--json"]).stdout),
+        inCreationOrder(steadyActivity(launch("js", repo, ["receipts", "--json"]).stdout)),
         fs.existsSync(journal) ? steadyActivity(fs.readFileSync(journal, "utf8")) : "(no journal)",
         extra(repo),
       ].join("\n--\n");
@@ -2351,6 +2371,465 @@ test("workspace forecast compares two workspaces natively, and its checkpoint fo
     .map((file) => fs.readFileSync(path.join(repo, file), "utf8"))
     .join("|");
   reconcileTwins("workspace-forecast", cases, build, { perSide: true, journalOf, extra: files });
+});
+
+test("rebase-forecast simulates the same rewrite natively under both engines (#148)", { skip }, () => {
+  // Both CLIs forecast in one repository, which a forecast leaves as it found
+  // it, so every hash and digest must agree and only what a run mints differs.
+  const steady = (text) => steadyMetrics(text)
+    .replace(/\b[a-z]+(?:_[a-z]+)*_[0-9a-z]{9}[0-9a-f]{12}\b/g, "<id>")
+    .replace(/vcs-lab-forecast-[A-Za-z0-9]+/g, "<temporary>")
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<time>")
+    .replace(/("[A-Za-z]*Ms": )-?[\d.e+-]+/g, "$1<ms>");
+  const dated = {
+    ...neutral,
+    GIT_AUTHOR_DATE: "2026-01-02T03:04:05Z",
+    GIT_COMMITTER_DATE: "2026-01-02T03:04:05Z",
+  };
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", env: testEnv(dated) });
+  const cst = (cwd, ...args) => spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
+  const must = (cwd, ...args) => {
+    const made = cst(cwd, ...args);
+    assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+  };
+  const write = (repo, file, text) => {
+    fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    fs.writeFileSync(path.join(repo, file), text);
+  };
+  const commit = (repo, message, files) => {
+    for (const [file, text] of Object.entries(files)) write(repo, file, text);
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", message);
+    return git(repo, "rev-parse", "HEAD").stdout.trim();
+  };
+  const spec = (alpha, beta) => `# Alpha\n\n${alpha}\n\n# Beta\n\n${beta}\n`;
+  // Every fixture rebases `feature`, which is checked out, onto `main`. It
+  // returns where to run and the commits a case may name.
+  const build = (kind) => {
+    const base = path.join(outside, `rebase-forecast-${kind}`);
+    const repo = path.join(base, "repo");
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Rebase twin");
+    git(repo, "config", "user.email", "rebase-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    if (kind === "spec") {
+      write(repo, "docs/spec.md", spec("base alpha", "base beta"));
+      must(repo, "spec", "index", "docs/spec.md");
+    }
+    const root = commit(repo, "base", { "shared.txt": "base\n", "a.txt": "1\n", "old.txt": "old\n" });
+    must(repo, "init");
+    const onMain = (message, files) => {
+      git(repo, "switch", "-q", "main");
+      commit(repo, message, files);
+      git(repo, "switch", "-q", "feature");
+    };
+    if (kind === "exact") {
+      // A conflict resolved once, so the same conflict has one exact candidate.
+      for (const suffix of ["one", "last"]) {
+        git(repo, "switch", "-q", "-c", `source-${suffix}`, root);
+        commit(repo, `source ${suffix}`, { "shared.txt": "source\n" });
+        git(repo, "switch", "-q", "-c", `target-${suffix}`, root);
+        commit(repo, `target ${suffix}`, { "shared.txt": "target\n" });
+        if (suffix === "one") {
+          assert.notEqual(cst(repo, "reconcile", "source-one").status, 0);
+          write(repo, "shared.txt", "remembered\n");
+          git(repo, "add", "shared.txt");
+          must(repo, "reconcile", "--continue");
+        }
+      }
+      git(repo, "branch", "-q", "-f", "main", "target-last");
+      git(repo, "branch", "-q", "-f", "feature", "source-last");
+      git(repo, "switch", "-q", "feature");
+      return { cwd: repo, commits: [] };
+    }
+    if (kind === "workspace") {
+      must(repo, "workspace", "create", "alpha", "--from", "main");
+      const alpha = path.join(base, "repo.workspaces", "alpha");
+      commit(alpha, "alpha adds b", { "b.txt": "b\n" });
+      write(alpha, "notes.txt", "draft\n");
+      must(alpha, "workspace", "checkpoint", "--label", "before");
+      commit(repo, "main adds z", { "z.txt": "z\n" });
+      return { cwd: alpha, commits: [] };
+    }
+    git(repo, "switch", "-q", "-c", "feature");
+    const commits = [];
+    if (kind === "conflict") {
+      commits.push(commit(repo, "feature edits shared", { "shared.txt": "source\n" }));
+      onMain("main edits shared", { "shared.txt": "target\n" });
+    } else if (kind === "spec") {
+      write(repo, "docs/spec.md", spec("source alpha", "base beta"));
+      must(repo, "spec", "index", "docs/spec.md");
+      commits.push(commit(repo, "feature edits alpha", {}));
+      git(repo, "switch", "-q", "main");
+      write(repo, "docs/spec.md", spec("base alpha", "target beta"));
+      must(repo, "spec", "index", "docs/spec.md");
+      commit(repo, "main edits beta", {});
+      git(repo, "switch", "-q", "feature");
+    } else if (kind === "candidate") {
+      commits.push(commit(repo, "feature edits a", { "a.txt": "2\n" }));
+      commits.push(commit(repo, "feature adds b", { "b.txt": "b\n" }));
+      git(repo, "switch", "-q", "main");
+      write(repo, "a.txt", "2\n");
+      git(repo, "commit", "-q", "-am", "main makes the same edit");
+      git(repo, "switch", "-q", "feature");
+    } else if (kind === "merge" || kind === "merge-conflict" || kind === "octopus" || kind === "joined") {
+      commits.push(commit(repo, "feature adds b", { "b.txt": "b\n" }));
+      git(repo, "switch", "-q", "-c", "side", root);
+      const side = commit(repo, "side adds c", kind === "merge-conflict" ? { "b.txt": "side\n" } : { "c.txt": "c\n" });
+      if (kind === "octopus") {
+        git(repo, "switch", "-q", "-c", "other", root);
+        commit(repo, "other adds d", { "d.txt": "d\n" });
+      }
+      git(repo, "switch", "-q", "feature");
+      if (kind === "merge-conflict") {
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side");
+        write(repo, "b.txt", "joined\n");
+        git(repo, "add", "-A");
+        git(repo, "commit", "-q", "--no-edit");
+      } else {
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side", ...(kind === "octopus" ? ["other"] : []));
+      }
+      commits.push(commit(repo, "feature adds e", { "e.txt": "e\n" }));
+      if (kind === "joined") {
+        // Both lines of the join already landed, so the rewrite replays
+        // neither and the merge has nothing left to join.
+        git(repo, "switch", "-q", "main");
+        must(repo, "cherry-pick", commits[0]);
+        must(repo, "cherry-pick", side);
+        git(repo, "switch", "-q", "feature");
+      } else {
+        onMain("main adds z", { "z.txt": "z\n" });
+      }
+    } else if (kind === "absorb-conflict") {
+      commits.push(commit(repo, "feature adds b", { "b.txt": "b\n" }));
+      commits.push(commit(repo, "feature edits shared", { "shared.txt": "source\n" }));
+      onMain("main edits shared", { "shared.txt": "target\n" });
+    } else if (kind === "same") {
+      // Nothing to replay: `feature` is `main`.
+    } else {
+      commits.push(commit(repo, "feature adds b", { "b.txt": "b\n" }));
+      commits.push(commit(repo, "feature edits a", { "a.txt": "2\n" }));
+      commits.push(commit(repo, "feature adds c\n\nWith a body.", { "c.txt": "c\n" }));
+      onMain("main adds z", { "z.txt": "z\n" });
+      if (kind === "dirty") {
+        write(repo, "untracked.txt", "dirty\n");
+        git(repo, "mv", "old.txt", "new.txt");
+      }
+      if (kind === "paused") {
+        onMain("main edits a", { "a.txt": "3\n" });
+        assert.notEqual(cst(repo, "rebase", "main").status, 0);
+      }
+    }
+    return { cwd: repo, commits };
+  };
+  const by = (engines) => (engine) => engines[engine];
+  const cases = [
+    [() => ["rebase-forecast", "main"], "clean", /status {7}complete[^]*C [0-9a-f]{12} feature adds b \[clean\]/],
+    [() => ["rebase-forecast", "main", "feature", "--json"], "clean", /"schema": "causet.rebase-forecast\/v3"[^]*"worktreeListDigest"/],
+    [() => ["rebase-forecast", "main"], "same", /No new source changes required simulation/],
+    [() => ["rebase-forecast", "main"], "dirty", /caller dirty 2 files ignored/],
+    [({ commits }) => ["rebase-forecast", "main", "--from", commits[0], "--json"], "clean", /"explicit": true/],
+    [() => ["rebase-forecast", "main"], "conflict", by({ worktree: /blocked by {3}missing-exact-resolution/, "merge-tree": /conflicted-step at step 1/ })],
+    [() => ["rebase-forecast", "main", "--json"], "exact", /"relation": "contextual-rebase"/],
+    [() => ["rebase-forecast", "main"], "spec", /\[semantic-spec-merge\]/],
+    [() => ["rebase-forecast", "main"], "candidate", /status {7}review-required[^]*cst rebase-forecast main feature --accept-candidates/],
+    [() => ["rebase-forecast", "main", "--accept-candidates", "--json"], "candidate", /"candidatePolicy": "accepted"[^]*"decision": "omit"/],
+    [() => ["rebase-forecast", "main"], "merge", /merge-preserving[^]*recreated {4}1 merge preserved as joins[^]*M [0-9a-f]{12} merge side \[clean\]/],
+    [() => ["rebase-forecast", "main", "--json"], "merge", by({ worktree: /"cleanJoin": true/, "merge-tree": /"reason": "merge-preserving-program"/ })],
+    [() => ["rebase-forecast", "main", "--json"], "merge-conflict", /"kind": "recreate-merge"[^]*missing-exact-resolution/],
+    [() => ["rebase-forecast", "main", "--json"], "joined", /"outcome": "blocked-empty-merge"/],
+    [() => ["rebase-forecast", "main"], "octopus", /status {7}unsupported[^]*unsupported {2}[0-9a-f]{12} octopus-merge/],
+    [({ commits }) => ["rebase-forecast", "main", "--reword", commits[1]], "clean", by({ worktree: /status {7}complete/, "merge-tree": /interactive-program/ })],
+    [({ commits }) => ["rebase-forecast", "main", "--edit", commits[1], "--json"], "clean", /"status": "pauses-for-content"/],
+    [({ commits }) => ["rebase-forecast", "main", "--squash", `${commits[2]}=${commits[0]}`, "--fixup", `${commits[1]}=${commits[0]}`, "--json"], "clean", /"absorbedChanges": \[/],
+    [({ commits }) => ["rebase-forecast", "main", "--fixup", `${commits[1]}=${commits[0]}`, "--json"], "absorb-conflict", /"outcome": "blocked-absorption"/],
+    [() => ["rebase-forecast", "main", "--target-checkpoint"], "workspace", /overlay after [0-9a-f]{40}[^]*caller draft 1 file carried as the overlay/],
+    [() => ["rebase-forecast", "main", "--target-checkpoint", "--json"], "clean", /needs a registered workspace/],
+    [() => ["rebase-forecast", "main"], "paused", /Finish or abort the current VCS Lab operation before forecasting a rebase/],
+    [() => ["rebase-forecast", "no-such-branch", "--json"], "clean", /"code": "revision-not-resolved"/],
+  ];
+  const fixtures = new Map();
+  for (const engine of ["worktree", "merge-tree"]) {
+    for (const [index, [argsOf, kind, outcome]] of cases.entries()) {
+      if (!fixtures.has(kind)) fixtures.set(kind, build(kind));
+      const fixture = fixtures.get(kind);
+      const args = argsOf(fixture);
+      const env = { ...dated, CAUSET_FORECAST_ENGINE: engine };
+      const snapshot = () => [
+        git(fixture.cwd, "rev-parse", "HEAD").stdout,
+        git(fixture.cwd, "status", "--porcelain=v1").stdout,
+        git(fixture.cwd, "worktree", "list", "--porcelain").stdout,
+        git(fixture.cwd, "for-each-ref").stdout,
+      ].join("\n--\n");
+      const before = snapshot();
+      const expected = spawnSync(process.execPath, [oracle, ...args], {
+        cwd: fixture.cwd, encoding: "utf8", env: testEnv(env),
+      });
+      if (rust === selectedCli) vlabPrefix();
+      const actual = spawnSync(rust, args, {
+        cwd: fixture.cwd, encoding: "utf8", env: testEnv({ ...env, CAUSET_DELEGATE: "never" }),
+      });
+      const label = `${engine} ${JSON.stringify(args)} on ${kind} #${index}`;
+      // Each case must reach the path it is named for, not fail alike for another reason.
+      const pinned = typeof outcome === "function" ? outcome(engine) : outcome;
+      assert.match(expected.stdout + expected.stderr, pinned, label);
+      assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
+      assert.equal(steady(actual.stderr), steady(expected.stderr), "stderr of " + label);
+      assert.equal(steady(actual.stdout), steady(expected.stdout), "stdout of " + label);
+      assert.equal(snapshot(), before, "repository after " + label);
+      const saved = (ran) => {
+        const id = /rebase_forecast_[0-9a-z]+/.exec(ran.stdout)?.[0];
+        if (!id) return "(none)";
+        const directory = path.join(git(fixture.cwd, "rev-parse", "--absolute-git-dir").stdout.trim(), "causet", "forecasts");
+        return steady(fs.readFileSync(path.join(directory, `${id}.json`), "utf8"));
+      };
+      assert.equal(saved(actual), saved(expected), "saved forecast of " + label);
+    }
+  }
+});
+
+test("rebase starts, reports, continues and aborts natively, and shares its journal and forecasts with the JavaScript CLI (#148)", { skip }, () => {
+  const spec = (alpha, beta) => `# Alpha\n\n${alpha}\n\n# Beta\n\n${beta}\n`;
+  // Every fixture rebases `feature`, which is checked out, onto `main`.
+  const build = (side, kind, { git, launch }) => {
+    const repo = path.join(outside, side);
+    const must = (...args) => {
+      const made = launch("js", repo, args);
+      assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+    };
+    const write = (file, text) => {
+      fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+      fs.writeFileSync(path.join(repo, file), text);
+    };
+    const commit = (message, files) => {
+      for (const [file, text] of Object.entries(files)) write(file, text);
+      git(repo, "add", "-A");
+      must("commit", "-m", message);
+      return git(repo, "rev-parse", "HEAD").stdout.trim();
+    };
+    const onMain = (message, files) => {
+      git(repo, "switch", "-q", "main");
+      commit(message, files);
+      git(repo, "switch", "-q", "feature");
+    };
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Rebase twin");
+    git(repo, "config", "user.email", "rebase-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    if (kind === "spec") {
+      write("docs/spec.md", spec("base alpha", "base beta"));
+      must("spec", "index", "docs/spec.md");
+    }
+    const root = commit("base", { "shared.txt": "base\n", "a.txt": "1\n" });
+    must("init");
+    if (kind === "exact") {
+      // A conflict resolved once, so the same conflict has one exact candidate.
+      for (const suffix of ["one", "last"]) {
+        git(repo, "switch", "-q", "-c", `source-${suffix}`, root);
+        commit(`source ${suffix}`, { "shared.txt": "source\n" });
+        git(repo, "switch", "-q", "-c", `target-${suffix}`, root);
+        commit(`target ${suffix}`, { "shared.txt": "target\n" });
+        if (suffix === "one") {
+          assert.notEqual(launch("js", repo, ["reconcile", "source-one"]).status, 0);
+          write("shared.txt", "remembered\n");
+          git(repo, "add", "shared.txt");
+          must("reconcile", "--continue");
+        }
+      }
+      git(repo, "branch", "-q", "-f", "main", "target-last");
+      git(repo, "branch", "-q", "-f", "feature", "source-last");
+      git(repo, "switch", "-q", "feature");
+      return repo;
+    }
+    git(repo, "switch", "-q", "-c", "feature");
+    if (kind === "conflict") {
+      commit("feature adds b", { "b.txt": "b\n" });
+      commit("feature edits shared", { "shared.txt": "source\n" });
+      commit("feature adds c", { "c.txt": "c\n" });
+      onMain("main edits shared", { "shared.txt": "target\n" });
+    } else if (kind === "spec") {
+      write("docs/spec.md", spec("source alpha", "base beta"));
+      must("spec", "index", "docs/spec.md");
+      commit("feature edits alpha", {});
+      git(repo, "switch", "-q", "main");
+      write("docs/spec.md", spec("base alpha", "target beta"));
+      must("spec", "index", "docs/spec.md");
+      commit("main edits beta", {});
+      git(repo, "switch", "-q", "feature");
+    } else if (kind === "candidate") {
+      commit("feature edits a", { "a.txt": "2\n" });
+      commit("feature adds b", { "b.txt": "b\n" });
+      git(repo, "switch", "-q", "main");
+      write("a.txt", "2\n");
+      git(repo, "commit", "-q", "-am", "main makes the same edit");
+      git(repo, "switch", "-q", "feature");
+    } else if (kind === "merge" || kind === "merge-conflict" || kind === "octopus" || kind === "joined") {
+      const first = commit("feature adds b", { "b.txt": "b\n" });
+      git(repo, "switch", "-q", "-c", "side", root);
+      const side = commit("side adds c", kind === "merge-conflict" ? { "b.txt": "side\n" } : { "c.txt": "c\n" });
+      if (kind === "octopus") {
+        git(repo, "switch", "-q", "-c", "other", root);
+        commit("other adds d", { "d.txt": "d\n" });
+      }
+      git(repo, "switch", "-q", "feature");
+      if (kind === "merge-conflict") {
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side");
+        write("b.txt", "joined\n");
+        git(repo, "add", "-A");
+        git(repo, "commit", "-q", "--no-edit");
+      } else {
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side", ...(kind === "octopus" ? ["other"] : []));
+      }
+      commit("feature adds e", { "e.txt": "e\n" });
+      if (kind === "joined") {
+        git(repo, "switch", "-q", "main");
+        must("cherry-pick", first);
+        must("cherry-pick", side);
+        git(repo, "switch", "-q", "feature");
+      } else {
+        onMain("main adds z", { "z.txt": "z\n" });
+      }
+    } else if (kind === "absorb-conflict") {
+      commit("feature adds b", { "b.txt": "b\n" });
+      commit("feature edits shared", { "shared.txt": "source\n" });
+      onMain("main edits shared", { "shared.txt": "target\n" });
+    } else {
+      commit("feature adds b", { "b.txt": "b\n" });
+      commit("feature edits a", { "a.txt": "2\n" });
+      commit("feature adds c\n\nWith a body.", { "c.txt": "c\n" });
+      onMain("main adds z", { "z.txt": "z\n" });
+    }
+    return repo;
+  };
+  // `<c0>`, `<c1>`, ...: the commits of `feature` beyond `main`, oldest first.
+  const commits = (context) => {
+    const listed = context.git(context.repo, "log", "--reverse", "--first-parent", "--format=%H", "main..feature");
+    for (const [index, id] of listed.stdout.trim().split("\n").entries()) context[`c${index}`] = id;
+  };
+  const write = (file, text) => ({ repo }) => fs.writeFileSync(path.join(repo, file), text);
+  const start = (...flags) => [A, "rebase", "main", ...flags];
+  const paused = [start(), [B, "rebase", "--status"], [B, "rebase", "--status", "--json"]];
+  const resolve = [write("shared.txt", "resolved\n"), ["git", "add", "shared.txt"]];
+  const forecast = (...flags) => [A, "rebase-forecast", "main", ...flags];
+  const approved = (...flags) => [B, "rebase", "main", "--use-forecast", "<forecast>", ...flags];
+  const cases = [
+    { kind: "clean", steps: [start()], outcome: /Causal rebase complete\.[^]*coverage {5}0 exact omit; 0 accepted candidate; 3 replayed/ },
+    { kind: "clean", steps: [start("--json")], outcome: /"schema": "causet\.rebase\/v3"/ },
+    { kind: "clean", steps: [commits, start("--from", "<c0>", "--json")], outcome: /"explicit": true/ },
+    { kind: "clean", steps: [[A, "rebase", "--status"], [A, "rebase", "--status", "--json"], [A, "rebase", "--continue"], [A, "rebase", "--abort", "--json"]], outcome: /No causal rebase is in progress[^]*"no-operation-pending"/ },
+    { kind: "clean", steps: [write("untracked.txt", "dirty\n"), start()], outcome: /-> 1\n/ },
+    { kind: "clean", steps: [["git", "switch", "-q", "--detach"], start("--json")], outcome: /Causal rebase requires a named local branch/ },
+    { kind: "clean", steps: [({ repo }) => fs.mkdirSync(path.join(repo, ".git", "sequencer")), start()], outcome: /active replay operation \(sequencer\)/ },
+    { kind: "clean", steps: [start("--use-forecast", "rebase_forecast_missing")], outcome: /was not found in this worktree/ },
+    { kind: "conflict", steps: [...paused, ...resolve, [B, "rebase", "--continue"]], outcome: /Causal rebase paused while applying[^]*state {8}conflicted[^]*contextual {3}1/ },
+    { kind: "conflict", steps: [start("--json"), ...resolve, [B, "rebase", "--continue", "--json"]], outcome: /"relation": "contextual-rebase"/ },
+    { kind: "conflict", forks: true, steps: [start(), ...resolve, [B, "rebase", "--continue", "--fork"]], outcome: /forked {7}1/ },
+    { kind: "conflict", steps: [start(), [B, "rebase", "--continue"], [B, "rebase", "--abort"]], outcome: /still has unresolved paths[^]*"aborted": true/ },
+    { kind: "conflict", steps: [forecast(), [A, "rebase", "main", "--use-forecast", "<forecast>"]], outcome: /is not a complete application approval/ },
+    { kind: "exact", steps: [forecast(), approved()], outcome: /status {7}complete[^]*contextual {3}1[^]*forecast {5}<id0>/ },
+    { kind: "exact", steps: [start("--json")], outcome: /"code": "conflict-paused"[^]*1 exact prior resolution candidate found/ },
+    { kind: "spec", steps: [forecast(), approved("--json")], outcome: /"selectionMethod": "rebase-forecast-batch"/ },
+    { kind: "clean", steps: [forecast(), approved()], outcome: /Causal rebase complete/ },
+    {
+      kind: "clean",
+      steps: [forecast(), ["git", "switch", "-q", "main"], ["git", "commit", "-q", "--allow-empty", "-m", "main moves"], ["git", "switch", "-q", "feature"], [A, "rebase", "main", "--use-forecast", "<forecast>", "--json"]],
+      outcome: /"code": "stale-forecast"/,
+    },
+    { kind: "clean", steps: [commits, forecast(), [A, "rebase", "main", "--from", "<c1>", "--use-forecast", "<forecast>"]], outcome: /The forecast approved the range from/ },
+    { kind: "candidate", steps: [start(), start("--accept-candidates")], outcome: /heuristic patch-equivalence candidates[^]*1 accepted candidate/ },
+    { kind: "candidate", steps: [forecast("--accept-candidates"), approved("--json")], outcome: /"candidatePolicy": "accepted"/ },
+    { kind: "merge", forks: true, steps: [start()], outcome: /Causal rebase complete/ },
+    { kind: "merge", forks: true, steps: [start("--json")], outcome: /"relation": "recreated-merge"[^]*"cleanJoin": true/ },
+    { kind: "merge", forks: true, steps: [forecast(), approved()], outcome: /recreated {4}1 merge preserved as joins[^]*Causal rebase complete/ },
+    {
+      kind: "merge-conflict",
+      forks: true,
+      steps: [...paused, write("b.txt", "rejoined\n"), ["git", "add", "b.txt"], [B, "rebase", "--continue", "--fork"], [B, "rebase", "--continue", "--json"]],
+      outcome: /cannot be forked[^]*"origin": "decided"/,
+    },
+    { kind: "merge-conflict", forks: true, steps: [start("--json"), [B, "rebase", "--abort"]], outcome: /"code": "conflict-paused"[^]*"aborted": true/ },
+    { kind: "joined", forks: true, steps: [start(), [B, "rebase", "--status"], [B, "rebase", "--continue"], [B, "rebase", "--abort"]], outcome: /would produce no join[^]*cannot be continued[^]*"aborted": true/ },
+    { kind: "octopus", steps: [start("--json")], outcome: /"code": "unsupported-repository-shape"/ },
+    {
+      kind: "clean",
+      steps: [commits, start("--reword", "<c1>"), [B, "rebase", "--status", "--json"], [B, "rebase", "--continue"], [B, "rebase", "--continue", "-m", "Change-Id: ch_other"], [B, "rebase", "--continue", "-m", "feature rewords a\n\nNew body."]],
+      outcome: /paused at [0-9a-f]{12} for a message[^]*paused for a new message[^]*cannot declare a different identity[^]*Causal rebase complete/,
+    },
+    {
+      kind: "clean",
+      steps: [commits, start("--edit", "<c1>", "--json"), [B, "rebase", "--continue", "-m", "words"], write("a.txt", "edited\n"), ["git", "add", "a.txt"], [B, "rebase", "--continue", "--json"]],
+      outcome: /"code": "interactive-paused"[^]*paused for content, not for a message[^]*"treeAfter"/,
+    },
+    { kind: "clean", steps: [commits, start("--edit", "<c1>"), [B, "rebase", "--continue", "--json"]], outcome: /"amendments": \[\]/ },
+    { kind: "clean", steps: [commits, start("--edit", "<c2>"), [B, "rebase", "--abort"]], outcome: /for content[^]*"aborted": true/ },
+    { kind: "clean", steps: [commits, start("--squash", "<c2>=<c0>", "--fixup", "<c1>=<c0>", "--json")], outcome: /"absorbedChanges": \[/ },
+    { kind: "clean", steps: [commits, start("--fixup", "<c2>=<c1>", "--reword", "<c1>"), [B, "rebase", "--continue", "-m", "one commit"]], outcome: /for a message[^]*Causal rebase complete/ },
+    { kind: "clean", steps: [commits, forecast("--fixup", "<c1>=<c0>"), approved("--fixup", "<c1>=<c0>")], outcome: /Causal rebase complete/ },
+    {
+      kind: "absorb-conflict",
+      steps: [commits, start("--fixup", "<c1>=<c0>"), [B, "rebase", "--status", "--json"], [B, "rebase", "--continue"], ...resolve, [B, "rebase", "--continue", "--json"]],
+      outcome: /paused absorbing[^]*"state": "awaiting-absorption"[^]*still has unresolved paths[^]*"schema": "causet\.rebase\/v3"/,
+    },
+    { kind: "absorb-conflict", steps: [commits, start("--fixup", "<c1>=<c0>", "--json"), [B, "rebase", "--abort", "--json"]], outcome: /"aborted": true/ },
+  ];
+  const journalOf = (repo) => path.join(repo, ".git", "causet", "rebase.json");
+  const history = (repo) => spawnSync("git", ["log", "--format=%P|%an|%B", "-8"], { cwd: repo, encoding: "utf8", env: testEnv(neutral) }).stdout
+    .replace(/\b[a-z]+_[0-9a-z]{9}[0-9a-f]{12}\b/g, "<id>")
+    .replace(/\b[0-9a-f]{40}\b/g, "<oid>");
+  reconcileTwins("rebase", cases, build, { journalOf, extra: history });
+});
+
+test("rebase carries a caller overlay through and back natively (#148)", { skip }, () => {
+  // A workspace `alpha` one commit ahead of `main`, which has moved, holding
+  // a checkpointed draft.
+  const build = (side, { overlay = "draft" }, { git, launch }) => {
+    const base = path.join(outside, side);
+    const repo = path.join(base, "repo");
+    const must = (cwd, ...args) => {
+      const made = launch("js", cwd, args);
+      assert.equal(made.status, 0, `${args.join(" ")}\n${made.stderr}`);
+    };
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q", "-b", "main");
+    git(repo, "config", "user.name", "Overlay twin");
+    git(repo, "config", "user.email", "overlay-twin@example.invalid");
+    git(repo, "config", "core.autocrlf", "false");
+    fs.writeFileSync(path.join(repo, "a.txt"), "1\n");
+    fs.writeFileSync(path.join(repo, "notes.txt"), "base\n");
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", "base");
+    must(repo, "init");
+    must(repo, "workspace", "create", "alpha", "--from", "main");
+    const alpha = path.join(base, "repo.workspaces", "alpha");
+    fs.writeFileSync(path.join(alpha, "b.txt"), "b\n");
+    git(alpha, "add", "-A");
+    must(alpha, "commit", "-m", "alpha adds b");
+    fs.writeFileSync(path.join(repo, overlay === "conflict" ? "notes.txt" : "z.txt"), "main\n");
+    git(repo, "add", "-A");
+    must(repo, "commit", "-m", "main moves");
+    fs.writeFileSync(path.join(alpha, "notes.txt"), "draft\n");
+    fs.writeFileSync(path.join(alpha, "new.txt"), "new\n");
+    must(alpha, "workspace", "checkpoint", "--label", "before");
+    return alpha;
+  };
+  const forecast = [A, "rebase-forecast", "main", "--target-checkpoint"];
+  const approved = [B, "rebase", "main", "--use-forecast", "<forecast>"];
+  const unpaired = [A, "rebase", "main", "--use-forecast", "<forecast>", "--json"];
+  const write = (file, text) => ({ repo }) => fs.writeFileSync(path.join(repo, file), text);
+  const cases = [
+    { kind: {}, steps: [forecast, approved], outcome: /re-materialized uncommitted as/ },
+    { kind: {}, steps: [[...forecast, "--json"], [...approved, "--json"]], outcome: /"rematerialized": true/ },
+    { kind: {}, steps: [forecast, write("notes.txt", "drifted\n"), unpaired], outcome: /The worktree has changed since the target overlay was captured/ },
+    { kind: { overlay: "conflict" }, steps: [forecast, unpaired], outcome: /blocked-target-overlay[^]*is not a complete application approval/ },
+  ];
+  const journalOf = (repo, git) =>
+    path.join(git(repo, "rev-parse", "--absolute-git-dir").stdout.trim(), "causet", "rebase.json");
+  const files = (repo) => ["a.txt", "b.txt", "notes.txt", "new.txt", "z.txt"]
+    .map((file) => fs.existsSync(path.join(repo, file)) ? fs.readFileSync(path.join(repo, file), "utf8") : "(absent)")
+    .join("|");
+  reconcileTwins("overlay-rebase", cases, build, { perSide: true, journalOf, extra: files });
 });
 
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {

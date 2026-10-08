@@ -3,11 +3,14 @@
 //! under either forecast engine (ADR-0016), and `formatForecast` of
 //! `src/cli.js`.
 //!
-//! The simulator here runs the queue a reconciliation replays: one pick per
-//! new change. A causal rebase's program (recreated merges, absorbed changes,
-//! `edit`, omitted steps; ADR-0034 and ADR-0035) is the rest of
-//! `simulatePlan`, and arrives with the rebase port (#148).
+//! The simulator runs a program: the queue a reconciliation replays, one pick
+//! per new change, or a causal rebase's, which may recreate merges, absorb
+//! changes, pause for an `edit` and leave commits out (ADR-0034, ADR-0035).
 
+use crate::rebase_program::{
+  ProgramItem, absorbed_change_id, absorbed_message, assert_single_identity, is_interactive,
+  rebase_program, recreated_merge_message, resolve_step_parents,
+};
 use crate::records::short;
 use crate::resolve::{
   capture_conflict_descriptors, capture_resolution_outcomes, materialize_resolution_candidate,
@@ -25,6 +28,7 @@ use causet_engine::session::with_object_session;
 use causet_engine::{engine, metrics, text};
 use causet_model::js::{get, length, nullish, strict_equals, text as js_text, to_fixed, to_number, truthy};
 use causet_model::json::{Object, Value, lossy, string, stringify, stringify_pretty};
+use std::collections::HashMap;
 use std::time::Instant;
 
 fn as_text(value: Option<&Value>) -> Option<String> {
@@ -47,12 +51,12 @@ fn git_allowing_failure(args: &[&str], cwd: &str) -> GitResult<causet_engine::pr
 }
 
 /// Milliseconds since `started`, as `performance.now()` differences are.
-fn elapsed(started: Instant) -> f64 {
+pub(crate) fn elapsed(started: Instant) -> f64 {
   started.elapsed().as_secs_f64() * 1000.0
 }
 
 /// `Number(value.toFixed(2))`.
-fn rounded(value: f64) -> Value {
+pub(crate) fn rounded(value: f64) -> Value {
   Value::Number(to_fixed(value, 2).parse().unwrap_or(0.0))
 }
 
@@ -67,7 +71,7 @@ fn timings(setup: f64, application: f64, cleanup: f64, total: f64) -> Value {
 }
 
 /// `zeroTimings()`.
-fn zero_timings() -> Value {
+pub(crate) fn zero_timings() -> Value {
   timings(0.0, 0.0, 0.0, 0.0)
 }
 
@@ -187,12 +191,12 @@ fn blocked_reason(conflicts: &[&Value]) -> &'static str {
 
 /// What `simulatePlan` returns: the result members, the engine that answered,
 /// the fallbacks taken, and both engines' timings.
-struct Simulation {
-  result: Object,
-  engine: &'static str,
-  fallbacks: Vec<Value>,
-  worktree_timings: Value,
-  merge_tree_timings: Value,
+pub(crate) struct Simulation {
+  pub result: Object,
+  pub engine: Option<&'static str>,
+  pub fallbacks: Vec<Value>,
+  pub worktree_timings: Value,
+  pub merge_tree_timings: Value,
 }
 
 /// The ends of a simulation: where it starts, what it should reach, and how
@@ -467,24 +471,257 @@ fn with_temporary_worktree(
   ))
 }
 
-/// The worktree simulator's loop over a reconciliation's queue: each change
-/// picked onto the last, its conflicts settled only by a deterministic spec
-/// merge or an exact retained resolution, and anything else a stop.
-fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResult<Object> {
+/// `commitRecreatedMerge(change, cwd)`: the staged join committed under the
+/// message the application will write, with an identity of its own.
+fn commit_recreated_merge(change: &Value, cwd: &str) -> GitResult<()> {
+  let path = text::join(&engine::repo_context(cwd)?.git_dir, "MERGE_MSG");
+  let message = recreated_merge_message(
+    get(Some(change), "subject"),
+    &crate::host::new_id("ch"),
+    get(Some(change), "changeId"),
+    &js_text(get(Some(change), "commit")),
+  );
+  std::fs::write(&path, message).map_err(|error| crate::envelope::io_failure(&error, "open", &path))?;
+  git(&["-c", "core.editor=true", "commit", "--no-edit"], cwd)?;
+  Ok(())
+}
+
+/// What `absorbChanges` returns when an absorbed change cannot be melded.
+struct FailedAbsorption {
+  commit: Value,
+  output: String,
+  conflicts: Option<Vec<Value>>,
+  reason: &'static str,
+}
+
+/// `absorbChanges(absorbs, message, cwd)`: every absorbed change applied
+/// without committing and folded into the commit at HEAD, which keeps one
+/// commit and one `Change-Id` (ADR-0035). A conflict gets the one chance a
+/// forecast can take, an exact prior resolution.
+fn absorb_changes(
+  absorbs: &[Value],
+  message: &str,
+  cwd: &str,
+) -> GitResult<Result<Vec<Value>, FailedAbsorption>> {
+  let mut resolutions = Vec::new();
+  for item in absorbs {
+    let commit = js_text(get(Some(item), "commit"));
+    let mut pick = GIT_NO_RERERE.to_vec();
+    pick.extend(["cherry-pick", "--no-commit", &commit]);
+    let applied = git_allowing_failure(&pick, cwd)?;
+    if applied.ok {
+      continue;
+    }
+    let paths = engine::unmerged_paths(cwd)?;
+    let mut conflicts = if paths.is_empty() {
+      Vec::new()
+    } else {
+      capture_conflict_descriptors(&paths, cwd)?
+    };
+    if conflicts.is_empty() || !conflicts.iter().all(|conflict| candidate_count(conflict) == 1) {
+      git_allowing_failure(&["cherry-pick", "--abort"], cwd)?;
+      let reason = if conflicts.is_empty() {
+        "git-application-error"
+      } else {
+        blocked_reason(&conflicts.iter().collect::<Vec<_>>())
+      };
+      return Ok(Err(FailedAbsorption {
+        commit: string(&commit),
+        output: applied.output,
+        conflicts: Some(conflicts),
+        reason,
+      }));
+    }
+    for conflict in &mut conflicts {
+      let candidate = match get(Some(conflict), "candidates") {
+        Some(Value::Array(items)) => items[0].clone(),
+        _ => Value::Null,
+      };
+      materialize_resolution_candidate(Some(conflict), Some(&candidate), cwd)?;
+      if let Value::Object(conflict) = conflict {
+        conflict.set("selectedResolutionId", get(Some(&candidate), "id").cloned().unwrap_or(Value::Null));
+        conflict.set("selectionMethod", string("absorption-exact-reuse"));
+      }
+    }
+    for outcome in capture_resolution_outcomes(&conflicts, cwd)? {
+      let mut outcome = match outcome {
+        Value::Object(outcome) => outcome,
+        _ => Object::new(),
+      };
+      outcome.set("absorbedCommit", string(&commit));
+      resolutions.push(Value::Object(outcome));
+    }
+  }
+  let amended = git_allowing_failure(&["-c", "core.editor=true", "commit", "--amend", "-m", message], cwd)?;
+  if amended.ok {
+    return Ok(Ok(resolutions));
+  }
+  Ok(Err(FailedAbsorption {
+    commit: Value::Null,
+    output: amended.output,
+    conflicts: None,
+    reason: "absorption-amend-error",
+  }))
+}
+
+/// The worktree simulator's loop over a program: each step applied onto the
+/// parent it names, or onto the last step for a plain queue. A conflict is
+/// settled only by a deterministic spec merge or an exact retained
+/// resolution, and anything else is a stop.
+fn simulate_program(
+  worktree: &str,
+  bounds: &Bounds,
+  program: &[ProgramItem],
+  new_base: &str,
+) -> GitResult<Object> {
   let mut steps: Vec<Value> = Vec::new();
   let mut approved_resolutions = Vec::new();
   let mut approved_spec_merges = Vec::new();
   let mut status = "complete";
   let mut reason = Value::Null;
-  for change in queue {
+  // Original commit to the commit that replaced it. Only a program that
+  // states its parents reads it, so a plain queue does not pay one process a
+  // step to fill it (ADR-0034).
+  let mut rewritten: HashMap<String, String> = HashMap::new();
+  let states_parents = program.iter().any(|item| item.step.is_some());
+  for item in program {
+    let change = &item.change;
     let commit = js_text(get(Some(change), "commit"));
+    let recreating = item.kind == "recreate-merge";
+    let kind = if recreating { "recreate-merge" } else { "pick" };
+    let parents = match &item.step {
+      Some(step) => Some(resolve_step_parents(step, new_base, &rewritten)?),
+      None => None,
+    };
+    let parent = |index: usize| {
+      parents
+        .as_ref()
+        .and_then(|parents| parents.get(index))
+        .map(|parent| parent.commit.clone())
+        .unwrap_or_default()
+    };
+    let parent_commits = || {
+      Value::Array(
+        parents
+          .iter()
+          .flatten()
+          .map(|parent| string(&parent.commit))
+          .collect(),
+      )
+    };
+    if item.kind == "omit" {
+      // The commit collapses out of the rewritten line: anything that named
+      // it as a parent now names whatever replaced the commit beneath it.
+      rewritten.insert(commit, parent(0));
+      continue;
+    }
+    let mut step = step_identity(change);
+    // `edit` lets a person change the content, so its result tree is not a
+    // thing a forecast can predict. It says so and stops (ADR-0035).
+    if item.action.as_deref() == Some("edit") {
+      status = "pauses-for-content";
+      reason = string("interactive-edit-pauses");
+      step.set("outcome", string("pauses-for-content"));
+      step.set("kind", string("pick"));
+      step.set("action", string("edit"));
+      let head = engine::current_head(worktree)?;
+      step.set("targetBeforeTree", string(&engine::tree_id(&head, worktree)?));
+      steps.push(Value::Object(step));
+      break;
+    }
+    // A program with merges jumps between lines, so each step states the
+    // parent it applies onto.
+    if parents.is_some() && engine::current_head(worktree)? != parent(0) {
+      git(&["reset", "--hard", &parent(0)], worktree)?;
+    }
     let target_before = engine::current_head(worktree)?;
     let target_before_tree = engine::tree_id(&target_before, worktree)?;
-    let mut pick = GIT_NO_RERERE.to_vec();
-    pick.extend(["cherry-pick", "-x", &commit]);
-    let applied = git_allowing_failure(&pick, worktree)?;
-    let mut step = step_identity(change);
+    let second = parent(1);
+    let mut apply = GIT_NO_RERERE.to_vec();
+    if recreating {
+      apply.extend(["merge", "--no-ff", "--no-commit", &second]);
+    } else {
+      apply.extend(["cherry-pick", "-x", &commit]);
+    }
+    let applied = git_allowing_failure(&apply, worktree)?;
+    // A recreated merge whose two parents became the same line joins nothing.
+    // Git reports that as success with no pending merge, and the operator
+    // decides what becomes of it (ADR-0034).
+    if recreating
+      && applied.ok
+      && !engine::pseudo_ref_target("MERGE_HEAD", worktree)?.is_some_and(|head| !head.is_empty())
+    {
+      status = "blocked";
+      reason = string("unexpected-empty");
+      step.set("outcome", string("blocked-empty-merge"));
+      step.set("kind", string("recreate-merge"));
+      step.set("parents", parent_commits());
+      step.set("targetBeforeTree", string(&target_before_tree));
+      step.set("gitOutput", string(&applied.output));
+      steps.push(Value::Object(step));
+      break;
+    }
     if applied.ok {
+      if recreating {
+        commit_recreated_merge(change, worktree)?;
+        if states_parents {
+          rewritten.insert(commit.clone(), engine::current_head(worktree)?);
+        }
+        step.set("outcome", string("clean"));
+        step.set("kind", string("recreate-merge"));
+        step.set("relation", string("recreated-merge"));
+        step.set("parents", parent_commits());
+        step.set("cleanJoin", Value::Bool(true));
+        step.set("targetBeforeTree", string(&target_before_tree));
+        step.set("resultTree", string(&engine::tree_id("HEAD", worktree)?));
+        steps.push(Value::Object(step));
+        continue;
+      }
+      let absorbed_commits = || {
+        Value::Array(
+          item
+            .absorbs
+            .iter()
+            .map(|entry| get(Some(entry), "commit").cloned().unwrap_or(Value::Null))
+            .collect(),
+        )
+      };
+      let mut absorbed_resolutions = Vec::new();
+      if !item.absorbs.is_empty() {
+        let surviving = engine::commit_message("HEAD", worktree)?;
+        let mut absorbed = Vec::new();
+        for entry in &item.absorbs {
+          absorbed.push((
+            js_text(get(Some(entry), "action")),
+            engine::commit_message(&js_text(get(Some(entry), "commit")), worktree)?,
+          ));
+        }
+        let change_id = js_text(get(Some(change), "changeId"));
+        let message = absorbed_message(&surviving, &absorbed, &change_id);
+        assert_single_identity(&message, &change_id)?;
+        match absorb_changes(&item.absorbs, &message, worktree)? {
+          Ok(resolutions) => absorbed_resolutions = resolutions,
+          Err(failed) => {
+            status = "blocked";
+            reason = string(failed.reason);
+            step.set("outcome", string("blocked-absorption"));
+            step.set("kind", string("pick"));
+            if let Some(action) = get(Some(change), "action") {
+              step.set("action", action.clone());
+            }
+            step.set("absorbedCommits", absorbed_commits());
+            step.set("conflictedAbsorption", failed.commit);
+            step.set("conflicts", Value::Array(failed.conflicts.unwrap_or_default()));
+            step.set("targetBeforeTree", string(&target_before_tree));
+            step.set("gitOutput", string(&failed.output));
+            steps.push(Value::Object(step));
+            break;
+          }
+        }
+      }
+      if states_parents {
+        rewritten.insert(commit.clone(), engine::current_head(worktree)?);
+      }
       step.set("outcome", string("clean"));
       step.set("kind", string("pick"));
       step.set(
@@ -494,6 +731,14 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
           value => value.cloned().unwrap_or(Value::Null),
         },
       );
+      if !item.absorbs.is_empty() {
+        step.set("absorbedCommits", absorbed_commits());
+        step.set(
+          "absorbedChanges",
+          Value::Array(item.absorbs.iter().map(absorbed_change_id).collect()),
+        );
+        step.set("absorbedResolutions", Value::Array(absorbed_resolutions));
+      }
       step.set("relation", string(bounds.clean_relation));
       step.set("targetBeforeTree", string(&target_before_tree));
       step.set("resultTree", string(&engine::tree_id("HEAD", worktree)?));
@@ -506,7 +751,7 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
       status = "blocked";
       reason = string("git-application-error");
       step.set("outcome", string("blocked-git-error"));
-      step.set("kind", string("pick"));
+      step.set("kind", string(kind));
       step.set("targetBeforeTree", string(&target_before_tree));
       step.set("gitOutput", string(&applied.output));
       steps.push(Value::Object(step));
@@ -514,18 +759,26 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
     }
 
     let mut conflicts = capture_conflict_descriptors(&paths, worktree)?;
+    // A pick's three-way endpoints are the change, its parent, and the tree it
+    // lands on. A recreated merge's are the two parents it joins and their
+    // own merge base (ADR-0034).
+    let endpoints = if recreating {
+      [
+        Some(string(&engine::merge_base(&parent(0), &second, worktree)?)),
+        Some(string(&parent(0))),
+        Some(string(&second)),
+      ]
+    } else {
+      [
+        Some(string(&format!("{commit}^"))),
+        Some(string(&target_before)),
+        Some(string(&commit)),
+      ]
+    };
     let path_values = Value::Array(paths.iter().map(|path| string(path)).collect());
     let mut semantic_plans = Vec::new();
     for file in spec_files_for_conflict_paths(Some(&path_values))? {
-      semantic_plans.push(plan_spec_merge(
-        &js_text(Some(&file)),
-        [
-          Some(string(&format!("{commit}^"))),
-          Some(string(&target_before)),
-          Some(string(&commit)),
-        ],
-        worktree,
-      )?);
+      semantic_plans.push(plan_spec_merge(&js_text(Some(&file)), endpoints.clone(), worktree)?);
     }
     for semantic_plan in &semantic_plans {
       let descriptor = conflicts.iter_mut().find(|conflict| {
@@ -581,7 +834,7 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
       status = "blocked";
       reason = string(blocked_reason(&exact.iter().map(|index| &conflicts[*index]).collect::<Vec<_>>()));
       step.set("outcome", string("blocked-conflict"));
-      step.set("kind", string("pick"));
+      step.set("kind", string(kind));
       step.set("targetBeforeTree", string(&target_before_tree));
       step.set("conflicts", Value::Array(conflicts));
       step.set("semanticMerges", Value::Array(semantic_merges));
@@ -602,14 +855,21 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
     }
     let exact_conflicts: Vec<Value> = exact.iter().map(|index| conflicts[*index].clone()).collect();
     let resolutions = capture_resolution_outcomes(&exact_conflicts, worktree)?;
-    let mut finish = GIT_NO_RERERE.to_vec();
-    finish.extend(["-c", "core.editor=true", "cherry-pick", "--continue"]);
-    let continued = git_allowing_failure(&finish, worktree)?;
-    if !continued.ok {
+    // A resolved pick is finished by the sequencer; a resolved merge is an
+    // ordinary commit of a staged index, because nothing is sequencing it.
+    let continued = if recreating {
+      commit_recreated_merge(change, worktree)?;
+      None
+    } else {
+      let mut finish = GIT_NO_RERERE.to_vec();
+      finish.extend(["-c", "core.editor=true", "cherry-pick", "--continue"]);
+      Some(git_allowing_failure(&finish, worktree)?).filter(|continued| !continued.ok)
+    };
+    if let Some(continued) = continued {
       status = "blocked";
       reason = string("exact-resolution-application-error");
       step.set("outcome", string("blocked-resolution-application"));
-      step.set("kind", string("pick"));
+      step.set("kind", string(kind));
       step.set("targetBeforeTree", string(&target_before_tree));
       step.set("conflicts", Value::Array(conflicts));
       step.set("semanticMerges", Value::Array(semantic_merges));
@@ -634,14 +894,24 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
       }
       approved_resolutions.push(Value::Object(approved));
     }
+    if states_parents {
+      rewritten.insert(commit.clone(), engine::current_head(worktree)?);
+    }
     let outcome = match (semantic_merges.is_empty(), resolutions.is_empty()) {
       (false, false) => "semantic-spec-and-exact-resolution",
       (false, true) => "semantic-spec-merge",
       _ => "exact-resolution",
     };
     step.set("outcome", string(outcome));
-    step.set("kind", string("pick"));
-    step.set("relation", string(bounds.contextual_relation));
+    step.set("kind", string(kind));
+    step.set(
+      "relation",
+      string(if recreating { "recreated-merge" } else { bounds.contextual_relation }),
+    );
+    if recreating {
+      step.set("parents", parent_commits());
+      step.set("cleanJoin", Value::Bool(false));
+    }
     step.set("targetBeforeTree", string(&target_before_tree));
     step.set("conflicts", Value::Array(conflicts));
     step.set("resolutions", Value::Array(resolutions));
@@ -654,6 +924,7 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
   let complete = status == "complete";
   let simulated = steps.len();
   let counts = simulation_counts(&steps);
+  let replayed = program.iter().filter(|item| item.kind != "omit").count();
   let mut ordered = Object::new();
   ordered.set("status", string(status));
   ordered.set("blockedReason", reason);
@@ -664,7 +935,7 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
   ordered.set("simulatedChanges", Value::Number(simulated as f64));
   ordered.set(
     "remainingChanges",
-    Value::Number(queue.len() as f64 - simulated as f64),
+    Value::Number(replayed as f64 - simulated as f64),
   );
   ordered.set("partialResultTree", string(&partial));
   ordered.set("predictedResultTree", if complete { string(&partial) } else { Value::Null });
@@ -679,9 +950,63 @@ fn simulate_queue(worktree: &str, bounds: &Bounds, queue: &[&Value]) -> GitResul
   Ok(ordered)
 }
 
-/// `simulatePlan(plan, cwd)` for a reconciliation: the merge-tree engine when
-/// it is selected and can answer, and the temporary-worktree simulator, the
-/// oracle, otherwise.
+/// `simulatePlan(plan, cwd, options)`: the merge-tree engine when it is
+/// selected and can answer the program, and the temporary-worktree simulator,
+/// the oracle, otherwise. Without a `program` the queue is the program.
+fn simulate(
+  bounds: &Bounds,
+  queue: &[&Value],
+  program: Option<Vec<ProgramItem>>,
+  cwd: &str,
+) -> GitResult<Simulation> {
+  let program = program.unwrap_or_else(|| queue.iter().map(|change| ProgramItem::pick(change)).collect());
+  let mut fallbacks = Vec::new();
+  let mut merge_tree_timings = zero_timings();
+  // `merge-tree` accumulates one tree from a queue of picks. It has no second
+  // parent for a recreated merge, and no commit to amend for a reworded,
+  // edited, or absorbing step, so either program goes to the worktree oracle.
+  let merge_preserving = program.iter().any(|item| item.kind == "recreate-merge");
+  let interactive = is_interactive(&program);
+  if merge_preserving || interactive {
+    if engine::forecast_engine()? == "merge-tree" {
+      let mut fallback = Object::new();
+      fallback.set("engine", string("merge-tree"));
+      fallback.set(
+        "reason",
+        string(if merge_preserving { "merge-preserving-program" } else { "interactive-program" }),
+      );
+      fallbacks.push(Value::Object(fallback));
+    }
+  } else if engine::forecast_engine()? == "merge-tree" {
+    match simulate_with_merge_tree(cwd, bounds, queue)? {
+      Ok((result, timings)) => {
+        return Ok(Simulation {
+          result,
+          engine: Some("merge-tree"),
+          fallbacks,
+          worktree_timings: zero_timings(),
+          merge_tree_timings: timings,
+        });
+      }
+      Err((fallback, timings)) => {
+        merge_tree_timings = timings;
+        fallbacks.push(fallback);
+      }
+    }
+  }
+  let (result, worktree_timings) = with_temporary_worktree(bounds.target_head, cwd, |worktree| {
+    simulate_program(worktree, bounds, &program, bounds.target_head)
+  })?;
+  Ok(Simulation {
+    result,
+    engine: Some("worktree"),
+    fallbacks,
+    worktree_timings,
+    merge_tree_timings,
+  })
+}
+
+/// `simulatePlan(plan, cwd)` for a reconciliation: one pick per new change.
 fn simulate_plan(plan: &Value, cwd: &str) -> GitResult<Simulation> {
   let target_head = js_text(get(Some(plan), "targetHead"));
   let expected_result_tree = js_text(get(Some(plan), "sourceTree"));
@@ -698,34 +1023,32 @@ fn simulate_plan(plan: &Value, cwd: &str) -> GitResult<Simulation> {
       .collect(),
     _ => Vec::new(),
   };
-  let mut fallbacks = Vec::new();
-  let mut merge_tree_timings = zero_timings();
-  if engine::forecast_engine()? == "merge-tree" {
-    match simulate_with_merge_tree(cwd, &bounds, &queue)? {
-      Ok((result, timings)) => {
-        return Ok(Simulation {
-          result,
-          engine: "merge-tree",
-          fallbacks,
-          worktree_timings: zero_timings(),
-          merge_tree_timings: timings,
-        });
-      }
-      Err((fallback, timings)) => {
-        merge_tree_timings = timings;
-        fallbacks.push(fallback);
-      }
-    }
-  }
-  let (result, worktree_timings) =
-    with_temporary_worktree(&target_head, cwd, |worktree| simulate_queue(worktree, &bounds, &queue))?;
-  Ok(Simulation {
-    result,
-    engine: "worktree",
-    fallbacks,
-    worktree_timings,
-    merge_tree_timings,
-  })
+  simulate(&bounds, &queue, None, cwd)
+}
+
+/// `simulateCausalRebasePlan(plan, cwd)`: the changes the plan replays, onto
+/// the plan's `onto` head. A linear plan without declared actions keeps its
+/// queue as its program, so the merge-tree engine still answers it.
+pub(crate) fn simulate_causal_rebase_plan(plan: &Value, cwd: &str) -> GitResult<Simulation> {
+  let onto_head = js_text(get(Some(plan), "ontoHead"));
+  let expected_result_tree = js_text(get(Some(plan), "sourceTree"));
+  let bounds = Bounds {
+    target_head: &onto_head,
+    expected_result_tree: &expected_result_tree,
+    clean_relation: "causal-rebase",
+    contextual_relation: "contextual-rebase",
+  };
+  let queue: Vec<&Value> = match get(Some(plan), "changes") {
+    Some(Value::Array(changes)) => changes
+      .iter()
+      .filter(|change| as_text(get(Some(change), "action")).as_deref() == Some("replay"))
+      .collect(),
+    _ => Vec::new(),
+  };
+  let declared = matches!(get(Some(plan), "interactive"), Some(Value::Array(items)) if !items.is_empty());
+  let program = (as_text(get(Some(plan), "mode")).as_deref() == Some("merge-preserving") || declared)
+    .then(|| rebase_program(plan));
+  simulate(&bounds, &queue, program, cwd)
 }
 
 /// `HEAD^{commit}`, `HEAD^{tree}` and the porcelain status: what forecasting
@@ -743,7 +1066,7 @@ fn worktree_state(cwd: &str) -> GitResult<(String, String, String)> {
 
 /// `saveForecast(forecast, cwd)`: the forecast under this worktree's runtime
 /// directory, written whole or not at all.
-fn save_forecast(forecast: &Value, id: &str, cwd: &str) -> GitResult<()> {
+pub(crate) fn save_forecast(forecast: &Value, id: &str, cwd: &str) -> GitResult<()> {
   let git_dir = engine::repo_context(cwd)?.git_dir;
   let directory = text::join(&runtime_directory(&git_dir, cwd)?, "forecasts");
   let path = text::join(&directory, &format!("{id}.json"));
@@ -1062,7 +1385,7 @@ fn forecast_in_session(
   ] {
     forecast.set(name, simulation.result.get(name).cloned().unwrap_or(Value::Null));
   }
-  forecast.set("engine", string(simulation.engine));
+  forecast.set("engine", simulation.engine.map_or(Value::Null, string));
   forecast.set("fallbacks", Value::Array(simulation.fallbacks));
   forecast.set(
     "workspaceComparison",

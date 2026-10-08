@@ -536,7 +536,7 @@ fn conflict_error(operation: &Object, change: &Value, output: &str, cwd: &str) -
 
 /// The `timings` member, as `operation.timings ??= { activeApplicationMs: 0 }`
 /// leaves it.
-fn timings_of(operation: &Object) -> Object {
+pub(crate) fn timings_of(operation: &Object) -> Object {
   match operation.get("timings") {
     Some(Value::Object(timings)) => timings.clone(),
     _ => {
@@ -551,7 +551,7 @@ fn timings_of(operation: &Object) -> Object {
 /// to what the journal already holds, command by command. A journal whose
 /// counts are missing adds up as JavaScript adds `undefined`: to `NaN`, which
 /// is written as `null`.
-fn accumulate_git_metrics(operation: &mut Object, metrics: &Metrics) -> GitResult<()> {
+pub(crate) fn accumulate_git_metrics(operation: &mut Object, metrics: &Metrics, by_name: bool) -> GitResult<()> {
   let mut timings = timings_of(operation);
   let existing = timings.get("git").filter(|git| !nullish(Some(git))).cloned();
   let existing = existing.as_ref();
@@ -635,11 +635,19 @@ fn accumulate_git_metrics(operation: &mut Object, metrics: &Metrics) -> GitResul
       entry
     })
     .collect();
-  // `right.totalMs - left.totalMs`, stable.
+  // `right.totalMs - left.totalMs`, stable; a rebase breaks a tie with
+  // `left.command.localeCompare(right.command)`.
   commands.sort_by(|left, right| {
     number(right.get("totalMs"))
       .partial_cmp(&number(left.get("totalMs")))
       .unwrap_or(std::cmp::Ordering::Equal)
+      .then_with(|| {
+        if by_name {
+          causet_model::js::locale_compare(&js_text(left.get("command")), &js_text(right.get("command")))
+        } else {
+          std::cmp::Ordering::Equal
+        }
+      })
   });
   let mut git = Object::new();
   git.set("count", Value::Number(stored("count") + metrics.count as f64));
@@ -674,7 +682,7 @@ fn finish_phase(operation: &mut Object, phase: &mut Phase, persist: bool, cwd: &
   let active = number(timings.get("activeApplicationMs")) + elapsed(started);
   timings.set("activeApplicationMs", Value::Number(active));
   operation.set("timings", Value::Object(timings));
-  accumulate_git_metrics(operation, &metrics::end(collector))?;
+  accumulate_git_metrics(operation, &metrics::end(collector), false)?;
   if persist {
     write_state(operation, cwd)?;
   }
@@ -743,7 +751,7 @@ fn run_queue(operation: &mut Object, cwd: &str, phase_started: Instant) -> GitRe
 
 /// `publishResolution(outcome, application, cwd)`: the resolution retained
 /// under its signature and result, unless that ref already holds one.
-fn publish_resolution(outcome: &Value, application: &Value, cwd: &str) -> GitResult<()> {
+pub(crate) fn publish_resolution(outcome: &Value, application: &Value, cwd: &str) -> GitResult<()> {
   let field = |name: &str| get(Some(outcome), name);
   let signature = js_text(field("signature"));
   let result_blob = field("resultBlob").filter(|blob| !nullish(Some(blob)));

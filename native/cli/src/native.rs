@@ -76,6 +76,24 @@ fn report(error: &GitError, json: bool) -> i32 {
 
 /// A command's output and exit code. A command may print and still exit 1,
 /// as `capabilities --against` does for a partially compatible peer.
+/// The `--from` base and the declared interactive actions a rebase command
+/// hands its plan.
+fn rebase_options(parsed: &Parsed) -> crate::plan::RebaseOptions {
+  use crate::parsed::Opt;
+  let values = |key: &str| match parsed.options.get(key) {
+    Some(Opt::Values(values)) => values.clone(),
+    Some(Opt::Value(value)) => vec![value.clone()],
+    _ => Vec::new(),
+  };
+  crate::plan::RebaseOptions {
+    from: parsed.value("from").map(str::to_string),
+    interactive: ["reword", "edit", "squash", "fixup"]
+      .into_iter()
+      .map(|action| (action, values(action)))
+      .collect(),
+  }
+}
+
 fn answer(command: &str, parsed: &Parsed, cwd: &str) -> GitResult<(Value, i32)> {
   let json = parsed.truthy("json");
   match command {
@@ -378,20 +396,56 @@ Causal edges
       }
       Ok((causet_model::json::string(&crate::plan::format_merge_plan(&plan)), 0))
     }
+    "rebase" => {
+      if parsed.truthy("status") {
+        let status = crate::rebase::rebase_status(cwd)?;
+        if json {
+          return Ok((status, 0));
+        }
+        return Ok((causet_model::json::string(&crate::rebase::format_rebase_status(&status)), 0));
+      }
+      if parsed.truthy("abort") {
+        return Ok((crate::rebase::abort_rebase(cwd)?, 0));
+      }
+      let result = if parsed.truthy("continue") {
+        crate::rebase::continue_rebase(parsed.truthy("fork"), parsed.value("message"), cwd)?
+      } else {
+        let options = crate::rebase::StartOptions {
+          accept_candidates: parsed.truthy("acceptCandidates"),
+          forecast_id: parsed.value("useForecast"),
+          plan: rebase_options(parsed),
+        };
+        let onto = parsed.positionals.first().cloned().unwrap_or_default();
+        crate::rebase::start_rebase(&onto, &options, cwd)?
+      };
+      if json {
+        return Ok((result, 0));
+      }
+      Ok((causet_model::json::string(&crate::rebase::format_rebase_result(&result)), 0))
+    }
+    "rebase-forecast" => {
+      let options = crate::rebase_forecast::ForecastOptions {
+        accept_candidates: parsed.truthy("acceptCandidates"),
+        target_checkpoint: parsed.truthy("targetCheckpoint"),
+        plan: rebase_options(parsed),
+      };
+      let onto = parsed.positionals.first().cloned().unwrap_or_default();
+      let forecast = crate::rebase_forecast::forecast_rebase(
+        &onto,
+        parsed.positionals.get(1).map(String::as_str),
+        &options,
+        cwd,
+      )?;
+      if json {
+        return Ok((forecast, 0));
+      }
+      Ok((
+        causet_model::json::string(&crate::rebase_forecast::format_rebase_forecast(&forecast)),
+        0,
+      ))
+    }
     "rebase-plan" => {
-      use crate::parsed::Opt;
-      let values = |key: &str| match parsed.options.get(key) {
-        Some(Opt::Values(values)) => values.clone(),
-        Some(Opt::Value(value)) => vec![value.clone()],
-        _ => Vec::new(),
-      };
-      let options = crate::plan::RebaseOptions {
-        from: parsed.value("from").map(str::to_string),
-        interactive: ["reword", "edit", "squash", "fixup"]
-          .into_iter()
-          .map(|action| (action, values(action)))
-          .collect(),
-      };
+      let options = rebase_options(parsed);
       let onto = parsed.positionals.first().cloned().unwrap_or_default();
       let plan =
         crate::plan::rebase_plan(&onto, parsed.positionals.get(1).map(String::as_str), cwd, &options)?;
