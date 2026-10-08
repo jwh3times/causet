@@ -65,6 +65,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "metadata retain",
   "metadata status",
   "metadata validate",
+  "migrate",
   "proof-bundle",
   "provenance",
   "rebase",
@@ -661,8 +662,7 @@ mod tests {
   #[test]
   fn commands_that_need_the_repository_delegate() {
     for args in [
-      &["migrate", "--apply"][..],
-      &["metadata", "benchmark", "--history", "5"],
+      &["metadata", "benchmark", "--history", "5"][..],
       &["spec", "benchmark", "--documents", "2"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {

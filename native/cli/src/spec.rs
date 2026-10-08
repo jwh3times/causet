@@ -590,7 +590,7 @@ fn materialize_manifest(raw: &str, stored: &Value) -> GitResult<Value> {
 }
 
 /// `path.relative(from, to)`, with Windows's case-insensitive comparison.
-fn relative_path(from: &str, to: &str) -> String {
+pub(crate) fn relative_path(from: &str, to: &str) -> String {
   let split = |path: &str| -> Vec<String> {
     path
       .split(text::SEPARATOR)
