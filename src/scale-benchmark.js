@@ -699,6 +699,9 @@ export function benchmarkRepositoryScale(options = {}, fixtureCallback = null) {
       schema: SCALE_BENCHMARK_SCHEMA,
       environment: {
         platform: process.platform,
+        // Which implementation answered (ADR-0037 §5): the Rust CLI reports
+        // "rust" and a null `node`.
+        implementation: "javascript",
         node: process.version,
         git: gitVersionText,
       },

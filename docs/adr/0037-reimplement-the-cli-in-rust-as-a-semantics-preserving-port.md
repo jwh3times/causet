@@ -150,6 +150,18 @@ Parity means **byte-identical standard output, standard error and exit code**, h
   The port adds an implementation and runtime description to `doctor` in both
   implementations first, as an additive change. No other field may differ.
 
+**Amended 2026-10-08 (owner decision, #212).** Porting the two benchmarks found two more
+fields that cannot be made equal, and the owner accepted both as named exceptions:
+- **the runtime self-description of `cst metadata benchmark`**: `environment` gains
+  `implementation` in both implementations, and `environment.node` is `null` from the
+  Rust CLI, as in `doctor`. `causet.repository-scale-benchmark/v1` now allows that;
+- **the compressed-size estimates of `cst spec benchmark`**: the four
+  `estimatedCompressed*` members come from each implementation's own zlib. Node's and the
+  `zlib-rs` crate choose matches differently and differ by about one percent on the same
+  input. The fields were already named estimates.
+
+Every count, schema and Git process figure of both benchmarks still has to match.
+
 Records must be **interchangeable across implementations**. Anything one writes, the other
 reads with the same result. This covers:
 - notes records, receipts, and envelopes;

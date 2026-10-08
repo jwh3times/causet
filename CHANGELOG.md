@@ -2,12 +2,26 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst metadata benchmark` and `cst spec benchmark`
+  natively (#212), so every command is ported. What the Rust CLI still hands
+  to the JavaScript CLI is an argument shape the JavaScript parser itself
+  fails on.
+  - **`metadata benchmark`:** `benchmarkRepositoryScale` of
+    `src/scale-benchmark.js`: the generated fixture, the nine measured
+    phases, their plain-Git floors and the analysis, with the Git process
+    count of every sample equal to the JavaScript CLI's.
+  - **`spec benchmark`:** `benchmarkSpecIndex` of `src/specs.js`.
+  - **Two named differences (ADR-0037 §5, amended):** `environment` in the
+    scale benchmark gains `implementation` (`"javascript"` or `"rust"`), and
+    its `node` is `null` from the Rust CLI;
+    `causet.repository-scale-benchmark/v1` allows both. The four
+    `estimatedCompressed*` members of the spec benchmark come from each
+    implementation's own zlib and differ by about one percent.
 - The Rust CLI answers `cst migrate` natively, with `--dry-run` (#212, first
   command). It ports `migrateRepository` of `src/migration.js`: the plan and
   its refusals, the one-transaction ref creation and fast-forward, the notes
   configuration, the runtime directories, the staged manifest move and the
-  marker. A dry run by either CLI predicts what the other applies. What still
-  delegates is `cst metadata benchmark` and `cst spec benchmark`.
+  marker. A dry run by either CLI predicts what the other applies.
 - The Rust CLI answers `cst rebase` natively: `cst rebase <onto>` with
   `--from`, `--accept-candidates`, `--use-forecast` and the declared
   `--reword`, `--edit`, `--squash` and `--fixup` actions, and `--status`,

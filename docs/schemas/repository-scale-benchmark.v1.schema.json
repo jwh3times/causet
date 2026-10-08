@@ -32,8 +32,11 @@
         "platform": {
           "type": "string"
         },
+        "implementation": {
+          "enum": ["javascript", "rust"]
+        },
         "node": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "git": {
           "type": "string"

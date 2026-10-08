@@ -1,12 +1,12 @@
 /**
  * The Rust CLI's native answers against the JavaScript oracle (ADR-0037, #141).
  *
- * While the port is under way the Rust `cst` answers help, version, and every
- * usage failure that `src/cli.js` raises from the arguments alone, and
- * delegates everything else to the JavaScript CLI. This suite runs each such
- * invocation through both, with the Rust CLI forbidden to delegate
+ * The Rust `cst` answers every command itself (#212). This suite runs each
+ * invocation through both CLIs, with the Rust CLI forbidden to delegate
  * (`CAUSET_DELEGATE=never`), and requires byte-identical stdout, stderr and exit
- * status. It then checks the delegation path itself.
+ * status, apart from what ADR-0037 §5 names. It then checks the delegation
+ * path, which remains for an argument shape the JavaScript parser fails on and
+ * for `CAUSET_DELEGATE=always`.
  *
  * This is the one suite that launches the JavaScript CLI directly rather than
  * through `test-support/vlab-command.js`: the JavaScript CLI is the oracle here,
@@ -152,14 +152,14 @@ test("every argument-only usage failure is answered natively, human and JSON", {
   }
 });
 
-test("a repository command is delegated with its output and exit status intact", { skip }, () => {
-  // These fail exactly as the JavaScript CLI does, which is all a delegation
-  // has to show: it ran with these arguments here.
-  for (const args of [["spec", "benchmark", "--documents", "0"], ["metadata", "benchmark", "--history", "x", "--json"], ["--trace-git", "metadata", "benchmark", "--samples", "0"]]) {
+test("an argument shape the parser itself fails on is delegated with its output and exit status intact", { skip }, () => {
+  // Every command is ported. What still reaches the JavaScript CLI is a
+  // repeated option under two spellings, which its parser fails on; the
+  // failure passes through unchanged.
+  for (const args of [["commit", "--authoredBy", "--authored-by", "a"], ["--trace-git", "commit", "--authoredBy", "--authored-by", "a"]]) {
     assertSame(args, {}, {});
   }
-  // The JavaScript CLI's exit status, passed through this one.
-  assert.equal(assertSame(["metadata", "benchmark", "--samples", "0"], {}, {}).status, 1);
+  assert.equal(assertSame(["commit", "--authoredBy", "--authored-by", "a", "--json"], {}, {}).status, 1);
 });
 
 test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, () => {
@@ -2906,6 +2906,65 @@ test("migrate moves a v0.19.1 repository natively, and either CLI finishes what 
   reconcileTwins("migrate", cases, build, { perSide: true, journalOf, extra: settled });
 });
 
+test("the benchmarks report the same counts natively, timings and the named estimates aside (#212)", { skip }, () => {
+  // Durations, and the Git activity lists ordered by them, differ run to
+  // run. `environment` names the implementation, and the compressed sizes
+  // are estimates from each implementation's own zlib (ADR-0037 §5).
+  const steady = (text) => {
+    let document;
+    try {
+      document = JSON.parse(text);
+    } catch {
+      return text;
+    }
+    const visit = (node) => {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node.byCommand)) {
+        node.byCommand.sort((left, right) => String(left.command).localeCompare(String(right.command)));
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (/Ms$/.test(key) && (typeof value === "number" || value === null)) node[key] = "<ms>";
+        else if (/^estimatedCompressed/.test(key)) node[key] = "<estimate>";
+        else visit(value);
+      }
+    };
+    visit(document);
+    if (document?.environment) {
+      delete document.environment.implementation;
+      delete document.environment.node;
+    }
+    return `${JSON.stringify(document, null, 2)}\n`;
+  };
+  const human = (text) => text
+    .replace(/[\d.]+ ms/g, "<ms> ms")
+    .replace(/\([\d.]+ cold\)/g, "(<ms> cold)");
+  const small = ["--history", "6", "--workspaces", "2", "--notes", "8", "--resolutions", "3", "--samples", "2", "--areas", "2", "--files-per-area", "3"];
+  const cases = [
+    [["spec", "benchmark", "--documents", "3", "--blocks", "4"], /"schema": "causet\.spec-benchmark\/v3"/],
+    [["spec", "benchmark", "--documents", "1", "--blocks", "1", "--json"], /"oneBlockChanged"/],
+    [["spec", "benchmark", "--documents", "0"], /--documents must be an integer between 1 and 1000/],
+    [["spec", "benchmark", "--documents", "1000", "--blocks", "1000", "--json"], /limited to 100,000 generated blocks/],
+    [["metadata", "benchmark", ...small, "--json"], /"schema": "causet\.repository-scale-benchmark\/v1"[^]*"unexpectedGitFailures": 0/],
+    [["metadata", "benchmark", ...small], /Repository scale benchmark[^]*next action/],
+    [["metadata", "benchmark", "--history", "2", "--workspaces", "0", "--notes", "0", "--resolutions", "0", "--samples", "1", "--areas", "1", "--files-per-area", "1", "--budget-ms", "1", "--json"], /"profile": "custom-v1"/],
+    [["metadata", "benchmark", "--samples", "0"], /--samples must be an integer between 1 and 10/],
+    [["metadata", "benchmark", "--notes", "5000", "--resolutions", "1", "--json"], /limited to 5,000 total note and resolution records/],
+  ];
+  for (const [args, outcome] of cases) {
+    const expected = runOracle(args);
+    const actual = runRust(args, { CAUSET_DELEGATE: "never" });
+    const label = JSON.stringify(args);
+    assert.match(expected.stdout + expected.stderr, outcome, label);
+    assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
+    assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
+    assert.equal(human(steady(actual.stdout)), human(steady(expected.stdout)), `stdout of ${label}`);
+  }
+  // The runtime description is the one member of `environment` that differs.
+  const described = JSON.parse(runRust(["metadata", "benchmark", ...small, "--json"], { CAUSET_DELEGATE: "never" }).stdout).environment;
+  assert.equal(described.implementation, "rust");
+  assert.equal(described.node, null);
+});
+
 test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
   // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
   // not look for it.
@@ -2919,11 +2978,11 @@ test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", {
   assertSame(["no-such-command", "--json"], {}, { CAUSET_DELEGATE: "always" });
 });
 
-test("CAUSET_DELEGATE=never refuses a command that is not ported", { skip }, () => {
-  const result = runRust(["spec", "benchmark"], { CAUSET_DELEGATE: "never" });
+test("CAUSET_DELEGATE=never refuses what it would have to delegate", { skip }, () => {
+  const result = runRust(["commit", "--authoredBy", "--authored-by", "a"], { CAUSET_DELEGATE: "never" });
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /^cst: 'spec' is not ported to the Rust CLI yet/);
+  assert.match(result.stderr, /^cst: 'commit' is not ported to the Rust CLI yet/);
   const invalid = runRust(["--version"], { CAUSET_DELEGATE: "sometimes" });
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /^cst: Unknown delegation mode 'sometimes'/);

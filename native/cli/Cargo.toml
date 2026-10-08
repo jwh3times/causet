@@ -15,3 +15,6 @@ causet-model = { path = "../model" }
 # Already in the workspace through gix; `slug` normalizes titles with NFKD as
 # String.prototype.normalize does.
 unicode-normalization = "=0.1.25"
+# Already in the workspace through gix; `cst spec benchmark` estimates
+# compressed sizes with it.
+zlib-rs = "=0.6.7"

@@ -78,6 +78,7 @@ dependencies = [
  "causet-engine",
  "causet-model",
  "unicode-normalization",
+ "zlib-rs",
 ]
 
 [[package]]
