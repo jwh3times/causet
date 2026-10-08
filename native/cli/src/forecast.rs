@@ -1,6 +1,7 @@
-//! `cst forecast`: `forecastReconciliation` of `src/forecasts.js`, the plan
-//! simulator it drives under either forecast engine (ADR-0016), and
-//! `formatForecast` of `src/cli.js`.
+//! `cst forecast` and `cst workspace forecast`: `forecastReconciliation` and
+//! `forecastWorkspaces` of `src/forecasts.js`, the plan simulator they drive
+//! under either forecast engine (ADR-0016), and `formatForecast` of
+//! `src/cli.js`.
 //!
 //! The simulator here runs the queue a reconciliation replays: one pick per
 //! new change. A causal rebase's program (recreated merges, absorbed changes,
@@ -773,7 +774,133 @@ pub fn forecast_reconciliation(
   cwd: &str,
 ) -> GitResult<Value> {
   with_object_session(cwd, || {
-    forecast_in_session(source_ref, target_checkpoint, accept_candidates, cwd)
+    forecast_in_session(source_ref, target_checkpoint, accept_candidates, None, cwd)
+  })
+}
+
+/// The `scope` and `workspaceComparison` options `forecastWorkspaces` passes.
+struct Comparison {
+  scope: &'static str,
+  workspaces: Value,
+}
+
+/// `requireWorkspace(workspaces, value, role)`.
+fn require_workspace<'a>(workspaces: &'a [Value], value: &str, role: &str) -> GitResult<&'a Value> {
+  let named = |workspace: &&Value| {
+    ["name", "id"]
+      .iter()
+      .any(|name| as_text(get(Some(workspace), name)).as_deref() == Some(value))
+  };
+  let Some(workspace) = workspaces.iter().find(named) else {
+    return Err(GitError::new(
+      "not-found",
+      format!("{role} workspace '{value}' was not found."),
+    ));
+  };
+  if as_text(get(Some(workspace), "status")).as_deref() != Some("active") {
+    return Err(GitError::new(
+      "precondition-not-met",
+      format!("{role} workspace '{value}' is not active."),
+    ));
+  }
+  Ok(workspace)
+}
+
+/// `forecastWorkspaces(targetName, sourceName, { sourceCheckpoint,
+/// acceptCandidates })`: a forecast of reconciling one workspace's branch, or
+/// its latest checkpoint, into another, run in the target's worktree.
+///
+/// `src/cli.js` also hands it `targetCheckpoint`, which it does not read; a
+/// workspace forecast therefore never carries a target overlay.
+pub fn forecast_workspaces(
+  target_name: &str,
+  source_name: &str,
+  source_checkpoint: bool,
+  accept_candidates: bool,
+  cwd: &str,
+) -> GitResult<Value> {
+  let listed = crate::workspaces::list_workspaces(cwd)?;
+  let workspaces = match &listed {
+    Value::Array(workspaces) => workspaces.as_slice(),
+    _ => &[],
+  };
+  let target = require_workspace(workspaces, target_name, "Target")?;
+  let source = require_workspace(workspaces, source_name, "Source")?;
+  let of = |workspace: &'_ Value, name: &str| get(Some(workspace), name).cloned();
+  if strict_equals(of(target, "id").as_ref(), of(source, "id").as_ref()) {
+    return Err(GitError::new(
+      "usage-conflicting-options",
+      "Choose two different workspaces to compare.",
+    ));
+  }
+  let source_label = js_text(of(source, "name").as_ref());
+  let checkpoint = if source_checkpoint {
+    let Some(checkpoint) = crate::workspaces::latest_workspace_checkpoint(source, cwd)? else {
+      return Err(GitError::new(
+        "precondition-not-met",
+        format!(
+          "Source workspace '{source_label}' has no checkpoint. Capture one before requesting a checkpoint forecast."
+        ),
+      ));
+    };
+    let id = js_text(get(Some(&checkpoint), "id"));
+    if !strict_equals(get(Some(&checkpoint), "baseHead"), of(source, "head").as_ref()) {
+      return Err(GitError::new(
+        "stale-input",
+        format!(
+          "Source workspace '{source_label}' moved after checkpoint '{id}'. Capture a new checkpoint before forecasting its draft."
+        ),
+      ));
+    }
+    let committed = engine::tree_id(
+      &js_text(of(source, "head").as_ref()),
+      &js_text(of(source, "path").as_ref()),
+    )?;
+    if as_text(get(Some(&checkpoint), "tree")).as_deref() == Some(committed.as_str()) {
+      return Err(GitError::new(
+        "precondition-not-met",
+        format!(
+          "Source checkpoint '{id}' contains no draft overlay beyond the committed workspace head."
+        ),
+      ));
+    }
+    Some(checkpoint)
+  } else {
+    None
+  };
+  let scope = if checkpoint.is_some() { "source-checkpoint" } else { "committed-heads" };
+  let side = |workspace: &Value| {
+    let mut side = Object::new();
+    for (name, member) in [
+      ("id", "id"),
+      ("name", "name"),
+      ("path", "path"),
+      ("head", "head"),
+      ("ignoredDirtyFiles", "dirtyFiles"),
+    ] {
+      if let Some(value) = of(workspace, member) {
+        side.set(name, value);
+      }
+    }
+    side
+  };
+  let source_ref = match &checkpoint {
+    Some(checkpoint) => js_text(get(Some(checkpoint), "id")),
+    None => js_text(of(source, "compatibilityBranch").as_ref()),
+  };
+  let mut source_side = side(source);
+  source_side.set("checkpoint", checkpoint.unwrap_or(Value::Null));
+  let mut comparison = Object::new();
+  comparison.set("target", Value::Object(side(target)));
+  comparison.set("source", Value::Object(source_side));
+  comparison.set("scope", string(scope));
+  let comparison = Comparison {
+    scope,
+    workspaces: Value::Object(comparison),
+  };
+  let target_path = js_text(of(target, "path").as_ref());
+  with_object_session(&target_path, || {
+    forecast_in_session(&source_ref, false, accept_candidates, Some(&comparison), &target_path)
   })
 }
 
@@ -781,6 +908,7 @@ fn forecast_in_session(
   source_ref: &str,
   target_checkpoint: bool,
   accept_candidates: bool,
+  comparison: Option<&Comparison>,
   cwd: &str,
 ) -> GitResult<Value> {
   let busy = read_journal(
@@ -876,7 +1004,11 @@ fn forecast_in_session(
   forecast.set("targetWorktree", string(&context.root));
   forecast.set(
     "scope",
-    string(if target_overlay.is_some() { "target-checkpoint" } else { "committed-heads" }),
+    string(match comparison {
+      Some(comparison) => comparison.scope,
+      None if target_overlay.is_some() => "target-checkpoint",
+      None => "committed-heads",
+    }),
   );
   forecast.set(
     "targetOverlay",
@@ -932,7 +1064,10 @@ fn forecast_in_session(
   }
   forecast.set("engine", string(simulation.engine));
   forecast.set("fallbacks", Value::Array(simulation.fallbacks));
-  forecast.set("workspaceComparison", Value::Null);
+  forecast.set(
+    "workspaceComparison",
+    comparison.map_or(Value::Null, |comparison| comparison.workspaces.clone()),
+  );
   let mut forecast_timings = Object::new();
   forecast_timings.set("forecastMs", rounded(elapsed(started)));
   forecast_timings.set("phases", Value::Object(phases));
@@ -1082,6 +1217,38 @@ pub fn format_forecast(forecast: &Value) -> String {
       js_text(member("ignoredTargetDirtyFiles"))
     ));
   }
+  let comparison = member("workspaceComparison").filter(|comparison| truthy(Some(comparison)));
+  if let Some(comparison) = comparison {
+    let side = |name: &str| get(Some(comparison), name);
+    lines.push(format!(
+      "workspaces   {} <= {}",
+      js_text(get(side("target"), "name")),
+      js_text(get(side("source"), "name"))
+    ));
+    let dirty: Vec<String> = [side("target"), side("source")]
+      .into_iter()
+      .filter(|workspace| truthy(get(*workspace, "ignoredDirtyFiles")))
+      .map(|workspace| {
+        format!(
+          "{}:{}",
+          js_text(get(workspace, "name")),
+          js_text(get(workspace, "ignoredDirtyFiles"))
+        )
+      })
+      .collect();
+    if !dirty.is_empty() {
+      lines.push(format!("dirty ignored {}", dirty.join(", ")));
+    }
+    let checkpoint = get(side("source"), "checkpoint");
+    if truthy(checkpoint) {
+      lines.push(format!(
+        "checkpoint   {} tree {}",
+        short(get(checkpoint, "id")),
+        short(get(checkpoint, "tree"))
+      ));
+      lines.push(format!("draft change {}", js_text(get(checkpoint, "draftChangeId"))));
+    }
+  }
   lines.push(String::new());
   let steps = match member("steps") {
     Some(Value::Array(steps)) => steps.clone(),
@@ -1168,11 +1335,29 @@ pub fn format_forecast(forecast: &Value) -> String {
   lines.push("The current HEAD, index, and working files were not changed.".into());
   if truthy(member("candidateDecisionRequired")) {
     lines.push("Review the heuristic candidates, then regenerate with:".into());
-    lines.push(format!(
-      "  cst forecast {} --accept-candidates",
-      js_text(member("sourceRef"))
-    ));
+    lines.push(match comparison {
+      Some(comparison) => format!(
+        "  cst workspace forecast {} {}{} --accept-candidates",
+        js_text(get(get(Some(comparison), "target"), "name")),
+        js_text(get(get(Some(comparison), "source"), "name")),
+        if as_text(member("scope")).as_deref() == Some("source-checkpoint") {
+          " --source-checkpoint"
+        } else {
+          ""
+        }
+      ),
+      None => format!(
+        "  cst forecast {} --accept-candidates",
+        js_text(member("sourceRef"))
+      ),
+    });
     return lines.join("\n");
+  }
+  if let Some(comparison) = comparison {
+    lines.push(format!(
+      "Run from target worktree: {}",
+      js_text(get(get(Some(comparison), "target"), "path"))
+    ));
   }
   lines.push("Start the pinned reconciliation with:".into());
   lines.push(format!(

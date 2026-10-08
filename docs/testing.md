@@ -224,9 +224,10 @@ through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
 `compact-merge`, `hard-squash` and `cherry-pick`, #146; `workspace list`,
 `checkpoint`, `prune`, `create`, `move`, `archive`, `restore` and `repair`,
 `spec index`, `spec merge-plan` and `spec resolve`, #149; `resolve apply`,
-`resolve reject`, `forecast`, and `reconcile`, #147), it also compares their output in a repository. For `reconcile` a case
+`resolve reject`, `forecast`, and `reconcile`, #147; `workspace forecast`, #149), it also compares their output in a repository. For `reconcile` a case
 that names two roles runs with either CLI in each, so a forecast one CLI wrote
-(under each forecast engine) is consumed by the other, and a journal one
+(under each forecast engine, or by `workspace forecast --source-checkpoint`) is
+consumed by the other, and a journal one
 started is reported on, continued or aborted by the other. The only members allowed to differ are
 `implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
 `node scripts/build-native.mjs` produces, and skips when neither exists.

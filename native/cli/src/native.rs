@@ -323,10 +323,24 @@ Causal edges
       Ok((result, 0))
     }
     "workspace" => {
-      // Every workspace result is an object or a list, printed as JSON.
+      // Every workspace result but a forecast is an object or a list, printed
+      // as JSON.
       let positional = |index: usize| parsed.positionals.get(index).cloned().unwrap_or_default();
       match parsed.positionals.first().map(String::as_str) {
         Some("list") => Ok((crate::workspaces::list_workspaces(cwd)?, 0)),
+        Some("forecast") => {
+          let forecast = crate::forecast::forecast_workspaces(
+            &positional(1),
+            &positional(2),
+            parsed.truthy("sourceCheckpoint"),
+            parsed.truthy("acceptCandidates"),
+            cwd,
+          )?;
+          if json {
+            return Ok((forecast, 0));
+          }
+          Ok((causet_model::json::string(&crate::forecast::format_forecast(&forecast)), 0))
+        }
         Some("checkpoint") => Ok((crate::workspaces::checkpoint_workspace(parsed.value("label"), cwd)?, 0)),
         Some("create") => {
           let options = crate::workspaces::CreateOptions {
