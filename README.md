@@ -60,25 +60,51 @@ This is a laboratory, not a production VCS. Its purpose is to make the semantics
 
 ## Requirements
 
-- Node.js 20 or newer
 - Git 2.40 or newer (the merge-tree forecast engine, the default on Windows,
   needs Git 2.49 and falls back to the worktree simulator below it)
+- npm, and so Node.js 20 or newer, to install
 
-It has no npm dependencies and does not need a build step.
+From v0.21.0 `cst` is a native executable. Once installed with its install
+script, it needs no Node.js to run.
 
-## Install locally
+## Install
 
-From this directory:
+```bash
+npm install -g --allow-scripts=@holland-vip/causet @holland-vip/causet
+cst --help
+```
+
+- **Prebuilt for Windows x64 and Linux x64 (glibc).** npm installs the matching
+  `@holland-vip/causet-<platform>` package alongside. Nothing is downloaded
+  outside npm and nothing is compiled.
+- **`--allow-scripts` matters on npm 12 and later,** which runs no install
+  script it was not told to. The script copies the executable into place so
+  that `cst` starts it directly. npm 11 and earlier run it without the flag
+  and warn that they do not know it.
+- **Without the script `cst` still works,** through a small Node.js launcher
+  that costs Node's startup on every command. `cst doctor` shows which you
+  have: `"launcher": null` is the executable, `"launcher": "node"` is the
+  launcher. Reinstall with the flag to switch.
+- **On another platform** the same command installs the JavaScript CLI, which
+  needs Node.js 20 or newer to run and says so on stderr.
+
+The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038). `vlab`,
+the command's old name, still works as an alias for the same program during
+the transition, and prints identical output.
+
+Each release also attaches the executables, the npm tarballs and `SHA256SUMS`
+to its [GitHub release](https://github.com/jwh3times/causet/releases), for
+installing without npm.
+
+## Develop from a checkout
+
+The checkout runs the JavaScript CLI, which the suites use as the oracle for
+the Rust one (ADR-0037). It has no npm dependencies.
 
 ```bash
 npm link
 cst --help
 ```
-
-The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038), installed with
-`npm install -g @holland-vip/causet`. `vlab`, the command's old name,
-still works as an alias for the same program during the transition, and prints identical
-output.
 
 Environment variables are named `CAUSET_*` (for example `CAUSET_ENGINE`). During the same
 transition the former `VLAB_*` name of each is still read when the `CAUSET_*` one is not set;
@@ -96,7 +122,7 @@ On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are o
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causet-0.20.0.bundle causet
+git clone /path/to/causet-0.21.0.bundle causet
 cd causet
 git remote remove origin
 npm link
@@ -108,7 +134,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 ```bash
 git init -b main
 git add .
-git commit -m "Bootstrap causet 0.20.0"
+git commit -m "Bootstrap causet 0.21.0"
 npm link
 npm test
 ```

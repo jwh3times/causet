@@ -4,11 +4,11 @@
 
 | Field | Value |
 | --- | --- |
-| Architecture baseline | v0.20.0 release |
+| Architecture baseline | v0.21.0 release |
 | Status | Current implementation reference |
 | Last updated | 2026-09-29 |
-| Runtime | Node.js 20+ (ES modules), Git 2.40+ (merge-tree forecast engine: Git 2.49+) |
-| External runtime dependencies | None beyond Node.js and Git |
+| Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 20+ installs it through npm, runs the JavaScript CLI kept as the oracle, and runs the suites |
+| External runtime dependencies | Git. Node.js only where no executable is published, or when install scripts did not run |
 
 This document explains the system that exists. [product.md](product.md) defines
 the desired product and its requirements. [adr](adr/README.md) records decisions

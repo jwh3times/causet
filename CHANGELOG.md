@@ -2,9 +2,47 @@
 
 ## Unreleased
 
+## 0.21.0
+
+**`cst` is now a native executable.** This release is the cutover of
+ADR-0037: the installed command is the Rust CLI, which answers every command
+itself and needs no Node.js to run.
+
+- **Install with** `npm install -g --allow-scripts=@holland-vip/causet
+  @holland-vip/causet`. The executable is prebuilt for Windows x64 and Linux
+  x64 (glibc) and arrives as `@holland-vip/causet-<platform>` (ADR-0038).
+  - npm 12 and later run no install script unless told to. Without the flag
+    `cst` still works, through a Node.js launcher; `cst doctor` reports
+    `"launcher": "node"` then.
+  - On any other platform the package runs the JavaScript CLI and says so.
+- **Output is unchanged.** Every command's human and JSON output is what
+  v0.20.0 printed, apart from the fields ADR-0037 §5 names: `implementation`,
+  `node` and `launcher` in `cst doctor`, the runtime description in
+  `cst metadata benchmark`, and the compressed-size estimates of
+  `cst spec benchmark`. Records, journals and forecasts written by either
+  implementation are read by the other.
+- **The JavaScript CLI stays in the package as the oracle** until two minor
+  releases from now (ADR-0037 §6). `CAUSET_DELEGATE=always` runs any command
+  through it.
+- **Notice: v0.22.0 ends the `vcs-lab` migration window** (ADR-0039 §8,
+  #170). It removes the fallback reads of `refs/notes/vcs-lab`,
+  `refs/vcs-lab/*`, `<git dir>/vcs-lab/` and `.vcs-lab/specs/`, and the
+  `VLAB_*` environment variables. Run `cst migrate` in each repository, and
+  rename the variables, before upgrading past this release. An unmigrated
+  repository will then be refused by every command except `cst migrate`,
+  `cst doctor` and `cst --version`.
+
+What follows is the same work in the order it landed.
+
+- The Rust CLI no longer chooses the JavaScript CLI for anything (#152). The
+  two inputs it still handed over are answered natively: an option repeated
+  under two spellings fails with the JavaScript parser's own `TypeError`
+  wording, and an argument that is not valid Unicode is decoded with
+  replacement characters, as Node decodes it. `CAUSET_DELEGATE=never` and
+  `auto` now behave alike.
 - The package set of ADR-0038 can be built and is installed in CI (#150).
-  Nothing is published yet, and this checkout's own `package.json` keeps the
-  JavaScript CLI as its command until the cutover (#152).
+  This checkout's own `package.json` keeps the JavaScript CLI as its command;
+  the release is what `scripts/pack-release.mjs` packs.
   - **`scripts/pack-release.mjs`** packs one package per platform
     (`@holland-vip/causet-win32-x64`, `@holland-vip/causet-linux-x64-gnu`)
     holding a prebuilt `cst`, and the main package with exact pins on them,

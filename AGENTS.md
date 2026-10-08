@@ -29,8 +29,11 @@ mirror.
 
 ## Build, Test, and Development Commands
 
-The project requires Node.js 20+ and Git 2.40+. It has no runtime dependencies
-or build step.
+Developing and testing need Node.js 20+ and Git 2.40+. The released `cst` is
+the Rust executable in `native/`, which needs Git only; `src/` is the
+JavaScript CLI, kept as the oracle the suites compare it with (ADR-0037).
+There are no npm dependencies. `npm run build:native` builds the Rust side,
+which the Rust comparisons need and skip without.
 
 - `npm test` runs the complete Node integration suite.
 - `npm run test:docs` checks local Markdown link targets.
@@ -72,7 +75,8 @@ or build step.
   `npm run demo:clean -- --apply` removes them (`-- --all` also sweeps fixtures
   an interrupted test or benchmark run left behind).
 - `node ./bin/vlab.js --help` runs the CLI directly without installing it.
-- `npm link` optionally exposes the `cst` command in the local shell. `vlab` is the
+- `npm link` optionally exposes the JavaScript CLI as `cst` in the local shell;
+  the released command is the executable `scripts/pack-release.mjs` packs. `vlab` is the
   same command under its old name and remains an alias during the rename (ADR-0038).
 
 ## Coding Style & Naming Conventions

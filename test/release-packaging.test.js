@@ -96,7 +96,7 @@ test("the package set carries matching versions and recorded digests", { skip },
   assert.ok(packed.tarballs.length >= 2, "a main package and at least this host's platform package");
   assert.match(sums, new RegExp(`^${packed.checksums[platform.package].sha256}  ${platform.package}/${platform.file}$`, "m"));
   for (const file of packed.tarballs) assert.match(sums, new RegExp(`^[0-9a-f]{64}  ${path.basename(file)}$`, "m"));
-  // The checkout's own manifest keeps the JavaScript CLI as its command until the cutover.
+  // The checkout's own manifest keeps the JavaScript CLI as its command, for development.
   const checkout = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
   assert.equal(checkout.bin.cst, "./bin/vlab.js");
   assert.equal(checkout.optionalDependencies, undefined);

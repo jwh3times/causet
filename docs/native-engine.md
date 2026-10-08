@@ -22,8 +22,10 @@ node bin/vlab.js doctor --engine native
 library and dependency license texts into `native/prebuilds/<platform>-<arch>/`.
 These generated artifacts are ignored by Git; `npm pack` includes an existing
 prebuild and its notices. A package built without one still works through Git.
-Installation never downloads a binding or runs a compiler automatically. There
-is no npm publication or cross-platform prebuild download in this build command.
+Installation never downloads a binding or runs a compiler automatically. This
+build command publishes nothing; the released `cst` executable and its
+per-platform packages are assembled by `scripts/pack-release.mjs` (ADR-0038,
+"Release packaging" in `docs/testing.md`).
 
 ## Profile and failure boundary
 
