@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- The Rust CLI answers `cst rebase-forecast <onto> [<source>]` natively, with
+  `--from`, `--accept-candidates`, `--target-checkpoint` and the declared
+  `--reword`, `--edit`, `--squash` and `--fixup` actions (#148, first
+  increment). It ports `forecastRebase` of `src/rebase-forecast.js` and the
+  rest of the plan simulator:
+  - **The program:** `rebaseProgram`, with recreated merges applied onto the
+    parents the rewrite gave them and omitted commits collapsed out
+    (ADR-0034).
+  - **Interactive steps:** absorbed changes melded under one `Change-Id`, and
+    an `edit` reported as a pause no forecast can predict (ADR-0035).
+  - **Engines:** a linear program still goes to the merge-tree engine; a
+    merge-preserving or interactive one falls back to the worktree simulator
+    with the same recorded reason (ADR-0016).
+  - **The caller:** the HEAD, branch, index, status and worktree-list
+    evidence, digested as the JavaScript CLI digests it.
+
+  `cst rebase` still delegates.
 - The Rust CLI answers `cst workspace forecast <target> <source>` natively,
   with `--source-checkpoint` and `--accept-candidates` (#149, last command), so
   every `cst workspace` subcommand is native. It ports `forecastWorkspaces` of

@@ -67,6 +67,7 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "metadata validate",
   "proof-bundle",
   "provenance",
+  "rebase-forecast",
   "rebase-plan",
   "receipts",
   "reconcile",
@@ -711,6 +712,7 @@ mod tests {
       &["workspace", "restore", "w", "--path", "p"],
       &["workspace", "repair", "w", "--path", "p"],
       &["workspace", "forecast", "a", "b", "--source-checkpoint"],
+      &["rebase-forecast", "main", "feature", "--target-checkpoint", "--edit", "abc"],
       &["reconcile", "feature", "--accept-candidates", "--use-forecast", "forecast_x"],
       &["reconcile", "--status", "--json"],
       &["reconcile", "--abort"],
@@ -724,7 +726,6 @@ mod tests {
     for args in [
       &["rebase", "--continue"][..],
       &["spec", "benchmark"],
-      &["rebase-forecast", "main"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
     }
