@@ -107,7 +107,11 @@ test("with install scripts, cst is the executable itself and runs without Node",
   assert.equal(startsWithShebang(installed.target), false, "the command's target is still the launcher");
   assert.deepEqual(fs.readFileSync(installed.target), fs.readFileSync(installed.executable));
   if (windows) {
-    assert.doesNotMatch(fs.readFileSync(installed.command, "utf8"), /node/i);
+    // The shim calls the executable itself: `"%dp0%\...\cst.exe" %*`, with no
+    // interpreter in front of it.
+    const shim = fs.readFileSync(installed.command, "utf8");
+    assert.match(shim, /^"%dp0%\\[^"]*\\bin\\native\\cst\.exe"\s+%\*\r?$/m);
+    assert.doesNotMatch(shim, /node(?:\.exe)?"?\s/i);
   }
   // Git and nothing else on PATH: a launcher would fail to find `node`.
   const bare = path.join(scratch, `bare-${installs}`);
