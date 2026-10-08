@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv04nrfjb43be61e9273",
+      "mode": "compact",
+      "sourceRef": "jwh3times/cutover",
+      "sourceHead": "63f5bc93768f9c1ddc0ca86fbd82e80784fac6d1",
+      "sourceSubject": "chore: prepare v0.21.0, the release whose cst is the Rust executable",
+      "targetBefore": "8861f4bdf73c9163409551fb2c537e0411494cb3",
+      "landingCommit": "2510b81426cac3b34965fa8b534ad451b6582c0a",
+      "base": "8861f4bdf73c9163409551fb2c537e0411494cb3",
+      "absorbedCommits": [
+        "64ef5072c23fd8739858abfd04c9330e2a4d4abe",
+        "63f5bc93768f9c1ddc0ca86fbd82e80784fac6d1"
+      ],
+      "absorbedChanges": [
+        "ch_0mv033ha3a067437236c7",
+        "ch_0mv03gy442fb8f326f493"
+      ],
+      "resultTree": "0b82c4bf3db6655fe454d0e78f9d1ec42cc80228",
+      "createdAt": "2026-10-08T22:48:09.634Z"
+    }
+  ]
+}
