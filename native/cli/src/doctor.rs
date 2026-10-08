@@ -131,6 +131,14 @@ pub fn doctor(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
   report.set("implementation", string("rust"));
   report.set("git", string(&engine::git_version(cwd)?.raw));
   report.set("node", Value::Null);
+  // `"node"` when the installed command is the Node launcher rather than this
+  // executable itself (ADR-0038 §2).
+  report.set(
+    "launcher",
+    environment::value("LAUNCHER")
+      .filter(|launcher| !launcher.is_empty())
+      .map_or(Value::Null, |launcher| string(&launcher)),
+  );
   report.set("repository", string(&context.root));
   report.set("notesRef", string(names(&context.root)?.notes_ref));
   report.set("engine", engine::describe_read_engines()?);

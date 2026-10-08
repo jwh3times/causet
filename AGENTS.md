@@ -46,6 +46,12 @@ or build step.
   shared runner can measure fairly (equality, exit status, Git process counts,
   and comparisons within one run). Timings never fail it; the absolute
   reference stays the local procedure on the wiki's Performance testing page.
+- `.github/workflows/release.yml` builds the `cst` executable per platform,
+  packs the ADR-0038 package set with `scripts/pack-release.mjs`, and installs
+  it on each runner. Pull requests touching the packaging and manual dispatch
+  are dry runs; a `v*` tag drafts the GitHub release and, when the repository
+  variable `NPM_PUBLISH` is `true`, publishes to npm. See "Release packaging"
+  in `docs/testing.md`.
 - `npm run test:benchmark` compares bounded benchmarks against the committed
   per-host baseline in `benchmarks/baseline.json`; `npm run benchmark:record -- --host <label>`
   refreshes an explicitly identified machine's entry on a quiet machine. Use the

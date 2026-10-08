@@ -82,7 +82,7 @@ import {
 } from "./provenance.js";
 import { auditIdentity } from "./identity-audit.js";
 import { CliError, requestJsonErrors } from "./errors.js";
-import { legacyVariablesInUse, setEnvironmentValue } from "./environment.js";
+import { environmentValue, legacyVariablesInUse, setEnvironmentValue } from "./environment.js";
 import { names, refFamily } from "./locations.js";
 import { assertWithinBound } from "./schemas.js";
 import { VERSION } from "./version.js";
@@ -1852,6 +1852,10 @@ export async function main(rawArgs) {
         implementation: "javascript",
         git: gitVersion().raw,
         node: process.version,
+        // `"node"` when the installed command is the Node launcher rather
+        // than the executable itself, which costs Node's startup on every
+        // command (ADR-0038 §2); `null` otherwise.
+        launcher: environmentValue("LAUNCHER") || null,
         repository: context.root,
         notesRef: names(context.root).notesRef,
         engine: describeReadEngines(),

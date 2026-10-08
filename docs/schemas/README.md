@@ -215,7 +215,7 @@ rendering at all.
 | `cst spec status` | Projection `{active, operationId, plans}` |
 | `cst spec resolve` | Projection `{operationId, applied}` |
 | `cst spec benchmark` | `causet.spec-benchmark/v3` |
-| `cst doctor` | Projection `{ok, version, git, node, repository, notesRef, engine, forecastEngine, legacyEnvironment, differential?, benchmark?, objectSession?}`; `version` is the causet build identity, `legacyEnvironment` lists the `VLAB_*` variables still read in place of `CAUSET_*` ones (ADR-0039 §5) and `differential` is a `causet.engine-differential/v1` |
+| `cst doctor` | Projection `{ok, version, implementation, git, node, launcher, repository, notesRef, engine, forecastEngine, legacyEnvironment, migration, differential?, benchmark?, objectSession?}`; `version` is the causet build identity, `implementation` and `node` describe the runtime (ADR-0037 §5), `launcher` is `"node"` when the installed command is the Node launcher rather than the executable (ADR-0038 §2) and `null` otherwise, `legacyEnvironment` lists the `VLAB_*` variables still read in place of `CAUSET_*` ones (ADR-0039 §5) and `differential` is a `causet.engine-differential/v1` |
 
 `cst merge`, `cst compact-merge`, and `cst hard-squash` print their
 `causet.landing/v1` receipt as JSON whatever the flags: like every command
