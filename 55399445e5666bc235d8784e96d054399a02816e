@@ -1,0 +1,17 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.application/v1",
+      "type": "application",
+      "id": "apply_0muzswk6x83fee23c6919",
+      "originCommit": "a2cdc4339b9086012a171823e7c80fc3fb50de4c",
+      "originChangeId": "ch_0muzswj1n9ea00502e61c",
+      "appliedCommit": "55399445e5666bc235d8784e96d054399a02816e",
+      "appliedChangeId": "ch_0muzswj1n9ea00502e61c",
+      "targetBefore": "06a1c4407476308963cc67685b773d40ff4f6a46",
+      "relation": "same-logical-change",
+      "createdAt": "2026-10-08T17:19:04.761Z"
+    }
+  ]
+}
