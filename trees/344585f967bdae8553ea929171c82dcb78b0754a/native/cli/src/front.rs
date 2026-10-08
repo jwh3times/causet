@@ -67,6 +67,8 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "metadata validate",
   "proof-bundle",
   "provenance",
+  "rebase",
+  "rebase-forecast",
   "rebase-plan",
   "receipts",
   "reconcile",
@@ -659,7 +661,8 @@ mod tests {
   #[test]
   fn commands_that_need_the_repository_delegate() {
     for args in [
-      &["rebase", "--status", "extra", "args"][..],
+      &["migrate", "--apply"][..],
+      &["metadata", "benchmark", "--history", "5"],
       &["spec", "benchmark", "--documents", "2"],
       &["commit", "--authoredBy", "--authored-by", "a"],
     ] {
@@ -711,6 +714,11 @@ mod tests {
       &["workspace", "restore", "w", "--path", "p"],
       &["workspace", "repair", "w", "--path", "p"],
       &["workspace", "forecast", "a", "b", "--source-checkpoint"],
+      &["rebase-forecast", "main", "feature", "--target-checkpoint", "--edit", "abc"],
+      &["rebase", "main", "--use-forecast", "rebase_forecast_1", "--fixup", "b=a"],
+      &["rebase", "--status", "--json"],
+      &["rebase", "--continue", "--fork", "-m", "words"],
+      &["rebase", "--abort"],
       &["reconcile", "feature", "--accept-candidates", "--use-forecast", "forecast_x"],
       &["reconcile", "--status", "--json"],
       &["reconcile", "--abort"],
@@ -722,9 +730,8 @@ mod tests {
     }
     // A command is native per subcommand: these still delegate.
     for args in [
-      &["rebase", "--continue"][..],
+      &["metadata", "benchmark"][..],
       &["spec", "benchmark"],
-      &["rebase-forecast", "main"],
     ] {
       assert!(delegated(run(args)), "{args:?}");
     }
