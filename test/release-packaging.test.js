@@ -25,6 +25,7 @@ import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
 import { environmentValue } from "../src/environment.js";
 import { testEnv } from "../test-support/git-environment.js";
+import { bareEnvironment, smokeSequence } from "../test-support/installed-smoke.js";
 import { packRelease } from "../scripts/pack-release.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -114,40 +115,15 @@ test("with install scripts, cst is the executable itself and runs without Node",
     assert.doesNotMatch(shim, /node(?:\.exe)?"?\s/i);
   }
   // Git and nothing else on PATH: a launcher would fail to find `node`.
-  const bare = path.join(scratch, `bare-${installs}`);
-  fs.mkdirSync(bare);
-  const git = spawnSync(windows ? "where" : "which", ["git"], { encoding: "utf8" }).stdout.split(/\r?\n/)[0];
-  const env = windows
-    ? testEnv({ PATH: `${path.dirname(git)};${process.env.SystemRoot}\\System32` })
-    : (fs.symlinkSync(git, path.join(bare, "git")), testEnv({ PATH: bare }));
+  const { git, env } = bareEnvironment(path.join(scratch, `bare-${installs}`));
   const reported = cst(installed, ["--version"], { env });
   assert.equal(reported.stdout, `causet ${version}\n`, reported.stderr);
-
-  // The release gate's smoke sequence, in a repository of its own.
-  const repo = path.join(scratch, `repo-${installs}`);
-  fs.mkdirSync(repo);
-  const run = (command, ...args) => {
-    const ran = command === "git"
-      ? spawnSync(git, args, { cwd: repo, encoding: "utf8", env })
-      : cst(installed, args, { cwd: repo, env });
-    assert.equal(ran.status, 0, `${command} ${args.join(" ")}\n${ran.stdout}\n${ran.stderr}`);
-    return ran.stdout;
-  };
-  run("git", "init", "-q", "-b", "main");
-  run("git", "config", "user.name", "Packaging");
-  run("git", "config", "user.email", "packaging@example.invalid");
-  fs.writeFileSync(path.join(repo, "a.txt"), "a\n");
-  run("git", "add", "-A");
-  run("cst", "commit", "-m", "base");
-  run("cst", "init");
-  run("cst", "branch", "work");
-  fs.writeFileSync(path.join(repo, "b.txt"), "b\n");
-  run("git", "add", "-A");
-  run("cst", "commit", "-m", "work");
-  run("git", "switch", "-q", "main");
-  run("cst", "merge", "work", "--compact", "-m", "land work");
-  assert.equal(JSON.parse(run("cst", "metadata", "validate", "--json")).summary.valid, true);
-  const doctor = JSON.parse(run("cst", "doctor"));
+  const doctor = smokeSequence({
+    launch: (args, options) => cst(installed, args, options),
+    git,
+    env,
+    repo: path.join(scratch, `repo-${installs}`),
+  });
   assert.equal(doctor.implementation, "rust");
   assert.equal(doctor.launcher, null);
 });

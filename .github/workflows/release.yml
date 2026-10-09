@@ -4,8 +4,9 @@ name: release
 #
 # - A pull request that touches the packaging, and a manual dispatch, are dry
 #   runs: build, assemble, and smoke-test on each platform's runner.
-# - A `v*` tag also drafts a GitHub release with the archives, the npm
-#   tarballs and SHA256SUMS, and publishes to npm when the repository variable
+# - A `v*` tag also attests the archives and the install scripts, drafts a
+#   GitHub release with them, the npm tarballs and SHA256SUMS, and publishes
+#   to npm when the repository variable
 #   NPM_PUBLISH is `true`. Each package's first publish is manual, from this
 #   run's artifacts, because npm configures a trusted publisher only on a
 #   package that exists (issue #139).
@@ -19,7 +20,11 @@ on:
       - "bin/native/**"
       - "scripts/pack-release.mjs"
       - "scripts/build-native.mjs"
+      - "scripts/install.sh"
+      - "scripts/install.ps1"
       - "test/release-packaging.test.js"
+      - "test/install-script.test.js"
+      - "test-support/installed-smoke.js"
       - "package.json"
   workflow_dispatch:
 
@@ -112,7 +117,9 @@ jobs:
             --executable win32-x64=executables/win32-x64/cst.exe \
             --notices win32-x64=executables/win32-x64/THIRD-PARTY-NOTICES.txt
           cp executables/archives/* dist/
-          (cd dist && sha256sum cst-* >> SHA256SUMS && cat SHA256SUMS)
+          # The install scripts travel with the release they install (ADR-0038, 2026-10-08).
+          cp scripts/install.sh scripts/install.ps1 dist/
+          (cd dist && sha256sum cst-* install.sh install.ps1 >> SHA256SUMS && cat SHA256SUMS)
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
@@ -138,13 +145,13 @@ jobs:
         with:
           name: release-set
           path: dist
-      - name: Install the packed set and run the installed command
+      - name: Install by npm and by script, and run each installed command
         shell: bash
         run: |
           git --version
           node --version
           npm --version
-          CAUSET_RELEASE_SET=dist node --test test/release-packaging.test.js 2>&1 | tee smoke.log
+          CAUSET_RELEASE_SET=dist node --test test/release-packaging.test.js test/install-script.test.js 2>&1 | tee smoke.log
       - name: Nothing was skipped
         shell: bash
         run: |
@@ -154,16 +161,17 @@ jobs:
           fi
 
   publish:
-    name: draft the release, and publish to npm when enabled
+    name: attest and draft the release, and publish to npm when enabled
     if: github.event_name == 'push'
     needs: [package, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
-      # Trusted publishing: npm exchanges this run's OIDC token for a
-      # short-lived credential, so no npm token is stored anywhere.
+      # Trusted publishing and attestation: this run's OIDC token is exchanged
+      # for a short-lived credential, so no npm token is stored anywhere.
       id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -174,6 +182,14 @@ jobs:
         with:
           name: release-set
           path: dist
+      - name: Attest what a user downloads
+        # `gh attestation verify <file> --repo jwh3times/causet` checks these.
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/cst-*
+            dist/install.sh
+            dist/install.ps1
       - name: Draft the GitHub release with every asset
         env:
           GH_TOKEN: ${{ github.token }}

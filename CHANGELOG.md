@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- `cst` can be installed without npm or Node.js (#218; ADR-0038, amendment
+  of 2026-10-08, which makes this the primary way to install).
+  - **`install.sh` and `install.ps1`** ship as assets of each release. Each
+    downloads the release's archive for the host, refuses it unless its
+    SHA-256 is the one `SHA256SUMS` lists, checks that the executable reports
+    the release's version, and copies `cst` and a `vlab` alias into
+    `~/.local/bin` or `%LOCALAPPDATA%\Programs\causet`. No elevation, and no
+    change to `PATH`.
+  - **`--version`, `--prefix`, `--target` and `--from`** pin a release,
+    choose the directory, name a platform, and read the assets from a
+    directory.
+  - **Releases attest their archives and install scripts,** so
+    `gh attestation verify` can show where a download was built.
+  - **npm stays as the second way,** unchanged, and is the one that carries
+    the JavaScript CLI for a platform with no prebuilt executable.
 ## 0.21.0
 
 **`cst` is now a native executable.** This release is the cutover of

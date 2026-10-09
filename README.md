@@ -62,21 +62,61 @@ This is a laboratory, not a production VCS. Its purpose is to make the semantics
 
 - Git 2.40 or newer (the merge-tree forecast engine, the default on Windows,
   needs Git 2.49 and falls back to the worktree simulator below it)
-- npm, and so Node.js 20 or newer, to install
 
-From v0.21.0 `cst` is a native executable. Once installed with its install
-script, it needs no Node.js to run.
+`cst` is a native executable, prebuilt for Windows x64 and Linux x64 (glibc).
+It needs no Node.js.
 
 ## Install
+
+The install scripts ship with the release after v0.21.0. For v0.21.0 itself,
+use npm, below.
+
+**Linux:**
+
+```bash
+curl -fsSL https://github.com/jwh3times/causet/releases/latest/download/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://github.com/jwh3times/causet/releases/latest/download/install.ps1 | iex
+```
+
+Each script downloads the release's archive for your platform, refuses it
+unless its SHA-256 is the one the release's `SHA256SUMS` lists, and copies
+`cst` into `~/.local/bin` (Linux) or `%LOCALAPPDATA%\Programs\causet`
+(Windows). It asks for no elevation and changes no `PATH`; it prints the line
+to add if the directory is not on it.
+
+- **Read it first, if you prefer.** Download the script, read it, then run it:
+  `curl -fsSLO <url>` and `sh install.sh`, or `irm <url> -OutFile install.ps1`
+  and `.\install.ps1`. Both are short.
+- **Options,** which need the downloaded form: `--version 0.22.0` installs
+  that release, and `--prefix <dir>` installs somewhere else (`-Version` and
+  `-Prefix` in PowerShell). The script
+  attached to a release installs that release's layout, so pin both together:
+  `https://github.com/jwh3times/causet/releases/download/v0.22.0/install.sh`.
+- **Upgrade** by running it again. **Uninstall** by deleting the two files it
+  names when it finishes: `cst` and the `vlab` alias.
+- **Check where a download came from** with GitHub's attestation of the
+  release's archives and scripts:
+  `gh attestation verify cst-<version>-<target>.tar.gz --repo jwh3times/causet`.
+- **The archives are on the
+  [GitHub release](https://github.com/jwh3times/causet/releases)** beside
+  `SHA256SUMS`, to unpack by hand.
+
+### With npm
 
 ```bash
 npm install -g --allow-scripts=@holland-vip/causet @holland-vip/causet
 cst --help
 ```
 
-- **Prebuilt for Windows x64 and Linux x64 (glibc).** npm installs the matching
-  `@holland-vip/causet-<platform>` package alongside. Nothing is downloaded
-  outside npm and nothing is compiled.
+npm installs the same executable, from a `@holland-vip/causet-<platform>`
+package alongside the main one. Nothing is downloaded outside npm and nothing
+is compiled.
+
 - **`--allow-scripts` matters on npm 12 and later,** which runs no install
   script it was not told to. The script copies the executable into place so
   that `cst` starts it directly. npm 11 and earlier run it without the flag
@@ -85,16 +125,12 @@ cst --help
   that costs Node's startup on every command. `cst doctor` shows which you
   have: `"launcher": null` is the executable, `"launcher": "node"` is the
   launcher. Reinstall with the flag to switch.
-- **On another platform** the same command installs the JavaScript CLI, which
-  needs Node.js 20 or newer to run and says so on stderr.
+- **On a platform with no prebuilt executable** this is the way to install:
+  the package runs the JavaScript CLI there, which needs Node.js 20 or newer,
+  and says so on stderr.
 
-The command is `cst`; the npm package is `@holland-vip/causet` (ADR-0038). `vlab`,
-the command's old name, still works as an alias for the same program during
-the transition, and prints identical output.
-
-Each release also attaches the executables, the npm tarballs and `SHA256SUMS`
-to its [GitHub release](https://github.com/jwh3times/causet/releases), for
-installing without npm.
+The command is `cst`. `vlab`, the command's old name, still works as an alias
+for the same program during the transition, and prints identical output.
 
 ## Develop from a checkout
 
