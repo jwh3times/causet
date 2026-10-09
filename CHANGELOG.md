@@ -2,34 +2,26 @@
 
 ## Unreleased
 
-- `cst` can be installed without npm or Node.js (#218; ADR-0038, amendment
-  of 2026-10-08, which makes this the primary way to install).
-  - **`install.sh` and `install.ps1`** ship as assets of each release. Each
-    downloads the release's archive for the host, refuses it unless its
-    SHA-256 is the one `SHA256SUMS` lists, checks that the executable reports
-    the release's version, and copies `cst` and a `vlab` alias into
-    `~/.local/bin` or `%LOCALAPPDATA%\Programs\causet`. No elevation, and no
-    change to `PATH`.
-  - **`--version`, `--prefix`, `--target` and `--from`** pin a release,
-    choose the directory, name a platform, and read the assets from a
-    directory.
-  - **Releases attest their archives and install scripts,** so
-    `gh attestation verify` can show where a download was built.
-  - **npm stays as the second way,** unchanged, and is the one that carries
-    the JavaScript CLI for a platform with no prebuilt executable.
 ## 0.21.0
 
 **`cst` is now a native executable.** This release is the cutover of
 ADR-0037: the installed command is the Rust CLI, which answers every command
 itself and needs no Node.js to run.
 
-- **Install with** `npm install -g --allow-scripts=@holland-vip/causet
-  @holland-vip/causet`. The executable is prebuilt for Windows x64 and Linux
-  x64 (glibc) and arrives as `@holland-vip/causet-<platform>` (ADR-0038).
+- **Install with a script, without npm or Node.js** (ADR-0038, amendment of
+  2026-10-08). The executable is prebuilt for Windows x64 and Linux x64
+  (glibc):
+  - Linux: `curl -fsSL
+    https://github.com/jwh3times/causet/releases/latest/download/install.sh | sh`
+  - Windows: `irm
+    https://github.com/jwh3times/causet/releases/latest/download/install.ps1 | iex`
+- **Or with npm:** `npm install -g --allow-scripts=@holland-vip/causet
+  @holland-vip/causet`, which installs the same executable from
+  `@holland-vip/causet-<platform>`.
   - npm 12 and later run no install script unless told to. Without the flag
     `cst` still works, through a Node.js launcher; `cst doctor` reports
     `"launcher": "node"` then.
-  - On any other platform the package runs the JavaScript CLI and says so.
+  - On any other platform the npm package runs the JavaScript CLI and says so.
 - **Output is unchanged.** Every command's human and JSON output is what
   v0.20.0 printed, apart from the fields ADR-0037 §5 names: `implementation`,
   `node` and `launcher` in `cst doctor`, the runtime description in
@@ -49,6 +41,21 @@ itself and needs no Node.js to run.
 
 What follows is the same work in the order it landed.
 
+- `cst` can be installed without npm or Node.js (#218; ADR-0038, amendment
+  of 2026-10-08, which makes this the primary way to install).
+  - **`install.sh` and `install.ps1`** ship as assets of each release. Each
+    downloads the release's archive for the host, refuses it unless its
+    SHA-256 is the one `SHA256SUMS` lists, checks that the executable reports
+    the release's version, and copies `cst` and a `vlab` alias into
+    `~/.local/bin` or `%LOCALAPPDATA%\Programs\causet`. No elevation, and no
+    change to `PATH`.
+  - **`--version`, `--prefix`, `--target` and `--from`** pin a release,
+    choose the directory, name a platform, and read the assets from a
+    directory.
+  - **Releases attest their archives and install scripts,** so
+    `gh attestation verify` can show where a download was built.
+  - **npm stays as the second way,** unchanged, and is the one that carries
+    the JavaScript CLI for a platform with no prebuilt executable.
 - The Rust CLI no longer chooses the JavaScript CLI for anything (#152). The
   two inputs it still handed over are answered natively: an option repeated
   under two spellings fails with the JavaScript parser's own `TypeError`
