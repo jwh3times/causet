@@ -380,8 +380,9 @@ Decided by the owner on 2026-09-28:
 ## Amendment 2026-10-08: GitHub releases become the primary install channel
 
 **Accepted by the owner on 2026-10-08**, as recorded at the end of this section. It takes effect
-with the release that delivers [#218](https://github.com/jwh3times/causet/issues/218); v0.21.0
-ships through npm as prepared.
+with the release that delivers [#218](https://github.com/jwh3times/causet/issues/218). That
+release is v0.21.0: #218 landed the same day, and the owner moved the release candidate forward
+to include it.
 
 ### What changed since 2026-09-27
 
@@ -438,8 +439,7 @@ ships through npm as prepared.
 
 - The names (§4), the platform matrix and its qualification rule (§3), and lockstep versioning
   with a refusal on mismatch (§6).
-- v0.21.0, which ships through npm as prepared. This amendment takes effect with the release
-  that delivers #218.
+- The npm package set of v0.21.0, which is published as prepared, beside the scripts.
 - `cst doctor`'s `launcher` field: `null` for an executable installed either way, `"node"` for
   the launcher.
 
