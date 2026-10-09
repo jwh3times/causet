@@ -51,7 +51,8 @@ which the Rust comparisons need and skip without.
   reference stays the local procedure on the wiki's Performance testing page.
 - `.github/workflows/release.yml` builds the `cst` executable per platform,
   packs the ADR-0038 package set with `scripts/pack-release.mjs`, and installs
-  it on each runner. Pull requests touching the packaging and manual dispatch
+  it on each runner, by npm and by `scripts/install.sh` or
+  `scripts/install.ps1`. Pull requests touching the packaging and manual dispatch
   are dry runs; a `v*` tag drafts the GitHub release and, when the repository
   variable `NPM_PUBLISH` is `true`, publishes to npm. See "Release packaging"
   in `docs/testing.md`.

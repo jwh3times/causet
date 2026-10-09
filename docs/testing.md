@@ -987,13 +987,27 @@ ways, and runs the release gate's smoke sequence through the installed
 command with only Git on `PATH`. With `CAUSET_RELEASE_SET=<directory>` it
 installs tarballs already packed there instead.
 
+The primary way to install is not npm but an install script over the same
+release's assets (ADR-0038, amendment of 2026-10-08): `scripts/install.sh`
+and `scripts/install.ps1`. Each reads `SHA256SUMS`, picks the host's archive,
+refuses one whose digest is not the listed one, checks that the executable
+reports the release's version, and copies `cst` and a `vlab` alias into a
+user-writable prefix. `--from <directory>` points a script at assets on disk
+instead of a release URL, which is how `test/install-script.test.js` runs it:
+with the script's own tools and Git on `PATH` and no Node.js, followed by the
+same smoke sequence through the installed executable
+(`test-support/installed-smoke.js`).
+
 `.github/workflows/release.yml` builds the executable on a Windows and a Linux
-runner, packs the set, and runs that test against it on each. A pull request
-that touches the packaging and a manual dispatch stop there. A `v*` tag also
-drafts a GitHub release with one archive per platform, the npm tarballs and
-`SHA256SUMS`, and publishes to npm through trusted publishing when the
-repository variable `NPM_PUBLISH` is `true`. Each package's first publish is
-manual, from the run's artifacts (#139).
+runner, packs the npm set, adds the two install scripts to the assets and to
+`SHA256SUMS`, and runs both tests against that set on each runner. A pull
+request that touches the packaging and a manual dispatch stop there. A `v*`
+tag also attests the archives and the scripts
+(`gh attestation verify <file> --repo jwh3times/causet`), drafts a GitHub
+release with them, the npm tarballs and `SHA256SUMS`, and publishes to npm
+through trusted publishing when the repository variable `NPM_PUBLISH` is
+`true`. Each package's first publish is manual, from the run's artifacts
+(#139).
 
 ## Continuous integration
 
