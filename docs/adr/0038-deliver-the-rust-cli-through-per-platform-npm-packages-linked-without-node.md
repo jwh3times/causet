@@ -1,6 +1,6 @@
 # ADR-0038: Deliver the Rust CLI through per-platform npm packages, linked without Node
 
-- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name); a third amendment is **proposed** 2026-10-08 (primary install channel) and not yet decided
+- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name) and 2026-10-08 (primary install channel)
 - **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers
@@ -377,11 +377,11 @@ Decided by the owner on 2026-09-28:
 - **Released as v0.19.1.** v0.19.0 was tagged with the name `causet` and was never published.
   Publishing it under another name would have made the published package differ from its tag.
 
-## Proposed amendment 2026-10-08: GitHub releases become the primary install channel
+## Amendment 2026-10-08: GitHub releases become the primary install channel
 
-**Status: proposed. The owner has not decided this.** Nothing below is in force until an owner
-decision is recorded at the end of this section. Implementation is
-[#218](https://github.com/jwh3times/causet/issues/218), which waits on that decision.
+**Accepted by the owner on 2026-10-08**, as recorded at the end of this section. It takes effect
+with the release that delivers [#218](https://github.com/jwh3times/causet/issues/218); v0.21.0
+ships through npm as prepared.
 
 ### What changed since 2026-09-27
 
@@ -405,7 +405,7 @@ decision is recorded at the end of this section. Implementation is
 4. **The other channel already exists.** §7 has every release attach one archive per platform and
    `SHA256SUMS`, and `.github/workflows/release.yml` builds them (#150).
 
-### Proposed decision
+### Decision
 
 1. **The primary way to install `cst` is an install script over the GitHub release assets.**
    - `install.sh` (Linux, and macOS once built) and `install.ps1` (Windows) download the host's
@@ -438,8 +438,8 @@ decision is recorded at the end of this section. Implementation is
 
 - The names (§4), the platform matrix and its qualification rule (§3), and lockstep versioning
   with a refusal on mismatch (§6).
-- v0.21.0, which ships through npm as prepared. This amendment, if accepted, takes effect with
-  the release that delivers #218.
+- v0.21.0, which ships through npm as prepared. This amendment takes effect with the release
+  that delivers #218.
 - `cst doctor`'s `launcher` field: `null` for an executable installed either way, `"node"` for
   the launcher.
 
@@ -462,7 +462,7 @@ decision is recorded at the end of this section. Implementation is
 - **Windows SmartScreen.** A downloaded `.exe` is treated with more suspicion than one npm
   unpacked. §5 defers Authenticode signing "until friction is observed"; this channel makes that
   friction likely at the first release that uses it. Signing is a certificate with a recurring
-  cost and a human action.
+  cost and a human action, and stays deferred (owner decision 4 below).
 - **Upgrades are the user's to run.** npm has `npm update`; a script install is re-run. `cst`
   gains no self-update under this amendment.
 
@@ -485,7 +485,7 @@ decision is recorded at the end of this section. Implementation is
   does not control, and neither covers Linux distributions. They are added in decision 4, not
   relied on.
 
-### What the owner must decide
+### What the owner was asked to decide
 
 1. **The primary channel:** install scripts over the GitHub release assets, with npm second
    (decisions 1 and 2), or npm alone with the flag documented.
@@ -493,6 +493,14 @@ decision is recorded at the end of this section. Implementation is
 3. **The reworded constraint** (decision 5).
 4. **Whether Windows signing should be decided now** or left to §5's "on observed friction".
 
-### Owner decision
+### Owner decision (2026-10-08)
 
-Not yet recorded.
+The owner accepted all four:
+
+1. **Install scripts over the GitHub release assets are the primary channel,** and npm is the
+   second, with its package set unchanged.
+2. **Release archives are attested.**
+3. **The constraint is reworded:** an npm install never downloads or compiles anything outside
+   npm's own resolution.
+4. **Windows signing is left until friction is observed,** as §5 already says. The package
+   managers of decision 4 follow as their own issues.
