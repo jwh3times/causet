@@ -122,6 +122,11 @@ README, changelog, or durable docs when contracts change. Screenshots are
 normally unnecessary for this CLI; include focused terminal output when it
 clarifies behavior.
 
+`main` and the `v*` release tags are protected by repository rulesets, and
+squash and rebase merging are off; land only with `cst merge --compact` and
+never force-push `main` or move a release tag. See "Repository rules" in
+`docs/testing.md`.
+
 ## Work Tracking
 
 GitHub is the only tracker. Future work is issues on the
