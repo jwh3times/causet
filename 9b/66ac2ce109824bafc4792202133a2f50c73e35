@@ -1,0 +1,29 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv17jpy2b5137eb5faff",
+      "mode": "compact",
+      "sourceRef": "feat/end-migration-window",
+      "sourceHead": "69561aa6af297f293b9194d2c0f81630364552c1",
+      "sourceSubject": "fix: migrate the perf harness's real-clone fixture",
+      "targetBefore": "9529c0ddda2fa05ad7afdc858fa474433d9b9654",
+      "landingCommit": "9b66ac2ce109824bafc4792202133a2f50c73e35",
+      "base": "9529c0ddda2fa05ad7afdc858fa474433d9b9654",
+      "absorbedCommits": [
+        "8572d7d429f348074174c123973ffae07e8b367f",
+        "5d6bef84ec15a528317203cdc49de1d8d4493e43",
+        "69561aa6af297f293b9194d2c0f81630364552c1"
+      ],
+      "absorbedChanges": [
+        "ch_0mv14qk2oedbf07d445bf",
+        "ch_0mv14qpey51a2ce7eaf9b",
+        "ch_0mv166hh8015b2f34978b"
+      ],
+      "resultTree": "3a4693772e2dc16a00c6401ae8d71e2226c76a1a",
+      "createdAt": "2026-10-09T16:56:46.108Z"
+    }
+  ]
+}
