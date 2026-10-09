@@ -931,6 +931,43 @@ require focused disposable-repository coverage in addition to this general
 gate. Release qualification does not establish production readiness, security
 review, service-level objectives, or broad platform performance.
 
+## Repository rules
+
+`jwh3times/causet` carries four rulesets and one merge setting, set on
+2026-10-09. They live in the repository's settings, not in the tree, so this
+is the record of what they are and why:
+
+| Ruleset | Applies to | Rule | Bypass |
+| --- | --- | --- | --- |
+| main: history is never rewritten or deleted | `main` | No force push, no deletion | None |
+| main: changes arrive by pull request with static checks | `main` | A pull request, and a passing `static checks` job | Repository admins |
+| release tags are immutable | `v*` tags | No deletion, no update | None |
+| release tags are created by maintainers | `v*` tags | Creation restricted | Repository admins |
+
+- **Admins bypass the pull-request rule because of how this project lands.**
+  `cst merge --compact` makes a new two-parent landing commit locally and
+  pushes it to `main`. No CI run has seen that commit, so a rule without the
+  bypass would reject every landing. Its tree is checked against the reviewed
+  branch's before the push instead (see the landing procedure on the wiki).
+- **Only `static checks` is required.** The suite jobs do not run for a
+  documentation-only pull request, and a required check that never runs
+  blocks forever.
+- **Linear history is not required:** a compact landing is a merge commit.
+- **A release tag cannot be moved or deleted, by anyone.** A `v*` tag starts
+  the release workflow. To correct a tag placed on the wrong commit before
+  anything was published, an admin disables "release tags are immutable" in
+  the repository settings, fixes the tag, and enables it again.
+- **Squash and rebase merging are turned off.** Either, from the GitHub UI,
+  would put a commit on `main` with no landing receipt and no carried
+  provenance. Merge commits stay enabled because GitHub requires one method.
+- **The causal refs are not covered.** Rulesets apply to branches and tags
+  only, so `refs/notes/causet` and `refs/causet/*` rely on being pushed
+  fast-forward, and atomically with `main`.
+
+To read them: `gh api repos/jwh3times/causet/rulesets`, and
+`gh api repos/jwh3times/causet/rules/branches/main` for what applies to
+`main`.
+
 ## Release packaging
 
 `scripts/pack-release.mjs` assembles what a release publishes (ADR-0038): one
