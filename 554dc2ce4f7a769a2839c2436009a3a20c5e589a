@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv0ij0xl3aad00a80209",
+      "mode": "compact",
+      "sourceRef": "jwh3times/release-gates-in-ci",
+      "sourceHead": "0e09ab636afd44ffd3986b07a3d7cd4427cfaec9",
+      "sourceSubject": "docs: make every release gate a hosted-runner check",
+      "targetBefore": "8cd4ae1fcc1facfc30908c1f1b27f23e2936aca2",
+      "landingCommit": "554dc2ce4f7a769a2839c2436009a3a20c5e589a",
+      "base": "8cd4ae1fcc1facfc30908c1f1b27f23e2936aca2",
+      "absorbedCommits": [
+        "2938237d710736d827ddb68175d860073f1d7ea6",
+        "0e09ab636afd44ffd3986b07a3d7cd4427cfaec9"
+      ],
+      "absorbedChanges": [
+        "ch_0mv0gy4mna546c4f90c75",
+        "ch_0mv0h4j9fcad59a2916b3"
+      ],
+      "resultTree": "aff8d5f1e2bfda1783ec401b4e1938509251fe1d",
+      "createdAt": "2026-10-09T05:16:23.292Z"
+    }
+  ]
+}
