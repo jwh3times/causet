@@ -1293,8 +1293,8 @@ Unknown, unselected, or hardware/settings-mismatched hosts **skip latency**.
 Compatible historical OS entries can still check deterministic counts when no
 engine/session overrides are set; forecast semantic checks always run. JSON
 reports `latencySkipped` and `reference`: `passed: true` with
-`latencySkipped: true` is only a deterministic pass and **does not qualify host
-latency for release**.
+`latencySkipped: true` is a deterministic pass, which is what the release gate
+asks for, and says nothing about latency.
 
 To establish a baseline, or refresh it after a reviewed performance change, run
 these commands deliberately on the actual quiet qualification machine:
@@ -1316,10 +1316,10 @@ for label syntax, provenance matching, and migration rules, or the
 [wiki walkthrough](https://github.com/jwh3times/causet/wiki/Benchmark-host-baselines).
 The identified Windows baseline is `hosts.lab-windows-a`, established in
 [issue #22](https://github.com/jwh3times/causet/issues/22). Use that label only
-on its matching machine. Current releases qualify latency on this Windows
-machine only, as selected for
-[issue #68](https://github.com/jwh3times/causet/issues/68). Linux latency remains
-unqualified; functional support and Windows/POSIX release testing continue.
+on its matching machine. Latency on an identified machine is evidence for
+performance work. It does not gate a release: every release gate runs on
+GitHub-hosted runners, and the benchmark's part in them is the deterministic
+counts, compared with the `github-<runner>` entries.
 Real-repository, multi-host evidence and budget ratification remain in
 [issue #42](https://github.com/jwh3times/causet/issues/42).
 
