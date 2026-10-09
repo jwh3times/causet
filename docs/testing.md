@@ -828,7 +828,8 @@ Forecast semantic equality checks always run. With no compatible reference, all
 baseline comparisons are skipped.
 Human output explains the scope; JSON reports `latencySkipped` and `reference`,
 and skipped latency findings have no baseline or limit. `passed: true` on a
-deterministic-only check does **not** qualify host latency for release.
+deterministic-only check is what release gate 10 asks for. It says nothing
+about latency on any machine.
 
 The baseline is the one committed measurement artifact, permitted because the
 check consumes it. Reading v2 data migrates its shape in memory only; recording
@@ -844,92 +845,74 @@ npm run benchmark:record -- --host lab-linux-a
 npm run test:benchmark -- --host lab-linux-a
 ```
 
-Establish identified baselines on the actual qualification machines before using
-latency evidence for release gates; historical entries alone are insufficient.
-The identified Windows baseline is `hosts.lab-windows-a`, established in
-[issue #22](https://github.com/jwh3times/causet/issues/22). Its latency limits
-apply only to matching hardware and benchmark settings. The `lab-linux-a`
-commands above illustrate recording a new machine; no identified Linux entry
-currently exists. Current releases qualify latency on Windows only, using
-`lab-windows-a`, as selected for
-[issue #68](https://github.com/jwh3times/causet/issues/68). Adding Linux latency
-qualification requires a reviewed baseline recorded on a real, quiet, identified
-Linux machine and a passing matching-host check. Shared hosted runners and Linux
-containers on the Windows host cannot supply that qualification. Real-repository,
-multi-host evidence and budget ratification remain in
+The baseline holds two kinds of identified entry:
+
+- **`github-<runner label>`** (`github-ubuntu-latest`, `github-windows-latest`),
+  recorded on a GitHub-hosted runner by `.github/workflows/release-gates.yml`.
+  Release gate 10 compares deterministic counts with these. Their latency
+  figures are never used: nothing selects such a host by label.
+  - To refresh one after a reviewed change, delete its entry in a pull
+    request. The workflow then records a new one on that runner and uploads
+    `benchmarks/baseline.json` as an artifact; review the diff and commit it
+    with the reason the counts changed.
+- **A machine someone owns,** such as `hosts.lab-windows-a`
+  ([issue #22](https://github.com/jwh3times/causet/issues/22)). Its latency
+  limits apply only to matching hardware and settings, and only when that
+  label is passed. This is evidence for performance work, not a release gate.
+
+Real-repository, multi-host evidence and budget ratification remain in
 [issue #42](https://github.com/jwh3times/causet/issues/42).
-
-Name the host anyway whenever you can. Without one the check is
-deterministic-only, and `passed: true` from such a run does not qualify host
-latency for a release.
-
-## Static checks
-
-Before merging a documentation or source change:
-
-```bash
-git diff --check
-npm run test:docs
-npm run sync:agents:check
-node --check src/cli.js
-node --test
-```
-
-For broad JavaScript changes, run `node --check` over every tracked JavaScript
-file under `src`, `bin`, `scripts`, and `test`. `npm run test:docs` verifies
-local Markdown link targets. New or changed formal requirement IDs must remain
-unique and every reference must resolve to a definition.
-
-## Repository-machinery suites
-
-Seven suites check the repository's own machinery rather than `cst` behavior.
-They are cheap, they run in every mode with the rest, and they are listed here
-because a suite no document names is a suite nobody maintains.
-
-| Suite | What it fails on |
-| --- | --- |
-| `test/native-engine.test.js` | The optional binding disagreeing with Git, or a build that loads but answers differently. It skips when no prebuild is present, so a green run does not by itself mean the binding was exercised — `CAUSET_ENGINE=native` is what proves that. |
-| `test/benchmark-host.test.js` | The baseline file's schema, host keying, reference selection, and the v2 migration. It reads the committed `legacyHosts` as fixture material, which is why a baseline re-record must touch `hosts.<label>` and nothing else. |
-| `test/scale-benchmark-analysis.test.js` | The repository-scale benchmark's own arithmetic — per-entity amplification and the phase summary — without running the benchmark. |
-| `test/ci-plan.test.js` | The change classifier in `scripts/ci-plan.mjs` choosing the wrong job set, which is how a documentation-only change would silently skip a suite it needed. |
-| `test/doc-links.test.js` | A local Markdown link with no target. The same check `npm run test:docs` runs, wired into the suite so a broken link fails a plain `npm test`. |
-| `scripts/sync-agents.test.mjs` | The mirror generator (`scripts/sync-agents.mjs`, shared verbatim with other repositories) misreading frontmatter, mis-rendering a Codex agent, altering a copied skill asset, or mishandling missing, orphaned, and symlinked entries — exercised on disposable fixtures. Drift in this checkout is what `npm run sync:agents:check` catches. |
-| `test/handoff-map.test.js` | The cross-machine handoff map's read/write discipline in `scripts/handoff-map.mjs` — that an entry is consumed once and cleared. |
 
 ## Release gate
 
+**Every gate runs on GitHub-hosted runners, against the release commit.**
+Nothing that can only run on a maintainer's own machine gates a release (owner
+decision, 2026-10-09): a gate has to be something anyone can re-run and audit
+from the repository. Three manually dispatched workflows on the candidate
+commit cover the list, and a routine PR or `main` run does not stand in for
+them:
+
+| Workflow | Dispatch | Gates |
+| --- | --- | --- |
+| `ci.yml` | `gh workflow run ci.yml --ref <branch>` | 1, 2, 3, 6, 7, 8 |
+| `release-gates.yml` | `gh workflow run release-gates.yml --ref <branch>` | 4, 5, 10 |
+| `release.yml` | `gh workflow run release.yml --ref <branch>` | 9, and 8 again on the tag |
+
 A release candidate is eligible only when:
 
-1. the source checkout begins and ends clean at the same candidate commit;
+1. every run below is on the same candidate commit, checked out clean by the
+   runner;
 2. every file in the checkout is text Git will diff — no file contains a NUL
    byte and none is hidden from review by a `binary` attribute;
 3. the integration suite passes in ordinary, session-on, session-off, both
-   forced forecast-engine, and native read-engine modes, on a Windows host
-   and a POSIX host — a green **manually dispatched full qualification** run
-   of the workflow below on the release commit satisfies this item; a routine
-   PR or main run does not;
-4. all maintained demos complete;
-5. metadata validation reports no unexpected errors;
+   forced forecast-engine, and native read-engine modes, on a Windows and a
+   Linux runner;
+4. all maintained demos complete, against the `cst` being released, on both
+   runners;
+5. `cst metadata validate` of this repository, with its causal refs fetched,
+   reports no errors;
 6. expected-failure cases leave protected refs and worktrees unchanged;
 7. no causet Node or Git process remains after completion;
-8. version constants, package metadata, changelog, and release tag agree; and
-9. the packed artifact passes an install and smoke test outside the source
-   checkout, and so does the package set of ADR-0038: a green
-   `.github/workflows/release.yml` run on the release commit installs the
-   main and platform packages on a Windows and a Linux runner and runs the
-   installed `cst` with Node absent from `PATH`; and
-10. `npm run test:benchmark -- --host lab-windows-a` passes on the matching
-    identified Windows qualification machine in `benchmarks/baseline.json`.
-    Current release latency qualification covers this machine only. Skipped
-    latency, deterministic-only passes, and historical OS entries do not
-    satisfy this gate.
+8. version constants, package metadata, changelog, and release tag agree;
+9. both ways of installing work outside the source checkout: the package set
+   of ADR-0038 and the install scripts each install on a Windows and a Linux
+   runner, and the installed `cst` runs with Node absent from `PATH`; and
+10. the deterministic benchmark check passes on both runners:
+    `npm run test:benchmark`, with no host named, against the committed
+    `github-<runner>` baseline entry. It compares process, record and
+    materialization counts, which are properties of the code, and the
+    forecast engines' semantic equality.
 
-The Windows-only latency scope selected for
-[issue #68](https://github.com/jwh3times/causet/issues/68) makes no Linux latency
-claim. Item 3 continues to require functional qualification on both Windows and
-POSIX. This scope does not satisfy the separate multi-host workload evidence and
-budget ratification requirements in
-[issue #42](https://github.com/jwh3times/causet/issues/42).
+**Latency is evidence, not a gate.** Absolute timings cannot travel between
+machines and a shared runner cannot measure them, so no gate depends on them.
+`npm run test:benchmark -- --host <label>` on a quiet, identified machine still
+compares latency with that machine's entry, and a regression there is worth an
+issue. It no longer blocks a release, and
+[issue #68](https://github.com/jwh3times/causet/issues/68)'s Windows-only
+latency qualification is superseded as a gate. The separate multi-host workload
+evidence and budget ratification in
+[issue #42](https://github.com/jwh3times/causet/issues/42) are investment
+gates, not release gates, and are unchanged.
 
 Item 2 is enforced by `test/repository-hygiene.test.js`, so item 3 already
 covers it; it is named separately because it is a property of the checkout

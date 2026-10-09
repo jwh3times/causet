@@ -56,6 +56,11 @@ which the Rust comparisons need and skip without.
   are dry runs; a `v*` tag drafts the GitHub release and, when the repository
   variable `NPM_PUBLISH` is `true`, publishes to npm. See "Release packaging"
   in `docs/testing.md`.
+- `.github/workflows/release-gates.yml` runs the release gates that are not
+  the suite or the package set (demos, this repository's metadata validation,
+  the deterministic benchmark check) on hosted Windows and Ubuntu runners.
+  Every release gate runs in GitHub Actions; never write one that needs a
+  maintainer's own machine. See "Release gate" in `docs/testing.md`.
 - `npm run test:benchmark` compares bounded benchmarks against the committed
   per-host baseline in `benchmarks/baseline.json`; `npm run benchmark:record -- --host <label>`
   refreshes an explicitly identified machine's entry on a quiet machine. Use the

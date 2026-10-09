@@ -13,6 +13,10 @@ ending a session. Examples include an owner decision, access to a real host,
 manual setup, credential configuration, validation on unavailable hardware, or
 user/workflow evidence required to qualify the delivered work. Do not invent
 human approval gates for work the agent can complete under existing authority.
+A release gate is never one of these: every release gate runs on GitHub-hosted
+runners (`docs/testing.md`, "Release gate"), so a release never waits on a
+maintainer's own machine. What a release still needs from a person is an
+account or a decision, such as an npm publish.
 
 ## Use the established destinations
 

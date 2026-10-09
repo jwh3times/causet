@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Every release gate now runs on GitHub-hosted runners (owner decision,
+  2026-10-09; ADR-0017 amended). Nothing that needs a maintainer's own machine
+  gates a release.
+  - **`.github/workflows/release-gates.yml`** runs the demos, this
+    repository's metadata validation, and the deterministic benchmark check on
+    a Windows and a Linux runner, against the `cst` being released.
+  - **Release gate 10 is the deterministic benchmark check,** compared with
+    `github-<runner>` baseline entries recorded on those runners. Latency on an
+    identified machine such as `lab-windows-a` is evidence and no longer a
+    gate, which supersedes #68 for releases.
 ## 0.21.0
 
 **`cst` is now a native executable.** This release is the cutover of

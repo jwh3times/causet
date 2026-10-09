@@ -469,7 +469,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 | NFR-PERF-03 | Performance reports shall include process count and semantic equality, not wall time alone. |
 | NFR-PERF-04 | The prototype shall avoid a resident service until measured use cases justify lifecycle, locking, and security complexity. |
 | NFR-PERF-05 | No fixed production scale claim is made until representative large-repository fixtures and targets are ratified. |
-| NFR-PERF-06 | Per-invocation latency budgets for agent loops shall be measured on explicitly identified hosts by the benchmark suite; skipped latency or a deterministic-only pass does not qualify a host (see `docs/testing.md`); once a baseline is committed with the automated regression check that consumes it (`docs/README.md`), a regression against it blocks a release. |
+| NFR-PERF-06 | Per-invocation latency budgets for agent loops shall be measured on explicitly identified hosts by the benchmark suite; skipped latency or a deterministic-only pass does not qualify a host's latency (see `docs/testing.md`). A regression in the deterministic counts against the committed hosted-runner baseline blocks a release; a latency regression on an identified machine is evidence for an issue and, since 2026-10-09, does not. |
 | NFR-PERF-07 | Storage efficiency shall be measured as bytes on disk and bytes transferred for repository content and causal metadata, compared against plain Git and any named alternative on the same fixture. |
 
 ### 10.4 Durability and recoverability
@@ -685,15 +685,12 @@ A release is eligible when:
 8. New automated decisions identify their proof/confidence and approval model.
 9. Documentation links resolve, and every issue the release closed is closed
    with the commit or tag that delivered it.
-10. `npm run test:benchmark -- --host lab-windows-a` passes on the matching
-    identified Windows qualification machine in `benchmarks/baseline.json`.
-    Current release latency qualification is Windows-only and covers this
-    machine only; Linux latency remains unqualified. Skipped latency,
-    deterministic-only passes, and historical OS entries do not satisfy this
-    gate. Functional Windows/POSIX qualification and the separate multi-host
-    investment gates remain required. See the
-    [testing guide](testing.md#benchmark-regression-check) for the evidence
-    needed to add Linux latency qualification.
+10. The deterministic benchmark check passes on a Windows and a Linux
+    GitHub-hosted runner, against the committed `github-<runner>` baseline
+    entries. Latency on an identified machine is evidence, not a gate: no
+    release gate may depend on a machine a maintainer owns (owner decision,
+    2026-10-09). The separate multi-host investment gates remain. See the
+    [testing guide](testing.md#release-gate).
 
 Production-readiness requires additional threat modeling, fuzzing, crash/fault
 injection, remote interoperability, performance targets, and a support policy.

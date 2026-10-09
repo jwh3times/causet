@@ -246,6 +246,33 @@ process tolerances are unchanged. Establishing measured identities on the actual
 qualification machines remains evidence work under issues #22 and #42; this
 amendment does not infer which machine produced the old Linux or Windows data.
 
+## Hosted-runner amendment (2026-10-09)
+
+**Owner decision.** A release gate has to run on GitHub-hosted runners or
+somewhere equally isolated from a maintainer's own machines. The identified-host
+amendment above made one machine, `lab-windows-a`, a release gate for latency;
+v0.21.0 shipped with that gate open, because only its owner could run it.
+
+- **The gate is the deterministic part of this check, on hosted runners.**
+  `.github/workflows/release-gates.yml` runs `npm run test:benchmark` with no
+  host named on a Windows and a Linux runner. Process, record and
+  materialization counts and the forecast engines' semantic equality compare
+  with a committed `github-<runner label>` entry.
+- **Those entries are recorded on the runners themselves,** by the same
+  workflow when an entry is absent, and committed after review. They are
+  identified entries like any other, so the rule that an unselected host
+  compares with the most recent identified entry for its platform sends a
+  hosted run to them. Their latency figures are never used.
+- **Latency on an identified machine stops gating.** It remains what this ADR
+  set out to make possible: a comparison that means something on the machine
+  it was recorded on. A regression there is evidence for an issue.
+- **What does not change:** the baseline shape, the tolerances, the refusal to
+  borrow latency across machines, and the rule that a re-record is deliberate
+  and carries its reason.
+
+This supersedes, as a release gate only, the Windows-only latency
+qualification of [#68](https://github.com/jwh3times/causet/issues/68).
+
 ## Consequences
 
 ### Positive
