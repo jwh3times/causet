@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv07eiafebdb96dddf58",
+      "mode": "compact",
+      "sourceRef": "jwh3times/adr-0038-install-channel",
+      "sourceHead": "617bcad43cf5a81d0842c7bd156e6614f5ddd3e5",
+      "sourceSubject": "docs: record the owner's acceptance of the install-channel amendment",
+      "targetBefore": "2510b81426cac3b34965fa8b534ad451b6582c0a",
+      "landingCommit": "4c19033e7d85a9c837a6bfa63b1c89aeab6b7450",
+      "base": "2510b81426cac3b34965fa8b534ad451b6582c0a",
+      "absorbedCommits": [
+        "d28d9fa59280360c238a553f8e34ddf829a6f4ca",
+        "617bcad43cf5a81d0842c7bd156e6614f5ddd3e5"
+      ],
+      "absorbedChanges": [
+        "ch_0mv077g7f9974bdce094d",
+        "ch_0mv07dh4jd6f404545335"
+      ],
+      "resultTree": "6a438563acf2bf25b3afd6defff470a31866d4f5",
+      "createdAt": "2026-10-09T00:04:56.731Z"
+    }
+  ]
+}
