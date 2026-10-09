@@ -247,9 +247,13 @@ function buildReal(dir, options) {
   git(dir, "switch", "-q", "--detach", options.realRev);
   git(dir, "update-ref", "refs/notes/vcs-lab", options.realNotes);
   git(dir, "remote", "remove", "origin");
+  // The migration window has ended (ADR-0039 §8, #170): this checkout's CLI
+  // refuses the clone until it is migrated. The former refs stay in place, so
+  // an older build named with --impl still reads the same data under them.
+  run(options.impls[0].command[0], [...options.impls[0].command.slice(1), "migrate"], dir);
   return {
     name: "real", path: dir,
-    description: `--no-local clone of this repository at ${options.realRev} with refs/notes/vcs-lab pinned to ${options.realNotes} and refs/vcs-lab/* from the source`,
+    description: `--no-local clone of this repository at ${options.realRev} with refs/notes/vcs-lab pinned to ${options.realNotes} and refs/vcs-lab/* from the source, then moved to the causet names with cst migrate`,
     head: git(dir, "rev-parse", "HEAD"), notes: git(dir, "rev-parse", "refs/notes/vcs-lab"),
     vlabRefs: git(dir, "for-each-ref", "--format=%(refname) %(objectname)", "refs/vcs-lab/"),
     commits: Number(git(dir, "rev-list", "--count", "HEAD")),
