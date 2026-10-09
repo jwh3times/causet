@@ -11,7 +11,7 @@ use std::io::Write as _;
 /// spelling, as Git reports it, so paths related to the repository root
 /// compare equal. A directory that cannot be resolved is left for the first
 /// Git call to report.
-fn canonical_working_directory() -> String {
+pub fn canonical_working_directory() -> String {
   let current = std::env::current_dir().unwrap_or_default();
   if let Ok(real) = std::fs::canonicalize(&current) {
     let text = real.to_string_lossy().into_owned();
@@ -40,7 +40,7 @@ pub fn print(value: &Value) {
 
 /// The failure as `bin/vlab.js` reports it: an envelope on stdout under
 /// `--json`, prose on stderr otherwise.
-fn report(error: &GitError, json: bool) -> i32 {
+pub fn report(error: &GitError, json: bool) -> i32 {
   if json {
     let envelope = if !causet_model::errors::is_published_code(error.code) {
       // A JavaScript `TypeError` (no code) or a Node error (its own code)
@@ -548,11 +548,16 @@ Causal edges
   }
 }
 
-/// Run a ported command and return its exit code.
-pub fn run(command: &str, parsed: &Parsed, settings: &[(&str, String)]) -> i32 {
+/// Select the variables a command's global flags name, for this process.
+pub fn select(settings: &[(&str, String)]) {
   for (name, value) in settings {
     environment::set(name, value);
   }
+}
+
+/// Run a ported command and return its exit code.
+pub fn run(command: &str, parsed: &Parsed, settings: &[(&str, String)]) -> i32 {
+  select(settings);
   let cwd = canonical_working_directory();
   match answer(command, parsed, &cwd) {
     Ok((value, code)) => {

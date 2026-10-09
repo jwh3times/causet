@@ -6,7 +6,7 @@
 use crate::migration::migration_state;
 use crate::parsed::Parsed;
 use causet_engine::errors::{GitError, GitResult};
-use causet_engine::locations::names;
+use causet_engine::locations::{CURRENT_NAMES, names};
 use causet_engine::metrics;
 use causet_engine::process::{RunOptions, run_git};
 use causet_engine::session::{enabled as session_enabled, with_object_session};
@@ -140,18 +140,9 @@ pub fn doctor(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
       .map_or(Value::Null, |launcher| string(&launcher)),
   );
   report.set("repository", string(&context.root));
-  report.set("notesRef", string(names(&context.root)?.notes_ref));
+  report.set("notesRef", string(CURRENT_NAMES.notes_ref));
   report.set("engine", engine::describe_read_engines()?);
   report.set("forecastEngine", string(&engine::forecast_engine()?));
-  report.set(
-    "legacyEnvironment",
-    Value::Array(
-      environment::legacy_variables_in_use()
-        .iter()
-        .map(|name| string(name))
-        .collect(),
-    ),
-  );
   report.set("migration", string(migration_state(&context.root)?));
   if parsed.truthy("differential") {
     report.set(

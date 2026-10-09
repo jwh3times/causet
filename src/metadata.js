@@ -20,7 +20,7 @@ import {
   quarantineRefs,
   readDispositions,
 } from "./quarantine.js";
-import { localRef, names, refFamily, repositoryNames, runtimeDirectory } from "./locations.js";
+import { localRef, names, refFamily, runtimeDirectory } from "./locations.js";
 import { advancedLegacyRefs } from "./migration.js";
 import {
   METADATA_LINEAGE_ALGORITHM,
@@ -897,18 +897,11 @@ function takeSnapshot(context, options) {
 }
 
 /**
- * Which names the repository uses (ADR-0039 §3). An unmigrated repository is
- * reported, not faulted, during the migration window; a former ref that moved
- * after migration is a warning, because a peer on an older build may still be
- * publishing to it and nothing reads it any more.
+ * A former ref that moved after migration is a warning, because a peer on an
+ * older build may still be publishing to it and nothing reads it any more
+ * (ADR-0039 §3). An unmigrated repository never gets this far: it is refused.
  */
 function inspectMigration(context, diagnostics) {
-  const { state } = repositoryNames(context.root);
-  if (state === "unmigrated") {
-    addDiagnostic(diagnostics, "unmigrated-repository", "info", "repository", context.root,
-      "This repository keeps its metadata under the names used before causet (refs/notes/vcs-lab, refs/vcs-lab/*). " +
-        "Run cst migrate --dry-run to see the move, then cst migrate.");
-  }
   for (const entry of advancedLegacyRefs(context.root)) {
     addDiagnostic(diagnostics, "legacy-ref-advanced", "warning", "repository", entry.ref,
       `The former ref ${entry.ref} is at ${entry.oid}, which cst migrate did not record; a build older than causet may still publish to it. ` +

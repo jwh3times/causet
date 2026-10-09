@@ -774,6 +774,7 @@ function revisionStageFromObjects(file, revision, sourceObject, manifestObject) 
 function revisionStages(file, revisions, cwd) {
   // A revision committed before a migration keeps its manifest under the former
   // directory, so both are read in the same batch and the current one wins.
+  // History is permanent, so this read outlives the migration window (ADR-0039 §8).
   const expressions = revisions.flatMap((revision) => [
     `${revision}:${file}`,
     `${revision}:${CURRENT_NAMES.specsDir}/${file}.json`,

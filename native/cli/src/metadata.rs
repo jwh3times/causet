@@ -10,7 +10,7 @@ use crate::records::short;
 use crate::store::read_json;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::locations::{
-  family_remainder, local_ref, names, ref_family, repository_names, runtime_directory,
+  family_remainder, local_ref, names, ref_family, runtime_directory,
 };
 use causet_engine::session::with_object_session;
 use causet_engine::types::{ObjectRecord, RefEntry, RepoContext};
@@ -1443,16 +1443,6 @@ fn inspect_private_state(context: &RepoContext, diagnostics: &mut Diagnostics) -
 
 /// `inspectMigration(context, diagnostics)`.
 fn inspect_migration(context: &RepoContext, diagnostics: &mut Diagnostics) -> GitResult<()> {
-  if repository_names(&context.root)?.state == "unmigrated" {
-    diagnostics.add(
-      "unmigrated-repository",
-      "info",
-      "repository",
-      string(&context.root),
-      "This repository keeps its metadata under the names used before causet (refs/notes/vcs-lab, refs/vcs-lab/*). Run cst migrate --dry-run to see the move, then cst migrate.",
-      Vec::new(),
-    );
-  }
   for entry in advanced_legacy_refs(&context.root)? {
     diagnostics.add(
       "legacy-ref-advanced",

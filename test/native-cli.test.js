@@ -127,8 +127,8 @@ test("global flag and environment failures are answered natively as prose", { sk
   assertSame(["help"], { CAUSET_FORECAST_ENGINE: "bogus", CAUSET_ENGINE: "bogus" });
   assertSame(["--engine=git", "version"], { CAUSET_ENGINE: "bogus" });
   assertSame(["--forecast-engine=merge-tree", "x"], { CAUSET_FORECAST_ENGINE: "bogus" });
-  // The former names are read when the new ones are absent, and lose when both are set
-  // (ADR-0039 §5). `undefined` removes the neutral value from the spawned environment.
+  // The former names are ignored by both, set alone or beside the new ones
+  // (ADR-0039 §8). `undefined` removes the neutral value from the spawned environment.
   const unset = { CAUSET_ENGINE: undefined, CAUSET_FORECAST_ENGINE: undefined };
   assertSame(["version"], { ...unset, VLAB_ENGINE: "bogus" });
   assertSame(["version"], { ...unset, VLAB_FORECAST_ENGINE: "bogus" });
@@ -2891,7 +2891,18 @@ test("migrate moves a v0.19.1 repository natively, and either CLI finishes what 
       steps: [[A, "migrate"], advance("refs/notes/vcs-lab"), advance("refs/notes/causet"), [B, "migrate", "--dry-run", "--json"], [B, "migrate"]],
       outcome: /"action": "conflict"[^]*will not choose between them/,
     },
-    { kind: "journal", steps: [[A, "migrate", "--dry-run"], [A, "migrate", "--json"]], outcome: /refused {6}A rebase operation is in progress[^]*"code": "operation-in-progress"/ },
+    // The window has ended (#170): until `migrate` runs, both refuse everything
+    // else before the command's own checks, in prose and as an envelope.
+    {
+      kind: "plain",
+      steps: [
+        [A, "metadata", "status", "--json"], [A, "receipts"], [A, "init"], [A, "commit", "-m", "refused", "--allow-empty"],
+        [A, "commit"], [A, "no-such-command", "--json"], [A, "--engine=native", "graph"], [A, "version"],
+        ["js", "doctor", "--json"], [B, "migrate"], [A, "metadata", "status"],
+      ],
+      outcome: /"code": "unmigrated-repository"[^]*which this build no longer reads\.\nRun cst migrate --dry-run[^]*"migration": "unmigrated"[^]*Migrated metadata/,
+    },
+    { kind: "journal", steps: [[A, "migrate", "--dry-run"], [A, "migrate", "--json"]], outcome: /refused {6}A rebase operation is in progress[^]*using the build that started it[^]*"code": "operation-in-progress"/ },
     { kind: "transient", steps: [[A, "migrate", "--dry-run", "--json"], [A, "migrate"]], outcome: /belongs to an unfinished operation/ },
   ];
   const settled = (repo) => {

@@ -90,6 +90,7 @@ code is a defect, not a category.
 | `git-operation-active` | Git itself has a replay or sequencer operation in progress. Resolve it before continuing. |
 | `out-of-band-change` | Git's state and the VCS Lab journal disagree, because Git was driven directly. Abort and restart the operation. |
 | `repository-mismatch` | The named path or object belongs to a different repository or workspace than the one in use. |
+| `unmigrated-repository` | The repository keeps its metadata under the names used before causet, which this build no longer reads. Run cst migrate; it deletes nothing. |
 
 ### Staleness: pinned inputs moved
 

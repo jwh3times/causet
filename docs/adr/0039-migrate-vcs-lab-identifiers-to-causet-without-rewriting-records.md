@@ -322,3 +322,41 @@ The owner accepted all eight decisions as written.
   - `docs/identity/` and `docs/canonical-json/`, for profile labels;
   - the wiki procedure for the origin migration and the repository rename, which are owner
     steps.
+
+## The window ended (issue #170)
+
+§8 is implemented for the release after v0.21.0, whose changelog carried the notice. `cst migrate`
+first shipped in v0.20.0, so that release is the second minor release after it.
+
+**Gone, in both CLIs:**
+
+- **The fallback to the former names.** `names()` returns the current names or refuses. An
+  unmigrated repository is refused before a command's own checks, with `unmigrated-repository`,
+  by every command except `migrate` and `doctor`; `--version` and `--help` read no repository.
+  The `unmigrated-repository` diagnostic of `metadata status` became that error.
+- **The `VLAB_*` variables,** and `doctor.legacyEnvironment` with them. A former variable is
+  ignored without a warning.
+- **The envelope translation.** A manifest whose ref entries use the former names is refused
+  as `malformed-input`, with details that say to migrate the source repository and export
+  again. This includes `capabilities --against <envelope>`.
+- **The anchor root of a rebase a former build started** (`refs/vcs-lab/rebase`). No journal can
+  reach it: `cst migrate` refuses while one is pending.
+
+**Kept, beyond what §8 lists, because each concerns something permanent:**
+
+- **Manifests in history.** A commit made before the migration keeps its manifest under
+  `.vcs-lab/specs/`, and a merge whose base or side predates the migration reads it there
+  (#183). This is tracked history, not a location this build writes or a state a repository can
+  leave.
+- **The ref a resolution record names inside its own bytes,** in `localRef()` and in the record
+  inventory of an envelope.
+- **The journal check of `workspace archive`** under the former runtime directory. It reads
+  nothing; it only declines to delete private state.
+- **`legacy-ref-advanced`** and the fast-forward in `cst migrate`, which are `migrate`'s own.
+
+**One consequence to know:** an operation left pending in an unmigrated repository can be
+finished or aborted only with a build that still reads the former names (0.21 or earlier).
+`cst migrate` says so when it refuses for that reason.
+
+**Not done here:** deleting this repository's frozen refs on origin, `refs/notes/vcs-lab` and
+`refs/vcs-lab/retention`. That is an explicit step under §6's retention check, recorded on #170.

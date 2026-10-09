@@ -1,6 +1,7 @@
 /**
- * A repository written by a released build reads identically in this one
- * (issue #159, ADR-0039 §2).
+ * A repository written by a released build reads identically in this one once
+ * `cst migrate` has run, and is refused until then (issues #159 and #170,
+ * ADR-0039 §2, §8).
  *
  * `test/fixtures/legacy-0.19.1/` was produced by `scripts/make-legacy-fixture.mjs`
  * with v0.19.1, whose records all carry `vcs-lab.*` identifiers: every ref in a
@@ -8,7 +9,8 @@
  * envelope, a proof bundle, and that build's own read outputs. Records keep
  * those identifiers forever, so this build must read them as the `causet.*`
  * families they alias. The comparison ignores only what cannot be the same: the
- * spelling of the identifiers, the fixture's location, and path separators.
+ * spelling of the identifiers, where the migration put things, the fixture's
+ * location, and path separators.
  */
 
 import assert from "node:assert/strict";
@@ -84,45 +86,24 @@ function cst(cwd, args, env = {}) {
   return spawnSync(vlabCommand, [...vlabPrefix(), ...args], { cwd, encoding: "utf8", env: testEnv(env) });
 }
 
-/** What may differ between the old build's output and this build's. */
 /**
- * What may differ between the old build's output and this build's. After
- * `cst migrate`, where things live differs too, so the former locations are
- * mapped to the current ones on both sides.
+ * What may differ between the old build's output and this build's: the
+ * identifier spellings, and where things live, which `cst migrate` changed. The
+ * former locations are mapped to the current ones on both sides.
  */
-function normalize(text, root, { migrated = false } = {}) {
-  let result = text
+function normalize(text, root) {
+  return text
     .split(JSON.stringify(root).slice(1, -1)).join("<ROOT>")
     .split(root).join("<ROOT>")
     .replaceAll("\\\\", "/")
     .replaceAll("\\", "/")
     .replace(/\bvcs-lab\.(?=[a-z][a-z-]*(?:\/v\d+)?\b)/g, "causet.")
-    .replaceAll("causal-vcs-lab", "causet");
-  if (migrated) {
-    result = result
-      .replaceAll("refs/notes/vcs-lab", "refs/notes/causet")
-      .replaceAll("refs/vcs-lab/", "refs/causet/")
-      .replaceAll("--ref=vcs-lab", "--ref=causet")
-      .replaceAll("/.git/vcs-lab", "/.git/causet")
-      .replaceAll(".vcs-lab/specs", ".causet/specs");
-  }
-  return result;
-}
-
-/**
- * `metadata status` and `validate` report the repository's migration state,
- * which v0.19.1 had no notion of: an unmigrated repository carries exactly one
- * `unmigrated-repository` info diagnostic, a migrated one none. That entry is
- * checked and then set aside, so everything else still compares byte for byte.
- */
-function withoutMigrationDiagnostic(args, stdout, migrated) {
-  if (args[0] !== "metadata" || !["status", "validate"].includes(args[1])) return stdout;
-  const report = JSON.parse(stdout);
-  const notices = report.diagnostics.filter((entry) => entry.code === "unmigrated-repository");
-  assert.equal(notices.length, migrated ? 0 : 1, `unmigrated-repository in ${args.join(" ")}`);
-  assert.ok(notices.every((entry) => entry.severity === "info"));
-  report.diagnostics = report.diagnostics.filter((entry) => entry.code !== "unmigrated-repository");
-  return `${JSON.stringify(report, null, 2)}\n`;
+    .replaceAll("causal-vcs-lab", "causet")
+    .replaceAll("refs/notes/vcs-lab", "refs/notes/causet")
+    .replaceAll("refs/vcs-lab/", "refs/causet/")
+    .replaceAll("--ref=vcs-lab", "--ref=causet")
+    .replaceAll("/.git/vcs-lab", "/.git/causet")
+    .replaceAll(".vcs-lab/specs", ".causet/specs");
 }
 
 /**
@@ -137,25 +118,95 @@ function withFixtureLocalVersion(args, stdout) {
   return `${JSON.stringify(report, null, 2)}\n`;
 }
 
-function assertReadsMatch(root, { migrated = false } = {}) {
+/**
+ * The one read that no longer answers: the fixture's envelope names its refs as
+ * v0.19.1 did, and the import translation of those names ended with the window.
+ */
+const readsFormerEnvelope = (args) => args[0] === "capabilities" && args[1] === "--against";
+
+function assertReadsMatch(root) {
   const repo = path.join(root, "repo");
   for (const expected of fixture.expected) {
     const args = rooted(expected.args, root);
     const actual = cst(repo, args);
     const label = expected.args.join(" ");
+    if (readsFormerEnvelope(expected.args)) {
+      assertFormerEnvelopeRefused(actual, label);
+      continue;
+    }
     assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
-    const stdout = withFixtureLocalVersion(expected.args,
-      withoutMigrationDiagnostic(expected.args, actual.stdout, migrated));
-    assert.equal(normalize(stdout, root, { migrated }), normalize(expected.stdout, root, { migrated }),
-      `stdout of ${label}`);
-    assert.equal(normalize(actual.stderr, root, { migrated }), normalize(expected.stderr, root, { migrated }),
-      `stderr of ${label}`);
+    assert.equal(normalize(withFixtureLocalVersion(expected.args, actual.stdout), root),
+      normalize(expected.stdout, root), `stdout of ${label}`);
+    assert.equal(normalize(actual.stderr, root), normalize(expected.stderr, root), `stderr of ${label}`);
   }
 }
 
-test("a repository written by v0.19.1 reads identically, apart from identifier spellings", () => {
+function assertFormerEnvelopeRefused(actual, label) {
+  assert.equal(actual.status, 1, label);
+  const envelope = JSON.parse(actual.stdout);
+  assert.equal(envelope.code, "malformed-input", label);
+  assert.equal(envelope.message, "Metadata envelope contains an invalid or unsupported ref entry.");
+  assert.equal(envelope.details,
+    "It names 'refs/notes/vcs-lab' as builds before causet did. Run cst migrate in the repository it came from and export it again.");
+}
+
+/** Every ref, the index and the worktree: what a refused command must leave alone. */
+function repositoryState(repo) {
+  return [
+    git(repo, "for-each-ref", "--format=%(refname) %(objectname)"),
+    git(repo, "status", "--porcelain"),
+    JSON.stringify(fs.readdirSync(path.join(repo, ".git")).sort()),
+  ].join("\n--\n");
+}
+
+test("an unmigrated repository is refused by every command except migrate, doctor and version", () => {
   assert.match(fixture.generatedBy, /^causet 0\.19\.1$/);
-  assertReadsMatch(restore());
+  const root = restore();
+  const repo = path.join(root, "repo");
+  const before = repositoryState(repo);
+  const refusal = /^cst: This repository keeps its metadata under the names used before causet \(refs\/notes\/vcs-lab, refs\/vcs-lab\/\*\), which this build no longer reads\.\nRun cst migrate --dry-run to see the move, then cst migrate\. It deletes nothing\.\n$/;
+  const writes = [
+    ["init"],
+    ["commit", "-m", "refused", "--allow-empty"],
+    ["metadata", "export", path.join(root, "refused-export")],
+    ["workspace", "create", "refused"],
+    ["spec", "index", "specs/design.md"],
+    ["reconcile", "--status"],
+  ];
+  for (const args of [...fixture.expected.map((entry) => rooted(entry.args, root)), ...writes]) {
+    const label = args.join(" ");
+    const actual = cst(repo, args);
+    assert.equal(actual.status, 1, `status of ${label}`);
+    if (args.includes("--json")) {
+      const envelope = JSON.parse(actual.stdout);
+      assert.equal(envelope.code, "unmigrated-repository", label);
+      assert.match(envelope.details, /cst migrate/, label);
+      assert.equal(actual.stderr, "", label);
+    } else {
+      assert.equal(actual.stdout, "", label);
+      assert.match(actual.stderr, refusal, label);
+    }
+  }
+  assert.equal(repositoryState(repo), before, "a refused command changes nothing");
+  assert.equal(fs.existsSync(path.join(root, "refused-export")), false);
+
+  // The three that still answer: one says what is wrong, one fixes it.
+  assert.match(cst(repo, ["version"]).stdout, /^causet \d/);
+  assert.match(cst(repo, ["--help"]).stdout, /cst migrate/);
+  const doctor = cst(repo, ["doctor"]);
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.equal(JSON.parse(doctor.stdout).migration, "unmigrated");
+  assert.equal(cst(repo, ["migrate", "--dry-run", "--json"]).status, 0);
+  assert.equal(repositoryState(repo), before);
+});
+
+test("the former VLAB_ variables are ignored, in a repository of either kind", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  // `VLAB_ENGINE=bogus` was a usage error while the fallback was read.
+  const doctor = cst(repo, ["doctor"], { VLAB_ENGINE: "bogus", VLAB_AGENT: "agent-1" });
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.equal(Object.hasOwn(JSON.parse(doctor.stdout), "legacyEnvironment"), false);
 });
 
 test("cst migrate moves a v0.19.1 repository to the causet names, and every read stays the same", () => {
@@ -164,7 +215,8 @@ test("cst migrate moves a v0.19.1 repository to the causet names, and every read
   const refsBefore = git(repo, "for-each-ref", "--format=%(refname) %(objectname)");
   const doctorBefore = JSON.parse(cst(repo, ["doctor"]).stdout);
   assert.equal(doctorBefore.migration, "unmigrated");
-  assert.equal(doctorBefore.notesRef, "refs/notes/vcs-lab");
+  // The doctor names the ref this build uses, which does not exist yet.
+  assert.equal(doctorBefore.notesRef, "refs/notes/causet");
 
   // A dry run reports the whole move and changes nothing.
   const preview = JSON.parse(cst(repo, ["migrate", "--dry-run", "--json"]).stdout);
@@ -200,8 +252,16 @@ test("cst migrate moves a v0.19.1 repository to the causet names, and every read
   const doctorAfter = JSON.parse(cst(repo, ["doctor"]).stdout);
   assert.equal(doctorAfter.migration, "migrated");
   assert.equal(doctorAfter.notesRef, "refs/notes/causet");
-  assertReadsMatch(root, { migrated: true });
+  assertReadsMatch(root);
   git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
+
+  // An envelope a build before causet exported is no longer translated on import.
+  const refsMigrated = git(repo, "for-each-ref", "--format=%(refname) %(objectname)");
+  for (const mode of ["--dry-run", "--apply"]) {
+    assertFormerEnvelopeRefused(cst(repo, ["metadata", "import", path.join(root, "envelope"), mode, "--json"]),
+      `metadata import ${mode}`);
+  }
+  assert.equal(git(repo, "for-each-ref", "--format=%(refname) %(objectname)"), refsMigrated);
 
   // Running it again finds nothing left to do.
   const again = JSON.parse(cst(repo, ["migrate", "--json"]).stdout);
@@ -249,7 +309,8 @@ test("cst migrate refuses while an operation is in progress", () => {
   assert.equal(refused.status, 1);
   const envelope = JSON.parse(refused.stdout);
   assert.equal(envelope.code, "operation-in-progress");
-  assert.match(envelope.details, /cst reconcile --continue/);
+  // No command of this build can finish an operation in an unmigrated repository.
+  assert.match(envelope.details, /cst reconcile --continue.*using the build that started it \(causet 0\.21 or earlier\)/);
   assert.equal(git(repo, "for-each-ref", "refs/notes/causet"), "");
 });
 
@@ -264,6 +325,7 @@ test("the legacy fixture really carries only vcs-lab identifiers", () => {
 
 test("a peer's capability document from v0.19.1 negotiates a full exchange", () => {
   const root = restore();
+  assert.equal(cst(path.join(root, "repo"), ["migrate"]).status, 0);
   const document = path.join(root, "old-capabilities.json");
   fs.writeFileSync(document, fixture.capabilities);
   const result = cst(path.join(root, "repo"), ["capabilities", "--against", document, "--json"]);
@@ -277,6 +339,8 @@ test("a pending operation journal under a legacy identifier is still resumable",
   // writes differently is the schema string; this rewrites exactly that.
   const root = restore();
   const repo = path.join(root, "repo");
+  assert.equal(cst(repo, ["migrate"]).status, 0);
+  git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
   git(repo, "switch", "-q", "-c", "clash", fixture.head);
   fs.writeFileSync(path.join(repo, "work-clash.txt"), "clash source\n");
   git(repo, "add", "-A");
@@ -287,7 +351,7 @@ test("a pending operation journal under a legacy identifier is still resumable",
   git(repo, "commit", "-q", "-m", "clash target");
   const paused = cst(repo, ["reconcile", "clash", "--json"]);
   assert.notEqual(paused.status, 0, "the reconciliation should pause on the conflict");
-  const journal = path.join(repo, ".git", "vcs-lab", "reconciliation.json");
+  const journal = path.join(repo, ".git", "causet", "reconciliation.json");
   const state = JSON.parse(fs.readFileSync(journal, "utf8"));
   assert.match(state.schema, /^causet\.reconciliation-operation\//);
   fs.writeFileSync(journal, `${JSON.stringify({ ...state, schema: state.schema.replace(/^causet\./, "vcs-lab.") }, null, 2)}\n`);
@@ -319,23 +383,14 @@ test("spec merge planning reads a manifest committed before cst migrate (#183)",
   assert.ok(plan.decisions.some((decision) => decision.outcome === "theirs-add"), planned.stdout);
 });
 
-test("metadata export leaves an unmigrated repository unmigrated (#191)", () => {
+test("an empty refs/causet directory does not make an unmigrated repository look migrated (#191)", () => {
+  // Git deletes a loose ref and leaves its directories, which is what a
+  // transient export ref left behind when an unmigrated repository could export.
   const root = restore();
   const repo = path.join(root, "repo");
-  const statusBefore = cst(repo, ["metadata", "status", "--json"]).stdout;
-  const first = cst(repo, ["metadata", "export", path.join(root, "first"), "--json"]);
-  assert.equal(first.status, 0, first.stderr);
-  assert.ok(JSON.parse(first.stdout).records > 0, first.stdout);
-
-  // The transient export ref is gone; any directories Git left are not evidence.
-  assert.equal(git(repo, "for-each-ref", "refs/causet/"), "");
-  const doctor = JSON.parse(cst(repo, ["doctor"]).stdout);
-  assert.equal(doctor.migration, "unmigrated");
-  assert.equal(doctor.notesRef, "refs/notes/vcs-lab");
-  assert.equal(cst(repo, ["metadata", "status", "--json"]).stdout, statusBefore);
-
-  const second = cst(repo, ["metadata", "export", path.join(root, "second"), "--json"]);
-  assert.equal(second.status, 0, second.stderr);
-  const manifest = (name) => JSON.parse(fs.readFileSync(path.join(root, name, "manifest.json"), "utf8"));
-  assert.deepEqual(manifest("second").records, manifest("first").records);
+  fs.mkdirSync(path.join(repo, ".git", "refs", "causet", "exports"), { recursive: true });
+  assert.equal(JSON.parse(cst(repo, ["doctor"]).stdout).migration, "unmigrated");
+  const refused = cst(repo, ["metadata", "status", "--json"]);
+  assert.equal(refused.status, 1);
+  assert.equal(JSON.parse(refused.stdout).code, "unmigrated-repository");
 });

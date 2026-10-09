@@ -82,8 +82,8 @@ import {
 } from "./provenance.js";
 import { auditIdentity } from "./identity-audit.js";
 import { CliError, requestJsonErrors } from "./errors.js";
-import { environmentValue, legacyVariablesInUse, setEnvironmentValue } from "./environment.js";
-import { names, refFamily } from "./locations.js";
+import { environmentValue, setEnvironmentValue } from "./environment.js";
+import { assertMigrated, CURRENT_NAMES, names, refFamily, repositoryNames } from "./locations.js";
 import { assertWithinBound } from "./schemas.js";
 import { VERSION } from "./version.js";
 import {
@@ -1233,6 +1233,17 @@ function formatRebaseStatus(status) {
   return lines.join("\n");
 }
 
+/** Outside a repository there is nothing to refuse; the command reports that itself. */
+function refuseUnmigratedRepository() {
+  let state;
+  try {
+    ({ state } = repositoryNames());
+  } catch {
+    return;
+  }
+  if (state === "unmigrated") assertMigrated();
+}
+
 export async function main(rawArgs) {
   canonicalizeWorkingDirectory();
   const forceSession = rawArgs.includes("--git-session");
@@ -1297,6 +1308,10 @@ export async function main(rawArgs) {
   // line — an unknown global flag, a conflicting session flag — fails before
   // any `--json` is in scope and keeps prose on stderr.
   requestJsonErrors(options.json);
+  // The migration window has ended (ADR-0039 §8): a repository still under the
+  // former names is refused before any command reads or writes it. `migrate`
+  // moves it and `doctor` reports it.
+  if (!["migrate", "doctor"].includes(command)) refuseUnmigratedRepository();
   switch (command) {
     case "init": {
       const context = initLab();
@@ -1857,12 +1872,9 @@ export async function main(rawArgs) {
         // command (ADR-0038 §2); `null` otherwise.
         launcher: environmentValue("LAUNCHER") || null,
         repository: context.root,
-        notesRef: names(context.root).notesRef,
+        notesRef: CURRENT_NAMES.notesRef,
         engine: describeReadEngines(),
         forecastEngine: forecastEngine(),
-        // `VLAB_*` variables still read in place of their `CAUSET_*` names
-        // (ADR-0039 §5); reported here rather than on stderr.
-        legacyEnvironment: legacyVariablesInUse(),
         // `unmigrated`, `migrated`, or `mixed` (ADR-0039 §3).
         migration: migrationState(context.root),
         differential: options.differential ? runDifferential(context.root) : undefined,

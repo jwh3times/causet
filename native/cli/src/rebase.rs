@@ -488,15 +488,11 @@ fn forecast_spec_merge_choices(operation: &Object, change: &Value, cwd: &str) ->
 // Recording a step
 // ---------------------------------------------------------------------------
 
-/// `anchorRoot(operation)`: where a merge-preserving rebase anchors its
-/// rewritten commits. Anchors are transient, so they use the current names
-/// (ADR-0039 §1), except for a rebase an older build started.
-fn anchor_root(operation: &Object) -> String {
-  if as_text(operation.get("schema")).is_some_and(|schema| schema.starts_with("vcs-lab.")) {
-    "refs/vcs-lab/rebase".to_string()
-  } else {
-    format!("{}/rebase", CURRENT_NAMES.refs_root)
-  }
+/// `anchorRoot()`: where a merge-preserving rebase anchors its rewritten
+/// commits. Anchors are transient, so they are only ever under the current
+/// names (ADR-0039 §1).
+fn anchor_root() -> String {
+  format!("{}/rebase", CURRENT_NAMES.refs_root)
 }
 
 fn merge_preserving(operation: &Object) -> bool {
@@ -516,7 +512,7 @@ fn anchor_rewritten(operation: &mut Object, origin: &str, commit: &str, cwd: &st
   if !merge_preserving(operation) {
     return Ok(());
   }
-  let name = format!("{}/{}/{origin}", anchor_root(operation), js_text(operation.get("id")));
+  let name = format!("{}/{}/{origin}", anchor_root(), js_text(operation.get("id")));
   git(&["update-ref", &name, commit], cwd)?;
   Ok(())
 }
@@ -530,7 +526,7 @@ fn release_anchors(operation: &Object, cwd: &str) -> GitResult<()> {
     for origin in rewritten.keys() {
       let name = format!(
         "{}/{}/{}",
-        anchor_root(operation),
+        anchor_root(),
         js_text(operation.get("id")),
         lossy(origin)
       );

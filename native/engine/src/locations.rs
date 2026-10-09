@@ -3,7 +3,7 @@
 //! repository, whose refs cost one listing.
 
 use crate::engine;
-use crate::errors::GitResult;
+use crate::errors::{GitError, GitResult};
 use crate::text;
 use crate::types::RepoContext;
 use std::cell::RefCell;
@@ -52,7 +52,6 @@ pub struct RepositoryNames {
   /// `unmigrated`, `migrated`, or `fresh`.
   pub state: &'static str,
   pub evidence: Evidence,
-  pub names: Names,
 }
 
 thread_local! {
@@ -125,7 +124,7 @@ fn holds_loose_ref(location: &Path) -> bool {
   }
 }
 
-/// `repositoryNames(cwd)`: the state of the repository and the names it uses.
+/// `repositoryNames(cwd)`: the state of the repository.
 pub fn repository_names(cwd: &str) -> GitResult<RepositoryNames> {
   let context = engine::repo_context(cwd)?;
   if let Some(cached) = CACHE.with(|cache| cache.borrow().get(&context.common_dir).copied()) {
@@ -143,15 +142,7 @@ pub fn repository_names(cwd: &str) -> GitResult<RepositoryNames> {
   } else {
     "fresh"
   };
-  let result = RepositoryNames {
-    state,
-    evidence,
-    names: if state == "unmigrated" {
-      LEGACY_NAMES
-    } else {
-      CURRENT_NAMES
-    },
-  };
+  let result = RepositoryNames { state, evidence };
   CACHE.with(|cache| {
     cache
       .borrow_mut()
@@ -160,9 +151,32 @@ pub fn repository_names(cwd: &str) -> GitResult<RepositoryNames> {
   Ok(result)
 }
 
-/// `names(cwd)`.
+/// The refusal of a repository that still keeps its metadata under the former
+/// names: the migration window has ended (ADR-0039 §8).
+pub fn unmigrated_error() -> GitError {
+  GitError::new(
+    "unmigrated-repository",
+    format!(
+      "This repository keeps its metadata under the names used before causet ({}, {}/*), which this build no longer reads.",
+      LEGACY_NAMES.notes_ref, LEGACY_NAMES.refs_root
+    ),
+  )
+  .details("Run cst migrate --dry-run to see the move, then cst migrate. It deletes nothing.")
+}
+
+/// `assertMigrated(cwd)`.
+pub fn assert_migrated(cwd: &str) -> GitResult<()> {
+  if repository_names(cwd)?.state == "unmigrated" {
+    return Err(unmigrated_error());
+  }
+  Ok(())
+}
+
+/// `names(cwd)`: the names everything that persists is kept under. An
+/// unmigrated repository has none this build can use, so asking refuses it.
 pub fn names(cwd: &str) -> GitResult<Names> {
-  Ok(repository_names(cwd)?.names)
+  assert_migrated(cwd)?;
+  Ok(CURRENT_NAMES)
 }
 
 /// `refFamily(family, cwd)`: `<refs root>/<family>` under the names in use.
@@ -183,7 +197,8 @@ pub fn family_remainder<'a>(name: &'a str, family: &str) -> Option<&'a str> {
     .find_map(|set| name.strip_prefix(&format!("{}/{family}/", set.refs_root)))
 }
 
-/// `localRef(ref, cwd)`: a ref a record names, under this repository's names.
+/// `localRef(ref, cwd)`: a ref a record names, under the current names. Records
+/// are permanent, so this translation is too (ADR-0039 §2, §8).
 pub fn local_ref(name: &str, cwd: &str) -> GitResult<String> {
   let local = names(cwd)?;
   if name == CURRENT_NAMES.notes_ref || name == LEGACY_NAMES.notes_ref {

@@ -17,7 +17,7 @@ use std::{
 /// to, for layouts where it is not beside an ancestor of this executable.
 pub const ENTRY_VARIABLE: &str = "CAUSET_JS_CLI";
 
-/// The JavaScript CLI's entry point: `CAUSET_JS_CLI` (or `VLAB_JS_CLI`) if
+/// The JavaScript CLI's entry point: `CAUSET_JS_CLI` if
 /// set, otherwise the
 /// first ancestor directory of this executable that holds a package with
 /// `bin/vlab.js`. That covers the repository build (`native/target/release`)

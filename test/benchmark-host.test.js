@@ -145,8 +145,8 @@ test("recording a labeled host preserves other hosts and all legacy measurements
 
 test("host options require a safe explicit recording identity and allow CLI precedence", () => {
   assert.equal(parseOptions([], {}).host, null);
-  assert.equal(parseOptions([], { VLAB_BENCHMARK_HOST: "alpha" }).host, "alpha");
-  assert.deepEqual(parseOptions(["--record", "--json", "--host", "beta"], { VLAB_BENCHMARK_HOST: "alpha" }), { record: true, json: true, host: "beta" });
+  assert.equal(parseOptions([], { CAUSET_BENCHMARK_HOST: "alpha" }).host, "alpha");
+  assert.deepEqual(parseOptions(["--record", "--json", "--host", "beta"], { CAUSET_BENCHMARK_HOST: "alpha" }), { record: true, json: true, host: "beta" });
   for (const args of [["--record"], ["--host"], ["--host", "--json"], ["--host", "../host"], ["--host", "a".repeat(65)], ["--host", "alpha", "--host", "beta"], ["--unknown"]]) {
     assert.throws(() => parseOptions(args, {}));
   }
@@ -155,7 +155,7 @@ test("host options require a safe explicit recording identity and allow CLI prec
 test("record without identity fails before measuring or modifying the committed baseline", () => {
   const baselineFile = path.join(root, "benchmarks/baseline.json");
   const before = fs.readFileSync(baselineFile, "utf8");
-  const result = spawnSync(process.execPath, [path.join(root, "scripts/benchmark-regression.mjs"), "--record"], { cwd: root, encoding: "utf8", timeout: 5000, env: testEnv({ VLAB_BENCHMARK_HOST: "", PATH: "" }) });
+  const result = spawnSync(process.execPath, [path.join(root, "scripts/benchmark-regression.mjs"), "--record"], { cwd: root, encoding: "utf8", timeout: 5000, env: testEnv({ CAUSET_BENCHMARK_HOST: "", PATH: "" }) });
   assert.equal(result.status, 2, result.stderr);
   assert.match(result.stderr, /Recording requires --host/);
   assert.equal(result.stdout, "");
@@ -163,7 +163,7 @@ test("record without identity fails before measuring or modifying the committed 
 });
 
 test("provenance records hardware and execution settings without machine identifiers", () => {
-  const provenance = hostProvenance("alpha", { VLAB_GIT_SESSION: "0" });
+  const provenance = hostProvenance("alpha", { CAUSET_GIT_SESSION: "0" });
   assert.deepEqual(Object.keys(provenance).sort(), ["id", "platform", "arch", "cpuModels", "logicalCpus", "memoryBytes", "osRelease", "overrides"].sort());
   assert.equal(provenance.id, "alpha");
   assert.equal(provenance.platform, process.platform);

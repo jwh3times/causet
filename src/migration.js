@@ -136,9 +136,14 @@ function migrationPlan(cwd) {
       for (const [file, command] of [["reconciliation.json", "reconcile"], ["rebase.json", "rebase"]]) {
         const journal = path.join(gitDir, set.runtime, file);
         if (fs.existsSync(journal)) {
+          // A journal under the former names belongs to a build that still
+          // read them; this one refuses the repository until it is migrated.
+          const former = set === LEGACY_NAMES && before === "unmigrated";
           refuse(new CliError(`A ${command} operation is in progress ('${journal}'); cst migrate moves nothing while one is.`, {
             code: "operation-in-progress",
-            details: `Finish it with cst ${command} --continue, or discard it with cst ${command} --abort, then run cst migrate again.`,
+            details: former
+              ? `Finish it with cst ${command} --continue, or discard it with cst ${command} --abort, using the build that started it (causet 0.21 or earlier), then run cst migrate again.`
+              : `Finish it with cst ${command} --continue, or discard it with cst ${command} --abort, then run cst migrate again.`,
           }));
         }
       }

@@ -139,10 +139,8 @@ npm link
 cst --help
 ```
 
-Environment variables are named `CAUSET_*` (for example `CAUSET_ENGINE`). During the same
-transition the former `VLAB_*` name of each is still read when the `CAUSET_*` one is not set;
-when both are set, `CAUSET_*` wins. `cst doctor` lists any `VLAB_*` variable it is still
-reading, under `legacyEnvironment` (ADR-0039 §5).
+Environment variables are named `CAUSET_*` (for example `CAUSET_ENGINE`). The former `VLAB_*`
+names are ignored: they were read as a fallback until the migration window ended (ADR-0039 §8).
 
 Alternatively, run it without installing:
 
@@ -1114,12 +1112,12 @@ change nothing about what negotiation concludes. See
 
 ### Repositories from before causet
 
-These are the locations in a repository that uses the current names: a new one, or
-one that ran `cst migrate`. A repository holding metadata from an earlier build keeps
-`refs/notes/vcs-lab`, `refs/vcs-lab/*`, `<git dir>/vcs-lab/` and `.vcs-lab/specs/`, and keeps
-working unchanged; `cst metadata status` reports it as `unmigrated-repository` and
-`cst doctor` as `migration: unmigrated`. Move it when convenient
-([ADR-0039](docs/adr/0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) §3):
+These are the only locations `cst` reads. A repository holding metadata from a build before
+causet keeps it under `refs/notes/vcs-lab`, `refs/vcs-lab/*`, `<git dir>/vcs-lab/` and
+`.vcs-lab/specs/`, and has to be moved once. Until it is, every command except `cst migrate`,
+`cst doctor` and `cst --version` refuses it with the error `unmigrated-repository`, and
+`cst doctor` reports `migration: unmigrated`
+([ADR-0039](docs/adr/0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) §3, §8):
 
 ```bash
 cst migrate --dry-run   # every ref, setting, path and manifest it would move; changes nothing
@@ -1128,7 +1126,9 @@ git commit -m "Move specification manifests to .causet/specs"   # the manifest m
 ```
 
 `cst migrate` refuses while a reconciliation, rebase, export or import is in progress, and
-never deletes anything: the former refs stay where they were. A former ref that moves
+never deletes anything: the former refs stay where they were. An operation that a build
+before causet 0.22 left pending in an unmigrated repository has to be finished or aborted with
+that build first, because this one will not act there. A former ref that moves
 afterwards (a peer on an older build published to it) is reported as `legacy-ref-advanced`;
 running `cst migrate` again fast-forwards the new ref, and refuses if both moved. Records keep
 their `vcs-lab.*` identifiers forever and are read as the `causet.*` families they name.
@@ -1141,11 +1141,10 @@ same-origin read, fetch the notes and shared cst namespaces together:
 git fetch origin 'refs/notes/causet:refs/notes/causet' 'refs/causet/*:refs/causet/*'
 ```
 
-From a publisher that has not migrated yet, fetch the former names instead:
-
-```bash
-git fetch origin 'refs/notes/vcs-lab:refs/notes/vcs-lab' 'refs/vcs-lab/*:refs/vcs-lab/*'
-```
+A publisher that has not migrated yet still serves the former names
+(`refs/notes/vcs-lab`, `refs/vcs-lab/*`). Fetch those, then run `cst migrate` in the clone.
+An envelope exported before its repository migrated names the former refs and is refused on
+import: migrate that repository and export it again.
 
 Both namespaces are required for a complete causal read: notes carry the
 records, while the retention root keeps their attachments and dependencies

@@ -375,6 +375,10 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
     "The named path or object belongs to a different repository or workspace than the one in use.",
   ),
   (
+    "unmigrated-repository",
+    "The repository keeps its metadata under the names used before causet, which this build no longer reads. Run cst migrate; it deletes nothing.",
+  ),
+  (
     "stale-forecast",
     "A forecast no longer matches the repository it was pinned to. Regenerate and re-approve it.",
   ),

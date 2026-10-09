@@ -116,6 +116,11 @@ fn main() {
       let _ = writeln!(stderr, "cst: {}", failure.message);
       1
     }
+    Outcome::Unmigrated { json } => {
+      drop(stdout);
+      drop(stderr);
+      native::report(&causet_engine::locations::unmigrated_error(), json)
+    }
     Outcome::Delegate { .. } => {
       let _ = stdout.flush();
       drop(stdout);
@@ -149,6 +154,12 @@ fn decide(raw: &[OsString]) -> Outcome {
     &|name| match environment::value(name) {
       Ok(value) => value,
       Err(raw) => Some(raw.to_string_lossy().into_owned()),
+    },
+    &|settings| {
+      native::select(settings);
+      // Outside a repository there is nothing to refuse; the command says so itself.
+      causet_engine::locations::repository_names(&native::canonical_working_directory())
+        .is_ok_and(|names| names.state == "unmigrated")
     },
     HELP,
   )
