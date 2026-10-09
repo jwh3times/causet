@@ -34,21 +34,6 @@ import { buildNoteTree, commitWithParents, buildRetentionCommit, recordDependenc
 import { temporaryDirectory } from "./store.js";
 import { localRef, names, refFamily, transientRefFamily } from "./locations.js";
 
-/**
- * An envelope names refs as its exporter did: `refs/notes/vcs-lab` and
- * `refs/vcs-lab/resolutions/*` before issue #159, the `causet` names after.
- * Import applies them under this repository's own names (ADR-0039 §4). Only
- * `ref` is translated; `bundleRef` is the name inside the bundle file.
- */
-function localizeEnvelope(envelope, cwd) {
-  return {
-    ...envelope,
-    manifest: {
-      ...envelope.manifest,
-      refs: envelope.manifest.refs.map((entry) => ({ ...entry, ref: localRef(entry.ref, cwd) })),
-    },
-  };
-}
 const MAX_COMMIT_PARENTS = 64;
 
 function groupRecords(entries) {
@@ -710,7 +695,7 @@ export function importMetadata(envelopePath, options = {}) {
   }
   const metrics = beginGitMetrics("metadata-import");
   try {
-    const envelope = localizeEnvelope(readEnvelope(path.resolve(cwd, envelopePath)), cwd);
+    const envelope = readEnvelope(path.resolve(cwd, envelopePath));
     const incoming = inspectEnvelopePayload(envelope);
     const preview = importPreview(envelope, incoming, cwd, {
       parkConflicts: Boolean(options.parkConflicts),

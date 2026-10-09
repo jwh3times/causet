@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **The `vcs-lab` migration window has ended** (ADR-0039 §8, #170), as v0.21.0
+  announced. This is a breaking change for a repository that has not run
+  `cst migrate`, and for a `VLAB_*` variable still in use.
+  - **An unmigrated repository is refused** by every command except
+    `cst migrate`, `cst doctor` and `cst --version`, with the new error code
+    `unmigrated-repository`, before the command reads or writes anything. Run
+    `cst migrate`; it deletes nothing. `cst metadata status` no longer reports
+    the state as a diagnostic, since it no longer answers there.
+  - **`VLAB_*` environment variables are ignored.** Only `CAUSET_*` is read,
+    and `cst doctor` no longer has a `legacyEnvironment` member.
+  - **An envelope that names the former refs is refused on import** and by
+    `cst capabilities --against`, as `malformed-input`. Migrate the repository
+    it came from and export it again.
+  - **An operation pending in an unmigrated repository** must be finished or
+    aborted with causet 0.21 or earlier before `cst migrate` will run.
+  - **Unchanged:** records keep their `vcs-lab.*` identifiers and are read as
+    before; `cst migrate` itself; manifests that commits made before a
+    migration keep under `.vcs-lab/specs/`; and existing `vlab/ws/<name>`
+    workspace branches.
+  - Both CLIs make the same refusals, byte for byte.
 - Every release gate now runs on GitHub-hosted runners (owner decision,
   2026-10-09; ADR-0017 amended). Nothing that needs a maintainer's own machine
   gates a release.

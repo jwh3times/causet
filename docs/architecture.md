@@ -128,7 +128,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/cli.js` | Argument parsing, command dispatch, human and JSON presentation, benchmarks | All domain modules |
 | `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
 | `src/engine.js` | The read-side engine seam: the catalog of 44 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
-| `src/environment.js` | The user-facing environment variables: `CAUSET_*` with the `VLAB_*` fallback of the migration window, and the legacy names in use (ADR-0039 §5) | None |
+| `src/environment.js` | The user-facing environment variables, `CAUSET_*` (ADR-0039 §5); the former `VLAB_*` names are ignored since the migration window ended (§8) | None |
 | `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `causet.error/v1` failure envelope (ADR-0021) | None |
 | `src/faults.js` | Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it | None |
 | `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
@@ -138,7 +138,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `src/identity-audit.js` | Repository-wide logical identity audit (`causet.identity-audit/v1`): union-find over identity-preserving application edges, multi-trailer, multi-origin, and invariant findings, plus the near-duplicate provenance actor warning | Engine, notes |
 | `src/ids.js` | Unique protocol IDs, SHA-256, Git blob hashing, slugs | Node crypto |
 | `src/landings.js` | Compact and hard-squash landing mechanics and receipts | Git adapter, notes |
-| `src/locations.js` | Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix a repository uses, decided per repository from its migration state without a Git process (ADR-0039 §3) | `src/engine.js` |
+| `src/locations.js` | Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix; a repository's migration state, decided without a Git process, and the refusal of an unmigrated one (ADR-0039 §3, §8) | `src/engine.js`, `src/errors.js` |
 | `src/merge-plan.js` | Coverage proof lattice, effective base, patch candidates, plan formatting | Git adapter, notes |
 | `src/merge-tree-session-worker.js` | Owns one asynchronous `git merge-tree --stdin` stream for the synchronous merge-tree forecast engine | Worker threads, Git |
 | `src/metadata-envelope.js` | Canonical envelope manifest, integrity hash, payload bounds, and parser | Metadata, schemas |

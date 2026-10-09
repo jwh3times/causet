@@ -303,14 +303,10 @@ function applicationRecord(operation, change, relation, cwd) {
  */
 /**
  * Where a merge-preserving rebase anchors its rewritten commits. Anchors are
- * transient, so they use the current names (ADR-0039 §1), except for a rebase
- * an older build started, whose journal says so and whose anchors already sit
- * under the former names.
+ * transient, so they are only ever under the current names (ADR-0039 §1).
  */
-function anchorRoot(operation) {
-  return typeof operation.schema === "string" && operation.schema.startsWith("vcs-lab.")
-    ? "refs/vcs-lab/rebase"
-    : transientRefFamily("rebase");
+function anchorRoot() {
+  return transientRefFamily("rebase");
 }
 
 function anchorRewritten(operation, originCommit, newCommit, cwd) {
@@ -318,7 +314,7 @@ function anchorRewritten(operation, originCommit, newCommit, cwd) {
   operation.rewritten[originCommit] = newCommit;
   if (operation.plan.mode !== "merge-preserving") return;
   runGit(
-    ["update-ref", `${anchorRoot(operation)}/${operation.id}/${originCommit}`, newCommit],
+    ["update-ref", `${anchorRoot()}/${operation.id}/${originCommit}`, newCommit],
     { cwd },
   );
 }
@@ -327,7 +323,7 @@ function releaseAnchors(operation, cwd) {
   if (operation.plan.mode !== "merge-preserving") return;
   for (const originCommit of Object.keys(operation.rewritten ?? {})) {
     runGit(
-      ["update-ref", "-d", `${anchorRoot(operation)}/${operation.id}/${originCommit}`],
+      ["update-ref", "-d", `${anchorRoot()}/${operation.id}/${originCommit}`],
       { cwd, allowFailure: true },
     );
   }

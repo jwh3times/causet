@@ -37,8 +37,8 @@ export function hostProvenance(id, env = process.env) {
     logicalCpus: cpus.length,
     memoryBytes: os.totalmem(),
     osRelease: os.release(),
-    // Recorded under the variables' names before #159, so baselines stay comparable;
-    // the values are read under either name (ADR-0039 §5).
+    // Recorded under the variables' names before #159, so baselines stay
+    // comparable; the values are read from `CAUSET_*` alone (ADR-0039 §8).
     overrides: Object.fromEntries(["ENGINE", "GIT_SESSION", "FORECAST_ENGINE"]
       .map((name) => [`VLAB_${name}`, environmentValue(name, env) || null])),
   };

@@ -14,9 +14,15 @@ use causet_model::schemas::canonical_schema;
 pub const ENVELOPE_MANIFEST: &str = "manifest.json";
 pub const ENVELOPE_BUNDLE: &str = "objects.bundle";
 pub const METADATA_ENVELOPE_SCHEMA: &str = "causet.metadata-envelope/v1";
-const NOTE_REFS: [&str; 2] = ["refs/notes/causet", "refs/notes/vcs-lab"];
-const RESOLUTION_REF_PREFIXES: [&str; 2] =
-  ["refs/causet/resolutions/", "refs/vcs-lab/resolutions/"];
+// The refs an envelope carries are named as this build names them. The former
+// names were translated on import during the migration window, which has ended
+// (ADR-0039 §8).
+const NOTE_REF: &str = "refs/notes/causet";
+const RESOLUTION_REF_PREFIX: &str = "refs/causet/resolutions/";
+const FORMER_REF_PREFIXES: [&str; 2] = ["refs/notes/vcs-lab", "refs/vcs-lab/"];
+// A resolution record names its own ref inside its bytes, as it was when the
+// record was written, and records are permanent (ADR-0039 §2).
+const RECORD_REF_PREFIXES: [&str; 2] = [RESOLUTION_REF_PREFIX, "refs/vcs-lab/resolutions/"];
 
 fn bound(name: &str) -> u64 {
   RESOURCE_BOUNDS
@@ -146,21 +152,24 @@ fn validate_manifest_shape(manifest: &Value) -> GitResult<()> {
   for entry in refs {
     let entry = Some(entry);
     let name = as_text(get(entry, "ref"));
-    let supported = name.as_deref().is_some_and(|name| {
-      NOTE_REFS.contains(&name)
-        || RESOLUTION_REF_PREFIXES
-          .iter()
-          .any(|prefix| name.starts_with(prefix))
-    });
+    let supported = name
+      .as_deref()
+      .is_some_and(|name| name == NOTE_REF || name.starts_with(RESOLUTION_REF_PREFIX));
     if !truthy(entry)
       || !valid_ref(get(entry, "ref"))
       || !valid_ref(get(entry, "bundleRef"))
       || !is_oid(get(entry, "oid"), &format)
       || !supported
     {
-      return Err(malformed(
-        "Metadata envelope contains an invalid or unsupported ref entry.",
-      ));
+      let refusal = malformed("Metadata envelope contains an invalid or unsupported ref entry.");
+      return Err(match name.as_deref() {
+        Some(name) if FORMER_REF_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) => {
+          refusal.details(format!(
+            "It names '{name}' as builds before causet did. Run cst migrate in the repository it came from and export it again."
+          ))
+        }
+        _ => refusal,
+      });
     }
     let name = name.unwrap_or_default();
     let bundle = as_text(get(entry, "bundleRef")).unwrap_or_default();
@@ -193,7 +202,7 @@ fn validate_manifest_shape(manifest: &Value) -> GitResult<()> {
     let reference = get(record, "ref");
     if !matches!(reference, Some(Value::Null)) {
       let resolution = as_text(reference).is_some_and(|name| {
-        RESOLUTION_REF_PREFIXES
+        RECORD_REF_PREFIXES
           .iter()
           .any(|prefix| name.starts_with(prefix))
       });

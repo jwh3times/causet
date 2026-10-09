@@ -29,6 +29,11 @@ pub enum Outcome {
     failure: Failure,
     json: bool,
   },
+  /// The repository still keeps its metadata under the former names, and the
+  /// command is not one of the two that answer there (ADR-0039 §8).
+  Unmigrated {
+    json: bool,
+  },
   /// The JavaScript CLI answers, because `CAUSET_DELEGATE=always` asked for the
   /// oracle (ADR-0037 §6).
   Delegate {
@@ -123,10 +128,19 @@ fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
   }
 }
 
+/// The variables a command's global flags select, as `setEnvironmentValue` would.
+pub type Settings = [(&'static str, String)];
+
 /// Decide an invocation. `env` looks up a user-facing environment variable by
-/// the name after its prefix, the way the JavaScript CLI sees it (`CAUSET_`,
-/// then `VLAB_`); `None` means unset.
-pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) -> Outcome {
+/// the name after its `CAUSET_` prefix, the way the JavaScript CLI sees it;
+/// `None` means unset. `unmigrated` says whether the working directory is in a
+/// repository that has not run `cst migrate`, under the settings it is given.
+pub fn decide(
+  raw: &[String],
+  env: &dyn Fn(&str) -> Option<String>,
+  unmigrated: &dyn Fn(&Settings) -> bool,
+  help: &str,
+) -> Outcome {
   let has = |flag: &str| raw.iter().any(|item| item == flag);
   if has("--git-session") && has("--no-git-session") {
     return fail(
@@ -222,6 +236,11 @@ pub fn decide(raw: &[String], env: &dyn Fn(&str) -> Option<String>, help: &str) 
     }
   };
   let json = parsed.truthy("json");
+  // The migration window has ended (ADR-0039 §8): the refusal comes before a
+  // command's own checks, as it does in `main` of `src/cli.js`.
+  if !matches!(command, "migrate" | "doctor") && unmigrated(&settings) {
+    return Outcome::Unmigrated { json };
+  }
   match usage_check(command, &parsed, help) {
     Some(failure) => Outcome::Fail { failure, json },
     None if is_native(command, &parsed) => Outcome::Native {
@@ -505,7 +524,25 @@ mod tests {
         .find(|(key, _)| *key == name)
         .map(|(_, value)| value.to_string())
     };
-    decide(&raw, &lookup, "HELP")
+    decide(&raw, &lookup, &|_| false, "HELP")
+  }
+
+  #[test]
+  fn an_unmigrated_repository_is_refused_before_a_command_checks_its_arguments() {
+    let decide_in = |args: &[&str]| {
+      let raw: Vec<String> = args.iter().map(|item| item.to_string()).collect();
+      decide(&raw, &|_| None, &|_| true, "HELP")
+    };
+    // `commit` without a message and an unknown command are usage errors elsewhere.
+    for args in [&["commit"][..], &["no-such-command"], &["graph"]] {
+      assert_eq!(decide_in(args), Outcome::Unmigrated { json: false }, "{args:?}");
+    }
+    assert_eq!(decide_in(&["receipts", "--json"]), Outcome::Unmigrated { json: true });
+    assert_eq!(decide_in(&["version"]), Outcome::Version);
+    assert_eq!(decide_in(&["--help"]), Outcome::Help);
+    for command in ["migrate", "doctor"] {
+      assert!(matches!(decide_in(&[command]), Outcome::Native { .. }), "{command}");
+    }
   }
 
   fn failed(outcome: Outcome) -> (String, &'static str, bool) {

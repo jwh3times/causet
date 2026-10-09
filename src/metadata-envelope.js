@@ -57,9 +57,15 @@ function manifestHash(value) {
   }
 }
 
-// An envelope names refs as its exporter did, under either set of names (ADR-0039 §4).
-const NOTE_REFS = ["refs/notes/causet", "refs/notes/vcs-lab"];
-const RESOLUTION_REF_PREFIXES = ["refs/causet/resolutions/", "refs/vcs-lab/resolutions/"];
+// The refs an envelope carries are named as this build names them. The former
+// names were translated on import during the migration window, which has ended
+// (ADR-0039 §8).
+const NOTE_REF = "refs/notes/causet";
+const RESOLUTION_REF_PREFIX = "refs/causet/resolutions/";
+const FORMER_REF_PREFIXES = ["refs/notes/vcs-lab", "refs/vcs-lab/"];
+// A resolution record names its own ref inside its bytes, as it was when the
+// record was written, and records are permanent (ADR-0039 §2).
+const RECORD_REF_PREFIXES = [RESOLUTION_REF_PREFIX, "refs/vcs-lab/resolutions/"];
 
 export function buildEnvelopeManifest(snapshot, payload, refs, includedNamespaces) {
   const records = snapshot.portableRecords.map((entry) => ({
@@ -82,8 +88,6 @@ export function buildEnvelopeManifest(snapshot, payload, refs, includedNamespace
     // an envelope cannot claim a behavior the producer does not advertise
     // (ADR-0033).
     capabilities: [...EXCHANGE_FEATURES].sort(),
-    // The exporter's own names: `refs/notes/causet` once it uses the current
-    // names, `refs/notes/vcs-lab` before it migrates (ADR-0039 §4).
     includedNamespaces,
     excludedScopes: [
       "tracked-portable/spec-manifests (moves with ordinary Git content)",
@@ -148,10 +152,15 @@ function validateManifestShape(manifest) {
       !validRef(entry.ref) ||
       !validRef(entry.bundleRef) ||
       !isOid(entry.oid, objectFormat) ||
-      !(NOTE_REFS.includes(entry.ref) || RESOLUTION_REF_PREFIXES.some((prefix) => entry.ref.startsWith(prefix)))
+      !(entry.ref === NOTE_REF || entry.ref.startsWith(RESOLUTION_REF_PREFIX))
     ) {
-      throw new CliError("Metadata envelope contains an invalid or unsupported ref entry.",
-        { code: "malformed-input" });
+      const former = typeof entry?.ref === "string" && FORMER_REF_PREFIXES.some((prefix) => entry.ref.startsWith(prefix));
+      throw new CliError("Metadata envelope contains an invalid or unsupported ref entry.", {
+        code: "malformed-input",
+        details: former
+          ? `It names '${entry.ref}' as builds before causet did. Run cst migrate in the repository it came from and export it again.`
+          : "",
+      });
     }
     if (logicalRefs.has(entry.ref) || bundleRefs.has(entry.bundleRef)) {
       throw new CliError("Metadata envelope contains duplicate refs.",
@@ -176,7 +185,7 @@ function validateManifestShape(manifest) {
       throw new CliError("Metadata envelope contains a malformed record inventory entry.",
         { code: "malformed-input" });
     }
-    if (record.ref !== null && (!validRef(record.ref) || !RESOLUTION_REF_PREFIXES.some((prefix) => record.ref.startsWith(prefix)))) {
+    if (record.ref !== null && (!validRef(record.ref) || !RECORD_REF_PREFIXES.some((prefix) => record.ref.startsWith(prefix)))) {
       throw new CliError("Metadata envelope contains a malformed resolution record ref.",
         { code: "malformed-input" });
     }

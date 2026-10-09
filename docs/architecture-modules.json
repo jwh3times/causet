@@ -20,12 +20,12 @@
     "dependencies": "None"
   },
   "src/environment.js": {
-    "responsibility": "The user-facing environment variables: `CAUSET_*` with the `VLAB_*` fallback of the migration window, and the legacy names in use (ADR-0039 §5)",
+    "responsibility": "The user-facing environment variables, `CAUSET_*` (ADR-0039 §5); the former `VLAB_*` names are ignored since the migration window ended (§8)",
     "dependencies": "None"
   },
   "src/locations.js": {
-    "responsibility": "Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix a repository uses, decided per repository from its migration state without a Git process (ADR-0039 §3)",
-    "dependencies": "`src/engine.js`"
+    "responsibility": "Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix; a repository's migration state, decided without a Git process, and the refusal of an unmigrated one (ADR-0039 §3, §8)",
+    "dependencies": "`src/engine.js`, `src/errors.js`"
   },
   "src/migration.js": {
     "responsibility": "`cst migrate`: create the causet refs at the objects of their vcs-lab names, repoint the notes settings, move the runtime directories and stage the manifest move, never deleting; the migration marker, `doctor.migration`, and the advanced-former-ref check (ADR-0039 §3)",

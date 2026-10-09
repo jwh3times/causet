@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { listRefs, repoContext } from "./engine.js";
+import { CliError } from "./errors.js";
 
 /**
  * Where causet keeps what it stores (ADR-0039 §1, §3). Every ref, runtime
@@ -9,11 +10,12 @@ import { listRefs, repoContext } from "./engine.js";
  *
  * A repository is in one of three states:
  * - `unmigrated`: it holds metadata under the names used before issue #159 and
- *   has not run `cst migrate`. It keeps using those names, reads and writes
- *   alike, so it works unchanged until the user migrates it.
+ *   has not run `cst migrate`. The migration window has ended (ADR-0039 §8), so
+ *   nothing reads those names any more: every command except `migrate`,
+ *   `doctor` and `version` refuses it with `unmigrated-repository`.
  * - `migrated`: `cst migrate` has run (its marker exists).
  * - `fresh`: it holds nothing under either name, or already holds metadata under
- *   the current names. It uses the current names from its first write.
+ *   the current names.
  *
  * The state is decided from files alone, so no command pays a Git process for
  * it: the runtime directories, loose refs, and `packed-refs`. Only a reftable
@@ -52,9 +54,8 @@ export function migrationMarkerPath(context) {
 }
 
 /**
- * The state of the repository at `cwd` and the names it uses. `evidence` says
- * which set of names holds anything, which `doctor` and `metadata status`
- * report and `cst migrate` acts on.
+ * The state of the repository at `cwd`. `evidence` says which set of names
+ * holds anything, which `doctor` reports and `cst migrate` acts on.
  */
 export function repositoryNames(cwd = process.cwd()) {
   const context = repoContext(cwd);
@@ -66,18 +67,30 @@ export function repositoryNames(cwd = process.cwd()) {
     legacy: holdsAny(context, LEGACY_NAMES),
   };
   const state = evidence.marker ? "migrated" : evidence.legacy && !evidence.current ? "unmigrated" : "fresh";
-  const result = Object.freeze({
-    state,
-    evidence: Object.freeze(evidence),
-    names: state === "unmigrated" ? LEGACY_NAMES : CURRENT_NAMES,
-  });
+  const result = Object.freeze({ state, evidence: Object.freeze(evidence) });
   cache.set(context.commonDir, result);
   return result;
 }
 
-/** The names the repository at `cwd` uses for everything that persists. */
+/** Refuse a repository that still keeps its metadata under the former names. */
+export function assertMigrated(cwd = process.cwd()) {
+  if (repositoryNames(cwd).state !== "unmigrated") return;
+  throw new CliError(
+    `This repository keeps its metadata under the names used before causet (${LEGACY_NAMES.notesRef}, ${LEGACY_NAMES.refsRoot}/*), which this build no longer reads.`,
+    {
+      code: "unmigrated-repository",
+      details: "Run cst migrate --dry-run to see the move, then cst migrate. It deletes nothing.",
+    },
+  );
+}
+
+/**
+ * The names everything that persists is kept under. An unmigrated repository
+ * has none this build can use, so asking for them refuses it.
+ */
 export function names(cwd = process.cwd()) {
-  return repositoryNames(cwd).names;
+  assertMigrated(cwd);
+  return CURRENT_NAMES;
 }
 
 /**
@@ -154,10 +167,10 @@ export function familyRemainder(ref, family) {
 }
 
 /**
- * `ref` under this repository's names. A record written before a migration
- * names its ref as it was then (`refs/vcs-lab/resolutions/…`), inside its own
- * bytes, so every join between a record and the refs listed today translates
- * the record's side rather than rewriting it (ADR-0039 §2, §3).
+ * `ref` under the current names. A record written before a migration names its
+ * ref as it was then (`refs/vcs-lab/resolutions/…`), inside its own bytes, and
+ * records are permanent, so every join between a record and the refs listed
+ * today translates the record's side rather than rewriting it (ADR-0039 §2, §8).
  */
 export function localRef(ref, cwd = process.cwd()) {
   if (typeof ref !== "string") return ref;

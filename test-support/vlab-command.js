@@ -2,8 +2,7 @@
  * The `vlab` executable the suites, demos, and measurement scripts drive.
  *
  * By default this is the checkout's JavaScript CLI, run under the current
- * Node. `CAUSET_CLI=<path>` (or the former `VLAB_CLI`) selects another
- * implementation, such as a Rust
+ * Node. `CAUSET_CLI=<path>` selects another implementation, such as a Rust
  * build of the CLI (ADR-0037, issue #140): a `.js` or `.mjs` path runs under
  * this Node; any other path is executed directly.
  *

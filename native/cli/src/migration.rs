@@ -176,9 +176,17 @@ fn migration_plan(cwd: &str) -> GitResult<Plan> {
                 "A {command} operation is in progress ('{journal}'); cst migrate moves nothing while one is."
               ),
             )
-            .details(format!(
-              "Finish it with cst {command} --continue, or discard it with cst {command} --abort, then run cst migrate again."
-            )),
+            // A journal under the former names belongs to a build that still
+            // read them; this one refuses the repository until it is migrated.
+            .details(if set.runtime == LEGACY_NAMES.runtime && before == "unmigrated" {
+              format!(
+                "Finish it with cst {command} --continue, or discard it with cst {command} --abort, using the build that started it (causet 0.21 or earlier), then run cst migrate again."
+              )
+            } else {
+              format!(
+                "Finish it with cst {command} --continue, or discard it with cst {command} --abort, then run cst migrate again."
+              )
+            }),
           );
         }
       }

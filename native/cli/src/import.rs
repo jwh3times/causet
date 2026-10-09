@@ -52,7 +52,7 @@ fn with(object: &Value, members: Vec<(&str, Value)>) -> Value {
   Value::Object(copy)
 }
 
-/// The envelope as `localizeEnvelope` leaves it: refs under this repository's names.
+/// The envelope as `readEnvelope` returns it, with its ref entries at hand.
 struct Envelope {
   directory: String,
   manifest: Value,
@@ -838,17 +838,8 @@ pub fn import_metadata(envelope_path: &str, dry_run: bool, apply: bool, park_con
   let collector = metrics::begin("metadata-import");
   let outcome = (|| -> GitResult<(Value, Value)> {
     let parts = read_envelope_parts(&resolve_against(cwd, envelope_path))?;
-    // `localizeEnvelope`: refs under this repository's own names.
     let refs = match member(&parts.manifest, "refs") {
-      Some(Value::Array(items)) => items
-        .iter()
-        .map(|entry| -> GitResult<Value> {
-          match member(entry, "ref") {
-            Some(Value::String(units)) => Ok(with(entry, vec![("ref", string(&local_ref(&lossy(units), cwd)?))])),
-            _ => Ok(entry.clone()),
-          }
-        })
-        .collect::<GitResult<Vec<Value>>>()?,
+      Some(Value::Array(items)) => items.clone(),
       _ => Vec::new(),
     };
     let envelope = Envelope {

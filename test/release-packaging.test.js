@@ -68,7 +68,10 @@ function install(tarballs, flags = []) {
   installs += 1;
   const prefix = path.join(scratch, `prefix-${installs}`);
   const ran = spawnSync(npm, [
-    "install", "--global", "--prefix", prefix, "--offline", "--no-audit", "--no-fund", ...flags, ...tarballs,
+    "install", "--global", "--prefix", prefix, "--offline", "--no-audit", "--no-fund",
+    // Its own cache: the host's may hold the published platform package of this
+    // version, which an offline install would then supply in place of none.
+    "--cache", path.join(scratch, "npm-cache"), ...flags, ...tarballs,
   ], { cwd: scratch, encoding: "utf8", shell: windows, env: testEnv() });
   assert.equal(ran.status, 0, `npm install ${flags.join(" ")}\n${ran.stdout}\n${ran.stderr}`);
   const modules = windows ? path.join(prefix, "node_modules") : path.join(prefix, "lib", "node_modules");

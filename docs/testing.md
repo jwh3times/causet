@@ -46,9 +46,8 @@ qualification of the new publication mechanism.
 With Git long paths disabled, a resolution ref's absolute `.lock` path must
 fit within 259 characters. For an ordinary SHA-1 repository with a `.git`
 directory, a blob-result resolution consumes 145 characters below the root
-(`refs/causet/resolutions/…`; an unmigrated repository's `refs/vcs-lab/…` takes
-one more): a 114-character root fits, and a 115-character root fails. SHA-256 object IDs
-consume another 24 characters; deletion results use the shorter `deleted`
+(`refs/causet/resolutions/…`): a 114-character root fits, and a 115-character
+root fails. SHA-256 object IDs consume another 24 characters; deletion results use the shorter `deleted`
 suffix. Linked worktrees store these refs in the common Git directory, so
 shortening only the linked worktree path does not solve this limit.
 
