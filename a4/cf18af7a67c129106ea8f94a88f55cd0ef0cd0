@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv09bkfj7d10f7320899",
+      "mode": "compact",
+      "sourceRef": "jwh3times/install-scripts",
+      "sourceHead": "b2646d8a032db9652c727c075c4e19ec910cd0e4",
+      "sourceSubject": "feat: install cst without npm, by a script over the release assets",
+      "targetBefore": "4c19033e7d85a9c837a6bfa63b1c89aeab6b7450",
+      "landingCommit": "a4cf18af7a67c129106ea8f94a88f55cd0ef0cd0",
+      "base": "4c19033e7d85a9c837a6bfa63b1c89aeab6b7450",
+      "absorbedCommits": [
+        "b2646d8a032db9652c727c075c4e19ec910cd0e4"
+      ],
+      "absorbedChanges": [
+        "ch_0mv07vt4xf558bb3f7208"
+      ],
+      "resultTree": "5a4db39920864e6fd86678b86b00ff68cf4c7c94",
+      "createdAt": "2026-10-09T00:58:38.770Z"
+    }
+  ]
+}
