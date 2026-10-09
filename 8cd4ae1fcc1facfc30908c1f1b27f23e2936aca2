@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv0bydm46c01b92363be",
+      "mode": "compact",
+      "sourceRef": "jwh3times/v0.21.0-with-install-scripts",
+      "sourceHead": "ccda7d7f36bfd04c78950b53f7f53d36b11356a3",
+      "sourceSubject": "docs: make v0.21.0 the release that carries the install scripts",
+      "targetBefore": "a4cf18af7a67c129106ea8f94a88f55cd0ef0cd0",
+      "landingCommit": "8cd4ae1fcc1facfc30908c1f1b27f23e2936aca2",
+      "base": "a4cf18af7a67c129106ea8f94a88f55cd0ef0cd0",
+      "absorbedCommits": [
+        "ccda7d7f36bfd04c78950b53f7f53d36b11356a3"
+      ],
+      "absorbedChanges": [
+        "ch_0mv0bx2k5814bbbdda715"
+      ],
+      "resultTree": "2e57ab00b8388f286d944bf385bb541d076d742c",
+      "createdAt": "2026-10-09T02:12:22.255Z"
+    }
+  ]
+}
