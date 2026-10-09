@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv0ikhcu5ae9a010720c",
+      "mode": "compact",
+      "sourceRef": "jwh3times/document-repository-rules",
+      "sourceHead": "917b6c1d7b39ccec1922a28e6c03fce9fe345949",
+      "sourceSubject": "docs: record the repository's rulesets and merge settings",
+      "targetBefore": "554dc2ce4f7a769a2839c2436009a3a20c5e589a",
+      "landingCommit": "9529c0ddda2fa05ad7afdc858fa474433d9b9654",
+      "base": "554dc2ce4f7a769a2839c2436009a3a20c5e589a",
+      "absorbedCommits": [
+        "917b6c1d7b39ccec1922a28e6c03fce9fe345949"
+      ],
+      "absorbedChanges": [
+        "ch_0mv0ijk39fe8610748a03"
+      ],
+      "resultTree": "79bb59c37ff8c1aa3f07e250989edd61ebff2b8a",
+      "createdAt": "2026-10-09T05:17:31.236Z"
+    }
+  ]
+}
