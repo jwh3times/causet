@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv72yxqc506e3ccbbd82",
+      "mode": "compact",
+      "sourceRef": "feat/finish-causet-rename-user-visible",
+      "sourceHead": "6b894ce31bc03daab78099dc981f3ce0b575b9ec",
+      "sourceSubject": "feat: finish the causet rename in what users see (#230)",
+      "targetBefore": "71a18b309f3621d7667924fca6acd1fd8fd8312a",
+      "landingCommit": "5ad5a6354b366a006cd415a12c6d53712fa08e38",
+      "base": "71a18b309f3621d7667924fca6acd1fd8fd8312a",
+      "absorbedCommits": [
+        "6b894ce31bc03daab78099dc981f3ce0b575b9ec"
+      ],
+      "absorbedChanges": [
+        "ch_0mv71owexe8ea27285605"
+      ],
+      "resultTree": "d9334ad9b8d49333ca705a5016a86981094adb32",
+      "createdAt": "2026-10-13T19:35:15.015Z"
+    }
+  ]
+}
