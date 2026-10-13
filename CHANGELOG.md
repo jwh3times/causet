@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Notice: v0.23.0 removes the `vlab` command alias** (ADR-0038 §4, #231).
+  `cst` has been the command since v0.19.0, and `vlab` is the same program
+  under its old name. Change any script or habit that still calls `vlab` to
+  `cst` before upgrading past this release; the arguments and output are the
+  same. The npm package and both install scripts will stop creating `vlab`,
+  and an upgrade will remove the one an earlier install placed. Existing
+  `vlab/ws/<name>` workspace branches keep their names.
 - **The `vcs-lab` migration window has ended** (ADR-0039 §8, #170), as v0.21.0
   announced. This is a breaking change for a repository that has not run
   `cst migrate`, and for a `VLAB_*` variable still in use.
