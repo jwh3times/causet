@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv76qmdf3feb08c825a2",
+      "mode": "compact",
+      "sourceRef": "docs/vlab-alias-removal-notice",
+      "sourceHead": "627e73d5adb754f9a7ff32174b203d8f8cdbf450",
+      "sourceSubject": "docs: announce the removal of the vlab alias in v0.23.0 (#231)",
+      "targetBefore": "5ad5a6354b366a006cd415a12c6d53712fa08e38",
+      "landingCommit": "0b626a22cbc2da254b306e90c7e17b40587ca59d",
+      "base": "5ad5a6354b366a006cd415a12c6d53712fa08e38",
+      "absorbedCommits": [
+        "627e73d5adb754f9a7ff32174b203d8f8cdbf450"
+      ],
+      "absorbedChanges": [
+        "ch_0mv76cdkta75bfe4915be"
+      ],
+      "resultTree": "b41fd200be511d6365d16abe8d7474098d2fa1d8",
+      "createdAt": "2026-10-13T21:20:45.510Z"
+    }
+  ]
+}
