@@ -53,9 +53,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Fetch the causal refs the real-clone fixture needs
-        # A checkout brings branches and tags but not notes or refs/vcs-lab/*;
-        # the harness pins the real clone to v0.18.0 and notes 4089785.
-        run: git fetch --no-tags origin '+refs/notes/vcs-lab:refs/notes/vcs-lab' '+refs/vcs-lab/*:refs/vcs-lab/*'
+        # A checkout brings branches and tags but not notes or refs/causet/*;
+        # the harness pins the real clone to v0.18.0, notes 4089785 and
+        # retention 0435137, all of which these two refs contain.
+        run: git fetch --no-tags origin '+refs/notes/causet:refs/notes/causet' '+refs/causet/*:refs/causet/*'
       - uses: actions/setup-node@v4
         with:
           node-version: 24
