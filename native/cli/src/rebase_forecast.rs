@@ -188,7 +188,7 @@ fn forecast_in_session(
   if busy {
     return Err(GitError::new(
       "operation-in-progress",
-      "Finish or abort the current VCS Lab operation before forecasting a rebase.",
+      "Finish or abort the current causet operation before forecasting a rebase.",
     ));
   }
   // Resolved before any planning, so a worktree that cannot supply an overlay

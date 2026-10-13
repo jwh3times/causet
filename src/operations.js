@@ -809,7 +809,7 @@ function startOperation(sourceRef, plan, options, cwd) {
 function reconcileInSession(sourceRef, options, cwd) {
   if (readReconciliationState(cwd) || readRebaseState(cwd)) {
     throw new CliError(
-      "A VCS Lab operation is already in progress in this worktree.",
+      "A causet operation is already in progress in this worktree.",
       { code: "operation-in-progress", details: "Inspect the active reconciliation or rebase before starting another operation." },
     );
   }

@@ -38,6 +38,20 @@
   `refs/causet/retention`, and is the same repository as before: `v0.18.0`,
   notes `4089785`, and retention now pinned to `0435137`
   (`--real-retention`).
+- **The product's own output says causet, not "VCS Lab"** (#230). Error codes,
+  exit statuses and JSON shapes are unchanged; only wording and names that are
+  not persisted moved, in both CLIs alike.
+  - **Messages and details** such as "A causet operation is already in
+    progress in this worktree.", and the published descriptions of
+    `operation-in-progress`, `no-operation-pending` and `out-of-band-change`.
+    Callers branch on `code` (ADR-0021), so nothing that reads the code
+    changes.
+  - **Temporary directories** the product creates are `causet-forecast-*`,
+    `causet-scale-benchmark-*` and `causet-spec-benchmark-*`.
+  - **Demos and the benchmark check** use `causet-*demo-*` and
+    `causet-benchmark-check-*`, and the fixture identities say causet.
+    `npm run demo:clean` still removes fixtures left under the former
+    `vcs-lab-` names.
 ## 0.21.0
 
 **`cst` is now a native executable.** This release is the cutover of

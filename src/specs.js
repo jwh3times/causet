@@ -1329,7 +1329,7 @@ export function applyPendingSpecMerges(options = {}) {
   const cwd = options.cwd ?? process.cwd();
   const operation = readPendingOperation(cwd);
   if (!operation?.current) {
-    throw new CliError("No VCS Lab conflict is pending in this worktree.",
+    throw new CliError("No causet conflict is pending in this worktree.",
       { code: "nothing-pending" });
   }
   assertCurrentSpecDecisions(operation);
@@ -1415,7 +1415,7 @@ export function benchmarkSpecIndex(options = {}) {
     throw new CliError("The benchmark is limited to 100,000 generated blocks.",
       { code: "usage-invalid-option-value" });
   }
-  const temporary = temporaryDirectory("vcs-lab-spec-benchmark-");
+  const temporary = temporaryDirectory("causet-spec-benchmark-");
   try {
     runGit(["init", "-q", "-b", "main"], { cwd: temporary });
     const context = repoContext(temporary);

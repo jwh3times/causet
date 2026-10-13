@@ -1323,7 +1323,7 @@ pub fn benchmark_spec_index(documents: Option<&str>, blocks: Option<&str>) -> Gi
       "The benchmark is limited to 100,000 generated blocks.",
     ));
   }
-  let temporary = crate::export::temporary_directory("vcs-lab-spec-benchmark-")?;
+  let temporary = crate::export::temporary_directory("causet-spec-benchmark-")?;
   let outcome = benchmark_in(&temporary, documents, blocks_per_document);
   match std::fs::remove_dir_all(&temporary) {
     Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
@@ -3024,7 +3024,7 @@ pub(crate) fn write_journal(file: &str, operation: &Value, cwd: &str) -> GitResu
 /// the paused step, materialized and recorded on the journal.
 pub fn apply_pending_spec_merges(path: Option<&str>, all: bool, cwd: &str) -> GitResult<Value> {
   let Some(mut operation) = read_pending_operation(cwd)?.filter(|operation| truthy(get(Some(operation), "current"))) else {
-    return Err(GitError::new("nothing-pending", "No VCS Lab conflict is pending in this worktree."));
+    return Err(GitError::new("nothing-pending", "No causet conflict is pending in this worktree."));
   };
   assert_current_spec_decisions(Some(&operation))?;
   let mut plans = spec_merge_plans_for_operation(Some(&operation), cwd)?;

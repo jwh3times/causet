@@ -414,7 +414,7 @@ fn with_temporary_worktree(
   callback: impl FnOnce(&str) -> GitResult<Object>,
 ) -> GitResult<(Object, Value)> {
   let total_started = Instant::now();
-  let root = crate::export::temporary_directory("vcs-lab-forecast-")?;
+  let root = crate::export::temporary_directory("causet-forecast-")?;
   let worktree = text::join(&root, "worktree");
   let mut added = false;
   let mut value: Option<Object> = None;
@@ -1245,7 +1245,7 @@ fn forecast_in_session(
   if busy {
     return Err(GitError::new(
       "operation-in-progress",
-      "Finish or abort the current VCS Lab operation before forecasting another.",
+      "Finish or abort the current causet operation before forecasting another.",
     ));
   }
   // Resolved before any planning, so a worktree that cannot supply an overlay

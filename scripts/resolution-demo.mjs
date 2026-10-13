@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const parent = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-resolution-demo-"));
+const parent = fs.mkdtempSync(path.join(os.tmpdir(), "causet-resolution-demo-"));
 const repo = path.join(parent, "repo");
 const workspace = path.join(parent, "reuse-worktree");
 fs.mkdirSync(repo);
@@ -47,8 +47,8 @@ console.log(`Creating reusable-resolution demo at ${repo}\n`);
 git(repo, "init", "-b", "main");
 git(repo, "config", "core.autocrlf", "false");
 git(repo, "config", "core.eol", "lf");
-git(repo, "config", "user.name", "VCS Lab Demo");
-git(repo, "config", "user.email", "vcs-lab@example.test");
+git(repo, "config", "user.name", "causet Demo");
+git(repo, "config", "user.email", "causet@example.test");
 vlab(repo, "init");
 
 write(repo, "shared.txt", "base policy\n");

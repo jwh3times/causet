@@ -3118,7 +3118,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
     commitMessagesIncluded: false,
   });
   assert.equal(scale.cleanup.temporaryFixtureRemoved, true);
-  assert.doesNotMatch(JSON.stringify(scale), /vcs-lab-scale-benchmark-/);
+  assert.doesNotMatch(JSON.stringify(scale), /causet-scale-benchmark-/);
 
   // A tiny custom fixture cannot dilute the catalog's fixed batch cost, so
   // the analysis asks for more volume instead of misreporting that cost as

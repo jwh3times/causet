@@ -191,7 +191,7 @@ function emptySimulation(status, blockedReason = null, remainingChanges = 0) {
 function forecastRebaseInSession(ontoRef, sourceRef, options, cwd) {
   if (readReconciliationState(cwd) || readRebaseState(cwd)) {
     throw new CliError(
-      "Finish or abort the current VCS Lab operation before forecasting a rebase.",
+      "Finish or abort the current causet operation before forecasting a rebase.",
         { code: "operation-in-progress" },
     );
   }

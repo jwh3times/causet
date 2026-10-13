@@ -465,7 +465,7 @@ export function benchmarkRepositoryScale(options = {}, fixtureCallback = null) {
     );
   }
 
-  const benchmarkRoot = temporaryDirectory("vcs-lab-scale-benchmark-");
+  const benchmarkRoot = temporaryDirectory("causet-scale-benchmark-");
   const repo = path.join(benchmarkRoot, "repo");
   const worktreeRoot = path.join(benchmarkRoot, "worktrees");
   const setupCollector = beginGitMetrics("scale-fixture-setup");
@@ -474,9 +474,9 @@ export function benchmarkRepositoryScale(options = {}, fixtureCallback = null) {
   try {
     fs.mkdirSync(repo, { recursive: true });
     runGit(["init", "-q", "-b", "main"], { cwd: repo });
-    runGit(["config", "user.name", "VCS Lab Scale Fixture"], { cwd: repo });
+    runGit(["config", "user.name", "causet Scale Fixture"], { cwd: repo });
     runGit(
-      ["config", "user.email", "vcs-lab-scale@example.invalid"],
+      ["config", "user.email", "causet-scale@example.invalid"],
       { cwd: repo },
     );
     runGit(["config", "core.autocrlf", "false"], { cwd: repo });

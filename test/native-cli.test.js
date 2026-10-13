@@ -1351,7 +1351,7 @@ test("spec resolve applies a paused step's deterministic merges natively (#149)"
     [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { state.steps = [{ semanticMerges: [{ algorithm: "stable-markdown-three-way/v1" }] }]; }), /unsupported merge algorithm/],
     [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { state.forecastApproval = { applied: "x" }; }), /flatMap is not a function/],
     [["spec", "resolve", "--all"], {}, (repo) => editJournal(repo, (state) => { delete state.id; })],
-    [["spec", "resolve", "--all"], {}, (repo) => fs.rmSync(journal(repo)), /No VCS Lab conflict is pending/],
+    [["spec", "resolve", "--all"], {}, (repo) => fs.rmSync(journal(repo)), /No causet conflict is pending/],
   ];
   const fixtures = new Map();
   for (const [index, [args, options = {}, prepare, outcome]] of cases.entries()) {
@@ -1711,7 +1711,7 @@ test("forecast simulates the same reconciliation natively under both engines (#1
     [["forecast", "feature", "--json"], "merge", by({ worktree: /git-application-error/, "merge-tree": /"reason": "merge-commit"/ })],
     [["forecast", "feature"], "attributes", by({ worktree: /status {7}complete/, "merge-tree": /attributes-changed at step 1/ })],
     [["forecast", "feature", "--json"], "empty", by({ worktree: /git-application-error/, "merge-tree": /"reason": "empty-step"/ })],
-    [["forecast", "feature"], "paused", /Finish or abort the current VCS Lab operation/],
+    [["forecast", "feature"], "paused", /Finish or abort the current causet operation/],
     [["forecast", "no-such-branch"], "clean", /did not resolve every requested object expression/],
     [["forecast", "feature", "--target-checkpoint", "--json"], "clean", /needs a registered workspace/],
   ];
@@ -2382,7 +2382,7 @@ test("rebase-forecast simulates the same rewrite natively under both engines (#1
   // it, so every hash and digest must agree and only what a run mints differs.
   const steady = (text) => steadyMetrics(text)
     .replace(/\b[a-z]+(?:_[a-z]+)*_[0-9a-z]{9}[0-9a-f]{12}\b/g, "<id>")
-    .replace(/vcs-lab-forecast-[A-Za-z0-9]+/g, "<temporary>")
+    .replace(/causet-forecast-[A-Za-z0-9]+/g, "<temporary>")
     .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<time>")
     .replace(/("[A-Za-z]*Ms": )-?[\d.e+-]+/g, "$1<ms>");
   const dated = {
@@ -2550,7 +2550,7 @@ test("rebase-forecast simulates the same rewrite natively under both engines (#1
     [({ commits }) => ["rebase-forecast", "main", "--fixup", `${commits[1]}=${commits[0]}`, "--json"], "absorb-conflict", /"outcome": "blocked-absorption"/],
     [() => ["rebase-forecast", "main", "--target-checkpoint"], "workspace", /overlay after [0-9a-f]{40}[^]*caller draft 1 file carried as the overlay/],
     [() => ["rebase-forecast", "main", "--target-checkpoint", "--json"], "clean", /needs a registered workspace/],
-    [() => ["rebase-forecast", "main"], "paused", /Finish or abort the current VCS Lab operation before forecasting a rebase/],
+    [() => ["rebase-forecast", "main"], "paused", /Finish or abort the current causet operation before forecasting a rebase/],
     [() => ["rebase-forecast", "no-such-branch", "--json"], "clean", /"code": "revision-not-resolved"/],
   ];
   const fixtures = new Map();
