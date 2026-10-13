@@ -128,6 +128,9 @@ is compiled.
 
 The command is `cst`. `vlab`, the command's old name, still works as an alias
 for the same program during the transition, and prints identical output.
+The alias is removed in v0.23.0
+([ADR-0038](docs/adr/0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md)
+§4), so call `cst` in anything you keep.
 
 ## Develop from a checkout
 
