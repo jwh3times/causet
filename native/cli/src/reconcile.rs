@@ -1137,7 +1137,7 @@ fn reconcile_in_session(
     return Err(
       GitError::new(
         "operation-in-progress",
-        "A VCS Lab operation is already in progress in this worktree.",
+        "A causet operation is already in progress in this worktree.",
       )
       .details("Inspect the active reconciliation or rebase before starting another operation."),
     );

@@ -23,6 +23,18 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const temporaryDir = os.tmpdir();
 
+/** The former product name: fixtures made before the rename (#230) keep it. */
+const FORMER = "vcs-lab-";
+const CURRENT = "causet-";
+
+/**
+ * Temporary directories the product itself creates and removes (`src/` and
+ * `native/cli/src/`), which only an interrupted run leaves behind. `--all`
+ * names them rather than sweeping every `causet-*` directory, which could be
+ * anything.
+ */
+const PRODUCT_PREFIXES = ["causet-forecast-", "causet-scale-benchmark-", "causet-spec-benchmark-"];
+
 /**
  * The prefixes to sweep, read out of the scripts themselves rather than listed
  * here. A hardcoded list silently stops covering a demo the day someone adds
@@ -48,7 +60,12 @@ export function fixturePrefixes() {
   // Only accept something shaped like one of this project's fixture prefixes.
   // A regex over source text will eventually match prose; this makes that
   // harmless rather than a directory nobody meant to sweep.
-  return [...prefixes].filter((prefix) => prefix.startsWith("vcs-lab-")).sort();
+  const ours = [...prefixes].filter((prefix) => prefix.startsWith(CURRENT) || prefix.startsWith(FORMER));
+  // A fixture left by a checkout from before the rename has the former name.
+  for (const prefix of [...ours]) {
+    if (prefix.startsWith(CURRENT)) ours.push(FORMER + prefix.slice(CURRENT.length));
+  }
+  return [...new Set(ours)].sort();
 }
 
 /** Every fixture directory in the temporary directory matching a prefix. */
@@ -63,7 +80,7 @@ export function findFixtures(prefixes, { all = false } = {}) {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const matches = all
-      ? entry.name.startsWith("vcs-lab-")
+      ? entry.name.startsWith(FORMER) || [...prefixes, ...PRODUCT_PREFIXES].some((prefix) => entry.name.startsWith(prefix))
       : prefixes.some((prefix) => entry.name.startsWith(prefix));
     if (!matches) continue;
     const absolute = path.join(temporaryDir, entry.name);
@@ -136,7 +153,7 @@ function main() {
 
   if (fixtures.length === 0) {
     console.log(
-      `No ${all ? "vcs-lab" : "demonstration"} fixtures in ${temporaryDir}.`,
+      `No ${all ? "causet" : "demonstration"} fixtures in ${temporaryDir}.`,
     );
     return;
   }

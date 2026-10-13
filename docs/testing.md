@@ -835,7 +835,7 @@ check consumes it. Reading v2 data migrates its shape in memory only; recording
 preserves those historical measurements and every other identified entry.
 Unsupported schemas or changed profiles/tolerances require an explicit migration;
 recording never silently discards old measurements or relaxes the limits.
-An interrupted run removes its `vcs-lab-benchmark-check-*` fixtures on SIGINT.
+An interrupted run removes its `causet-benchmark-check-*` fixtures on SIGINT.
 Record or refresh an identified host deliberately on a quiet machine in a clean
 checkout, review the diff, and commit it with the reason the numbers changed:
 

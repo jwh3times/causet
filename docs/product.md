@@ -426,7 +426,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 
 | ID | Pri | Requirement | Status | Acceptance signal |
 | --- | --- | --- | --- | --- |
-| FR-PROTO-01 | P0 | Every persisted record shall carry a schema identifier and version. | Implemented | Current records use namespaced `vcs-lab.*` schemas. |
+| FR-PROTO-01 | P0 | Every persisted record shall carry a schema identifier and version. | Implemented | New records use namespaced `causet.*` schemas; records written before the rename keep their `vcs-lab.*` identifiers and are read as the `causet.*` families they name (ADR-0039). |
 | FR-PROTO-02 | P1 | Unknown newer schemas shall fail safely instead of being treated as trusted coverage. | Implemented for portable causal facts | Unknown or unsupported records are diagnosed and quarantined from coverage, resolution lookup, and export. |
 | FR-PROTO-03 | P1 | A metadata inventory shall enumerate notes, hidden refs, sidecars, worktree-private state, and required object reachability. | Implemented | `cst metadata status --json` explains scope, completeness, and damage with stable codes. |
 | FR-PROTO-04 | P1 | Export/import shall preserve causal records and retained objects without requiring users to know internal refspecs. | Implemented experimentally | Deterministic Git-bundle envelopes round-trip between clones idempotently. |

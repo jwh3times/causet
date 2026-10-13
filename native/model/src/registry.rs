@@ -344,7 +344,7 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
   ),
   (
     "operation-in-progress",
-    "A VCS Lab operation journal is present in an affected worktree. Finish or abort it first.",
+    "A causet operation journal is present in an affected worktree. Finish or abort it first.",
   ),
   (
     "notes-locked",
@@ -356,7 +356,7 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
   ),
   (
     "no-operation-pending",
-    "No VCS Lab operation is pending, so there is nothing to continue or abort.",
+    "No causet operation is pending, so there is nothing to continue or abort.",
   ),
   (
     "operation-state-invalid",
@@ -368,7 +368,7 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
   ),
   (
     "out-of-band-change",
-    "Git's state and the VCS Lab journal disagree, because Git was driven directly. Abort and restart the operation.",
+    "Git's state and the causet journal disagree, because Git was driven directly. Abort and restart the operation.",
   ),
   (
     "repository-mismatch",

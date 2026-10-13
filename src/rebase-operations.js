@@ -1293,7 +1293,7 @@ function startOperation(branch, ontoRef, plan, options, cwd) {
 function startRebaseInSession(ontoRef, options, cwd) {
   if (readReconciliationState(cwd) || readRebaseState(cwd)) {
     throw new CliError(
-      "A VCS Lab operation is already in progress in this worktree.",
+      "A causet operation is already in progress in this worktree.",
         { code: "operation-in-progress" },
     );
   }
@@ -1627,7 +1627,7 @@ function continueRebaseInSession(options, cwd) {
         "Git's pending merge does not match the causal rebase journal.",
         {
           code: "out-of-band-change",
-          details: "Abort the VCS Lab rebase to restore the original branch tip.",
+          details: "Abort the causet rebase to restore the original branch tip.",
         },
       );
     }
@@ -1636,7 +1636,7 @@ function continueRebaseInSession(options, cwd) {
     if (!gitHead || gitHead !== operation.current.sourceCommit) {
       throw new CliError(
         "Git's pending cherry-pick does not match the causal rebase journal.",
-        { code: "out-of-band-change", details: "Abort the VCS Lab rebase to restore the original branch tip." },
+        { code: "out-of-band-change", details: "Abort the causet rebase to restore the original branch tip." },
       );
     }
   }

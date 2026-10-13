@@ -1788,7 +1788,7 @@ fn start_in_session(onto_ref: &str, options: &StartOptions, cwd: &str) -> GitRes
   if busy {
     return Err(GitError::new(
       "operation-in-progress",
-      "A VCS Lab operation is already in progress in this worktree.",
+      "A causet operation is already in progress in this worktree.",
     ));
   }
   let forecast_id = options.forecast_id.filter(|id| !id.is_empty());
@@ -2245,7 +2245,7 @@ fn continue_in_session(fork: bool, message: Option<&str>, cwd: &str) -> GitResul
           "out-of-band-change",
           "Git's pending merge does not match the causal rebase journal.",
         )
-        .details("Abort the VCS Lab rebase to restore the original branch tip."),
+        .details("Abort the causet rebase to restore the original branch tip."),
       );
     }
   } else {
@@ -2257,7 +2257,7 @@ fn continue_in_session(fork: bool, message: Option<&str>, cwd: &str) -> GitResul
           "out-of-band-change",
           "Git's pending cherry-pick does not match the causal rebase journal.",
         )
-        .details("Abort the VCS Lab rebase to restore the original branch tip."),
+        .details("Abort the causet rebase to restore the original branch tip."),
       );
     }
   }

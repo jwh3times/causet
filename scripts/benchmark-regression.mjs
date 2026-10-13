@@ -78,7 +78,7 @@ export const SCALE_PHASES = [
   "workspaceCreate",
   "workspaceCreateCone",
 ];
-const FIXTURE_PREFIX = "vcs-lab-benchmark-check-";
+const FIXTURE_PREFIX = "causet-benchmark-check-";
 const activeFixtures = new Set();
 
 function run(command, commandArgs, cwd, env = {}) {
@@ -151,8 +151,8 @@ function makeRepo() {
   run("git", ["init", "-q", "-b", "main"], repo);
   run("git", ["config", "core.autocrlf", "false"], repo);
   run("git", ["config", "core.eol", "lf"], repo);
-  run("git", ["config", "user.name", "VCS Lab Benchmark"], repo);
-  run("git", ["config", "user.email", "vcs-lab-benchmark@example.invalid"], repo);
+  run("git", ["config", "user.name", "causet Benchmark"], repo);
+  run("git", ["config", "user.email", "causet-benchmark@example.invalid"], repo);
   return { root, repo };
 }
 

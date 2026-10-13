@@ -595,7 +595,7 @@ pub fn benchmark_repository_scale(options: &Options) -> GitResult<Value> {
       "The scale benchmark is limited to 5,000 total note and resolution records.",
     ));
   }
-  let root = crate::export::temporary_directory("vcs-lab-scale-benchmark-")?;
+  let root = crate::export::temporary_directory("causet-scale-benchmark-")?;
   let mut setup = Some(metrics::begin("scale-fixture-setup"));
   let outcome = benchmark_in(&root, &sizes, &mut setup);
   if let Some(setup) = setup {
@@ -617,8 +617,8 @@ fn benchmark_in(
   let setup_started = Instant::now();
   std::fs::create_dir_all(&repo).map_err(|error| io(&error, "mkdir", &repo))?;
   git(&["init", "-q", "-b", "main"], &repo)?;
-  git(&["config", "user.name", "VCS Lab Scale Fixture"], &repo)?;
-  git(&["config", "user.email", "vcs-lab-scale@example.invalid"], &repo)?;
+  git(&["config", "user.name", "causet Scale Fixture"], &repo)?;
+  git(&["config", "user.email", "causet-scale@example.invalid"], &repo)?;
   git(&["config", "core.autocrlf", "false"], &repo)?;
   let git_version = engine::git_version(&repo)?.raw;
   let empty_tree = git_with_input(&["mktree"], &repo, "")?.stdout;

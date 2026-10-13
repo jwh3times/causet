@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
 
-const repo = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-conflict-demo-"));
+const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-conflict-demo-"));
 
 function run(command, args, { quiet = false } = {}) {
   const output = execFileSync(command, args, {
@@ -32,8 +32,8 @@ console.log(`Creating resumable-conflict demo at ${repo}\n`);
 git("init", "-b", "main");
 git("config", "core.autocrlf", "false");
 git("config", "core.eol", "lf");
-git("config", "user.name", "VCS Lab Demo");
-git("config", "user.email", "vcs-lab@example.test");
+git("config", "user.name", "causet Demo");
+git("config", "user.email", "causet@example.test");
 vlab("init");
 
 write("shared.txt", "base\n");

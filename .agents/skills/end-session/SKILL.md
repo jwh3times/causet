@@ -231,18 +231,20 @@ Show findings before acting. Work through:
   (`git worktree remove --force <path>`, `git branch -D <branch>`,
   `git worktree prune`, deleting `.git/causet/` or `.git/vcs-lab/`). Anything the user created on
   purpose stays.
-- **Disposable fixtures in the OS temp directory.** Tests, forecasts, and the
-  benchmarks remove their own `vcs-lab-test-*`, `vcs-lab-forecast-*`,
-  `vcs-lab-scale-benchmark-*`, `vcs-lab-spec-benchmark-*`, and
-  `vcs-lab-benchmark-check-*` repositories, so
+- **Disposable fixtures in the OS temp directory.** Forecasts and the
+  benchmarks remove their own `causet-forecast-*`,
+  `causet-scale-benchmark-*`, `causet-spec-benchmark-*`, and
+  `causet-benchmark-check-*` repositories, and the suites their
+  `vcs-lab-test-*` ones, so
   any of those left behind mark an interrupted run; the demos keep
-  `vcs-lab-*demo-*` repositories by design for inspection; gate or experiment
-  scripts may leave `vcs-lab-gate-*` and similar. List them and remove after a
-  yes; a leftover `vcs-lab-scale-benchmark-*` directory makes the benchmark
-  test's cleanup assertion fail in the next session.
+  `causet-*demo-*` repositories by design for inspection; gate or experiment
+  scripts may leave `vcs-lab-gate-*` and similar. A checkout from before #230
+  made all of them under `vcs-lab-`, so look for both names. List them and
+  remove after a yes; a leftover `causet-scale-benchmark-*` directory makes the
+  benchmark test's cleanup assertion fail in the next session.
 
   ```bash
-  ls -d "$(node -e 'console.log(require("os").tmpdir())')"/vcs-lab-* 2>/dev/null
+  ls -d "$(node -e 'console.log(require("os").tmpdir())')"/{causet,vcs-lab}-* 2>/dev/null
   ```
 
 - **Lingering processes.** The release gate requires that no causet Node or

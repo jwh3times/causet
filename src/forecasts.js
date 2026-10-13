@@ -110,7 +110,7 @@ function saveForecast(forecast, cwd) {
 
 function withTemporaryWorktree(targetHead, cwd, callback) {
   const totalStarted = performance.now();
-  const temporaryRoot = temporaryDirectory("vcs-lab-forecast-");
+  const temporaryRoot = temporaryDirectory("causet-forecast-");
   const temporaryWorktree = path.join(temporaryRoot, "worktree");
   let added = false;
   let pruneAfterRemoval = false;
@@ -990,7 +990,7 @@ export function simulateCausalRebasePlan(plan, cwd = process.cwd()) {
 function forecastReconciliationInSession(sourceRef, options, cwd) {
   if (readReconciliationState(cwd) || readRebaseState(cwd)) {
     throw new CliError(
-      "Finish or abort the current VCS Lab operation before forecasting another.",
+      "Finish or abort the current causet operation before forecasting another.",
         { code: "operation-in-progress" },
     );
   }
