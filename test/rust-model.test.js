@@ -8,8 +8,8 @@
  *
  * Every case runs through `src/` and through `model-probe` and must agree
  * exactly; a malformed member is a field error in both, never a throw (#172).
- * The one deliberate exclusion is V8's non-ISO date fallback (#173):
- * timestamps here are all in the ECMAScript date-time format.
+ * Timestamps are judged by the ECMAScript date-time format alone, on both
+ * sides: neither consults V8's non-ISO `Date.parse` fallback (#173).
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -32,6 +32,7 @@ import {
   RESOURCE_BOUNDS,
   SCHEMA_NAMESPACE,
   assertReadableSchema,
+  isTimestamp,
   referencedObjectsForRecord,
   resolutionSignatureFor,
   schemaClassification,
@@ -290,8 +291,6 @@ const REPLACEMENTS = [null, "", "x", "abcd", 0, 1.5, -0, true, false, [], {}, [n
   [OID, OID2], ["a", ""], [{ role: "generated", actor: "x" }], [{ role: "owner", actor: "x" }], [["generated"]],
   { commit: OID }, { blob: OID }];
 
-const ISO_SHAPE = /^[+-]?\d{4,6}(-\d{2}(-\d{2})?)?(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
-
 /** Each record, and every record one member away from it. */
 function recordCorpus() {
   const corpus = [];
@@ -302,8 +301,6 @@ function recordCorpus() {
       const { [field]: _removed, ...without } = record;
       corpus.push(without);
       for (const value of REPLACEMENTS) {
-        // A string createdAt outside the ECMAScript format is V8's fallback (#173).
-        if (field === "createdAt" && typeof value === "string" && !ISO_SHAPE.test(value)) continue;
         corpus.push({ ...record, [field]: value });
       }
     }
@@ -379,29 +376,37 @@ test("SHA-256 agrees with node:crypto", { skip }, () => {
   for (const [index, data] of inputs.entries()) assert.equal(replies[index].hex, sha256(data), JSON.stringify(data));
 });
 
-test("createdAt timestamps in the ECMAScript format are judged as Date.parse judges them (#173 excluded)", { skip }, () => {
+test("createdAt timestamps are judged by the ECMAScript format alone, alike in both validators (#173)", { skip }, () => {
   const next = random(173);
   const two = (limit) => String(Math.floor(next() * limit)).padStart(2, "0");
-  const values = [];
+  // What V8's Date.parse fallback accepts and the format does not.
+  const values = ["1", "March 7, 2006", "2020/01/02", "2020-01-01 10:00", "2020-1-1", "+2020-01-01", "20201-01",
+    "-000000-01-01", "+000002-13", "+000000-01-01", "-271821-04-19T23:00-01:00", "-271821-04-19T23:59:59.999Z",
+    "+275760-09-13T00:00:00.000Z", "+275760-09-13T00:00:00.001Z", "2020-01-01T10:00:00.000Z ", ""];
   for (let index = 0; index < 3000; index += 1) {
-    const year = next() < 0.1 ? `${next() < 0.5 ? "+" : "-"}${String(Math.floor(next() * 300000)).padStart(6, "0")}`
-      : String(Math.floor(next() * 10000)).padStart(4, "0");
+    const year = next() < 0.2
+      ? `${next() < 0.5 ? "+" : "-"}${String(Math.floor(next() * (next() < 0.3 ? 3 : 300000))).padStart(6, "0")}`
+      : String(Math.floor(next() * 10000)).padStart(next() < 0.05 ? 5 : 4, "0");
     let value = year;
     if (next() < 0.9) value += `-${two(14)}`;
     if (next() < 0.8) value += `-${two(33)}`;
     if (next() < 0.7) {
-      value += `T${two(26)}:${two(62)}`;
+      value += `${next() < 0.05 ? " " : "T"}${two(26)}:${two(62)}`;
       if (next() < 0.8) value += `:${two(62)}`;
       if (next() < 0.5) value += `.${String(Math.floor(next() * 10000)).slice(0, 1 + Math.floor(next() * 4))}`;
       const zone = next();
       if (zone < 0.4) value += "Z";
       else if (zone < 0.6) value += `${next() < 0.5 ? "+" : "-"}${two(26)}:${two(62)}`;
     }
-    // Only full ECMAScript shapes: a date-only value keeps month and day
-    // together, since V8's fallback reads partial shapes its own way (#173).
-    if (/^[+-]?\d{4,6}(-\d{2}(-\d{2})?)?(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/.test(value)) values.push(value);
+    values.push(value);
   }
   const replies = probe(values.map((value) => ({ op: "date", value })));
-  const disagreements = values.filter((value, index) => replies[index].valid !== !Number.isNaN(Date.parse(value)));
+  const disagreements = values.filter((value, index) => replies[index].valid !== isTimestamp(value));
   assert.deepEqual(disagreements, []);
+  // The format is a subset of what Date.parse reads: nothing it refuses is accepted here.
+  assert.deepEqual(values.filter((value) => isTimestamp(value) && Number.isNaN(Date.parse(value))), []);
+  for (const value of ["1", "March 7, 2006", "2020/01/02", "2020-01-01 10:00"]) {
+    assert.equal(isTimestamp(value), false, value);
+    assert.equal(Number.isNaN(Date.parse(value)), false, `${value}: expected V8's fallback to read it`);
+  }
 });

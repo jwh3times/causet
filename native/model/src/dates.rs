@@ -1,10 +1,11 @@
-//! Whether a record's `createdAt` is a timestamp. The JavaScript validator asks
-//! `!Number.isNaN(Date.parse(value))`, and V8 answers from the ECMAScript
-//! date-time string format and, failing that, from an implementation-defined
-//! fallback no other implementation can reproduce (#173). This accepts exactly
-//! the ECMAScript format as V8 applies it: days 01-31 whatever the month,
-//! `24:00` only as `24:00`, `24:00:00` or `24:00:00.000...`, a fraction of one
-//! or more digits, offsets up to `±23:59`, and the ±8.64e15 ms range.
+//! Whether a record's `createdAt` is a timestamp. Both validators accept
+//! exactly the ECMAScript date-time string format (#173); `isTimestamp` in
+//! `src/schemas.js` is the same rule. V8's `Date.parse` also answers from an
+//! implementation-defined fallback no other implementation can reproduce,
+//! which neither side consults. The format, as V8 applies it: days 01-31
+//! whatever the month, `24:00` only as `24:00`, `24:00:00` or
+//! `24:00:00.000...`, a fraction of one or more digits, offsets up to
+//! `±23:59`, no year `-000000`, and the ±8.64e15 ms range.
 
 pub fn parses(text: &str) -> bool {
   parse(text.as_bytes()).is_some()
@@ -45,6 +46,10 @@ fn parse(bytes: &[u8]) -> Option<f64> {
       let negative = bytes[0] == b'-';
       at = 1;
       let value = number(bytes, &mut at, 6)?;
+      // ECMAScript has no year -000000; only +000000 names year zero.
+      if negative && value == 0 {
+        return None;
+      }
       if negative { -value } else { value }
     }
     _ => number(bytes, &mut at, 4)?,
@@ -156,6 +161,8 @@ mod tests {
       "+002020-01-01",
       "-000001-01-01",
       "+275760-09-13T00:00:00.000Z",
+      "+000000-01-01",
+      "-271821-04-19T23:00-01:00",
     ] {
       assert!(parses(accepted), "{accepted}");
     }
@@ -171,6 +178,11 @@ mod tests {
       "20200101",
       "2020-01-01T10:00:00.Z",
       "2020-01-01T10:00:00.000Z ",
+      "-000000-01-01",
+      "2020/01/02",
+      "2020-01-01 10:00",
+      "March 7, 2006",
+      "1",
     ] {
       assert!(!parses(refused), "{refused}");
     }
