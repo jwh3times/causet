@@ -1130,15 +1130,15 @@ fn require_workspace<'a>(workspaces: &'a [Value], value: &str, role: &str) -> Gi
 }
 
 /// `forecastWorkspaces(targetName, sourceName, { sourceCheckpoint,
-/// acceptCandidates })`: a forecast of reconciling one workspace's branch, or
-/// its latest checkpoint, into another, run in the target's worktree.
-///
-/// `src/cli.js` also hands it `targetCheckpoint`, which it does not read; a
-/// workspace forecast therefore never carries a target overlay.
+/// targetCheckpoint, acceptCandidates })`: a forecast of reconciling one
+/// workspace's branch, or its latest checkpoint, into another, run in the
+/// target's worktree, where `targetCheckpoint` carries the target's own
+/// checkpoint as an overlay.
 pub fn forecast_workspaces(
   target_name: &str,
   source_name: &str,
   source_checkpoint: bool,
+  target_checkpoint: bool,
   accept_candidates: bool,
   cwd: &str,
 ) -> GitResult<Value> {
@@ -1191,7 +1191,12 @@ pub fn forecast_workspaces(
   } else {
     None
   };
-  let scope = if checkpoint.is_some() { "source-checkpoint" } else { "committed-heads" };
+  let scope = match (checkpoint.is_some(), target_checkpoint) {
+    (true, true) => "source-and-target-checkpoint",
+    (true, false) => "source-checkpoint",
+    (false, true) => "target-checkpoint",
+    (false, false) => "committed-heads",
+  };
   let side = |workspace: &Value| {
     let mut side = Object::new();
     for (name, member) in [
@@ -1223,7 +1228,13 @@ pub fn forecast_workspaces(
   };
   let target_path = js_text(of(target, "path").as_ref());
   with_object_session(&target_path, || {
-    forecast_in_session(&source_ref, false, accept_candidates, Some(&comparison), &target_path)
+    forecast_in_session(
+      &source_ref,
+      target_checkpoint,
+      accept_candidates,
+      Some(&comparison),
+      &target_path,
+    )
   })
 }
 
@@ -1660,14 +1671,15 @@ pub fn format_forecast(forecast: &Value) -> String {
     lines.push("Review the heuristic candidates, then regenerate with:".into());
     lines.push(match comparison {
       Some(comparison) => format!(
-        "  cst workspace forecast {} {}{} --accept-candidates",
+        "  cst workspace forecast {} {}{}{} --accept-candidates",
         js_text(get(get(Some(comparison), "target"), "name")),
         js_text(get(get(Some(comparison), "source"), "name")),
-        if as_text(member("scope")).as_deref() == Some("source-checkpoint") {
+        if truthy(get(get(Some(comparison), "source"), "checkpoint")) {
           " --source-checkpoint"
         } else {
           ""
-        }
+        },
+        if truthy(member("targetOverlay")) { " --target-checkpoint" } else { "" }
       ),
       None => format!(
         "  cst forecast {} --accept-candidates",

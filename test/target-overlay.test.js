@@ -374,6 +374,84 @@ test("abort never invents bytes for an overlay it cannot read", (t) => {
 });
 
 // ---------------------------------------------------------------------------
+// Workspace forecasts (#211)
+// ---------------------------------------------------------------------------
+
+/** A second workspace on `feature`, holding a checkpointed draft of its own. */
+function sourceDraft(parent, repo) {
+  const source = path.join(parent, "source-ws");
+  vlab(repo, "workspace", "create", "source", "--from", "feature", "--path", source);
+  write(source, "shared.txt", "from feature, drafted\n");
+  return JSON.parse(
+    exec(vlabCommand, [...vlabPrefix(), "workspace", "checkpoint", "--label", "draft", "--json"], source),
+  );
+}
+
+test("a workspace forecast carries the target workspace's checkpoint as an overlay", (t) => {
+  const { parent, repo, workspace } = overlaid(t);
+  sourceDraft(parent, repo);
+  const captured = draftAndCheckpoint(workspace);
+
+  // Asked from another worktree, the overlay is still the target workspace's,
+  // and the source's own draft stays out of a forecast that did not ask for it.
+  const forecast = vlabJson(repo, "workspace", "forecast", "target", "source", "--target-checkpoint");
+  assert.equal(forecast.status, "complete");
+  assert.equal(forecast.scope, "target-checkpoint");
+  assert.equal(forecast.workspaceComparison.scope, "target-checkpoint");
+  assert.equal(forecast.workspaceComparison.source.checkpoint, null);
+  assert.equal(forecast.targetOverlay.checkpoint, captured.id);
+  assert.equal(forecast.targetOverlay.workspaceName, "target");
+  assert.ok(forecast.predictedOverlayTree);
+
+  // Without the option the same comparison ignores the draft, as before.
+  const plain = vlabJson(repo, "workspace", "forecast", "target", "source");
+  assert.equal(plain.scope, "committed-heads");
+  assert.equal(plain.targetOverlay, null);
+  assert.equal(plain.predictedResultTree, forecast.predictedResultTree);
+});
+
+test("a workspace forecast of both checkpoints has its own scope, and applies as approved", (t) => {
+  const { parent, repo, workspace } = overlaid(t);
+  const sourceCheckpoint = sourceDraft(parent, repo);
+  const targetCheckpoint = draftAndCheckpoint(workspace);
+
+  const forecast = vlabJson(repo, "workspace", "forecast", "target", "source",
+    "--source-checkpoint", "--target-checkpoint");
+  assert.equal(forecast.status, "complete");
+  assert.equal(forecast.scope, "source-and-target-checkpoint");
+  assert.equal(forecast.workspaceComparison.scope, "source-and-target-checkpoint");
+  assert.equal(forecast.sourceRef, sourceCheckpoint.id);
+  assert.equal(forecast.targetOverlay.checkpoint, targetCheckpoint.id);
+  assert.equal(forecast.targetOverlay.workspaceName, "target");
+  assert.ok(forecast.predictedOverlayTree);
+
+  vlabJson(workspace, "reconcile", forecast.sourceRef, "--use-forecast", forecast.id);
+  assert.equal(git(workspace, "rev-parse", "HEAD^{tree}"), forecast.predictedResultTree);
+  assert.equal(readText(workspace, "shared.txt"), "from feature, drafted\n");
+  assert.equal(readText(workspace, "target-only.txt"), "draft in progress\n");
+  assert.equal(fs.existsSync(path.join(workspace, "scratch.txt")), true);
+});
+
+test("a combined-scope forecast that names no overlay is refused", (t) => {
+  const { parent, repo, workspace } = overlaid(t);
+  sourceDraft(parent, repo);
+  draftAndCheckpoint(workspace);
+  const forecast = vlabJson(repo, "workspace", "forecast", "target", "source",
+    "--source-checkpoint", "--target-checkpoint");
+
+  // Without its overlay the record claims a combination it does not describe.
+  const root = git(workspace, "rev-parse", "--absolute-git-dir");
+  const file = path.join(root, "causet", "forecasts", `${forecast.id}.json`);
+  fs.writeFileSync(file, JSON.stringify({ ...forecast, targetOverlay: null }));
+  git(workspace, "checkout", "--", ".");
+  fs.rmSync(path.join(workspace, "scratch.txt"));
+
+  const refused = refusal(workspace, "reconcile", forecast.sourceRef, "--use-forecast", forecast.id);
+  assert.equal(refused.code, "malformed-input");
+  assert.match(refused.message, /invalid checkpoint metadata/);
+});
+
+// ---------------------------------------------------------------------------
 // Carrying an overlay through a causal rebase (ADR-0028 decision 5)
 // ---------------------------------------------------------------------------
 

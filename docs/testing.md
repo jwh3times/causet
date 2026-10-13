@@ -449,7 +449,7 @@ no output mode is known yet, while an unknown command is enveloped.
 
 `test/target-overlay.test.js` covers target-checkpoint forecasts
 ([ADR-0028](adr/0028-define-target-checkpoint-forecast-semantics.md)) on both the
-reconciliation and the causal-rebase path. Two of its seventeen cases carry the
+reconciliation and the causal-rebase path. Two of its twenty cases carry the
 contract's central claim, that an overlay is context rather than a draft commit:
 one compares an overlaid forecast with a bare one and
 requires the plan, the fingerprint, and the committed predicted tree to be

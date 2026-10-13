@@ -1006,7 +1006,8 @@ function formatForecast(forecast) {
           "cst workspace forecast",
           forecast.workspaceComparison.target.name,
           forecast.workspaceComparison.source.name,
-          forecast.scope === "source-checkpoint" ? "--source-checkpoint" : null,
+          forecast.workspaceComparison.source.checkpoint ? "--source-checkpoint" : null,
+          forecast.targetOverlay ? "--target-checkpoint" : null,
           "--accept-candidates",
         ].filter(Boolean).join(" ")
       : `cst forecast ${forecast.sourceRef} --accept-candidates`;

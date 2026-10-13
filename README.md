@@ -681,14 +681,17 @@ Compare two workspace branches without disturbing either worktree:
 cst workspace forecast agent-auth agent-payments
 cst workspace forecast agent-auth agent-payments --source-checkpoint
 cst workspace forecast agent-auth agent-payments --target-checkpoint
+cst workspace forecast agent-auth agent-payments --source-checkpoint --target-checkpoint
 ```
 
 The ordering is `target <= source`: this previews applying the committed head
 of `agent-payments` onto `agent-auth`. With `--source-checkpoint`, the source is
 the latest immutable checkpoint whose base still matches the source head. Live
-dirty bytes after that checkpoint remain excluded. The target is always its
-committed head. The forecast is stored privately in the target worktree, where
-its printed reconciliation command should be run.
+dirty bytes after that checkpoint remain excluded. The target is its committed
+head unless `--target-checkpoint` is given, as described below. The two options
+combine, and the forecast then reports the scope `source-and-target-checkpoint`,
+which is what its approval covers. The forecast is stored privately in the
+target worktree, where its printed reconciliation command should be run.
 
 ### Carrying the target's own uncommitted work
 

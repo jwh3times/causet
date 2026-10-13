@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **`cst workspace forecast --target-checkpoint` now carries the target
+  workspace's checkpoint as an overlay** (#211, ADR-0028). The option was
+  accepted and ignored: the forecast reported `committed-heads` and a null
+  `targetOverlay`. It now reports the scope `target-checkpoint`, or
+  `source-and-target-checkpoint` with `--source-checkpoint`, and
+  `cst reconcile --use-forecast` approves both, putting the overlay back
+  uncommitted afterwards. A workspace forecast that passes the option now
+  needs a checkpoint with a draft in the target workspace and is refused
+  without one, as `cst forecast --target-checkpoint` is. Both scopes were
+  already in the published `causet.forecast/v2` schema.
 - **Notice: v0.23.0 removes the `vlab` command alias** (ADR-0038 §4, #231).
   `cst` has been the command since v0.19.0, and `vlab` is the same program
   under its old name. Change any script or habit that still calls `vlab` to

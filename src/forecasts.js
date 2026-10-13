@@ -1154,11 +1154,17 @@ export function forecastForPlan(id, plan, cwd = process.cwd()) {
         "A branch head or causal record changed. Generate and review a new forecast.",
     });
   }
-  if (forecast.scope === "source-checkpoint") {
+  if (
+    forecast.scope === "source-checkpoint" ||
+    forecast.scope === "source-and-target-checkpoint"
+  ) {
     const comparison = forecast.workspaceComparison;
     const checkpoint = comparison?.source?.checkpoint;
     if (
-      comparison?.scope !== "source-checkpoint" ||
+      comparison?.scope !== forecast.scope ||
+      // The combined scope approves an overlay too; one that names none was
+      // not written by a forecast of that combination (ADR-0028).
+      (forecast.scope === "source-and-target-checkpoint" && !forecast.targetOverlay) ||
       !comparison.source?.id ||
       checkpoint?.id !== forecast.sourceHead ||
       !checkpoint.baseHead
@@ -1249,10 +1255,16 @@ export function forecastWorkspaces(targetName, sourceName, options = {}) {
   }
 
   const sourceRef = checkpoint?.id ?? source.compatibilityBranch;
+  // The target's checkpoint is resolved by the forecast itself, in the target
+  // worktree, exactly as `cst forecast --target-checkpoint` run there would.
+  const scope = checkpoint
+    ? options.targetCheckpoint ? "source-and-target-checkpoint" : "source-checkpoint"
+    : options.targetCheckpoint ? "target-checkpoint" : "committed-heads";
   return forecastReconciliation(sourceRef, {
     cwd: target.path,
     acceptCandidates: options.acceptCandidates,
-    scope: checkpoint ? "source-checkpoint" : "committed-heads",
+    targetCheckpoint: options.targetCheckpoint,
+    scope,
     workspaceComparison: {
       target: {
         id: target.id,
@@ -1269,7 +1281,7 @@ export function forecastWorkspaces(targetName, sourceName, options = {}) {
         ignoredDirtyFiles: source.dirtyFiles,
         checkpoint,
       },
-      scope: checkpoint ? "source-checkpoint" : "committed-heads",
+      scope,
     },
   });
 }

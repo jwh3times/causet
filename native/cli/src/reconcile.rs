@@ -203,11 +203,16 @@ fn forecast_for_plan(id: &str, plan: &Value, cwd: &str) -> GitResult<Value> {
       .details("A branch head or causal record changed. Generate and review a new forecast."),
     );
   }
-  if as_text(member("scope")).as_deref() == Some("source-checkpoint") {
+  let scope = as_text(member("scope"));
+  if matches!(scope.as_deref(), Some("source-checkpoint" | "source-and-target-checkpoint")) {
     let comparison = member("workspaceComparison");
     let source = get(comparison, "source");
     let checkpoint = get(source, "checkpoint");
-    if as_text(get(comparison, "scope")).as_deref() != Some("source-checkpoint")
+    if as_text(get(comparison, "scope")) != scope
+      // The combined scope approves an overlay too; one that names none was
+      // not written by a forecast of that combination (ADR-0028).
+      || (scope.as_deref() == Some("source-and-target-checkpoint")
+        && !truthy(member("targetOverlay")))
       || !truthy(get(source, "id"))
       || !strict_equals(get(checkpoint, "id"), member("sourceHead"))
       || !truthy(get(checkpoint, "baseHead"))

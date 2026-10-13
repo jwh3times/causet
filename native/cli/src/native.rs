@@ -366,6 +366,7 @@ Causal edges
             &positional(1),
             &positional(2),
             parsed.truthy("sourceCheckpoint"),
+            parsed.truthy("targetCheckpoint"),
             parsed.truthy("acceptCandidates"),
             cwd,
           )?;
