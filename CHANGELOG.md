@@ -32,6 +32,12 @@
     `github-<runner>` baseline entries recorded on those runners. Latency on an
     identified machine such as `lab-windows-a` is evidence and no longer a
     gate, which supersedes #68 for releases.
+- The performance workflow and `scripts/perf-checkpoint.mjs` no longer fetch
+  origin's frozen `refs/notes/vcs-lab` and `refs/vcs-lab/*` (#232). The
+  real-clone fixture is built from `refs/notes/causet` and
+  `refs/causet/retention`, and is the same repository as before: `v0.18.0`,
+  notes `4089785`, and retention now pinned to `0435137`
+  (`--real-retention`).
 ## 0.21.0
 
 **`cst` is now a native executable.** This release is the cutover of

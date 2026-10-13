@@ -33,6 +33,7 @@ const USAGE = `Usage: node scripts/perf-checkpoint.mjs --host <label> --checkpoi
   [--engines <list>]            read engines: git,native (default both; native skipped without a binding)
   [--real-rev <rev>]            real-clone revision (default v0.18.0)
   [--real-notes <commit>]       real-clone notes commit (default 4089785)
+  [--real-retention <commit>]   real-clone retention commit (default 0435137)
   [--max-cpu <percent>]         abort if host CPU load starts above this (default 30)
   [--allow-noisy]               record a noisy host instead of aborting
   [--note <text>]               free-text load note recorded with the run
@@ -44,6 +45,7 @@ function parseArgs(argv) {
   const options = {
     impls: [], samples: 21, warmup: 3, suites: ["startup", "reads", "writes"],
     engines: ["git", "native"], realRev: "v0.18.0", realNotes: "4089785",
+    realRetention: "0435137",
     maxCpu: 30, allowNoisy: false, keep: false, note: null, markdown: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -68,6 +70,7 @@ function parseArgs(argv) {
     else if (flag === "--engines") options.engines = value().split(",");
     else if (flag === "--real-rev") options.realRev = value();
     else if (flag === "--real-notes") options.realNotes = value();
+    else if (flag === "--real-retention") options.realRetention = value();
     else if (flag === "--max-cpu") options.maxCpu = Number(value());
     else if (flag === "--allow-noisy") options.allowNoisy = true;
     else if (flag === "--keep") options.keep = true;
@@ -243,9 +246,13 @@ function buildTemplate(dir, js) {
 function buildReal(dir, options) {
   const source = git(root, "rev-parse", "--show-toplevel");
   run("git", ["clone", "-q", "--no-local", source, dir], os.tmpdir());
-  git(dir, "fetch", "-q", "origin", "refs/notes/vcs-lab:refs/notes/vcs-lab", "+refs/vcs-lab/*:refs/vcs-lab/*");
+  // The clone is a repository from before the rename (#159), so its metadata
+  // goes under the former names. The source holds it only under the current
+  // ones, whose history contains both pinned commits (ADR-0039 §6, #232).
+  git(dir, "fetch", "-q", "origin", "+refs/notes/causet:refs/notes/vcs-lab", "+refs/causet/retention:refs/vcs-lab/retention");
   git(dir, "switch", "-q", "--detach", options.realRev);
   git(dir, "update-ref", "refs/notes/vcs-lab", options.realNotes);
+  git(dir, "update-ref", "refs/vcs-lab/retention", options.realRetention);
   git(dir, "remote", "remove", "origin");
   // The migration window has ended (ADR-0039 §8, #170): this checkout's CLI
   // refuses the clone until it is migrated. The former refs stay in place, so
@@ -253,7 +260,7 @@ function buildReal(dir, options) {
   run(options.impls[0].command[0], [...options.impls[0].command.slice(1), "migrate"], dir);
   return {
     name: "real", path: dir,
-    description: `--no-local clone of this repository at ${options.realRev} with refs/notes/vcs-lab pinned to ${options.realNotes} and refs/vcs-lab/* from the source, then moved to the causet names with cst migrate`,
+    description: `--no-local clone of this repository at ${options.realRev} with refs/notes/vcs-lab pinned to ${options.realNotes} and refs/vcs-lab/retention pinned to ${options.realRetention}, then moved to the causet names with cst migrate`,
     head: git(dir, "rev-parse", "HEAD"), notes: git(dir, "rev-parse", "refs/notes/vcs-lab"),
     vlabRefs: git(dir, "for-each-ref", "--format=%(refname) %(objectname)", "refs/vcs-lab/"),
     commits: Number(git(dir, "rev-list", "--count", "HEAD")),

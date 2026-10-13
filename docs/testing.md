@@ -1099,7 +1099,7 @@ classes; larger runners are charged even in public repositories.
 Rust CLI program (#136, #151; ADR-0037 decision 7). It times whole `cst`
 processes, including startup, per implementation, against a plain-Git floor,
 on three fixtures it builds and removes itself:
-- a real clone pinned to a release and its notes;
+- a real clone pinned to a release, its notes and its retained objects;
 - the synthetic scale fixture with a populated resolution catalog;
 - a deterministic template repository, of which each write sample gets a fresh
   copy.
@@ -1141,7 +1141,7 @@ node scripts/measure-real-repository.mjs --repo <clean-disposable-clone> --host 
 
 Clone without local object sharing (`git clone --no-local <source> <clone>`),
 then fetch the source's notes and cst refs into the clone before measuring:
-`git -C <clone> fetch origin 'refs/notes/*:refs/notes/*' 'refs/vcs-lab/*:refs/vcs-lab/*'`.
+`git -C <clone> fetch origin 'refs/notes/*:refs/notes/*' 'refs/causet/*:refs/causet/*'`.
 Use public-safe repository content for public evidence. A clone carries history
 and these refs, but not the source's workspace registry, private forecasts, or
 dirty files; actual workspace behavior needs separate pilot observations.
