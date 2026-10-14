@@ -1279,6 +1279,10 @@ when the next checkpoint is captured. Nothing is ever captured on a user's
 behalf: `--target-checkpoint` on `cst forecast`, `cst workspace forecast`, and
 `cst rebase-forecast` selects an existing checkpoint, and uncommitted work
 without one is refused rather than quietly promoted into approved state.
+`cst workspace forecast` resolves the overlay in the target workspace's
+worktree, wherever it is run from, and reports `target-checkpoint`, or
+`source-and-target-checkpoint` when the source is a checkpoint too; an approval
+of the combined scope is refused unless the forecast names both.
 
 The forecast carries a **second** predicted tree: the worktree after the overlay
 is put back, computed as a three-way merge of the target tree before application,

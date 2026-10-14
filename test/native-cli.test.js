@@ -2318,7 +2318,8 @@ test("workspace forecast compares two workspaces natively, and its checkpoint fo
     if (draft) fs.writeFileSync(path.join(beta, "notes.txt"), "beta draft\n");
     if (checkpoint) must(beta, "workspace", "checkpoint", "--label", "reviewed");
     if (targetDraft) {
-      fs.writeFileSync(path.join(alpha, "notes.txt"), "alpha draft\n");
+      // `true` drafts the file beta's draft also edits; a name drafts beside it.
+      fs.writeFileSync(path.join(alpha, targetDraft === true ? "notes.txt" : targetDraft), "alpha draft\n");
       must(alpha, "workspace", "checkpoint", "--label", "before");
     }
     if (archived) must(repo, "workspace", "archive", "beta");
@@ -2342,8 +2343,25 @@ test("workspace forecast compares two workspaces natively, and its checkpoint fo
     // The same edit made on both sides is a heuristic candidate to review.
     { kind: { twin: true }, steps: [forecast()], outcome: /cst workspace forecast alpha beta --accept-candidates/ },
     { kind: { twin: true, draft: true }, steps: [forecast("--source-checkpoint")], outcome: /cst workspace forecast alpha beta --source-checkpoint --accept-candidates/ },
-    // The flag is accepted and not read: a workspace forecast carries no target overlay.
-    { kind: { targetDraft: true }, steps: [forecast("--target-checkpoint", "--json")], outcome: /"scope": "committed-heads"[^]*"targetOverlay": null[^]*"ignoredDirtyFiles": 1/ },
+    // The target's checkpoint is carried as an overlay, alone or with the source's (#211).
+    { kind: { targetDraft: true }, steps: [forecast("--target-checkpoint", "--json")], outcome: /"scope": "target-checkpoint"[^]*"rematerialized": "uncommitted"[^]*"scope": "target-checkpoint"/ },
+    { kind: { targetDraft: true }, steps: [forecast("--target-checkpoint"), approved], outcome: /scope {8}committed heads plus a target overlay[^]*re-materialized uncommitted as/ },
+    { kind: { draft: true, targetDraft: "alpha.txt" }, steps: [forecast("--source-checkpoint", "--target-checkpoint"), approved], outcome: /scope {8}immutable source checkpoint plus a target overlay[^]*re-materialized uncommitted as/ },
+    { kind: { draft: true, targetDraft: "alpha.txt" }, steps: [forecast("--source-checkpoint", "--target-checkpoint", "--json"), [...approved, "--json"]], outcome: /"scope": "source-and-target-checkpoint"[^]*"scope": "source-and-target-checkpoint"[^]*"rematerialized": true/ },
+    // Both drafts edit notes.txt, so the overlay cannot be put back over the source's.
+    { kind: { draft: true, targetDraft: true }, steps: [forecast("--source-checkpoint", "--target-checkpoint")], outcome: /status {7}blocked-target-overlay[^]*overlay after BLOCKED/ },
+    { kind: { twin: true, draft: true, targetDraft: "alpha.txt" }, steps: [forecast("--source-checkpoint", "--target-checkpoint")], outcome: /cst workspace forecast alpha beta --source-checkpoint --target-checkpoint --accept-candidates/ },
+    { kind: { twin: true, targetDraft: true }, steps: [forecast("--target-checkpoint")], outcome: /cst workspace forecast alpha beta --target-checkpoint --accept-candidates/ },
+    { kind: {}, steps: [forecast("--target-checkpoint", "--json")], outcome: /has no checkpoint to carry as a target overlay/ },
+    {
+      kind: { draft: true, targetDraft: "alpha.txt" },
+      steps: [
+        forecast("--source-checkpoint", "--target-checkpoint"),
+        ({ repo, git }) => git(beta(repo), "commit", "-q", "--allow-empty", "-m", "beta moves"),
+        unpaired,
+      ],
+      outcome: /no longer matches its source workspace head/,
+    },
     { kind: { draft: true }, steps: [forecast("--source-checkpoint"), approved], outcome: /scope {8}immutable source checkpoint[^]* -> 0\n/ },
     { kind: { draft: true }, steps: [forecast("--source-checkpoint", "--json"), [...approved, "--json"]], outcome: /"scope": "source-checkpoint"[^]*"draftChangeId": "/ },
     {

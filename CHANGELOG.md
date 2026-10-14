@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **`cst workspace forecast --target-checkpoint` now carries the target
+  workspace's checkpoint as an overlay** (#211, ADR-0028). The option was
+  accepted and ignored: the forecast reported `committed-heads` and a null
+  `targetOverlay`. It now reports the scope `target-checkpoint`, or
+  `source-and-target-checkpoint` with `--source-checkpoint`, and
+  `cst reconcile --use-forecast` approves both, putting the overlay back
+  uncommitted afterwards. A workspace forecast that passes the option now
+  needs a checkpoint with a draft in the target workspace and is refused
+  without one, as `cst forecast --target-checkpoint` is. Both scopes were
+  already in the published `causet.forecast/v2` schema.
 - **A record's `createdAt` must be in the ECMAScript date-time format**
   (#173), in both CLIs. The JavaScript validator used to ask V8's
   `Date.parse`, which also reads strings such as `"1"`, `"March 7, 2006"` and
