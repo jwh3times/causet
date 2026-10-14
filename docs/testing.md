@@ -253,12 +253,12 @@ both on the same inputs through the `model-probe` executable
   timestamps.
 
 `test/schema-catalog.test.js` adds the same check for every record its live
-scenario publishes. Two limits are deliberate: timestamps are compared only in
-the ECMAScript date-time format, because V8's non-ISO fallback cannot be
-reproduced (#173), and generated member names avoid escapes, because Node 26.4's
-`JSON.parse` can mis-name an escaped member after an earlier object primed the
-same member path (fixed cases cover those names instead). Both suites skip when
-the probe is not built.
+scenario publishes. Timestamps are judged by the ECMAScript date-time format
+on both sides, including strings V8's non-ISO `Date.parse` fallback would read
+(#173). One limit is deliberate: generated member names avoid escapes, because
+Node 26.4's `JSON.parse` can mis-name an escaped member after an earlier object
+primed the same member path (fixed cases cover those names instead). Both
+suites skip when the probe is not built.
 
 The Rust Git engine (`native/engine`, #143) is the layer every ported command
 will sit on:
