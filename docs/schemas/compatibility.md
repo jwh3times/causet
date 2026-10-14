@@ -178,6 +178,25 @@ moves them (ADR-0039 §3).
 family and version, and that no writer emits a `vcs-lab.*` identifier.
 `test/legacy-fixture.test.js` reads a repository written by v0.19.1.
 
+## 2.3 `createdAt` is read by the published format
+
+Every record's `createdAt` is a timestamp in the ECMAScript date-time string
+format: `YYYY[-MM[-DD]][THH:mm[:ss[.sss]]][Z|±HH:mm]`, with `±YYYYYY` for
+expanded years, inside the range of a time value. The catalog has always
+declared it `"format": "date-time"`, and every writer emits
+`new Date().toISOString()`.
+
+Before v0.22.0 the JavaScript validator asked V8's `Date.parse`, which also
+reads strings outside that format (`"1"`, `"March 7, 2006"`, `"2020/01/02"`,
+`"2020-01-01 10:00"`) from a fallback the language leaves to each
+implementation. No other reader could reproduce it, so such a record was valid
+to one build and malformed to another. Both validators now apply the format
+alone (#173), and a record whose `createdAt` is outside it is malformed.
+
+This is the runtime meeting the published contract, not a narrowing of it, so
+no family's version changes (owner decision, 2026-10-13). No record this
+project has written is affected.
+
 ## 3. Migration
 
 Only two families read a version they do not write.

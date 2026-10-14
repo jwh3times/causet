@@ -485,6 +485,50 @@ function fieldError(errors, condition, field, expectation) {
   if (!condition) errors.push({ field, expectation });
 }
 
+const TIMESTAMP_SHAPE = /^(\d{4}|[+-]\d{6})(?:-(\d{2})(?:-(\d{2}))?)?(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+/**
+ * Whether `text` is a timestamp in the ECMAScript date-time string format
+ * (`YYYY[-MM[-DD]][THH:mm[:ss[.sss]]][Z|±HH:mm]`, with `±YYYYYY` expanded
+ * years) inside the ±8.64e15 ms range of a time value. `Date.parse` is not
+ * asked: past this format it answers from an implementation-defined fallback
+ * that no other implementation can reproduce (#173). `native/model/src/dates.rs`
+ * is the same rule, and `test/rust-model.test.js` holds the two together.
+ */
+export function isTimestamp(text) {
+  const match = typeof text === "string" ? TIMESTAMP_SHAPE.exec(text) : null;
+  if (!match || match[1] === "-000000") return false;
+  const year = Number(match[1]);
+  const month = Number(match[2] ?? 1);
+  const day = Number(match[3] ?? 1);
+  const hour = Number(match[4] ?? 0);
+  const minute = Number(match[5] ?? 0);
+  const second = Number(match[6] ?? 0);
+  const fraction = match[7] ?? "";
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  if (hour > 24 || minute > 59 || second > 59) return false;
+  if (hour === 24 && (minute !== 0 || second !== 0 || /[1-9]/.test(fraction))) return false;
+  let offsetMinutes = 0;
+  if (match[8] && match[8] !== "Z") {
+    const offsetHours = Number(match[8].slice(1, 3));
+    const offsetMins = Number(match[8].slice(4, 6));
+    if (offsetHours > 23 || offsetMins > 59) return false;
+    offsetMinutes = (match[8][0] === "-" ? -1 : 1) * (offsetHours * 60 + offsetMins);
+  }
+  // Days from 1970-01-01 in the proleptic Gregorian calendar; day 29-31 of a
+  // short month rolls into the next one, as ECMAScript MakeDay does.
+  const y = month <= 2 ? year - 1 : year;
+  const m = month <= 2 ? month + 9 : month - 3;
+  const era = Math.floor(y / 400);
+  const yearOfEra = y - era * 400;
+  const dayOfEra = yearOfEra * 365 + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100)
+    + Math.floor((153 * m + 2) / 5);
+  const days = era * 146097 + dayOfEra - 719468 + (day - 1);
+  const time = days * 86400000 + ((hour * 60 + minute - offsetMinutes) * 60000 + second * 1000)
+    + Number(fraction.slice(0, 3).padEnd(3, "0"));
+  return Math.abs(time) <= 8.64e15;
+}
+
 function validateCommonRecord(record, expectedType, objectFormat, errors) {
   fieldError(errors, record && typeof record === "object" && !Array.isArray(record), "$", "object");
   if (!record || typeof record !== "object" || Array.isArray(record)) return;
@@ -492,7 +536,7 @@ function validateCommonRecord(record, expectedType, objectFormat, errors) {
   fieldError(errors, record.type === expectedType, "type", expectedType);
   fieldError(errors, typeof record.id === "string" && record.id.length > 3, "id", "non-empty record ID");
   if (record.createdAt !== undefined) {
-    fieldError(errors, typeof record.createdAt === "string" && !Number.isNaN(Date.parse(record.createdAt)), "createdAt", "ISO-compatible timestamp");
+    fieldError(errors, isTimestamp(record.createdAt), "createdAt", "ISO-compatible timestamp");
   }
   if (record.attachedTo !== undefined) {
     fieldError(errors, isOid(record.attachedTo, objectFormat), "attachedTo", `${objectFormat} commit OID`);
