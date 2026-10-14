@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, afterEach } from "node:test";
 import { environmentValue } from "../src/environment.js";
-import { cliInvocations, resetCliInvocations, selectedCli } from "./vlab-command.js";
+import { cliInvocations, resetCliInvocations, selectedCli } from "./cst-command.js";
 
 /**
  * The environment for every Git and CLI process a suite spawns. Besides

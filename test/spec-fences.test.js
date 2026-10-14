@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { materializeResolutionCandidate } from "../src/resolutions.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
 function assertRefusal(action, code) {
@@ -25,7 +25,7 @@ function fixture(t) {
   }).trim();
   const git = (...args) => run("git", args);
   const vlab = (...args) => {
-    const output = run(vlabCommand, [...vlabPrefix(), ...args, "--json"]);
+    const output = run(cstCommand, [...cstPrefix(), ...args, "--json"]);
     return args[0] === "init" ? output : JSON.parse(output);
   };
   git("init", "-b", "main");
@@ -53,7 +53,7 @@ function fixture(t) {
     git("commit", "--allow-empty", "-m", "fixture");
     return git("rev-parse", "HEAD");
   };
-  const human = (...args) => run(vlabCommand, [...vlabPrefix(), ...args]);
+  const human = (...args) => run(cstCommand, [...cstPrefix(), ...args]);
   return { root, git, vlab, human, source, manifestFile, stored, save, index, legacy, commit };
 }
 

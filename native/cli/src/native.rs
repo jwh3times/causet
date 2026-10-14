@@ -1,5 +1,5 @@
 //! Running a ported command: the part of `main` in `src/cli.js` after the
-//! front end, and the error reporting of `bin/vlab.js` (ADR-0021).
+//! front end, and the error reporting of `bin/cst.js` (ADR-0021).
 
 use crate::parsed::Parsed;
 use causet_engine::environment;
@@ -38,7 +38,7 @@ pub fn print(value: &Value) {
   let _ = writeln!(stdout, "{text}");
 }
 
-/// The failure as `bin/vlab.js` reports it: an envelope on stdout under
+/// The failure as `bin/cst.js` reports it: an envelope on stdout under
 /// `--json`, prose on stderr otherwise.
 pub fn report(error: &GitError, json: bool) -> i32 {
   if json {

@@ -6,7 +6,7 @@
  * it and requires the current build to read it identically, apart from the
  * spelling of the identifiers.
  *
- *   node scripts/make-legacy-fixture.mjs --cli <old checkout>/bin/vlab.js --out test/fixtures/legacy-<version>
+ *   node scripts/make-legacy-fixture.mjs --cli <old checkout>/bin/cst.js --out test/fixtures/legacy-<version>
  *
  * Extract the old checkout with `git archive <tag> | tar -x -C <dir>`; this
  * script never touches the repository it lives in. The output is deterministic

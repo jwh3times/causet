@@ -25,7 +25,7 @@ import {
 import { appendNote, readNote } from "../src/notes.js";
 import { forecastForPlan } from "../src/forecasts.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -293,7 +293,7 @@ function git(cwd, ...args) {
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),
@@ -311,9 +311,9 @@ function repository(t) {
   git(repo, "config", "user.email", "vcs-lab-compatibility@example.invalid");
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
-  exec(vlabCommand, [...vlabPrefix(), "init"], repo);
+  exec(cstCommand, [...cstPrefix(), "init"], repo);
   git(repo, "add", "-A");
-  exec(vlabCommand, [...vlabPrefix(), "commit", "-m", "base"], repo);
+  exec(cstCommand, [...cstPrefix(), "commit", "-m", "base"], repo);
   return repo;
 }
 

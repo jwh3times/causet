@@ -9,7 +9,7 @@ import { RECORD_FAMILIES, referencedObjectsForRecord, schemaClassification, vali
 import { canonicalJson as legacyCanonicalJson } from "../src/metadata.js";
 import { available as modelProbeAvailable, jsReferences, jsValidation, probe as modelProbe } from "../test-support/model-probe.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schemasDir = path.join(projectRoot, "docs", "schemas");
@@ -282,7 +282,7 @@ function git(cwd, ...args) {
 }
 
 function vlab(cwd, ...args) {
-  return exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
+  return exec(cstCommand, [...cstPrefix(), ...args], cwd);
 }
 
 function vlabJson(cwd, ...args) {
@@ -290,7 +290,7 @@ function vlabJson(cwd, ...args) {
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

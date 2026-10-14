@@ -21,14 +21,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
 const git = (cwd, ...args) =>
   execFileSync("git", args, { cwd, encoding: "utf8", env: testEnv() }).trim();
 
 function run(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

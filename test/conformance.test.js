@@ -6,7 +6,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -32,11 +32,11 @@ function git(cwd, ...args) {
 }
 
 function vlab(cwd, ...args) {
-  return exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
+  return exec(cstCommand, [...cstPrefix(), ...args], cwd);
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

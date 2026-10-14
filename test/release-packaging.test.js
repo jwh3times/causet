@@ -5,7 +5,7 @@
  * package from the workspace's release build of the Rust CLI. Each test
  * installs them globally under a prefix of its own and runs the `cst` npm
  * linked there. That command is the subject, so this suite launches it
- * directly rather than through `test-support/vlab-command.js`.
+ * directly rather than through `test-support/cst-command.js`.
  *
  * With `CAUSET_RELEASE_SET=<directory>` it installs the tarballs a release
  * workflow already packed there instead of packing its own, which is how the
@@ -102,13 +102,15 @@ test("the package set carries matching versions and recorded digests", { skip },
   for (const file of packed.tarballs) assert.match(sums, new RegExp(`^[0-9a-f]{64}  ${path.basename(file)}$`, "m"));
   // The checkout's own manifest keeps the JavaScript CLI as its command, for development.
   const checkout = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
-  assert.equal(checkout.bin.cst, "./bin/vlab.js");
+  assert.equal(checkout.bin.cst, "./bin/cst.js");
   assert.equal(checkout.optionalDependencies, undefined);
 });
 
 test("with install scripts, cst is the executable itself and runs without Node", { skip }, () => {
   const installed = install([mainTarball(), platformTarball()], withScripts);
   assert.equal(startsWithShebang(installed.target), false, "the command's target is still the launcher");
+  // The vlab alias was removed in 0.23.0 (ADR-0038 §4): cst is the only command npm links.
+  assert.deepEqual(fs.readdirSync(path.dirname(installed.command)).filter((name) => /^vlab/i.test(name)), []);
   assert.deepEqual(fs.readFileSync(installed.target), fs.readFileSync(installed.executable));
   if (windows) {
     // The shim calls the executable itself: `"%dp0%\...\cst.exe" %*`, with no

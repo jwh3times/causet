@@ -68,8 +68,8 @@ if (mode === "--sample") {
       }
       const cli = [];
       for (let index = 0; index < 9; index += 1) {
-        const native = execute([path.join(root, "bin/vlab.js"), "resolve", "list", "--json", "--engine", "native"], repo);
-        const git = execute([path.join(root, "bin/vlab.js"), "resolve", "list", "--json", "--engine", "git"], repo);
+        const native = execute([path.join(root, "bin/cst.js"), "resolve", "list", "--json", "--engine", "native"], repo);
+        const git = execute([path.join(root, "bin/cst.js"), "resolve", "list", "--json", "--engine", "git"], repo);
         const { wholeMs: nativeMs, ...nativeResult } = native;
         const { wholeMs: gitMs, ...gitResult } = git;
         assert.deepEqual(nativeResult, gitResult);

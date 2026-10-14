@@ -1,5 +1,5 @@
 /**
- * The `vlab` executable the suites, demos, and measurement scripts drive.
+ * The `cst` executable the suites, demos, and measurement scripts drive.
  *
  * By default this is the checkout's JavaScript CLI, run under the current
  * Node. `CAUSET_CLI=<path>` selects another implementation, such as a Rust
@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { environmentValue } from "../src/environment.js";
 
-const defaultCli = fileURLToPath(new URL("../bin/vlab.js", import.meta.url));
+const defaultCli = fileURLToPath(new URL("../bin/cst.js", import.meta.url));
 
 const named = environmentValue("CLI");
 
@@ -28,17 +28,17 @@ if (selectedCli && !fs.existsSync(selectedCli)) {
 const target = selectedCli ?? defaultCli;
 const runsUnderNode = /\.(?:c|m)?js$/.test(target);
 
-/** The program to spawn for a `vlab` invocation. */
-export const vlabCommand = runsUnderNode ? process.execPath : target;
+/** The program to spawn for a `cst` invocation. */
+export const cstCommand = runsUnderNode ? process.execPath : target;
 
 let invocations = 0;
 
 /**
- * The arguments that precede a `vlab` invocation's own arguments. Call it
- * once per invocation, as `spawnSync(vlabCommand, [...vlabPrefix(), ...args])`;
+ * The arguments that precede a `cst` invocation's own arguments. Call it
+ * once per invocation, as `spawnSync(cstCommand, [...cstPrefix(), ...args])`;
  * the call is how the suites count which tests exercised the CLI under test.
  */
-export function vlabPrefix() {
+export function cstPrefix() {
   invocations += 1;
   return runsUnderNode ? [target] : [];
 }

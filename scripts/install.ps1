@@ -5,10 +5,11 @@
 #                 [-Target <rust-target>] [-From <url-or-directory>]
 #
 # It downloads SHA256SUMS and this host's archive, refuses an archive whose
-# SHA-256 is not the listed one, and copies cst.exe (and a vlab.cmd alias) into
-# the prefix, %LOCALAPPDATA%\Programs\causet by default. It changes no PATH and
-# asks for no elevation. To upgrade, run it again. To uninstall, delete the two
-# files it names when it finishes.
+# SHA-256 is not the listed one, and copies cst.exe into the prefix,
+# %LOCALAPPDATA%\Programs\causet by default. It changes no PATH and asks for no
+# elevation. To upgrade, run it again; that also removes the vlab.cmd alias an
+# install before 0.23.0 left. To uninstall, delete the file it names when it
+# finishes.
 
 param(
   [string]$Version = "",
@@ -110,16 +111,21 @@ function Install-Causet {
 
     New-Item -ItemType Directory -Path $Prefix -Force | Out-Null
     $installed = Join-Path $Prefix "cst.exe"
-    $alias = Join-Path $Prefix "vlab.cmd"
     # Copied beside its destination and renamed, so cst.exe is never half written.
     $staged = Join-Path $Prefix ".cst.new"
     Copy-Item -LiteralPath $executable -Destination $staged -Force
     Move-Item -LiteralPath $staged -Destination $installed -Force
-    Set-Content -LiteralPath $alias -Value '@"%~dp0cst.exe" %*' -Encoding Ascii
+    # The vlab.cmd alias earlier versions wrote here was removed in 0.23.0
+    # (ADR-0038 §4). Only the one that runs this cst.exe is ours to remove.
+    $alias = Join-Path $Prefix "vlab.cmd"
+    if ((Test-Path -LiteralPath $alias -PathType Leaf) -and
+        ("$(Get-Content -LiteralPath $alias -Raw)".Trim() -eq '@"%~dp0cst.exe" %*')) {
+      Remove-Item -LiteralPath $alias -Force
+      Write-Output "Removed the vlab.cmd alias, which causet 0.23.0 retired: run cst instead."
+    }
 
     Write-Output "Installed causet $released ($Target):"
     Write-Output "  $installed"
-    Write-Output "  $alias -> cst.exe"
     $onPath = ($env:PATH -split ";") | Where-Object { $_.TrimEnd("\") -ieq $Prefix.TrimEnd("\") }
     if (-not $onPath) {
       Write-Output ""

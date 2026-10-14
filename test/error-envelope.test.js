@@ -21,7 +21,7 @@ import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ERROR_CODES, ERROR_ENVELOPE_SCHEMA } from "../src/errors.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -98,13 +98,13 @@ function makeRepo() {
   git("config", "user.email", "vcs-lab-error@example.invalid");
   fs.writeFileSync(path.join(repo, "a.txt"), "base\n");
   git("add", "-A");
-  execFileSync(vlabCommand, [...vlabPrefix(), "commit", "-m", "base"], { cwd: repo, encoding: "utf8", env: testEnv() });
-  execFileSync(vlabCommand, [...vlabPrefix(), "init"], { cwd: repo, encoding: "utf8", env: testEnv() });
+  execFileSync(cstCommand, [...cstPrefix(), "commit", "-m", "base"], { cwd: repo, encoding: "utf8", env: testEnv() });
+  execFileSync(cstCommand, [...cstPrefix(), "init"], { cwd: repo, encoding: "utf8", env: testEnv() });
   return repo;
 }
 
 const run = (repo, ...args) =>
-  spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd: repo,
     encoding: "utf8",
     env: testEnv(),
@@ -287,7 +287,7 @@ test("a missing revision is classified the same way on both Git transports", () 
   const repo = makeRepo();
   const codes = {};
   for (const session of ["0", "1"]) {
-    const failed = spawnSync(vlabCommand, [...vlabPrefix(), "merge-plan", "does-not-exist", "--json"], {
+    const failed = spawnSync(cstCommand, [...cstPrefix(), "merge-plan", "does-not-exist", "--json"], {
       cwd: repo,
       encoding: "utf8",
       env: testEnv({ CAUSET_GIT_SESSION: session }),
@@ -311,7 +311,7 @@ test("a conflicted landing, a duplicate workspace, and a stale manifest carry th
   const git = (...args) =>
     execFileSync("git", args, { cwd: repo, encoding: "utf8", env: testEnv() }).trim();
   const vlab = (...args) =>
-    execFileSync(vlabCommand, [...vlabPrefix(), ...args], { cwd: repo, encoding: "utf8", env: testEnv() }).trim();
+    execFileSync(cstCommand, [...cstPrefix(), ...args], { cwd: repo, encoding: "utf8", env: testEnv() }).trim();
   const notesRef = () =>
     spawnSync("git", ["rev-parse", "--verify", "--quiet", "refs/notes/causet"], {
       cwd: repo,

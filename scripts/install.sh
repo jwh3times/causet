@@ -6,10 +6,11 @@
 #                 [--target <rust-target>] [--from <url-or-directory>]
 #
 # It downloads SHA256SUMS and this host's archive, refuses an archive whose
-# SHA-256 is not the listed one, and copies `cst` (and the `vlab` alias) into
-# the prefix, ~/.local/bin by default. It changes no shell profile and asks
-# for no elevation. To upgrade, run it again. To uninstall, delete the two
-# files it names when it finishes.
+# SHA-256 is not the listed one, and copies `cst` into the prefix,
+# ~/.local/bin by default. It changes no shell profile and asks for no
+# elevation. To upgrade, run it again; that also removes the `vlab` alias an
+# install before 0.23.0 left. To uninstall, delete the file it names when it
+# finishes.
 
 set -eu
 
@@ -139,9 +140,14 @@ mkdir -p "$prefix"
 # Copied beside its destination and renamed, so a running cst is never half written.
 cp "$work/unpacked/cst" "$prefix/.cst.new"
 mv -f "$prefix/.cst.new" "$prefix/cst"
-ln -sf cst "$prefix/vlab"
+# The `vlab` alias earlier versions linked here was removed in 0.23.0
+# (ADR-0038 §4). Only a link to this cst is ours to remove.
+if [ -L "$prefix/vlab" ] && [ "$(readlink "$prefix/vlab")" = cst ]; then
+  rm -f "$prefix/vlab"
+  printf 'Removed the vlab alias, which causet 0.23.0 retired: run cst instead.\n'
+fi
 
-printf 'Installed causet %s (%s):\n  %s\n  %s -> cst\n' "$released" "$target" "$prefix/cst" "$prefix/vlab"
+printf 'Installed causet %s (%s):\n  %s\n' "$released" "$target" "$prefix/cst"
 case ":${PATH:-}:" in
   *":$prefix:"*) ;;
   *) printf '\n%s is not on PATH. Add it for this shell with:\n  export PATH="%s:$PATH"\n' "$prefix" "$prefix" ;;

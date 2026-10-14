@@ -7,7 +7,7 @@ import test from "node:test";
 import { RESOURCE_BOUNDS } from "../src/schemas.js";
 import { bundleHash } from "../src/proof-bundle.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
 function exec(command, args, cwd, options = {}) {
@@ -22,7 +22,7 @@ function exec(command, args, cwd, options = {}) {
 const git = (cwd, ...args) => exec("git", args, cwd);
 
 function run(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

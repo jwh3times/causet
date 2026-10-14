@@ -94,8 +94,9 @@ to add if the directory is not on it.
   `-Prefix` in PowerShell). The script
   attached to a release installs that release's layout, so pin both together:
   `https://github.com/jwh3times/causet/releases/download/v0.22.1/install.sh`.
-- **Upgrade** by running it again. **Uninstall** by deleting the two files it
-  names when it finishes: `cst` and the `vlab` alias.
+- **Upgrade** by running it again; that also removes the `vlab` alias an
+  install before v0.23.0 left. **Uninstall** by deleting the `cst` file it
+  names when it finishes.
 - **Check where a download came from** with GitHub's attestation of the
   release's archives and scripts:
   `gh attestation verify cst-<version>-<target>.tar.gz --repo jwh3times/causet`.
@@ -126,11 +127,10 @@ is compiled.
   the package runs the JavaScript CLI there, which needs Node.js 20 or newer,
   and says so on stderr.
 
-The command is `cst`. `vlab`, the command's old name, still works as an alias
-for the same program during the transition, and prints identical output.
-The alias is removed in v0.23.0
+The command is `cst`. Its old name, `vlab`, was an alias until v0.23.0
+removed it
 ([ADR-0038](docs/adr/0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md)
-§4), so call `cst` in anything you keep.
+§4); a script that still calls `vlab` must call `cst`.
 
 ## Develop from a checkout
 
@@ -148,7 +148,7 @@ names are ignored: they were read as a fallback until the migration window ended
 Alternatively, run it without installing:
 
 ```bash
-node /path/to/checkout/bin/vlab.js --help
+node /path/to/checkout/bin/cst.js --help
 ```
 
 On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are on `PATH`.
@@ -178,8 +178,8 @@ npm test
 Create a disposable repository:
 
 ```bash
-mkdir vlab-playground
-cd vlab-playground
+mkdir causet-playground
+cd causet-playground
 git init -b main
 git config user.name "Local Tester"
 git config user.email "tester@example.test"
@@ -620,7 +620,7 @@ npm run demo:resolution
 ```bash
 cst workspace create agent-auth --from main --owner agent-7 --focus service:auth
 cst workspace list
-cd ../vlab-playground.workspaces/agent-auth
+cd ../causet-playground.workspaces/agent-auth
 echo draft > agent-plan.md
 cst workspace checkpoint --label "agent handoff"
 ```
@@ -637,10 +637,10 @@ From the original or another linked worktree, move or temporarily dematerialize
 a workspace without changing its identity:
 
 ```bash
-cst workspace move agent-auth ../vlab-playground.workspaces/agent-auth-2
+cst workspace move agent-auth ../causet-playground.workspaces/agent-auth-2
 cst workspace archive agent-auth
-cst workspace restore agent-auth --path ../vlab-playground.workspaces/agent-auth-3
-cst workspace repair agent-auth --path ../vlab-playground.workspaces/agent-auth-3
+cst workspace restore agent-auth --path ../causet-playground.workspaces/agent-auth-3
+cst workspace repair agent-auth --path ../causet-playground.workspaces/agent-auth-3
 cst workspace prune --dry-run
 ```
 

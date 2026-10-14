@@ -10,7 +10,7 @@ pub fn is_published_code(code: &str) -> bool {
 }
 
 /// The envelope exactly as `JSON.stringify(errorEnvelope(error), null, 2)`
-/// writes it in `bin/vlab.js`. A code outside the vocabulary is a defect at
+/// writes it in `bin/cst.js`. A code outside the vocabulary is a defect at
 /// the raise site, as it is in `CliError`.
 pub fn envelope(code: &str, message: &str, details: &str, exit_code: i32) -> String {
   assert!(

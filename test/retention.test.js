@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { resolutionSignatureFor } from "../src/schemas.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const notesModule = new URL("../src/notes.js", import.meta.url).href;
 const resolutionsModule = new URL("../src/resolutions.js", import.meta.url).href;
@@ -14,7 +14,7 @@ const RETENTION = "refs/causet/retention";
 const NOTES = "refs/notes/causet";
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", env: testEnv(), stdio: ["pipe", "pipe", "pipe"] }).trim();
 const gitInput = (cwd, args, input) => execFileSync("git", args, { cwd, input, encoding: "utf8", env: testEnv() }).trim();
-const run = (cwd, args, env = {}) => spawnSync(vlabCommand, [...vlabPrefix(), ...args], { cwd, encoding: "utf8", env: testEnv(env) });
+const run = (cwd, args, env = {}) => spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, encoding: "utf8", env: testEnv(env) });
 function vlab(cwd, ...args) {
   const result = run(cwd, args);
   assert.equal(result.status, 0, result.stdout + result.stderr);
