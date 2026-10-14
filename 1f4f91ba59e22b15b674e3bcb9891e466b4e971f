@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv8cpwxc1c905b144bee",
+      "mode": "compact",
+      "sourceRef": "feat/remove-vlab-alias",
+      "sourceHead": "2c220966890a074ef5877b3523a567b89ee606ba",
+      "sourceSubject": "feat: remove the vlab command alias and rename bin/vlab.js to bin/cst.js",
+      "targetBefore": "7e5f89961df44684173e1dfda4f260b426ba494e",
+      "landingCommit": "1f4f91ba59e22b15b674e3bcb9891e466b4e971f",
+      "base": "7e5f89961df44684173e1dfda4f260b426ba494e",
+      "absorbedCommits": [
+        "2c220966890a074ef5877b3523a567b89ee606ba"
+      ],
+      "absorbedChanges": [
+        "ch_0mv8aws1c57ec6e156ed3"
+      ],
+      "resultTree": "6a7aa7410858808b4c57707fc156d5b26595704a",
+      "createdAt": "2026-10-14T16:55:56.404Z"
+    }
+  ]
+}
