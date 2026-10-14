@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.23.0
+
+**`cst` is the only command.** This release removes the `vlab` alias, as
+v0.22.1 announced; anything that still runs `vlab` must run `cst`. It also
+ends ADR-0037's oracle period, two minor releases after the v0.21.0 cutover.
+The JavaScript CLI stays in the repository as the oracle the suites compare
+with until an issue of its own retires it.
+
 - **The `vlab` command alias is removed** (#231, ADR-0038 §4), as v0.22.1
   announced. Breaking for anything that still runs `vlab`: call `cst`. npm
   links only `cst`, and the install scripts no longer write a `vlab` link or a

@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Architecture baseline | v0.22.1 release |
+| Architecture baseline | v0.23.0 release |
 | Status | Current implementation reference |
 | Last updated | 2026-09-29 |
 | Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 20+ installs it through npm, runs the JavaScript CLI kept as the oracle, and runs the suites |
