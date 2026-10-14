@@ -15,7 +15,7 @@ Build on Windows x64 with MSVC Build Tools or Ubuntu x64 with the GNU toolchain:
 ```sh
 rustup toolchain install 1.98.1 --profile minimal
 npm run build:native
-node bin/vlab.js doctor --engine native
+node bin/cst.js doctor --engine native
 ```
 
 `CARGO` can name a Cargo executable outside PATH. The build copies the platform

@@ -21,7 +21,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const source = path.join(here, "fixtures", "legacy-0.19.1");
@@ -83,7 +83,7 @@ function restore() {
 }
 
 function cst(cwd, args, env = {}) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], { cwd, encoding: "utf8", env: testEnv(env) });
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, encoding: "utf8", env: testEnv(env) });
 }
 
 /**

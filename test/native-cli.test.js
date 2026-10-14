@@ -8,7 +8,7 @@
  * `CAUSET_DELEGATE=always`, the one way left to reach the JavaScript CLI.
  *
  * This is the one suite that launches the JavaScript CLI directly rather than
- * through `test-support/vlab-command.js`: the JavaScript CLI is the oracle here,
+ * through `test-support/cst-command.js`: the JavaScript CLI is the oracle here,
  * whichever implementation `CAUSET_CLI` selects. The Rust CLI is `CAUSET_CLI` when
  * that names an executable, else the workspace's release build. Without one,
  * the suite is skipped; `node scripts/build-native.mjs` builds it.
@@ -22,10 +22,10 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
-import { selectedCli, vlabPrefix } from "../test-support/vlab-command.js";
+import { selectedCli, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const oracle = path.join(projectRoot, "bin/vlab.js");
+const oracle = path.join(projectRoot, "bin/cst.js");
 const built = path.join(projectRoot, "native/target/release",
   process.platform === "win32" ? "cst.exe" : "cst");
 const rust = selectedCli && !/\.(?:c|m)?js$/.test(selectedCli)
@@ -48,7 +48,7 @@ function runOracle(args, env = {}) {
 
 function runRust(args, env = {}) {
   // Counts the invocation when the Rust CLI is the one under test (#140).
-  if (rust === selectedCli) vlabPrefix();
+  if (rust === selectedCli) cstPrefix();
   return spawnSync(rust, args, {
     cwd: outside, encoding: "utf8", env: testEnv({ ...neutral, ...env }),
   });
@@ -182,7 +182,7 @@ test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, 
   });
   for (const args of [["doctor"], ["doctor", "--differential"], ["--engine", "native", "doctor"]]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
     assert.equal(actual.status, 0, actual.stderr);
     assert.equal(actual.stderr, expected.stderr);
@@ -229,7 +229,7 @@ test("capabilities is answered natively, byte for byte", { skip }, () => {
     ...peers.flatMap((file) => [["capabilities", "--against", file], ["capabilities", "--against", file, "--json"]]),
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
     const label = JSON.stringify(args);
     assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
@@ -290,7 +290,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
     ["metadata", "retain", "--dry-run"], ["metadata", "retain", "--dry-run", "--json"], ["metadata", "retain"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
     const label = JSON.stringify(args);
     assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
@@ -299,7 +299,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
   }
   // Each implementation writes the same bundle bytes and verifies the other's.
   const oracleBundle = inRepo(process.execPath, [oracle, "proof-bundle", "HEAD~1"], {});
-  if (rust === selectedCli) vlabPrefix();
+  if (rust === selectedCli) cstPrefix();
   const rustBundle = inRepo(rust, ["proof-bundle", "HEAD~1"], { CAUSET_DELEGATE: "never" });
   assert.equal(rustBundle.stdout, oracleBundle.stdout);
   const rustFile = path.join(outside, "rust-bundle.json");
@@ -348,7 +348,7 @@ test("spec status plans a base whose manifest predates cst migrate, as the JavaS
   }));
   for (const args of [["spec", "status"], ["spec", "status", "--json"]]) {
     const expected = oracleIn(args);
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -376,7 +376,7 @@ test("init writes the same configuration and runtime directory natively (#145)",
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: oracleSide.repo, encoding: "utf8", env: testEnv(neutral),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -437,7 +437,7 @@ test("commit publishes the same commit and declared provenance natively (#145)",
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: oracleSide.repo, encoding: "utf8", env: testEnv(neutral),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -484,7 +484,7 @@ test("metadata retain --apply publishes the same backfill natively (#145)", { sk
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: oracleSide.repo, encoding: "utf8", env: testEnv(neutral),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -517,7 +517,7 @@ test("metadata export writes the same envelope natively, byte for byte (#145)", 
   const expected = spawnSync(process.execPath, [oracle, "metadata", "export", "../envelope-js"], {
     cwd: repo, encoding: "utf8", env: testEnv(neutral),
   });
-  if (rust === selectedCli) vlabPrefix();
+  if (rust === selectedCli) cstPrefix();
   const actual = spawnSync(rust, ["metadata", "export", "../envelope-rust"], {
     cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
   });
@@ -568,7 +568,7 @@ test("metadata import previews and applies an envelope as the JavaScript CLI doe
   fs.cpSync(clone, copy, { recursive: true });
   for (const args of [["metadata", "import", "../envelope", "--dry-run"], ["metadata", "import", "../envelope", "--apply"], ["metadata", "import", "../envelope", "--apply"]]) {
     const expected = oracleIn(clone, args);
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -627,7 +627,7 @@ test("metadata dispose resolves a parked conflict as the JavaScript CLI does (#1
     fs.cpSync(parked, rustSide, { recursive: true });
     const args = ["metadata", "dispose", recordId, ...flags];
     const expected = oracleIn(oracleSide, args);
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: rustSide, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -715,7 +715,7 @@ test("branch and the landings publish the same commits, receipts and carried pro
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0], encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -823,7 +823,7 @@ test("cherry-pick applies, forks and recognizes covered changes natively (#146)"
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0], encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -944,7 +944,7 @@ test("workspace list, checkpoint and prune answer natively as the JavaScript CLI
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0].cwd, encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1].cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -1078,7 +1078,7 @@ test("workspace create, move, archive, restore and repair answer natively as the
     const expected = spawnSync(process.execPath, [oracle, ...js.args], {
       cwd: js.cwd, encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, rs.args, {
       cwd: rs.cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -1158,7 +1158,7 @@ test("spec merge-plan answers natively, byte for byte (#149)", { skip }, () => {
     ["spec", "merge-plan", "specs/missing.md", "main", "ours", "theirs"],
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
@@ -1258,7 +1258,7 @@ test("spec index writes the same manifests natively, single and --all (#149)", {
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0], encoding: "utf8", env: testEnv(neutral),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1], encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
     });
@@ -1366,7 +1366,7 @@ test("spec resolve applies a paused step's deterministic merges natively (#149)"
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0], encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -1525,7 +1525,7 @@ test("resolve apply and reject record decisions on a paused step natively (#147)
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0], encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -1734,7 +1734,7 @@ test("forecast simulates the same reconciliation natively under both engines (#1
       const expected = spawnSync(process.execPath, [oracle, ...args], {
         cwd: sides[0], encoding: "utf8", env: testEnv(env),
       });
-      if (rust === selectedCli) vlabPrefix();
+      if (rust === selectedCli) cstPrefix();
       const actual = spawnSync(rust, args, {
         cwd: sides[1], encoding: "utf8", env: testEnv({ ...env, CAUSET_DELEGATE: "never" }),
       });
@@ -1834,7 +1834,7 @@ test("forecast --target-checkpoint carries the same overlay natively (#147)", { 
     const expected = spawnSync(process.execPath, [oracle, ...args], {
       cwd: sides[0], encoding: "utf8", env: testEnv(dated),
     });
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
       cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
     });
@@ -1915,7 +1915,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
     if (who === "js") {
       return spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
     }
-    if (rust === selectedCli) vlabPrefix();
+    if (rust === selectedCli) cstPrefix();
     return spawnSync(rust, args, { cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }) });
   };
   const rename = (text, repo, side, hashes) => {
@@ -2588,7 +2588,7 @@ test("rebase-forecast simulates the same rewrite natively under both engines (#1
       const expected = spawnSync(process.execPath, [oracle, ...args], {
         cwd: fixture.cwd, encoding: "utf8", env: testEnv(env),
       });
-      if (rust === selectedCli) vlabPrefix();
+      if (rust === selectedCli) cstPrefix();
       const actual = spawnSync(rust, args, {
         cwd: fixture.cwd, encoding: "utf8", env: testEnv({ ...env, CAUSET_DELEGATE: "never" }),
       });

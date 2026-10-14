@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-conflict-demo-"));
 
@@ -21,7 +21,7 @@ function git(...args) {
 }
 
 function vlab(...args) {
-  return run(vlabCommand, [...vlabPrefix(), ...args]);
+  return run(cstCommand, [...cstPrefix(), ...args]);
 }
 
 function write(relative, content) {
@@ -51,7 +51,7 @@ git("add", "shared.txt");
 vlab("commit", "-m", "main changes retry policy");
 
 console.log("\nStarting reconciliation; this conflict is intentional...");
-const attempt = spawnSync(vlabCommand, [...vlabPrefix(), "reconcile", "feature"], {
+const attempt = spawnSync(cstCommand, [...cstPrefix(), "reconcile", "feature"], {
   cwd: repo,
   encoding: "utf8",
   env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
@@ -64,5 +64,5 @@ if (attempt.stderr) console.log(attempt.stderr.trim());
 console.log("\nPending operation:");
 vlab("reconcile", "--status");
 console.log(
-  `\nContinue the experiment with:\n  cd ${repo}\n  node -e "require('fs').writeFileSync('shared.txt', 'contextual policy: retries = 4\\n')"\n  git add shared.txt\n  vlab reconcile --continue\n  vlab graph\n  vlab receipts`,
+  `\nContinue the experiment with:\n  cd ${repo}\n  node -e "require('fs').writeFileSync('shared.txt', 'contextual policy: retries = 4\\n')"\n  git add shared.txt\n  cst reconcile --continue\n  cst graph\n  cst receipts`,
 );

@@ -6,7 +6,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { RESOURCE_BOUNDS } from "../src/schemas.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
 // ---------------------------------------------------------------------------
@@ -23,10 +23,10 @@ function exec(command, args, cwd, options = {}) {
 }
 
 const git = (cwd, ...args) => exec("git", args, cwd);
-const vlab = (cwd, ...args) => exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
+const vlab = (cwd, ...args) => exec(cstCommand, [...cstPrefix(), ...args], cwd);
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),

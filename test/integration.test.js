@@ -11,20 +11,19 @@ import { VERSION } from "../src/version.js";
 import { pseudoRefTarget, reachableCommits } from "../src/engine.js";
 import { recordsReachableFrom } from "../src/notes.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-test("cst is the command and vlab stays an alias for the same entry point", () => {
+test("cst is the only command: the vlab alias was removed in 0.23.0", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
   assert.equal(manifest.name, "@holland-vip/causet");
-  assert.equal(manifest.bin.cst, "./bin/vlab.js");
-  assert.equal(manifest.bin.vlab, manifest.bin.cst);
+  assert.deepEqual(manifest.bin, { cst: "./bin/cst.js" });
 });
 
 test("CLI reports the package version", () => {
   assert.equal(
-    exec(vlabCommand, [...vlabPrefix(), "--version"], projectRoot),
+    exec(cstCommand, [...cstPrefix(), "--version"], projectRoot),
     `causet ${VERSION}`,
   );
 });
@@ -68,11 +67,11 @@ function skipWithoutMergeTreeEngine(t) {
 }
 
 function vlab(cwd, ...args) {
-  return exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
+  return exec(cstCommand, [...cstPrefix(), ...args], cwd);
 }
 
 function vlabResult(cwd, ...args) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv(),
@@ -194,7 +193,7 @@ function publishRetainedResolution(repo, options) {
 }
 
 function tracedGitCommands(cwd, ...args) {
-  const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  const result = spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv({ CAUSET_TRACE: "1" }),
@@ -1427,12 +1426,12 @@ test("a Change-Id argument names the change's origin, then the earliest bearer",
   write(repo, "picked.txt", "portable change\n");
   git(repo, "add", ".");
   const origin = JSON.parse(exec(
-    vlabCommand, [...vlabPrefix(), "commit", "-m", "portable change"], repo,
+    cstCommand, [...cstPrefix(), "commit", "-m", "portable change"], repo,
     dated("2026-01-01T00:00:10Z"),
   ));
   git(repo, "switch", "main");
   const picked = JSON.parse(exec(
-    vlabCommand, [...vlabPrefix(), "cherry-pick", origin.changeId, "--json"], repo,
+    cstCommand, [...cstPrefix(), "cherry-pick", origin.changeId, "--json"], repo,
     dated("2026-01-01T00:00:00Z"),
   ));
   assert.equal(picked.appliedChangeId, origin.changeId);
@@ -2293,7 +2292,7 @@ test("heuristic candidates require explicit acceptance", (t) => {
     1,
     JSON.stringify(plan, null, 2),
   );
-  const attempt = spawnSync(vlabCommand, [...vlabPrefix(), "reconcile", "left"], {
+  const attempt = spawnSync(cstCommand, [...cstPrefix(), "reconcile", "left"], {
     cwd: repo,
     encoding: "utf8",
     env: testEnv(),
@@ -3019,7 +3018,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
     fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-fixture-root-")),
   );
   t.after(() => fs.rmSync(scaleFixtureRoot, { recursive: true, force: true }));
-  const benchmark = (...args) => JSON.parse(exec(vlabCommand, [...vlabPrefix(), ...args], repo, {
+  const benchmark = (...args) => JSON.parse(exec(cstCommand, [...cstPrefix(), ...args], repo, {
     env: testEnv({ TMPDIR: scaleFixtureRoot, TMP: scaleFixtureRoot, TEMP: scaleFixtureRoot }),
   }));
   const scale = benchmark(
@@ -3174,7 +3173,7 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
     worktrees: git(repo, "worktree", "list", "--porcelain"),
   }, scaleCallerBefore);
 
-  const traced = spawnSync(vlabCommand, [...vlabPrefix(), "doctor"], {
+  const traced = spawnSync(cstCommand, [...cstPrefix(), "doctor"], {
     cwd: repo,
     encoding: "utf8",
     env: testEnv({ CAUSET_TRACE: "1" }),
@@ -3183,8 +3182,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
   assert.match(traced.stderr, /\[cst trace\].*git --version/);
 
   const tracedOption = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "--trace-git", "--git-session", "merge-plan", "HEAD", "--json"],
+    cstCommand,
+    [...cstPrefix(), "--trace-git", "--git-session", "merge-plan", "HEAD", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -3202,8 +3201,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
 
   const shutdownDiagnosticsPath = path.join(parent, "shutdown-diagnostics.log");
   const planned = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "merge-plan", "HEAD", "--git-session", "--json"],
+    cstCommand,
+    [...cstPrefix(), "merge-plan", "HEAD", "--git-session", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -3231,8 +3230,8 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
   const diagnosticsPath = path.join(parent, "lazy-session-diagnostics.log");
   write(repo, "dirty.txt", "dirty\n");
   const rejected = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "reconcile", "HEAD", "--git-session"],
+    cstCommand,
+    [...cstPrefix(), "reconcile", "HEAD", "--git-session"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -3283,8 +3282,8 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   git(repo, "switch", "main");
 
   const planned = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "merge-plan", "feature", "--git-session", "--trace-git", "--json"],
+    cstCommand,
+    [...cstPrefix(), "merge-plan", "feature", "--git-session", "--trace-git", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -3308,8 +3307,8 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   // persistent process answering reads and `CAUSET_GIT_SESSION=0` must show no
   // session at all; unset, the default is platform-specific and not claimed.
   const inherited = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "merge-plan", "feature", "--trace-git", "--json"],
+    cstCommand,
+    [...cstPrefix(), "merge-plan", "feature", "--trace-git", "--json"],
     { cwd: repo, encoding: "utf8", env: testEnv() },
   );
   assert.equal(inherited.status, 0, inherited.stderr);
@@ -3330,8 +3329,8 @@ test("merge planning batches commit metadata instead of spawning per commit", (t
   }
 
   const failedSession = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "merge-plan", "feature", "--git-session", "--trace-git", "--json"],
+    cstCommand,
+    [...cstPrefix(), "merge-plan", "feature", "--git-session", "--trace-git", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -4132,8 +4131,8 @@ test("workspace listing batches one status query per existing path and preserves
     .map((line) => line.match(/^\[cst trace\] [\d.]+ms git (\S+) /)?.[1])
     .filter(Boolean);
   const listTraced = (...args) => spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "workspace", "list", ...args],
+    cstCommand,
+    [...cstPrefix(), "workspace", "list", ...args],
     {
       cwd: repo,
       encoding: "utf8",
@@ -4532,7 +4531,7 @@ test("batched resolution catalog lists retained records newest-first and quarant
     catalog,
   );
   for (const CAUSET_GIT_SESSION of ["0", "1"]) {
-    const result = spawnSync(vlabCommand, [...vlabPrefix(), "resolve", "list", "--json"], {
+    const result = spawnSync(cstCommand, [...cstPrefix(), "resolve", "list", "--json"], {
       cwd: repo,
       encoding: "utf8",
       env: testEnv({ CAUSET_GIT_SESSION }),
@@ -4905,7 +4904,7 @@ test("metadata export and import carry a retention ref that names an annotated t
 // ---------------------------------------------------------------------------
 
 function vlabWithEngine(cwd, engine, ...args) {
-  const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  const result = spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv({
@@ -5478,7 +5477,7 @@ test("merge-tree forecasts fall back with a reason when the merge-tree session i
   vlab(repo, "commit", "-m", "target");
 
   const worktree = forecastWithEngine(repo, "worktree", "forecast", "feature");
-  const failed = spawnSync(vlabCommand, [...vlabPrefix(), "forecast", "feature", "--json"], {
+  const failed = spawnSync(cstCommand, [...cstPrefix(), "forecast", "feature", "--json"], {
     cwd: repo,
     encoding: "utf8",
     env: testEnv({
@@ -5529,8 +5528,8 @@ function tooOldFixture(t) {
 function mergeTreeForecastWithEnv(repo, env) {
   const started = Date.now();
   const result = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "forecast", "feature", "--forecast-engine", "merge-tree", "--json"],
+    cstCommand,
+    [...cstPrefix(), "forecast", "feature", "--forecast-engine", "merge-tree", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -5598,7 +5597,7 @@ test("the default forecast engine is merge-tree on Windows and the worktree simu
   const { repo } = tooOldFixture(t);
   const env = testEnv();
   delete env.CAUSET_FORECAST_ENGINE;
-  const result = spawnSync(vlabCommand, [...vlabPrefix(), "forecast", "feature", "--json"], {
+  const result = spawnSync(cstCommand, [...cstPrefix(), "forecast", "feature", "--json"], {
     cwd: repo,
     encoding: "utf8",
     env,
@@ -5652,8 +5651,8 @@ test("unknown merge-tree or worktree engine selections fail before any forecast 
   assert.equal(forecastFileCount(repo), 0);
 
   const viaEnvironment = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "forecast", "feature", "--json"],
+    cstCommand,
+    [...cstPrefix(), "forecast", "feature", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -5691,8 +5690,8 @@ test("unknown merge-tree or worktree engine selections fail before any forecast 
 
   // The flag overrides an unusable environment selection.
   const overridden = spawnSync(
-    vlabCommand,
-    [...vlabPrefix(), "forecast", "feature", "--forecast-engine", "merge-tree", "--json"],
+    cstCommand,
+    [...cstPrefix(), "forecast", "feature", "--forecast-engine", "merge-tree", "--json"],
     {
       cwd: repo,
       encoding: "utf8",
@@ -6596,7 +6595,7 @@ test("every repository read passes through the engine seam and the native engine
   // The same commands answer identically under each engine, and the metrics
   // of every result name the engine and its fallbacks.
   const runWithEngine = (engineName, ...args) => {
-    const result = spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+    const result = spawnSync(cstCommand, [...cstPrefix(), ...args], {
       cwd: repo,
       encoding: "utf8",
       env: testEnv({ CAUSET_ENGINE: engineName }),
@@ -6732,7 +6731,7 @@ test("every repository read passes through the engine seam and the native engine
   const badFlag = vlabResult(repo, "doctor", "--engine", "bogus");
   assert.notEqual(badFlag.status, 0);
   assert.match(badFlag.stderr, /--engine requires one of: git, native/);
-  const badEnv = spawnSync(vlabCommand, [...vlabPrefix(), "doctor"], {
+  const badEnv = spawnSync(cstCommand, [...cstPrefix(), "doctor"], {
     cwd: repo,
     encoding: "utf8",
     env: testEnv({ CAUSET_ENGINE: "bogus" }),

@@ -16,7 +16,7 @@ const { locate, packageRoot, verify } = require("./platform.js");
 const found = locate();
 if (found.missing) {
   process.stderr.write(`cst: ${found.missing}; running the JavaScript CLI.\n`);
-  import(pathToFileURL(path.join(packageRoot, "bin", "vlab.js")).href).catch((error) => {
+  import(pathToFileURL(path.join(packageRoot, "bin", "cst.js")).href).catch((error) => {
     process.stderr.write(`cst: ${error?.message ?? error}\n`);
     process.exitCode = 1;
   });

@@ -4,7 +4,7 @@
 
 `src/` contains the ES-module implementation. Keep domain behavior in focused
 modules such as `merge-plan.js`, `workspaces.js`, and `metadata.js`; `src/cli.js`
-owns command parsing and presentation. `bin/vlab.js` is the executable entry
+owns command parsing and presentation. `bin/cst.js` is the executable entry
 point. `test/integration.test.js` exercises the real CLI against disposable Git
 repositories, `test/schema-catalog.test.js` keeps the published JSON
 Schema catalog in `docs/schemas/` in agreement with the runtime validators in
@@ -80,10 +80,10 @@ which the Rust comparisons need and skip without.
   inspection, so they accumulate; `npm run demo:clean` lists those fixtures and
   `npm run demo:clean -- --apply` removes them (`-- --all` also sweeps fixtures
   an interrupted test or benchmark run left behind).
-- `node ./bin/vlab.js --help` runs the CLI directly without installing it.
+- `node ./bin/cst.js --help` runs the CLI directly without installing it.
 - `npm link` optionally exposes the JavaScript CLI as `cst` in the local shell;
-  the released command is the executable `scripts/pack-release.mjs` packs. `vlab` is the
-  same command under its old name and remains an alias during the rename (ADR-0038).
+  the released command is the executable `scripts/pack-release.mjs` packs. The
+  old name, `vlab`, is no longer installed (removed in v0.23.0, ADR-0038 §4).
 
 ## Coding Style & Naming Conventions
 
@@ -106,7 +106,7 @@ changes, run `npm test`, `CAUSET_GIT_SESSION=1 npm test`, `CAUSET_GIT_SESSION=0 
 (the default forecast engine differs by platform), and `CAUSET_ENGINE=native npm test`
 (every read must pass through `src/engine.js`; never call `runGit` for a read
 in a domain module). Every CLI launch in the suites goes through
-`test-support/vlab-command.js`; never spawn `bin/vlab.js` directly, so that
+`test-support/cst-command.js`; never spawn `bin/cst.js` directly, so that
 `CAUSET_CLI=<executable> npm test` can run the same suites against another
 implementation of the CLI (ADR-0037). No numeric coverage threshold is
 defined; preserve the behavioral and failure-safety guarantees in

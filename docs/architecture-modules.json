@@ -1,5 +1,5 @@
 {
-  "bin/vlab.js": {
+  "bin/cst.js": {
     "responsibility": "Minimal executable entry point and error/exit boundary",
     "dependencies": "`src/cli.js`"
   },

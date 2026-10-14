@@ -120,7 +120,7 @@ export function packRelease(options) {
   fs.writeFileSync(path.join(main, "bin", "native", "checksums.json"), `${JSON.stringify(checksums, null, 2)}\n`);
   fs.writeFileSync(path.join(main, "package.json"), `${JSON.stringify({
     ...manifest,
-    bin: { cst: "bin/native/cst.exe", vlab: "bin/native/cst.exe" },
+    bin: { cst: "bin/native/cst.exe" },
     scripts: { preinstall: "node bin/native/preinstall.js" },
     // Exact pins: a platform package of another version is refused (§6).
     optionalDependencies: Object.fromEntries(

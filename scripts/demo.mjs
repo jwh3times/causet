@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-demo-"));
 
@@ -21,7 +21,7 @@ function git(...args) {
 }
 
 function vlab(...args) {
-  return run(vlabCommand, [...vlabPrefix(), ...args]);
+  return run(cstCommand, [...cstPrefix(), ...args]);
 }
 
 function write(relative, content) {
@@ -78,4 +78,4 @@ vlab("spec", "index", "docs/spec.md");
 git("add", "docs/spec.md", ".causet/specs/docs/spec.md.json");
 vlab("commit", "-m", "add indexed demo specification");
 
-console.log(`\nDemo complete. Inspect it with:\n  cd ${repo}\n  vlab graph\n  vlab receipts\n  vlab receipts --json`);
+console.log(`\nDemo complete. Inspect it with:\n  cd ${repo}\n  cst graph\n  cst receipts\n  cst receipts --json`);

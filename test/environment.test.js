@@ -12,7 +12,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { ENVIRONMENT_VARIABLES, environmentValue, setEnvironmentValue } from "../src/environment.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-environment-")));
 after(() => fs.rmSync(repo, { recursive: true, force: true }));
@@ -24,7 +24,7 @@ const clean = Object.fromEntries(ENVIRONMENT_VARIABLES.flatMap((name) =>
   [[`CAUSET_${name}`, undefined], [`VLAB_${name}`, undefined]]));
 
 function cst(args, env) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd: repo, encoding: "utf8", env: testEnv({ ...clean, ...env }),
   });
 }

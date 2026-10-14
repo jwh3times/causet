@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MERGE_TREE_ENGINE_MIN_GIT } from "../src/git.js";
 import { BASELINE_SCHEMA, parseOptions, hostProvenance, migrateBaseline, selectBaseline, recordBaseline } from "./benchmark-host.mjs";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 /**
  * Compare the bounded benchmarks against the committed per-host baseline
@@ -113,7 +113,7 @@ function runCapture(command, commandArgs, cwd, env = {}) {
 }
 
 function vlabJson(cwd, commandArgs, env = {}) {
-  return JSON.parse(run(vlabCommand, [...vlabPrefix(), ...commandArgs, "--json"], cwd, env));
+  return JSON.parse(run(cstCommand, [...cstPrefix(), ...commandArgs, "--json"], cwd, env));
 }
 
 function gitVersion() {
@@ -214,7 +214,7 @@ function measureForecasts(modes) {
     fs.writeFileSync(historyFile, "base\n");
     run("git", ["add", "history.txt"], repo);
     run("git", ["commit", "-q", "-m", "base"], repo);
-    run(vlabCommand, [...vlabPrefix(), "init"], repo);
+    run(cstCommand, [...cstPrefix(), "init"], repo);
     run("git", ["switch", "-q", "-c", "feature"], repo);
     for (let index = 1; index <= PROFILE.forecastChanges; index += 1) {
       fs.writeFileSync(historyFile, `${index}\n`);
@@ -293,7 +293,7 @@ function measurePublication() {
     fs.writeFileSync(path.join(repo, "base.txt"), "base\n");
     run("git", ["add", "-A"], repo);
     run("git", ["commit", "-q", "-m", "base"], repo);
-    run(vlabCommand, [...vlabPrefix(), "init"], repo);
+    run(cstCommand, [...cstPrefix(), "init"], repo);
 
     run("git", ["switch", "-q", "-c", "feature"], repo);
     for (let index = 1; index <= PROFILE.publishChanges; index += 1) {
@@ -302,8 +302,8 @@ function measurePublication() {
       fs.writeFileSync(path.join(repo, `change-${index}.txt`), `${index}\n`);
       run("git", ["add", "-A"], repo);
       run(
-        vlabCommand,
-        [...vlabPrefix(), "commit", "-m", `publish ${index}`],
+        cstCommand,
+        [...cstPrefix(), "commit", "-m", `publish ${index}`],
         repo,
         { CAUSET_AGENT: "benchmark-agent" },
       );
@@ -314,8 +314,8 @@ function measurePublication() {
     run("git", ["commit", "-q", "-m", "target moves"], repo);
 
     const reconciled = runCapture(
-      vlabCommand,
-      [...vlabPrefix(), "reconcile", "feature", "--json"],
+      cstCommand,
+      [...cstPrefix(), "reconcile", "feature", "--json"],
       repo,
       { CAUSET_TRACE: "1" },
     );
@@ -332,7 +332,7 @@ function measurePublication() {
     const processes =
       (reconciled.stderr.match(/\(new (?:persistent )?process\)/g) ?? []).length;
     const records = JSON.parse(
-      run(vlabCommand, [...vlabPrefix(), "receipts", "--json"], repo),
+      run(cstCommand, [...cstPrefix(), "receipts", "--json"], repo),
     ).length;
 
     return {

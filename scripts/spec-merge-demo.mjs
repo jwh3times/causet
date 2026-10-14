@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-spec-demo-"));
 
@@ -21,7 +21,7 @@ function git(...args) {
 }
 
 function vlab(...args) {
-  return run(vlabCommand, [...vlabPrefix(), ...args]);
+  return run(cstCommand, [...cstPrefix(), ...args]);
 }
 
 function writeSpec(content) {
@@ -66,5 +66,5 @@ const forecastId = output.match(/^forecast\s+(forecast_[a-z0-9]+)/m)?.[1];
 if (!forecastId) throw new Error("Could not read the generated forecast ID.");
 
 console.log(
-  `\nThe target remains clean. Apply the reviewed block merge with:\n  cd ${repo}\n  git status --short\n  vlab reconcile agent-retries --use-forecast ${forecastId}\n  Get-Content docs\\policy.md\n  vlab receipts\n\nMeasure a generated documentation corpus with:\n  vlab spec benchmark --documents 25 --blocks 40`,
+  `\nThe target remains clean. Apply the reviewed block merge with:\n  cd ${repo}\n  git status --short\n  cst reconcile agent-retries --use-forecast ${forecastId}\n  Get-Content docs\\policy.md\n  cst receipts\n\nMeasure a generated documentation corpus with:\n  cst spec benchmark --documents 25 --blocks 40`,
 );

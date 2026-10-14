@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const parent = fs.mkdtempSync(path.join(os.tmpdir(), "causet-resolution-demo-"));
 const repo = path.join(parent, "repo");
@@ -24,11 +24,11 @@ function git(cwd, ...args) {
 }
 
 function vlab(cwd, ...args) {
-  return run(vlabCommand, [...vlabPrefix(), ...args], cwd);
+  return run(cstCommand, [...cstPrefix(), ...args], cwd);
 }
 
 function expectConflict(cwd, source) {
-  const attempt = spawnSync(vlabCommand, [...vlabPrefix(), "reconcile", source], {
+  const attempt = spawnSync(cstCommand, [...cstPrefix(), "reconcile", source], {
     cwd,
     encoding: "utf8",
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
@@ -101,5 +101,5 @@ console.log("\nExact candidate discovered:");
 vlab(workspace, "resolve", "status");
 
 console.log(
-  `\nContinue the experiment with:\n  cd ${workspace}\n  vlab resolve apply --all\n  git diff --cached -- renamed-policy.txt\n  vlab reconcile --continue\n  vlab graph\n  vlab receipts`,
+  `\nContinue the experiment with:\n  cd ${workspace}\n  cst resolve apply --all\n  git diff --cached -- renamed-policy.txt\n  cst reconcile --continue\n  cst graph\n  cst receipts`,
 );

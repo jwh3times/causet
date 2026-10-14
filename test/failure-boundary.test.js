@@ -7,7 +7,7 @@ import test, { after } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { FAULT_EXIT_CODE } from "../src/faults.js";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -28,10 +28,10 @@ function exec(command, args, cwd, options = {}) {
 }
 
 const git = (cwd, ...args) => exec("git", args, cwd);
-const vlab = (cwd, ...args) => exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
+const vlab = (cwd, ...args) => exec(cstCommand, [...cstPrefix(), ...args], cwd);
 
 function vlabResult(cwd, args, env = {}) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv({ ...env }),
@@ -919,7 +919,7 @@ test("a lock whose holder is gone is abandoned, and a live holder's is respected
 });
 
 function workspaceWriter(repo, args, env = {}) {
-  const child = spawn(vlabCommand, [...vlabPrefix(), "workspace", ...args, "--json"], {
+  const child = spawn(cstCommand, [...cstPrefix(), "workspace", ...args, "--json"], {
     cwd: repo,
     env: testEnv(env),
     stdio: ["ignore", "pipe", "pipe"],

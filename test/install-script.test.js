@@ -6,7 +6,7 @@
  * directory holding an archive, `SHA256SUMS` and the script, and installs
  * under a prefix of its own, with no Node.js on `PATH`. The installed
  * executable is the subject, so this suite launches it directly rather than
- * through `test-support/vlab-command.js`.
+ * through `test-support/cst-command.js`.
  *
  * Without `CAUSET_RELEASE_SET=<directory>` the assets are made here from the
  * workspace's release build; the release workflow passes the set it has just
@@ -70,7 +70,7 @@ before(() => {
   }
   // The script's own tools and Git, and no Node.js.
   const tools = windows ? [] : [
-    "sh", "uname", "ls", "ldd", "grep", "sed", "head", "mktemp", "rm", "cp", "mv", "ln", "mkdir", "chmod",
+    "sh", "uname", "ls", "ldd", "grep", "sed", "head", "mktemp", "rm", "cp", "mv", "readlink", "mkdir", "chmod",
     "tar", "gzip", "sha256sum", "cut", "cat",
   ].map((tool) => spawnSync("which", [tool], { encoding: "utf8" }).stdout.trim()).filter(Boolean);
   shell = bareEnvironment(path.join(scratch, "bare"), windows
@@ -83,11 +83,11 @@ before(() => {
 let installs = 0;
 
 /** Run the install script against the release at `from`, into a new prefix. */
-function install(flags = [], from = assets) {
+function install(flags = [], from = assets, prefix = undefined) {
   // The script always comes from a real release; `from` may be one that is not there.
   const source = fs.existsSync(path.join(from, script)) ? from : assets;
   installs += 1;
-  const prefix = path.join(scratch, `prefix-${installs}`);
+  prefix ??= path.join(scratch, `prefix-${installs}`);
   const ran = windows
     ? spawnSync(`${process.env.SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`, [
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(source, script),
@@ -106,7 +106,7 @@ function copyOfAssets() {
   return copy;
 }
 
-test("the script installs cst and its alias with no Node.js on PATH, and the installed command works", { skip }, () => {
+test("the script installs cst and no vlab alias with no Node.js on PATH, and the installed command works", { skip }, () => {
   assert.equal(sha256(path.join(assets, script)), sha256(path.join(projectRoot, "scripts", script)),
     "the release carries this checkout's install script");
   const installed = install();
@@ -117,10 +117,7 @@ test("the script installs cst and its alias with no Node.js on PATH, and the ins
     cwd: options.cwd ?? scratch, encoding: "utf8", env: options.env ?? shell.env,
   });
   assert.equal(launch(["--version"]).stdout, `causet ${version}\n`);
-  const alias = spawnSync(path.join(installed.prefix, windows ? "vlab.cmd" : "vlab"), ["--version"], {
-    cwd: scratch, encoding: "utf8", env: shell.env, shell: windows,
-  });
-  assert.equal(alias.stdout.trim(), `causet ${version}`, alias.stderr);
+  assert.deepEqual(fs.readdirSync(installed.prefix), [windows ? "cst.exe" : "cst"]);
   const doctor = smokeSequence({ launch, git: shell.git, env: shell.env, repo: path.join(scratch, "repo") });
   assert.equal(doctor.implementation, "rust");
   assert.equal(doctor.node, null);
@@ -129,6 +126,34 @@ test("the script installs cst and its alias with no Node.js on PATH, and the ins
   // Running it again upgrades in place, and a pinned version finds its archive.
   const again = install(["--version", version]);
   assert.equal(again.status, 0, again.stderr);
+});
+
+/** Place the `vlab` alias an install before 0.23.0 left, or `content` of someone else's. */
+function placeAlias(prefix, content = undefined) {
+  fs.mkdirSync(prefix, { recursive: true });
+  const alias = path.join(prefix, windows ? "vlab.cmd" : "vlab");
+  if (content !== undefined) fs.writeFileSync(alias, content);
+  else if (windows) fs.writeFileSync(alias, '@"%~dp0cst.exe" %*\r\n');
+  else fs.symlinkSync("cst", alias);
+  return alias;
+}
+
+test("upgrading over an install with the vlab alias removes the alias, and only that one", { skip }, () => {
+  const ours = path.join(scratch, `upgrade-${installs + 1}`);
+  const alias = placeAlias(ours);
+  const upgraded = install([], assets, ours);
+  assert.equal(upgraded.status, 0, `${upgraded.stdout}\n${upgraded.stderr}`);
+  assert.match(upgraded.stdout, /Removed the vlab(\.cmd)? alias, which causet 0\.23\.0 retired: run cst instead\./);
+  assert.equal(fs.existsSync(alias), false);
+  assert.deepEqual(fs.readdirSync(ours), [windows ? "cst.exe" : "cst"]);
+
+  // A `vlab` that is not the alias this script wrote is someone else's, and stays.
+  const theirs = path.join(scratch, `upgrade-${installs + 1}`);
+  const other = placeAlias(theirs, "someone else's vlab\n");
+  const kept = install([], assets, theirs);
+  assert.equal(kept.status, 0, `${kept.stdout}\n${kept.stderr}`);
+  assert.doesNotMatch(kept.stdout, /Removed the vlab/);
+  assert.equal(fs.readFileSync(other, "utf8"), "someone else's vlab\n");
 });
 
 test("an archive that is not the listed one is refused, and nothing is installed", { skip }, () => {

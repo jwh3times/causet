@@ -17,7 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
 const created = [];
@@ -36,7 +36,7 @@ function exec(command, args, cwd) {
 }
 
 const git = (cwd, ...args) => exec("git", args, cwd);
-const vlab = (cwd, ...args) => exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
+const vlab = (cwd, ...args) => exec(cstCommand, [...cstPrefix(), ...args], cwd);
 
 function write(repo, relative, content) {
   const target = path.join(repo, relative);
@@ -231,7 +231,7 @@ test("a proof bundle verifies against a fork of its repository and is refused by
   tampered.repository.lineage.rootCommits = [...tampered.repository.lineage.rootCommits, "f".repeat(40)];
   const tamperedFile = path.join(origin, "..", "tampered-bundle.json");
   fs.writeFileSync(tamperedFile, JSON.stringify(tampered));
-  const tamperedRun = spawnSync(vlabCommand, [...vlabPrefix(), "verify-proof", tamperedFile, "--json"], { cwd: fork, encoding: "utf8", env: testEnv() });
+  const tamperedRun = spawnSync(cstCommand, [...cstPrefix(), "verify-proof", tamperedFile, "--json"], { cwd: fork, encoding: "utf8", env: testEnv() });
   assert.equal(tamperedRun.status, 1, "a tampered lineage claim does not verify");
   const tamperedResult = JSON.parse(tamperedRun.stdout);
   assert.equal(tamperedResult.integrity.intact, false, "the restated roots break the bundle hash");

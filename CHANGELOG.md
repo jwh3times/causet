@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **The `vlab` command alias is removed** (#231, ADR-0038 §4), as v0.22.1
+  announced. Breaking for anything that still runs `vlab`: call `cst`. npm
+  links only `cst`, and the install scripts no longer write a `vlab` link or a
+  `vlab.cmd`. Running an install script over an earlier install removes the
+  alias it left, and only one that runs `cst`. Existing `vlab/ws/<name>`
+  workspace branches keep their names.
+- The JavaScript CLI's entry point is `bin/cst.js` (was `bin/vlab.js`), and
+  the suites' launcher is `test-support/cst-command.js`, exporting
+  `cstCommand` and `cstPrefix`. The demos print `cst` in the commands they
+  suggest.
+
 ## 0.22.1
 
 **The first published release of the 0.22 line.** v0.22.0 was tagged, but
@@ -14,8 +25,10 @@ release, unchanged.
   shorthand and refused to publish it. Every run of the workflow now checks
   that npm reads each tarball path as a file, so a pull request or dispatch
   sees the failure, not only a tag.
-- The npm packages are published from the workflow through trusted
-  publishing, with provenance (#139).
+- The release workflow was to publish the npm packages through trusted
+  publishing, with provenance (#139), but npm refused its token
+  (npm/cli#9969), so 0.22.1 was published by hand, without provenance, as
+  0.21.0 was.
 
 ## 0.22.0
 

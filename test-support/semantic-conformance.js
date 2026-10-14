@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { testEnv } from "./git-environment.js";
-import { vlabCommand, vlabPrefix } from "./vlab-command.js";
+import { cstCommand, cstPrefix } from "./cst-command.js";
 
 export function runMarkdownCase(t, entry, profile) {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-semantic-"));
@@ -13,7 +13,7 @@ export function runMarkdownCase(t, entry, profile) {
     cwd: repo, env: testEnv(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000,
   }).trim();
   const git = (...args) => execute("git", args);
-  const vlab = (...args) => JSON.parse(execute(vlabCommand, [...vlabPrefix(), ...args, "--json"]));
+  const vlab = (...args) => JSON.parse(execute(cstCommand, [...cstPrefix(), ...args, "--json"]));
   git("init", "-b", "main");
   git("config", "user.name", "Semantic fixture");
   git("config", "user.email", "semantic@example.invalid");

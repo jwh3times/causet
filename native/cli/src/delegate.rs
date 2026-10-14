@@ -1,5 +1,5 @@
 //! Delegation to the JavaScript CLI (ADR-0037, decision 4): an unported
-//! command runs `node bin/vlab.js` with the same arguments, environment,
+//! command runs `node bin/cst.js` with the same arguments, environment,
 //! working directory and standard streams, and its exit code becomes ours.
 //! It adds exactly one process on Windows and none on POSIX, where the
 //! JavaScript CLI replaces this process.
@@ -20,7 +20,7 @@ pub const ENTRY_VARIABLE: &str = "CAUSET_JS_CLI";
 /// The JavaScript CLI's entry point: `CAUSET_JS_CLI` if
 /// set, otherwise the
 /// first ancestor directory of this executable that holds a package with
-/// `bin/vlab.js`. That covers the repository build (`native/target/release`)
+/// `bin/cst.js`. That covers the repository build (`native/target/release`)
 /// and the npm package (`bin/native`, ADR-0038) alike.
 pub fn entry_point() -> Result<PathBuf, String> {
   if let Some(named) = environment::value_os("JS_CLI").filter(|value| !value.is_empty()) {
@@ -32,11 +32,11 @@ pub fn entry_point() -> Result<PathBuf, String> {
   executable
     .ancestors()
     .skip(1)
-    .map(|directory| directory.join("bin").join("vlab.js"))
+    .map(|directory| directory.join("bin").join("cst.js"))
     .find(|candidate| is_package_entry(candidate))
     .ok_or_else(|| {
       format!(
-        "no JavaScript CLI (bin/vlab.js) was found above {}; set {ENTRY_VARIABLE} to its path",
+        "no JavaScript CLI (bin/cst.js) was found above {}; set {ENTRY_VARIABLE} to its path",
         executable.display()
       )
     })

@@ -72,7 +72,7 @@ hardware is required.
 exact classifications, entities, rendered bytes, stable identity, and read-only
 repeatability. Parser v2 cases assert corrected fence behavior; historical v1
 views remain characterized and affected legacy plans must block migration.
-The adapter launches the CLI through `test-support/vlab-command.js`, so with
+The adapter launches the CLI through `test-support/cst-command.js`, so with
 `CAUSET_CLI` set the same fixtures drive that implementation's Markdown adapter;
 only the two catalog-validation tests stay module-level.
 `node --test test/spec-fences.test.js` covers migration identity, unknown-version
@@ -181,8 +181,8 @@ assert executed operations and zero Git processes for supported inputs.
 **Running the suites against another CLI implementation.** Every CLI launch in
 the suites, the demos, `scripts/benchmark-regression.mjs`, and the whole-command
 part of `scripts/measure-real-repository.mjs` goes through
-`test-support/vlab-command.js`. By default that is this checkout's JavaScript
-CLI (`node bin/vlab.js`). `CAUSET_CLI=<path>` selects another implementation, such
+`test-support/cst-command.js`. By default that is this checkout's JavaScript
+CLI (`node bin/cst.js`). `CAUSET_CLI=<path>` selects another implementation, such
 as a Rust build of the CLI (ADR-0037, #140):
 - a `.js`, `.mjs` or `.cjs` path runs under the current Node;
 - any other path is executed directly;
@@ -203,7 +203,7 @@ test to that file, so a whole run can be counted. Those tests still run and
 still pass or fail against the JavaScript modules, but a `CAUSET_CLI` run's
 evidence for the selected CLI is the tests *not* in that report.
 
-With `CAUSET_CLI` pointing at `bin/vlab.js` explicitly, every mode passes exactly
+With `CAUSET_CLI` pointing at `bin/cst.js` explicitly, every mode passes exactly
 as it does with `CAUSET_CLI` unset; that run proves the indirection adds nothing.
 `CAUSET_CLI=native/target/release/cst.exe` (or `cst` off Windows) in all six
 modes is the qualification a ported command needs before it stops delegating
@@ -1010,8 +1010,9 @@ The primary way to install is not npm but an install script over the same
 release's assets (ADR-0038, amendment of 2026-10-08): `scripts/install.sh`
 and `scripts/install.ps1`. Each reads `SHA256SUMS`, picks the host's archive,
 refuses one whose digest is not the listed one, checks that the executable
-reports the release's version, and copies `cst` and a `vlab` alias into a
-user-writable prefix. `--from <directory>` points a script at assets on disk
+reports the release's version, and copies `cst` into a user-writable prefix,
+removing a `vlab` alias an install before v0.23.0 left there (only one that
+points at `cst`). `--from <directory>` points a script at assets on disk
 instead of a release URL, which is how `test/install-script.test.js` runs it:
 with the script's own tools and Git on `PATH` and no Node.js, followed by the
 same smoke sequence through the installed executable

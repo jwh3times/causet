@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Whole-command performance checkpoint for the Rust CLI program (ADR-0037,
- * issue #151). Times complete `vlab` invocations, per implementation, against
+ * issue #151). Times complete `cst` invocations, per implementation, against
  * a plain-Git floor, on pinned fixtures, and records every sample.
  *
  * Results are information, never a gate: the script exits non-zero only when
@@ -81,7 +81,7 @@ function parseArgs(argv) {
   if (!options.host || options.checkpoint === undefined || !options.output) throw new Error(USAGE);
   if (fs.existsSync(options.output)) throw new Error(`${options.output} exists; choose a new output file`);
   assert.ok(options.samples >= 5, "--samples must be at least 5");
-  options.impls.unshift({ name: "js", command: [process.execPath, path.join(root, "bin/vlab.js")] });
+  options.impls.unshift({ name: "js", command: [process.execPath, path.join(root, "bin/cst.js")] });
   return options;
 }
 
@@ -395,7 +395,7 @@ function measure(options, fixtures, engines, results) {
             suite: scenario.suite, fixture: scenario.fixture, scenario: scenario.name, engine,
             forecastEngine: scenario.env?.CAUSET_FORECAST_ENGINE ?? null,
             side: side.name, kind: side.kind,
-            command: side.kind === "impl" ? ["vlab", ...scenario.args].join(" ") : [side.command[0] === process.execPath ? "node" : side.command[0], ...side.floorArgs].join(" "),
+            command: side.kind === "impl" ? ["cst", ...scenario.args].join(" ") : [side.command[0] === process.execPath ? "node" : side.command[0], ...side.floorArgs].join(" "),
             processes, exitStatus: entry.status,
             stableOutput: side.kind === "impl" && scenario.deterministic ? entry.digests.size === 1 : null,
             outputSha256: side.kind === "impl" && scenario.deterministic && entry.digests.size === 1 ? [...entry.digests][0] : null,

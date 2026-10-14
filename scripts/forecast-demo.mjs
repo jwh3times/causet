@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-forecast-demo-"));
 
@@ -21,7 +21,7 @@ function git(...args) {
 }
 
 function vlab(...args) {
-  return run(vlabCommand, [...vlabPrefix(), ...args]);
+  return run(cstCommand, [...cstPrefix(), ...args]);
 }
 
 function write(relative, content) {
@@ -29,7 +29,7 @@ function write(relative, content) {
 }
 
 function expectConflict(source) {
-  const attempt = spawnSync(vlabCommand, [...vlabPrefix(), "reconcile", source], {
+  const attempt = spawnSync(cstCommand, [...cstPrefix(), "reconcile", source], {
     cwd: repo,
     encoding: "utf8",
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
@@ -84,5 +84,5 @@ const forecastId = forecastOutput.match(/^forecast\s+(forecast_[a-z0-9]+)/m)?.[1
 if (!forecastId) throw new Error("Could not read the generated forecast ID.");
 
 console.log(
-  `\nThe repository is still clean. Apply the reviewed forecast with:\n  cd ${repo}\n  git status --short\n  vlab reconcile source-two --use-forecast ${forecastId}\n  vlab graph\n  vlab receipts`,
+  `\nThe repository is still clean. Apply the reviewed forecast with:\n  cd ${repo}\n  git status --short\n  cst reconcile source-two --use-forecast ${forecastId}\n  cst graph\n  cst receipts`,
 );

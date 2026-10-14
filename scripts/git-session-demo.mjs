@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { MERGE_TREE_ENGINE_MIN_GIT } from "../src/git.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-git-session-demo-"));
 
@@ -31,8 +31,8 @@ function write(content) {
 
 function measure(...flags) {
   const started = performance.now();
-  const result = run(vlabCommand, [
-    ...vlabPrefix(),
+  const result = run(cstCommand, [
+    ...cstPrefix(),
     "forecast",
     "feature",
     ...flags,
@@ -65,7 +65,7 @@ git("config", "user.email", "causet@example.test");
 write("base\n");
 git("add", "history.txt");
 git("commit", "-q", "-m", "base");
-run(vlabCommand, [...vlabPrefix(), "init"]);
+run(cstCommand, [...cstPrefix(), "init"]);
 git("switch", "-q", "-c", "feature");
 for (let index = 1; index <= 12; index += 1) {
   write(`${index}\n`);
@@ -148,5 +148,5 @@ console.log(
   "Windows enables the session and the merge-tree engine automatically (Git 2.49 or newer); POSIX hosts opt in with --forecast-engine merge-tree. Wall time is machine-specific; plan, per-step tree, and predicted-tree equality plus process reduction are the acceptance invariants.",
 );
 console.log(
-  `\nInspect the repository with:\n  cd ${repo}\n  vlab forecast feature --trace-git\n  vlab forecast feature --trace-git --forecast-engine merge-tree`,
+  `\nInspect the repository with:\n  cd ${repo}\n  cst forecast feature --trace-git\n  cst forecast feature --trace-git --forecast-engine merge-tree`,
 );

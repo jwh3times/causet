@@ -22,7 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
-import { vlabCommand, vlabPrefix } from "../test-support/vlab-command.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
 const created = [];
@@ -41,11 +41,11 @@ function exec(command, args, cwd, env = {}) {
 }
 
 const git = (cwd, ...args) => exec("git", args, cwd);
-const vlab = (cwd, ...args) => exec(vlabCommand, [...vlabPrefix(), ...args], cwd);
-const vlabEnv = (cwd, env, ...args) => exec(vlabCommand, [...vlabPrefix(), ...args], cwd, env);
+const vlab = (cwd, ...args) => exec(cstCommand, [...cstPrefix(), ...args], cwd);
+const vlabEnv = (cwd, env, ...args) => exec(cstCommand, [...cstPrefix(), ...args], cwd, env);
 
 function vlabResult(cwd, args, env = {}) {
-  return spawnSync(vlabCommand, [...vlabPrefix(), ...args], {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd,
     encoding: "utf8",
     env: testEnv({ ...env }),
