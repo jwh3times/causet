@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv7la4hf32d8f2e9cc2b",
+      "mode": "compact",
+      "sourceRef": "fix/release-npm-publish-paths",
+      "sourceHead": "3c72eddfaca985402aaa7fddde1d04d558977a48",
+      "sourceSubject": "chore: prepare v0.22.1, the first published release of the 0.22 line",
+      "targetBefore": "b81cd0f1a9026acab4e7aa9625602c32e2853e64",
+      "landingCommit": "7e5f89961df44684173e1dfda4f260b426ba494e",
+      "base": "b81cd0f1a9026acab4e7aa9625602c32e2853e64",
+      "absorbedCommits": [
+        "6b26a78690c8d2904ee3955f9b1f18aa1760f3fe",
+        "3c72eddfaca985402aaa7fddde1d04d558977a48"
+      ],
+      "absorbedChanges": [
+        "ch_0mv7jhyf7c1254dd002fa",
+        "ch_0mv7jw8ej51d994ecd374"
+      ],
+      "resultTree": "f5943e3fda8c24cbbf576d417c510afbc51fcab3",
+      "createdAt": "2026-10-14T04:07:50.070Z"
+    }
+  ]
+}
