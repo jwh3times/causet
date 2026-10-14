@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **A record's `createdAt` must be in the ECMAScript date-time format**
+  (#173), in both CLIs. The JavaScript validator used to ask V8's
+  `Date.parse`, which also reads strings such as `"1"`, `"March 7, 2006"` and
+  `"2020-01-01 10:00"` from a fallback no other implementation can reproduce;
+  the Rust validator never accepted them. A record with such a value, which
+  only another producer could have written, is now malformed everywhere. The
+  published schemas already declared `date-time`, so no family's version
+  changes (`docs/schemas/compatibility.md` §2.3). Year `-000000`, which the
+  format excludes, is refused by both.
 - **Notice: v0.23.0 removes the `vlab` command alias** (ADR-0038 §4, #231).
   `cst` has been the command since v0.19.0, and `vlab` is the same program
   under its old name. Change any script or habit that still calls `vlab` to
