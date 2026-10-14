@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.22.0
+
+**The `vcs-lab` migration window ends with this release,** as v0.21.0
+announced: a repository that has not run `cst migrate` is refused, and
+`VLAB_*` variables are no longer read. It also carries the notice that
+v0.23.0 removes the `vlab` command alias, and finishes the rename in what the
+product prints.
+
 - **`cst workspace forecast --target-checkpoint` now carries the target
   workspace's checkpoint as an overlay** (#211, ADR-0028). The option was
   accepted and ignored: the forecast reported `committed-heads` and a null
