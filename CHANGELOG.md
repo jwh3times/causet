@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.22.1
+
+**The first published release of the 0.22 line.** v0.22.0 was tagged, but
+its release run failed at the npm publish step, so it was never published to
+npm or as a GitHub release. Everything listed under 0.22.0 below ships in this
+release, unchanged.
+
+- The release workflow names its npm tarballs by `./dist/` paths (#240).
+  npm 12, which the workflow installs, read `dist/<file>.tgz` as GitHub
+  shorthand and refused to publish it. Every run of the workflow now checks
+  that npm reads each tarball path as a file, so a pull request or dispatch
+  sees the failure, not only a tag.
+- The npm packages are published from the workflow through trusted
+  publishing, with provenance (#139).
+
 ## 0.22.0
 
 **The `vcs-lab` migration window ends with this release,** as v0.21.0

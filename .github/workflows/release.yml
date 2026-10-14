@@ -121,6 +121,18 @@ jobs:
           cp scripts/install.sh scripts/install.ps1 dist/
           (cd dist && sha256sum cst-* install.sh install.ps1 >> SHA256SUMS && cat SHA256SUMS)
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      # The publish step runs only on a tag, so every run checks here that the
+      # npm it installs reads the same paths as tarballs (v0.22.0's tag run
+      # failed there and nothing earlier could see it). `npm pack` resolves a
+      # path as `npm publish` does, without asking the registry, which refuses
+      # a dry-run publish of a version that is already out.
+      - name: npm reads every tarball path as a file
+        run: |
+          npm install --global npm@latest
+          npm --version
+          for tarball in ./dist/holland-vip-causet-*.tgz; do
+            npm pack "$tarball" --dry-run
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: release-set
@@ -204,6 +216,7 @@ jobs:
           npm install --global npm@latest
           npm --version
           # Platform packages first, so the main package never names one that is not there.
-          for tarball in $(ls dist/holland-vip-causet-*.tgz | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-); do
+          # `./` keeps npm 12 from reading `dist/<file>.tgz` as GitHub shorthand.
+          for tarball in $(ls ./dist/holland-vip-causet-*.tgz | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-); do
             npm publish "$tarball" --provenance --access public
           done
