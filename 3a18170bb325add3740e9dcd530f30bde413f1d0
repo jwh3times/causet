@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv7e4pu23ea4207e7c2b",
+      "mode": "compact",
+      "sourceRef": "fix/createdat-ecmascript-format",
+      "sourceHead": "f351a4bd5cddd706f30b2e98e59344157dbb33e5",
+      "sourceSubject": "fix: judge createdAt by the ECMAScript date-time format alone (#173)",
+      "targetBefore": "0b626a22cbc2da254b306e90c7e17b40587ca59d",
+      "landingCommit": "3a18170bb325add3740e9dcd530f30bde413f1d0",
+      "base": "0b626a22cbc2da254b306e90c7e17b40587ca59d",
+      "absorbedCommits": [
+        "f351a4bd5cddd706f30b2e98e59344157dbb33e5"
+      ],
+      "absorbedChanges": [
+        "ch_0mv787oxpd01c6db9af1b"
+      ],
+      "resultTree": "8942bf676b1b9cf6510f9b22349becda5186f3be",
+      "createdAt": "2026-10-14T00:47:40.493Z"
+    }
+  ]
+}
