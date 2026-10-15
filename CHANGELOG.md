@@ -5,7 +5,8 @@
 - **The npm package descriptions say what to install** (an audit of the
   published metadata). The main package's description says causet is
   experimental, names the `cst` command and the two prebuilt platforms, and
-  the package gains keywords so that npm search finds it. Each platform
+  the package gains keywords so that npm search finds it. All three packages
+  name their author. Each platform
   package's description names the main package to install instead of a Rust
   target triple. The README's first line, which is also the npm page's, no
   longer calls the Git engine dependency-free: the Rust CLI links gitoxide.
