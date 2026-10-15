@@ -901,10 +901,10 @@ coverage only when their attachments are reachable from the selected target.
 See [ADR-0025](docs/adr/0025-retain-the-object-closure-of-published-causal-facts.md).
 
 An ordinary clone fetches branch refs, not causal notes or their shared causet
-refs. A clone that fetches `refs/notes/causet` without `refs/causet/*` can
+refs. A clone that fetches `refs/notes/causet` without `refs/causet/retention` can
 therefore see a valid record but not the retention carrier that keeps its
 attachment readable; `metadata validate` then reports `missing-attachment`
-even though the origin is healthy. Fetch both namespaces as shown under
+even though the origin is healthy. Fetch the refs as shown under
 [Metadata locations](#metadata-locations) before interpreting validation from
 a low-level same-origin read.
 
@@ -1141,18 +1141,26 @@ their `vcs-lab.*` identifiers forever and are read as the `causet.*` families th
 Existing `vlab/ws/<name>` workspace branches keep their names; new workspaces use `causet/ws/<name>`.
 
 The supported transfer path is `cst metadata export/import`. For a low-level
-same-origin read, fetch the notes and shared cst namespaces together:
+same-origin read, fetch the notes, the retention root and the resolution refs
+together, each by name:
 
 ```bash
-git fetch origin 'refs/notes/causet:refs/notes/causet' 'refs/causet/*:refs/causet/*'
+git fetch origin 'refs/notes/causet:refs/notes/causet' \
+  'refs/causet/retention:refs/causet/retention' \
+  'refs/causet/resolutions/*:refs/causet/resolutions/*'
 ```
 
+Name them; a `refs/causet/*` glob also copies the publisher's checkpoint refs
+and parked conflicts (`refs/causet/checkpoints/**`, `refs/causet/quarantine/**`),
+which belong to that clone alone.
+
 A publisher that has not migrated yet still serves the former names
-(`refs/notes/vcs-lab`, `refs/vcs-lab/*`). Fetch those, then run `cst migrate` in the clone.
+(`refs/notes/vcs-lab`, `refs/vcs-lab/retention`, `refs/vcs-lab/resolutions/*`).
+Fetch those, then run `cst migrate` in the clone.
 An envelope exported before its repository migrated names the former refs and is refused on
 import: migrate that repository and export it again.
 
-Both namespaces are required for a complete causal read: notes carry the
+All three are required for a complete causal read: notes carry the
 records, while the retention root keeps their attachments and dependencies
 readable and resolution refs retain reusable result blobs. Direct ref fetching
 does not provide envelope validation, conflict preview, or quarantine. Use the
