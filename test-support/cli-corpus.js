@@ -150,16 +150,23 @@ function steadyBenchmark(text) {
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
+// Git's refusal outside a repository depends on where the directory is
+// mounted: "(or any of the parent directories): .git", or, when discovery
+// stops at a filesystem boundary, "(or any parent up to mount point <path>)"
+// and a second line saying so. Raw in stderr, or escaped inside JSON.
+const NOT_A_REPOSITORY = /fatal: not a git repository \((?:or any of the parent directories\): \.git|or any parent up to mount point [^)\n"]*\))(?:(?:\n|\\n)Stopping at filesystem boundary \(GIT_DISCOVERY_ACROSS_FILESYSTEM not set\)\.)?/g;
+
 /**
  * A result as it is frozen: the package version, the directory the cases ran
- * in (in either separator) and trace timings are masked, and so is each
- * group's own volatile part.
+ * in (in either separator), Git's wording of "not a git repository" and trace
+ * timings are masked, and so is each group's own volatile part.
  */
 export function frozenForm(result, { group, outside, version }) {
   const forms = [outside, outside.replaceAll("\\", "/")];
   const mask = (text) => forms
     .reduce((value, form) => value.replaceAll(form, "<outside>"), text ?? "")
     .replaceAll(version, "<version>")
+    .replace(NOT_A_REPOSITORY, "fatal: not a git repository <discovery>")
     .replace(/^(\[cst trace\]) [\d.]+ms /gm, "$1 <ms> ");
   let stdout = mask(result.stdout);
   if (group === "capabilities") stdout = stdout.replace(/\b[0-9a-f]{64}\b/g, "<sha256>");
