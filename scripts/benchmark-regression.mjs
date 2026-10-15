@@ -60,7 +60,7 @@ export const TOLERANCE = { latencyRatio: 2, latencyFloorMs: 5, processes: 0 };
  * stated intent into a failing build. `compare()` is unchanged.
  */
 export const GIT_EQUIVALENT_TARGET_RATIO = 1.1;
-/** The merge-tree engine floor is the CLI's (`src/git.js`): `merge-tree --stdin` flushes records only from Git 2.49. */
+/** The merge-tree engine floor is the CLI's (`native/engine/src/merge_tree.rs`): `merge-tree --stdin` flushes records only from Git 2.49. */
 export { MERGE_TREE_ENGINE_MIN_GIT };
 export const FORECAST_MODES = {
   "worktree-ordinary": ["--no-git-session", "--forecast-engine", "worktree"],

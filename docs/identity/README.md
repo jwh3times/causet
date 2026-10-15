@@ -8,8 +8,9 @@ bundle of FR-PLAN-08 hands a coverage classification to a third party — and
 because the specification is required **before identifiers participate in any
 trust decision** ([product.md](../product.md) §15, Gate B).
 
-**Authority.** `ID_NAMESPACES`, `ID_ENTROPY_BITS`, and `parseLogicalId` in
-`src/ids.js` are the runtime authority; this document describes them.
+**Authority.** `ID_NAMESPACES`, `ID_ENTROPY_BITS`, and `parse_logical_id` in
+`native/model/src/ids.rs` are the runtime authority (until #243, their
+counterparts in `src/ids.js`); this document describes them.
 
 ## 1. Form
 
@@ -175,9 +176,10 @@ provenance carried from it. The rule:
    are ordered by ascending commit id. Both keys are content of the commits,
    so the choice is the same on every host that reaches the same commits.
 
-`findCommitsByChangeId` in `src/git.js` returns every bearer in the order of
-rule 2, `resolveChangeOrCommit` in `src/operations.js` applies rule 1, and
-`test/integration.test.js` pins both.
+`find_commits_by_change_id` in `native/engine/src/git.rs` returns every bearer
+in the order of rule 2, `resolve_change_or_commit` in
+`native/cli/src/cherry_pick.rs` applies rule 1, and `test/integration.test.js`
+pins both.
 
 ## 6. Versioning this specification
 
@@ -213,9 +215,21 @@ do not overwrite an unreadable container or remove a lock whose writer is active
 Recover only the actors explicitly supplied to the original invocation, including
 `CAUSET_AGENT`; do not infer missing attribution from the content or Git author.
 
-There is no public provenance-declaration CLI for an existing commit. A maintainer
-with a compatible causet source checkout can use the existing declaration API.
-From that source checkout, run the following in Bash/Git Bash, replacing the two
+There is no public provenance-declaration CLI for an existing commit
+([#246](https://github.com/jwh3times/causet/issues/246) proposes one). Until there is, the repair uses the declaration
+API of the JavaScript CLI, which v0.24.0 removed (#243): a source checkout of
+**v0.23.0**, the last release that has it. It writes the same
+`causet.provenance/v1` record and `causet.note/v1` container this release reads,
+takes the same notes lock, and refuses a container it cannot read rather than
+overwrite it. It needs Node.js 20 or newer and nothing else; it does not need
+the causet installed in the affected repository to be v0.23.0.
+
+```bash
+git clone --branch v0.23.0 --depth 1 https://github.com/jwh3times/causet.git causet-v0.23.0
+cd causet-v0.23.0
+```
+
+From that checkout, run the following in Bash/Git Bash, replacing the two
 arguments and the example actors with the original declaration. Use the full
 commit ID inspected above. This updates only its note, preserves other records,
 and refuses if provenance already exists so a retry cannot duplicate it:
@@ -275,5 +289,5 @@ of the other's with at least one extra word that is not a number (`codex`,
 change the exit code, and nothing rewrites a published record: the names were
 claims made when the work was recorded. Fix the spelling for future commits, and
 treat existing spellings as a known alias wherever work is grouped by actor.
-`nearDuplicateActorNames` in `src/identity-audit.js` is the authority for the
+`near_duplicate` in `native/cli/src/audit.rs` is the authority for the
 rule, and `test/integration.test.js` pins it.

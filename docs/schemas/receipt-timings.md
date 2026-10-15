@@ -38,9 +38,8 @@ elapsed-time measurement for end-to-end latency. The
 the trace and checks published record counts. Trace process counts do not
 themselves provide a whole-command logical-query breakdown.
 
-The boundaries are implemented by `runReconciliationQueue` and
-`finalizeReconciliation` in [operations.js](../../src/operations.js), and
-`runRebaseQueue` and `finalizeRebase` in
-[rebase-operations.js](../../src/rebase-operations.js). Any future expansion to
+The boundaries are implemented by `run_queue` and `finalize` in
+[reconcile.rs](../../native/cli/src/reconcile.rs), and by the functions of the
+same names in [rebase.rs](../../native/cli/src/rebase.rs). Any future expansion to
 full-command receipt metrics needs an explicit versioned contract rather than
 silently changing these fields' meaning.

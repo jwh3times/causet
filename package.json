@@ -14,9 +14,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "bin": {
-    "cst": "./bin/cst.js"
-  },
+  "files": [
+    "bin/native/"
+  ],
   "scripts": {
     "build:native": "node ./scripts/build-native.mjs",
     "test": "node --test",

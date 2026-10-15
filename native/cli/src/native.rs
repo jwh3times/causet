@@ -1,5 +1,6 @@
-//! Running a ported command: the part of `main` in `src/cli.js` after the
-//! front end, and the error reporting of `bin/cst.js` (ADR-0021).
+//! Running a command once the front end has decided it: the part of `main` in
+//! `src/cli.js` after the front end, and the error reporting of `bin/cst.js`
+//! (ADR-0021), which it ported.
 
 use crate::parsed::Parsed;
 use causet_engine::environment;

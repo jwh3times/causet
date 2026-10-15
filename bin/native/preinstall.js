@@ -6,17 +6,18 @@
 // line and links `cst` straight to the executable.
 //
 // Nothing is downloaded or compiled. A platform with no published executable,
-// or an install that left the optional package out, keeps the launcher. An
-// executable that is not this release's is refused, and the install fails.
+// or an install that left the optional package out, keeps the launcher, which
+// then says what is missing each time `cst` runs; the install itself succeeds.
+// An executable that is not this release's is refused, and the install fails.
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { locate, verify } = require("./platform.js");
+const { locate, unavailable, verify } = require("./platform.js");
 
 const target = path.join(__dirname, "cst.exe");
 const found = locate();
 if (found.missing) {
-  process.stderr.write(`causet: ${found.missing}; cst will start through Node.\n`);
+  process.stderr.write(`causet: cst will not run on this host: ${unavailable(found.missing)}\n`);
   process.exit(0);
 }
 try {

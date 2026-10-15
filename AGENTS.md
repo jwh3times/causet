@@ -2,10 +2,15 @@
 
 ## Project Structure & Module Organization
 
-`src/` contains the ES-module implementation. Keep domain behavior in focused
-modules such as `merge-plan.js`, `workspaces.js`, and `metadata.js`; `src/cli.js`
-owns command parsing and presentation. `bin/cst.js` is the executable entry
-point. `test/integration.test.js` exercises the real CLI against disposable Git
+`native/` is the implementation, a Rust workspace: `core` (bounded read-only
+Git object access), `model` (the record model, the authority for every record
+family, bound and error code), `engine` (the Git engine; every repository read
+is an operation of its seam, `engine/src/engine.rs`), and `cli` (the `cst`
+command, one module per command family, with `front.rs` deciding each
+invocation). `bin/native/` is the npm launcher the main package ships. The
+JavaScript CLI that was the oracle until #243 is gone; its answers are frozen
+under `test/fixtures/oracle/`, and a change to one is a decision that the Rust
+answer is right, said in the change. `test/integration.test.js` exercises the real CLI against disposable Git
 repositories, `test/schema-catalog.test.js` keeps the published JSON
 Schema catalog in `docs/schemas/` in agreement with the runtime validators of
 the Rust record model in `native/model` (the authority since #243), and
@@ -32,9 +37,8 @@ mirror.
 Developing and testing need Node.js 20+, Git 2.40+ and the Rust toolchain
 `native/rust-toolchain.toml` pins. The released `cst` is the Rust executable
 in `native/`, which needs Git only, and it is what the suites run (#243):
-`npm run build:native` builds it, and `npm test` fails without it. `src/` is
-the JavaScript CLI, retired by #243; its answers from the oracle period are
-frozen under `test/fixtures/oracle/`. There are no npm dependencies.
+`npm run build:native` builds it, and `npm test` fails without it. There are
+no npm dependencies.
 
 - `npm test` runs the complete Node integration suite.
 - `npm run test:docs` checks local Markdown link targets.
@@ -81,10 +85,8 @@ frozen under `test/fixtures/oracle/`. There are no npm dependencies.
   inspection, so they accumulate; `npm run demo:clean` lists those fixtures and
   `npm run demo:clean -- --apply` removes them (`-- --all` also sweeps fixtures
   an interrupted test or benchmark run left behind).
-- `node ./bin/cst.js --help` runs the CLI directly without installing it.
-- `npm link` optionally exposes the JavaScript CLI as `cst` in the local shell;
-  the released command is the executable `scripts/pack-release.mjs` packs. The
-  old name, `vlab`, is no longer installed (removed in v0.23.0, ADR-0038 §4).
+- `native/target/release/cst --help` runs the build directly. The old name,
+  `vlab`, is no longer installed (removed in v0.23.0, ADR-0038 §4).
 
 ## Coding Style & Naming Conventions
 

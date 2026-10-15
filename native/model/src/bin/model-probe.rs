@@ -1,6 +1,6 @@
-//! Answers one JSON request per stdin line with one JSON line, so
-//! `test/rust-model.test.js` can put this crate and `src/` side by side on the
-//! same inputs in a single process. Not part of any shipped command.
+//! Answers one JSON request per stdin line with one JSON line, so the suites
+//! can put this crate to many inputs in a single process and hold its answers
+//! to the frozen oracle's (#243). Not part of any shipped command.
 #![forbid(unsafe_code)]
 
 use causet_model::canonical::{

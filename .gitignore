@@ -2,7 +2,6 @@ node_modules/
 *.log
 .DS_Store
 native/target/
-native/prebuilds/
 causal-vcs-lab-*.bundle
 causet-*.bundle
 causet-*.zip

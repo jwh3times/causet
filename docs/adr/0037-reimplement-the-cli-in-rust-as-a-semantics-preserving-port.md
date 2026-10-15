@@ -309,3 +309,10 @@ and GP-12.
   native command ships.
 - **At cutover:** NFR-PORT-01 (the Node.js requirement), `README.md` install, `AGENTS.md`,
   `docs/testing.md`, and `docs/native-engine.md`.
+- **After the oracle period (§6):** #243 retired the JavaScript CLI in v0.24.0, in three
+  steps: delegation (`CAUSET_DELEGATE`) removed; the suites pointed at the Rust CLI, with
+  the oracle's answers frozen under `test/fixtures/oracle/` and the Rust model
+  (`native/model`) made the validator authority; then `src/`, `bin/cst.js`, the N-API
+  binding and the npm fallback removed. `--engine native` remains, as the gitoxide backend
+  linked into `cst`. The provenance repair of `docs/identity/README.md` §7 runs from a
+  v0.23.0 checkout until a CLI command replaces it (#246).
