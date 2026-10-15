@@ -314,5 +314,5 @@ and GP-12.
   the oracle's answers frozen under `test/fixtures/oracle/` and the Rust model
   (`native/model`) made the validator authority; then `src/`, `bin/cst.js`, the N-API
   binding and the npm fallback removed. `--engine native` remains, as the gitoxide backend
-  linked into `cst`. The provenance repair of `docs/identity/README.md` §7 runs from a
-  v0.23.0 checkout until a CLI command replaces it (#246).
+  linked into `cst`. The provenance repair of `docs/identity/README.md` §7, which used
+  the JavaScript declaration API, is `cst provenance declare` since #246.

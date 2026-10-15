@@ -215,41 +215,23 @@ do not overwrite an unreadable container or remove a lock whose writer is active
 Recover only the actors explicitly supplied to the original invocation, including
 `CAUSET_AGENT`; do not infer missing attribution from the content or Git author.
 
-There is no public provenance-declaration CLI for an existing commit
-([#246](https://github.com/jwh3times/causet/issues/246) proposes one). Until there is, the repair uses the declaration
-API of the JavaScript CLI, which v0.24.0 removed (#243): a source checkout of
-**v0.23.0**, the last release that has it. It writes the same
-`causet.provenance/v1` record and `causet.note/v1` container this release reads,
-takes the same notes lock, and refuses a container it cannot read rather than
-overwrite it. It needs Node.js 20 or newer and nothing else; it does not need
-the causet installed in the affected repository to be v0.23.0.
+Then declare the original actors on that exact commit, using its full ID.
+`cst provenance declare` takes the notes lock, refuses when the commit already
+has provenance (so a retry cannot duplicate a claim), and refuses a note
+container of a version or family this build does not read rather than overwrite
+it. It updates only that commit's note and preserves the note's other records,
+including note text that is not a container, which it keeps as a `legacy-note`
+record:
 
 ```bash
-git clone --branch v0.23.0 --depth 1 https://github.com/jwh3times/causet.git causet-v0.23.0
-cd causet-v0.23.0
+cst provenance declare <full-commit-id> --generated-by agent:test --json
 ```
 
-From that checkout, run the following in Bash/Git Bash, replacing the two
-arguments and the example actors with the original declaration. Use the full
-commit ID inspected above. This updates only its note, preserves other records,
-and refuses if provenance already exists so a retry cannot duplicate it:
-
-```bash
-node --input-type=module -e '
-import { changeIdForCommit } from "./src/engine.js";
-import { declareProvenance, provenanceFor } from "./src/provenance.js";
-import { withNotesLock } from "./src/notes.js";
-const [repo, commit] = process.argv.slice(1);
-withNotesLock(repo, () => {
-  if ((provenanceFor([commit], repo).get(commit) ?? []).length) {
-    throw new Error("Inspect existing provenance before repairing.");
-  }
-  declareProvenance(commit, changeIdForCommit(commit, repo), [
-    { role: "generated", actor: "agent:test" },
-  ], repo);
-});
-' "/absolute/path/to/affected-repository" "full-commit-id"
-```
+Name every actor the original invocation declared, each with its own flag:
+`--authored-by`, `--generated-by` and `--reviewed-by` are repeatable. The
+command reads `CAUSET_AGENT` as `cst commit` does, so unset it unless it names
+an actor of the original declaration. The record's `changeId` is the commit's
+`Change-Id` trailer.
 
 Run `cst provenance <commit> --json` again in the affected repository and verify
 the declared actors. The commit ID and branch history remain unchanged. If the

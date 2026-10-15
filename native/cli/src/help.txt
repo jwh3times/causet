@@ -30,6 +30,8 @@ Usage:
   cst commit ... [--authored-by <actor>] [--generated-by <actor>]
                  [--reviewed-by <actor>]     declare provenance (repeatable)
   cst provenance [<rev>] [--all] [--json]
+  cst provenance declare <commit> [--authored-by <actor>]
+                 [--generated-by <actor>] [--reviewed-by <actor>]
   cst receipts [--json]
   cst audit identity [--json]
   cst metadata status [--json]

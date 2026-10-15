@@ -1039,6 +1039,16 @@
         "plan-source"
       ],
       "reason": "The bundle exists to be handed to another tool; a human rendering of it would be the very prose a verifier must not trust (FR-PLAN-08)."
+    },
+    {
+      "argv": [
+        "provenance",
+        "declare",
+        "plan-source",
+        "--generated-by",
+        "conformance-agent"
+      ],
+      "reason": "Prints the record it attached, as cst commit does; the human reading is cst provenance, which has a parity fixture. Last in this list because it writes a note the earlier entries would otherwise read."
     }
   ],
   "textOnlyCommands": [
@@ -1103,6 +1113,20 @@
       "stage": "paused",
       "code": "operation-in-progress",
       "reason": "Starting a second operation while one is paused is refused, and a caller must be able to tell that apart from the conflict that paused it."
+    },
+    {
+      "name": "provenance-already-declared",
+      "argv": [
+        "provenance",
+        "declare",
+        "pick-source",
+        "--generated-by",
+        "conformance-agent",
+        "--json"
+      ],
+      "stage": "clean",
+      "code": "already-exists",
+      "reason": "A declaration is never added beside an existing one, so a retried repair cannot duplicate a claim, and a caller must be able to tell that refusal from a failure to write."
     }
   ]
 }

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **`cst provenance declare <commit>` declares provenance for an existing
+  commit** (#246). It is the repair `docs/identity/README.md` §7 describes for
+  an attributed `cst commit` whose note was not published, and it accepts any
+  commit, a plain Git one included. It takes `--authored-by`, `--generated-by`
+  and `--reviewed-by` and reads `CAUSET_AGENT`, as `cst commit` does; it writes
+  one `causet.provenance/v1` record with `origin: "declared"` and the commit's
+  `Change-Id` (null without one), under the notes lock. A commit that already
+  has provenance is refused with `already-exists`, so a retry cannot duplicate
+  a claim. It prints JSON, as `cst commit` does. The v0.23.0-checkout repair
+  procedure is gone, and `cst commit`'s refusal names the command. A branch or
+  tag named `declare` is now read with `cst provenance refs/heads/declare`.
+
 ## 0.24.0
 
 **`cst` is the Rust executable alone.** This release removes the JavaScript

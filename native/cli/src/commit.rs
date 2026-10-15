@@ -159,7 +159,7 @@ fn commit_with_provenance(message: &str, all: bool, allow_empty: bool, actors: &
       error.message.clone(),
       error.details.clone(),
       format!("Keep this commit and inspect it with 'git show {commit}' and 'cst provenance {commit}'."),
-      "Do not retry commit as though it failed before creation. After fixing the notes write failure, use the provenance repair procedure in docs/identity/README.md to attach the original declaration to this exact commit.".into(),
+      format!("Do not retry commit as though it failed before creation. After fixing the notes write failure, attach the original declaration to this exact commit with 'cst provenance declare {commit}' and the same actors (docs/identity/README.md §7)."),
     ]
     .into_iter()
     .filter(|part| !part.is_empty())
