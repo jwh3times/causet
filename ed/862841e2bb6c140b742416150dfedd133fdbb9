@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9fjwkcdd7c0d56f702",
+      "mode": "compact",
+      "sourceRef": "chore/remove-delegation",
+      "sourceHead": "8cab55002959b5dd725303f623e05ce68bd593fe",
+      "sourceSubject": "chore: remove the Rust CLI's delegation to the JavaScript CLI",
+      "targetBefore": "6aae8da1de100dd915d34deb7fad372ff55c0509",
+      "landingCommit": "ed862841e2bb6c140b742416150dfedd133fdbb9",
+      "base": "6aae8da1de100dd915d34deb7fad372ff55c0509",
+      "absorbedCommits": [
+        "8cab55002959b5dd725303f623e05ce68bd593fe"
+      ],
+      "absorbedChanges": [
+        "ch_0mv8v7l2rd314ce7c88eb"
+      ],
+      "resultTree": "183eb65c440624165d560099b812130347a7688c",
+      "createdAt": "2026-10-15T11:03:01.023Z"
+    }
+  ]
+}
