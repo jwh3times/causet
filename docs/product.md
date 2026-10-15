@@ -1031,8 +1031,11 @@ recorded in an ADR when it changes a durable decision.
    `refs/causet/quarantine`, and a person disposes of it once. What remains
    open is the transport that would run in park mode
    ([#37](https://github.com/jwh3times/causet/issues/37),
-   [#40](https://github.com/jwh3times/causet/issues/40)) and which copy is
-   *true*, which is question 4.
+   [#40](https://github.com/jwh3times/causet/issues/40)), which
+   [ADR-0040](adr/0040-make-cst-the-one-command-carrying-records-over-git-remotes.md)
+   proposes as `cst fetch` and `cst push` over ordinary Git remotes
+   ([#255](https://github.com/jwh3times/causet/issues/255)), and which copy
+   is *true*, which is question 4.
 3. Should logical Change IDs be repository-scoped, globally namespaced, or
    issuer-qualified? **Answered in v0.12.0** by the frozen
    `causet.logical-id/v1` protocol ([docs/identity](identity/README.md)):
