@@ -89,11 +89,11 @@ to add if the directory is not on it.
 - **Read it first, if you prefer.** Download the script, read it, then run it:
   `curl -fsSLO <url>` and `sh install.sh`, or `irm <url> -OutFile install.ps1`
   and `.\install.ps1`. Both are short.
-- **Options,** which need the downloaded form: `--version 0.23.0` installs
+- **Options,** which need the downloaded form: `--version 0.24.0` installs
   that release, and `--prefix <dir>` installs somewhere else (`-Version` and
   `-Prefix` in PowerShell). The script
   attached to a release installs that release's layout, so pin both together:
-  `https://github.com/jwh3times/causet/releases/download/v0.23.0/install.sh`.
+  `https://github.com/jwh3times/causet/releases/download/v0.24.0/install.sh`.
 - **Upgrade** by running it again; that also removes the `vlab` alias an
   install before v0.23.0 left. **Uninstall** by deleting the `cst` file it
   names when it finishes.
@@ -154,7 +154,7 @@ PowerShell, Git Bash, or a terminal where `git`, `cargo` and `node` are on `PATH
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causet-0.23.0.bundle causet
+git clone /path/to/causet-0.24.0.bundle causet
 cd causet
 git remote remove origin
 npm run build:native
@@ -166,7 +166,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 ```bash
 git init -b main
 git add .
-git commit -m "Bootstrap causet 0.23.0"
+git commit -m "Bootstrap causet 0.24.0"
 npm run build:native
 npm test
 ```

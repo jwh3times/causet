@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.24.0
+
+**`cst` is the Rust executable alone.** This release removes the JavaScript
+CLI (#243): `src/`, `bin/cst.js` and the N-API binding are gone, and the
+suites run the Rust build against the JavaScript oracle's frozen answers.
+Breaking for npm installs on any platform but Windows x64 and Linux x64 with
+glibc, which no longer fall back to the JavaScript CLI: `cst` there says
+where it is published and exits 1. The install scripts, and npm on the two
+published platforms, are unaffected.
+
 - **The npm package descriptions say what to install** (an audit of the
   published metadata). The main package's description says causet is
   experimental, names the `cst` command and the two prebuilt platforms, and
