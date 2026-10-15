@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9qthmqe874ccce72d0",
+      "mode": "compact",
+      "sourceRef": "feat/provenance-declare",
+      "sourceHead": "b92fbc03816ff49662ccc56af432f1754cf9cc6d",
+      "sourceSubject": "feat: add cst provenance declare, to declare provenance for an existing commit",
+      "targetBefore": "19626b0b32340c6a5fade96edfe283657beef890",
+      "landingCommit": "6da365dfb667a645c675cbffd03069d920c2730e",
+      "base": "19626b0b32340c6a5fade96edfe283657beef890",
+      "absorbedCommits": [
+        "b92fbc03816ff49662ccc56af432f1754cf9cc6d"
+      ],
+      "absorbedChanges": [
+        "ch_0mv9q8w2k8659d2c95e46"
+      ],
+      "resultTree": "94fe9ed24e5c902574fdb5d0d1fbab9bc8cb3179",
+      "createdAt": "2026-10-15T16:18:24.005Z"
+    }
+  ]
+}
