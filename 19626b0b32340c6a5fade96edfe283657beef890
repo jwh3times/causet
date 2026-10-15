@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9nkmur7a2bc6735b92",
+      "mode": "compact",
+      "sourceRef": "chore/release-v0.24.0",
+      "sourceHead": "ee1ccfb8349b2908114ff611b08eff3a02ba0692",
+      "sourceSubject": "chore: prepare v0.24.0, the release that removes the JavaScript CLI",
+      "targetBefore": "33c8e32ca0f56314ad36fc3a57739ffe0dd2d5e3",
+      "landingCommit": "19626b0b32340c6a5fade96edfe283657beef890",
+      "base": "33c8e32ca0f56314ad36fc3a57739ffe0dd2d5e3",
+      "absorbedCommits": [
+        "ee1ccfb8349b2908114ff611b08eff3a02ba0692"
+      ],
+      "absorbedChanges": [
+        "ch_0mv9mmjir0a72f63594b9"
+      ],
+      "resultTree": "ace555595e6b156bb81502535a4d0a91e7ef7bea",
+      "createdAt": "2026-10-15T14:47:32.022Z"
+    }
+  ]
+}
