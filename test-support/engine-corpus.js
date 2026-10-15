@@ -337,14 +337,18 @@ export function failureRequest({ history }) {
 
 /**
  * An answer as it is frozen: the scratch directory, which differs per run and
- * per host, becomes `<scratch>` in either separator, and the host's Git
- * version becomes `<git version>`.
+ * per host, becomes `<scratch>` in either separator, a path below it uses `/`
+ * as the oracle's host wrote it, and the host's Git version becomes
+ * `<git version>`.
  */
 export function normalize(value, scratch, op) {
   if (op === "gitVersion" && value && "value" in value) return { ...value, value: "<git version>" };
   const forms = [scratch, scratch.replaceAll("\\", "/")];
   const walk = (item) => {
-    if (typeof item === "string") return forms.reduce((text, form) => text.replaceAll(form, "<scratch>"), item);
+    if (typeof item === "string") {
+      return forms.reduce((text, form) => text.replaceAll(form, "<scratch>"), item)
+        .replace(/<scratch>[^\s"']*/g, (below) => below.replaceAll("\\", "/"));
+    }
     if (Array.isArray(item)) return item.map(walk);
     if (item && typeof item === "object") return Object.fromEntries(Object.entries(item).map(([key, member]) => [key, walk(member)]));
     return item;

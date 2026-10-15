@@ -162,9 +162,12 @@ const NOT_A_REPOSITORY = /fatal: not a git repository \((?:or any of the parent 
  * timings are masked, and so is each group's own volatile part.
  */
 export function frozenForm(result, { group, outside, version }) {
-  const forms = [outside, outside.replaceAll("\\", "/")];
+  // The directory as given, with forward slashes, and escaped inside JSON; a
+  // path below it uses `/`, as the oracle's host wrote it.
+  const forms = [outside.replaceAll("\\", "\\\\"), outside, outside.replaceAll("\\", "/")];
   const mask = (text) => forms
     .reduce((value, form) => value.replaceAll(form, "<outside>"), text ?? "")
+    .replace(/<outside>[^\s"']*/g, (below) => below.replace(/\\\\|\\/g, "/"))
     .replaceAll(version, "<version>")
     .replace(NOT_A_REPOSITORY, "fatal: not a git repository <discovery>")
     .replace(/^(\[cst trace\]) [\d.]+ms /gm, "$1 <ms> ");
