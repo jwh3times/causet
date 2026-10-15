@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The npm package descriptions say what to install** (an audit of the
+  published metadata). The main package's description says causet is
+  experimental, names the `cst` command and the two prebuilt platforms, and
+  the package gains keywords so that npm search finds it. Each platform
+  package's description names the main package to install instead of a Rust
+  target triple. The README's first line, which is also the npm page's, no
+  longer calls the Git engine dependency-free: the Rust CLI links gitoxide.
 - **The JavaScript CLI is removed** (#243, the last step; ADR-0037 §6). `src/`,
   `bin/cst.js` and the N-API binding (`native/binding`, the `causet-core.node`
   prebuild, `CAUSET_REQUIRE_NATIVE`) are gone; `cst` is the Rust executable
@@ -14,7 +21,9 @@
     now carries only its launcher, `bin/native/`.
   - A checkout's `package.json` names no command; `npm run build:native` builds
     the `cst` it runs. The help text lives in `native/cli/src/help.txt`, and the
-    Rust build takes the version from `package.json`.
+    Rust build takes the version from `package.json`. In a checkout made before
+    this change, delete the untracked `native/prebuilds/`, the binding's build
+    output, or the repository-hygiene suite reports its binaries.
   - The provenance repair of `docs/identity/README.md` §7 runs from a v0.23.0
     checkout, the last with the JavaScript declaration API.
   - The engine's refusal of a read outside its seam names the read catalog
