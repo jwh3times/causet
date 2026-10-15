@@ -312,15 +312,22 @@ identity belongs in tracked files.
 
 An ordinary clone's default refspec fetches branches, not
 `refs/notes/causet` or `refs/causet/*`. A complete causal read needs both:
-the notes namespace supplies the records, and the shared cst namespace
-supplies the retention carrier and reusable resolution objects those records
-depend on. Fetching notes alone can therefore produce `missing-attachment`
+the notes namespace supplies the records, and `refs/causet/retention` and
+`refs/causet/resolutions/**` supply the retention carrier and reusable
+resolution objects those records depend on. Fetching notes alone can therefore produce `missing-attachment`
 diagnostics for healthy facts whose attachment commits are present on the
 origin only through `refs/causet/retention`. The low-level same-origin fetch is:
 
 ```bash
-git fetch origin 'refs/notes/causet:refs/notes/causet' 'refs/causet/*:refs/causet/*'
+git fetch origin 'refs/notes/causet:refs/notes/causet' \
+  'refs/causet/retention:refs/causet/retention' \
+  'refs/causet/resolutions/*:refs/causet/resolutions/*'
 ```
+
+Each ref is named because the rest of `refs/causet/*` is shared-local: a glob
+would also copy the publisher's checkpoints and parked conflicts
+(`refs/causet/checkpoints/**`, `refs/causet/checkpoint-history/**`,
+`refs/causet/quarantine/**`), which the table above keeps local.
 
 Validated metadata envelopes remain the supported transfer path between
 clones; a direct ref fetch does not perform envelope validation, conflict

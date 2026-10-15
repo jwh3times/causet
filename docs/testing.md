@@ -1125,7 +1125,9 @@ node scripts/measure-real-repository.mjs --repo <clean-disposable-clone> --host 
 
 Clone without local object sharing (`git clone --no-local <source> <clone>`),
 then fetch the source's notes and cst refs into the clone before measuring:
-`git -C <clone> fetch origin 'refs/notes/*:refs/notes/*' 'refs/causet/*:refs/causet/*'`.
+`git -C <clone> fetch origin 'refs/notes/causet:refs/notes/causet' 'refs/causet/retention:refs/causet/retention' 'refs/causet/resolutions/*:refs/causet/resolutions/*'`
+(each ref by name: a `refs/causet/*` glob would also copy the source's
+checkpoints and parked conflicts).
 Use public-safe repository content for public evidence. A clone carries history
 and these refs, but not the source's workspace registry, private forecasts, or
 dirty files; actual workspace behavior needs separate pilot observations.
