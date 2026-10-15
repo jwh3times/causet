@@ -5,18 +5,33 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import "../test-support/git-environment.js";
-import { moduleTable, replaceTable, schemaTable, syncArchitecture } from "../scripts/sync-architecture.mjs";
+import { moduleTable, recordFamilies, replaceTable, schemaTable, syncArchitecture } from "../scripts/sync-architecture.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+
+const REGISTRY = `//! The registries.
+pub const RECORD_FAMILIES: &[Family] = &[
+  Family {
+    name: "causet.example",
+    scope: "worktree-private",
+    registered: &[1, 2],
+    readable: &[1, 2],
+    written: &[2],
+    unknown_version: "refuse",
+    store: "<git dir>/example.json",
+  },
+];
+`;
 
 function fixture(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-architecture-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  for (const subdirectory of ["bin", "src", "docs"]) fs.mkdirSync(path.join(directory, subdirectory));
-  fs.writeFileSync(path.join(directory, "src/example.js"), "");
-  fs.writeFileSync(path.join(directory, "docs/architecture-modules.json"), JSON.stringify({
-    "src/example.js": { responsibility: "Example behavior", dependencies: "None" },
-  }));
+  for (const subdirectory of ["native/cli/src", "native/model/src", "docs"]) {
+    fs.mkdirSync(path.join(directory, subdirectory), { recursive: true });
+  }
+  fs.writeFileSync(path.join(directory, "native/cli/src/example.rs"),
+    "//! Example behavior, said once. Then more.\nuse crate::store;\nuse causet_model::json;\n");
+  fs.writeFileSync(path.join(directory, "native/model/src/registry.rs"), REGISTRY);
   fs.writeFileSync(path.join(directory, "docs/architecture.md"),
     "Before\n<!-- generated:modules:start -->\nstale\n<!-- generated:modules:end -->\nBetween\n"
     + "<!-- generated:schemas:start -->\nstale\n<!-- generated:schemas:end -->\nAfter\n");
@@ -44,22 +59,21 @@ test("regeneration repairs drift without changing prose and check mode never wri
   assert.equal(syncArchitecture(directory), false);
 });
 
-test("added nested modules and removed modules require an updated description catalog", (t) => {
+test("every module is described by its own header, with what it uses", (t) => {
   const directory = fixture(t);
-  fs.mkdirSync(path.join(directory, "src/nested"));
-  const added = path.join(directory, "src/nested/new.js");
-  fs.writeFileSync(added, "");
-  assert.throws(() => moduleTable(directory), /missing: src\/nested\/new.js/);
-  fs.unlinkSync(added);
-  fs.unlinkSync(path.join(directory, "src/example.js"));
-  assert.throws(() => moduleTable(directory), /stale: src\/example.js/);
+  assert.ok(moduleTable(directory).includes(
+    "| `native/cli/src/example.rs` | Example behavior, said once. | `store`, causet-model |"));
+  // A nested module appears, and one without a header refuses the table.
+  fs.mkdirSync(path.join(directory, "native/cli/src/bin"));
+  fs.writeFileSync(path.join(directory, "native/cli/src/bin/probe.rs"), "fn main() {}\n");
+  assert.throws(() => moduleTable(directory), /native\/cli\/src\/bin\/probe.rs has no header comment/);
 });
 
-test("schema table exposes readable legacy versions separately from writer versions", () => {
-  const table = schemaTable(new Map([["example", {
-    readable: [1, 2], written: [2], store: "<git dir>/example.json", scope: "private",
-  }]]));
-  assert.ok(table.includes("| `example` | v1, v2 | v2 | `<git dir>/example.json` | `private` |"));
+test("schema table exposes readable legacy versions separately from writer versions", (t) => {
+  const families = recordFamilies(fixture(t));
+  assert.deepEqual([...families.keys()], ["causet.example"]);
+  const table = schemaTable(families);
+  assert.ok(table.includes("| `causet.example` | v1, v2 | v2 | `<git dir>/example.json` | `worktree-private` |"));
 });
 
 test("missing, duplicate, or reversed markers refuse regeneration before writing", (t) => {

@@ -4,15 +4,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 // The status a fault point exits with, as the Rust CLI defines it.
 const FAULT_EXIT_CODE = Number(/const FAULT_EXIT_CODE: i32 = (\d+);/
   .exec(fs.readFileSync(new URL("../native/cli/src/host.rs", import.meta.url), "utf8"))[1]);
-
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const created = [];
 after(() => {
@@ -1377,25 +1374,10 @@ test("a post-commit notes failure identifies the retained commit and permits pro
   assert.equal(fs.readFileSync(blockedRef, "utf8"), "test-held Git ref lock\n");
   assert.deepEqual(JSON.parse(vlab(repo, "provenance", commit, "--json")).entries, []);
   fs.rmSync(blockedRef);
-  // The documented repair uses the existing declaration API, under its notes
-  // lock, to add the original claim without creating or rewriting any commit.
-  const repair = [
-    "import { changeIdForCommit } from \"./src/engine.js\";",
-    "import { declareProvenance, provenanceFor } from \"./src/provenance.js\";",
-    "import { withNotesLock } from \"./src/notes.js\";",
-    "const [repo, commit] = process.argv.slice(1);",
-    "withNotesLock(repo, () => {",
-    "  if ((provenanceFor([commit], repo).get(commit) ?? []).length) throw new Error(\"Inspect existing provenance before repairing.\");",
-    "  declareProvenance(commit, changeIdForCommit(commit, repo), [{ role: \"generated\", actor: \"agent:test\" }], repo);",
-    "});",
-  ].join("\n");
-  exec(process.execPath, ["--input-type=module", "-e", repair, repo, commit], projectRoot);
+  // The documented repair (docs/identity/README.md §7) runs the declaration
+  // API of a v0.23.0 checkout, the last with the JavaScript CLI (#243); a
+  // retry of the commit itself is what the details forbid. Once the lock is
+  // gone, the retained commit is still the head and still undeclared.
   assert.equal(git(repo, "rev-parse", "HEAD"), commit);
-  const [record] = JSON.parse(vlab(repo, "provenance", commit, "--json")).entries;
-  assert.deepEqual(record.actors, [{ role: "generated", actor: "agent:test" }]);
-  assert.equal(record.origin, "declared");
-  const repeated = spawnSync(process.execPath, ["--input-type=module", "-e", repair, repo, commit],
-    { cwd: projectRoot, env: testEnv(), encoding: "utf8" });
-  assert.notEqual(repeated.status, 0);
-  assert.deepEqual(noteRecordIds(repo, commit), [record.id], "repair refuses to duplicate a declaration");
+  assert.deepEqual(JSON.parse(vlab(repo, "provenance", commit, "--json")).entries, []);
 });

@@ -2,8 +2,8 @@
 # ADR-0037 decision 7). Hosted runners are shared, so absolute milliseconds are
 # not comparable between runs; what this job contributes is load-independent:
 # byte equality, exit status, Git process counts, and comparisons made within
-# one run (native against Git engine, each command against its Git floor, and
-# the Rust CLI against the JavaScript CLI once one is built). Absolute figures
+# one run (native against Git engine, and each command against its Git floor;
+# until #243, also the Rust CLI against the JavaScript CLI). Absolute figures
 # come from the reference host; see the wiki's Performance testing page.
 #
 # Timings never fail this job. It fails only when the harness cannot measure:
@@ -64,7 +64,7 @@ jobs:
         run: |
           git --version
           node --version
-      - name: Build the optional native backend
+      - name: Build the cst under measurement
         run: |
           rustup toolchain install 1.98.1 --profile minimal
           node scripts/build-native.mjs
@@ -80,8 +80,8 @@ jobs:
               exit 0
             fi
           done
-          echo "args=" >> "$GITHUB_OUTPUT"
-          echo "No Rust CLI binary yet; measuring the JavaScript CLI only."
+          echo "The build produced no cst executable." >&2
+          exit 1
       - name: Run the performance checkpoint harness
         env:
           SAMPLES: ${{ inputs.samples || '11' }}

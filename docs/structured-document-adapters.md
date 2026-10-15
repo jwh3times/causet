@@ -31,13 +31,13 @@ adding an adapter does not waive that requirement.
 
 ## Worked example: current Markdown adapter
 
-The implementation is [src/specs.js](../src/specs.js), with ID slugging in
-[src/ids.js](../src/ids.js). These descriptions record the current behavior,
+The implementation is [native/cli/src/spec.rs](../native/cli/src/spec.rs),
+including ID slugging (`slug`). These descriptions record the current behavior,
 including its limitations; they do not assert full Markdown syntax support.
 
 ### Canonical bytes
 
-Markdown source is authoritative and is read as UTF-8 text. `normalizeMarkdown`
+Markdown source is authoritative and is read as UTF-8 text. `normalize_markdown`
 converts CRLF and bare CR to LF. The source hash is SHA-256 of that normalized
 text; Git blob identity is a separate cache input. Indexing writes the manifest
 without rewriting the Markdown source.
@@ -129,8 +129,8 @@ ambiguities. Different artifacts report `artifact-identity-mismatch`.
 Missing, malformed, stale, unsupported, or oversized committed manifests can
 produce `semantic-metadata-unavailable`; a blocked plan has no renderable result.
 
-The tracked manifest bound is `RESOURCE_BOUNDS.specManifestBytes` (8 MiB),
-defined by [src/schemas.js](../src/schemas.js). Staged manual resolutions must
+The tracked manifest bound is `specManifestBytes` (8 MiB) in `RESOURCE_BOUNDS`,
+defined by [native/model/src/registry.rs](../native/model/src/registry.rs). Staged manual resolutions must
 add or delete source and manifest together and provide a matching source hash.
 Automatic semantic choices are pinned by forecasts and checked on application.
 

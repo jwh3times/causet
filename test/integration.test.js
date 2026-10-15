@@ -7,20 +7,22 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { MERGE_TREE_ENGINE_MIN_GIT } from "../test-support/merge-tree-floor.js";
-import { reachableCommits } from "../src/engine.js";
-import { recordsReachableFrom } from "../src/notes.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import { hashedSha256, probe as modelProbe, registry } from "../test-support/model-probe.js";
 import { probe as engineProbe } from "../test-support/engine-probe.js";
+import { loadVectors } from "../test-support/oracle-vectors.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { version: VERSION } = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
 
-test("cst is the only command: the vlab alias was removed in 0.23.0", () => {
+test("the checkout names no command and publishes only the launcher", () => {
+  // The vlab alias was removed in 0.23.0; the JavaScript CLI that `bin` named,
+  // in 0.24.0 (#243). The published `cst` is the one scripts/pack-release.mjs writes.
   const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
   assert.equal(manifest.name, "@holland-vip/causet");
-  assert.deepEqual(manifest.bin, { cst: "./bin/cst.js" });
+  assert.equal(manifest.bin, undefined);
+  assert.deepEqual(manifest.files, ["bin/native/"]);
 });
 
 test("CLI reports the package version", () => {
@@ -129,8 +131,8 @@ function writeVlabNote(repo, commit, note) {
 }
 
 /**
- * Publish a resolution record with Git plumbing exactly the way
- * src/resolutions.js publishResolution does: a retention commit whose tree
+ * Publish a resolution record with Git plumbing exactly the way the CLI's
+ * resolution publisher does: a retention commit whose tree
  * holds `result` (or is empty for a deleted result), a retention ref under
  * refs/causet/resolutions/<signature>/<resultBlob|deleted>, and a note record
  * attached to that commit. `treeBlob`, `ref`, `record`, and `note` let a test
@@ -6486,30 +6488,6 @@ test("merge-tree workspace forecasts match the worktree oracle for committed hea
   assert.equal(readText(sourcePath, "draft.txt"), "uncommitted agent draft\n");
 });
 
-/**
- * The names a domain module may import from the Git engine: mutations,
- * transports, selectors, metrics, and pure helpers. Every read comes from
- * `src/engine.js` (ADR-0019).
- */
-const GIT_ENGINE_NON_READ_EXPORTS = new Set([
-  "runGit",
-  "gitText",
-  "GIT_NO_RERERE",
-  "beginGitMetrics",
-  "endGitMetrics",
-  "withGitObjectSession",
-  "gitObjectSessionEnabled",
-  "FORECAST_ENGINES",
-  "forecastEngine",
-  "defaultForecastEngine",
-  "MERGE_TREE_ENGINE_MIN_GIT",
-  "MergeTreeSession",
-  "READ_ENGINES",
-  "readEngine",
-  "withReadEngine",
-  "extractTrailer",
-]);
-
 function stripVolatile(value) {
   return JSON.parse(JSON.stringify(value, (key, item) =>
     ["timings", "metrics", "id", "forecastId", "createdAt"].includes(key) ? undefined : item,
@@ -6523,45 +6501,13 @@ test("every repository read passes through the engine seam and the native engine
     if (previousBinding === undefined) delete process.env.CAUSET_TEST_NATIVE_BINDING;
     else process.env.CAUSET_TEST_NATIVE_BINDING = previousBinding;
   });
-  // Import discipline: only the seam reads from the Git engine, and only a
-  // deliberate raw-Git measurement may bypass it -- the doctor's process-cost
-  // probes, and the scale benchmark's raw-Git floors (issue #42). Both exist to
-  // measure what one Git process costs on this host, which is the one question
-  // the seam cannot answer about itself.
-  const RAW_PROBE_MODULES = new Set(["cli.js", "scale-benchmark.js"]);
-  const srcDir = path.join(projectRoot, "src");
-  const engineModules = new Set([
-    "git.js",
-    "engine.js",
-    "git-session-worker.js",
-    "merge-tree-session-worker.js",
-  ]);
-  for (const file of fs.readdirSync(srcDir).filter((name) => name.endsWith(".js"))) {
-    const source = fs.readFileSync(path.join(srcDir, file), "utf8");
-    if (engineModules.has(file)) continue;
-    if (!RAW_PROBE_MODULES.has(file)) {
-      assert.ok(!source.includes("rawProbe"), `${file} must not bypass the engine seam with rawProbe`);
-    }
-    for (const block of source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"\.\/git\.js";/g)) {
-      const names = block[1]
-        .split(",")
-        .map((item) => item.trim().split(/\s+as\s+/)[0])
-        .filter(Boolean);
-      for (const name of names) {
-        assert.ok(
-          GIT_ENGINE_NON_READ_EXPORTS.has(name),
-          `${file} imports ${name} from ./git.js; reads must come from ./engine.js`,
-        );
-      }
-    }
-  }
-  const engine = await import(pathToFileURL(path.join(srcDir, "engine.js")).href);
-  const gitEngine = await import(pathToFileURL(path.join(srcDir, "git.js")).href);
-  assert.ok(engine.READ_OPERATIONS.length >= 38);
-  for (const operation of engine.READ_OPERATIONS) {
-    assert.equal(typeof engine[operation], "function", `${operation} is exported by the seam`);
-  }
-  assert.deepEqual(engine.READ_ENGINES, ["git", "native"]);
+  // Until #243 this also scanned src/ for imports that bypassed the seam. The
+  // Rust engine enforces the rule as it runs instead: in native mode a read
+  // outside the seam is refused, and in either mode it is counted, so every
+  // command below must report no direct reads. The catalog is the one the
+  // frozen engine differential lists.
+  const READ_OPERATIONS = loadVectors("engine").readOperations;
+  assert.ok(READ_OPERATIONS.length >= 38);
 
   const { repo } = makeRepo(t);
   write(repo, "shared.txt", "base\n");
@@ -6614,7 +6560,7 @@ test("every repository read passes through the engine seam and the native engine
   for (const fallback of nativeForecast.timings.git.fallbacks) {
     assert.equal(fallback.reason, "binding-missing");
     assert.ok(fallback.count >= 1);
-    assert.ok(engine.READ_OPERATIONS.includes(fallback.operation), fallback.operation);
+    assert.ok(READ_OPERATIONS.includes(fallback.operation), fallback.operation);
   }
 
   // The doctor names both selectors and compares the engines operation by
@@ -6636,13 +6582,13 @@ test("every repository read passes through the engine seam and the native engine
   assert.equal(differential.oracle, "git");
   assert.equal(differential.equal, true);
   assert.deepEqual(differential.counts, {
-    equal: engine.READ_OPERATIONS.length,
+    equal: READ_OPERATIONS.length,
     different: 0,
     skipped: 0,
   });
   assert.deepEqual(
     differential.operations.map((item) => item.operation).sort(),
-    [...engine.READ_OPERATIONS].sort(),
+    [...READ_OPERATIONS].sort(),
   );
   for (const item of differential.operations) {
     assert.equal(item.status, "equal", item.operation);
@@ -6664,52 +6610,35 @@ test("every repository read passes through the engine seam and the native engine
   );
 
   // A read that bypasses the seam is counted in git mode and refused in
-  // native mode; the doctor's raw probes are the one exemption.
-  const previousEngine = process.env.CAUSET_ENGINE;
-  try {
-    process.env.CAUSET_ENGINE = "git";
-    const counted = gitEngine.beginGitMetrics("bypass");
-    assert.equal(gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo }).stdout, head);
-    const countedMetrics = gitEngine.endGitMetrics(counted);
-    assert.equal(countedMetrics.engine, "git");
-    assert.equal(countedMetrics.directReads, 1);
-    assert.deepEqual(countedMetrics.fallbacks, []);
+  // native mode, as the Rust engine's probe runs it.
+  const probed = (engineName, calls) =>
+    engineProbe([{ cwd: repo, engine: engineName, calls }], testEnv({ CAUSET_TEST_NATIVE_BINDING: "missing" }))[0].results;
+  const [counted] = probed("git", [{ op: "$run", args: [["rev-parse", "HEAD"]] }]);
+  assert.equal(counted.value.stdout.trim(), head);
+  assert.equal(counted.metrics.directReads, 1);
+  assert.deepEqual(counted.metrics.fallbacks, []);
 
-    process.env.CAUSET_ENGINE = "native";
-    assert.throws(
-      () => gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo }),
-      /git rev-parse was read outside the engine seam/,
-    );
-    assert.throws(
-      () => gitEngine.runGit(["worktree", "list", "--porcelain"], { cwd: repo }),
-      /git worktree was read outside the engine seam/,
-    );
-    assert.equal(
-      gitEngine.runGit(["rev-parse", "HEAD"], { cwd: repo, rawProbe: true }).stdout,
-      head,
-    );
-    const seam = gitEngine.beginGitMetrics("seam");
-    assert.equal(engine.currentHead(repo), head);
-    assert.equal(engine.treeId(head, repo), git(repo, "rev-parse", `${head}^{tree}`));
-    const seamMetrics = gitEngine.endGitMetrics(seam);
-    assert.equal(seamMetrics.engine, "native");
-    assert.equal(seamMetrics.directReads, 0);
-    assert.deepEqual(seamMetrics.fallbacks, [
-      { operation: "resolveRevision", reason: "binding-missing", count: 1 },
-      { operation: "treeId", reason: "binding-missing", count: 1 },
-    ]);
+  const [refusedRead, refusedWorktrees, ...seamReads] = probed("native", [
+    { op: "$run", args: [["rev-parse", "HEAD"]] },
+    { op: "$run", args: [["worktree", "list", "--porcelain"]] },
+    { op: "resolveRevision", args: ["HEAD"] },
+    { op: "treeId", args: [head] },
     // A mutation is never a bypass, whichever engine is selected.
-    gitEngine.runGit(["update-ref", "refs/causet-test/probe", head], { cwd: repo });
-    assert.equal(git(repo, "rev-parse", "refs/causet-test/probe"), head);
-    assert.equal(
-      gitEngine.withReadEngine("git", () => gitEngine.readEngine()),
-      "git",
-    );
-    assert.equal(gitEngine.readEngine(), "native");
-  } finally {
-    if (previousEngine === undefined) delete process.env.CAUSET_ENGINE;
-    else process.env.CAUSET_ENGINE = previousEngine;
+    { op: "$run", args: [["update-ref", "refs/causet-test/probe", head]] },
+  ]);
+  assert.match(refusedRead.error.message, /git rev-parse was read outside the engine seam/);
+  assert.match(refusedWorktrees.error.message, /git worktree was read outside the engine seam/);
+  const [resolved, tree, mutation] = seamReads;
+  assert.equal(resolved.value, head);
+  assert.equal(tree.value, git(repo, "rev-parse", `${head}^{tree}`));
+  for (const [operation, result] of [["resolveRevision", resolved], ["treeId", tree]]) {
+    assert.equal(result.metrics.directReads, 0, operation);
+    assert.deepEqual(result.metrics.fallbacks, [{ operation, reason: "binding-missing", count: 1 }]);
   }
+  assert.equal(mutation.error, undefined, JSON.stringify(mutation.error));
+  assert.equal(mutation.metrics.directReads, 0);
+  assert.equal(git(repo, "rev-parse", "refs/causet-test/probe"), head);
+  git(repo, "update-ref", "-d", "refs/causet-test/probe");
 
   // Invalid selections fail before any work, by flag or by environment.
   const badFlag = vlabResult(repo, "doctor", "--engine", "bogus");
@@ -6724,38 +6653,6 @@ test("every repository read passes through the engine seam and the native engine
   assert.match(badEnv.stderr, /Unknown engine 'bogus'\. Use one of: git, native/);
   assert.equal(git(repo, "rev-parse", "HEAD"), head);
   assert.equal(git(repo, "status", "--porcelain=v1"), "");
-});
-
-test("recordsReachableFrom derives the reachable set when a caller does not pass one", (t) => {
-  const { repo } = makeRepo(t);
-  write(repo, "app.txt", "base\n");
-  git(repo, "add", ".");
-  vlab(repo, "commit", "-m", "base");
-  vlab(repo, "init");
-  vlab(repo, "branch", "feature");
-  write(repo, "feature.txt", "one\n");
-  git(repo, "add", ".");
-  vlab(repo, "commit", "-m", "feature one");
-  git(repo, "switch", "main");
-  const landing = JSON.parse(vlab(repo, "hard-squash", "feature", "--json"));
-
-  // The two-argument form used to throw: its third parameter shadowed the
-  // imported reachableCommits it needed to derive the set from, so only the
-  // one caller that passed a set ever worked.
-  const derived = recordsReachableFrom("HEAD", repo);
-  const commits = reachableCommits("HEAD", repo);
-  const fromSet = recordsReachableFrom("HEAD", repo, new Set(commits));
-  const fromArray = recordsReachableFrom("HEAD", repo, commits);
-  assert.deepEqual(derived, fromSet);
-  assert.deepEqual(derived, fromArray);
-  assert.ok(
-    derived.some((record) => record.id === landing.id),
-    "the landing receipt is reachable from the target",
-  );
-  assert.ok(
-    !recordsReachableFrom("feature", repo).some((record) => record.id === landing.id),
-    "the receipt sits on the landing commit, which the source does not reach",
-  );
 });
 
 test("a branch named CHERRY_PICK_HEAD does not pass for a pending cherry-pick", (t) => {

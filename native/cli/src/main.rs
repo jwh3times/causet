@@ -43,7 +43,7 @@ mod workspaces;
 use front::Outcome;
 use std::{env, ffi::OsString, io::Write, process};
 
-const HELP: &str = include_str!(concat!(env!("OUT_DIR"), "/help.txt"));
+const HELP: &str = include_str!("help.txt");
 const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
 
 fn main() {

@@ -123,9 +123,10 @@ is compiled.
   that costs Node's startup on every command. `cst doctor` shows which you
   have: `"launcher": null` is the executable, `"launcher": "node"` is the
   launcher. Reinstall with the flag to switch.
-- **On a platform with no prebuilt executable** this is the way to install:
-  the package runs the JavaScript CLI there, which needs Node.js 20 or newer,
-  and says so on stderr.
+- **On a platform with no prebuilt executable** (anything but Windows x64 and
+  Linux x64 with glibc) the package installs, but `cst` says so and exits: there
+  is no JavaScript CLI to fall back to since v0.24.0. Build it from a checkout
+  instead ([below](#develop-from-a-checkout)).
 
 The command is `cst`. Its old name, `vlab`, was an alias until v0.23.0
 removed it
@@ -134,24 +135,21 @@ removed it
 
 ## Develop from a checkout
 
-The checkout runs the JavaScript CLI, which the suites use as the oracle for
-the Rust one (ADR-0037). It has no npm dependencies.
+A checkout builds `cst` from `native/` with Rust (the toolchain
+`native/rust-toolchain.toml` pins) and runs the suites with Node.js 20 or newer;
+it has no npm dependencies. The build is what the suites run.
 
 ```bash
-npm link
-cst --help
+npm run build:native
+native/target/release/cst --help    # native/target/release/cst.exe on Windows
+npm test
 ```
 
 Environment variables are named `CAUSET_*` (for example `CAUSET_ENGINE`). The former `VLAB_*`
 names are ignored: they were read as a fallback until the migration window ended (ADR-0039 §8).
 
-Alternatively, run it without installing:
-
-```bash
-node /path/to/checkout/bin/cst.js --help
-```
-
-On Windows, use PowerShell, Git Bash, or a terminal where `git` and `node` are on `PATH`.
+Put `native/target/release` on `PATH` to use the build as `cst`. On Windows, use
+PowerShell, Git Bash, or a terminal where `git`, `cargo` and `node` are on `PATH`.
 
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
@@ -159,7 +157,7 @@ This project now has its own Git history and should live in a normal development
 git clone /path/to/causet-0.23.0.bundle causet
 cd causet
 git remote remove origin
-npm link
+npm run build:native
 npm test
 ```
 
@@ -169,7 +167,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 git init -b main
 git add .
 git commit -m "Bootstrap causet 0.23.0"
-npm link
+npm run build:native
 npm test
 ```
 
@@ -1167,10 +1165,10 @@ where the observed 80–130 ms process startup cost dominates these operations.
 On other platforms it remains opt-in because a local Git process may take only
 a few milliseconds.
 
-The worker starts lazily at the first uncached object request. This keeps worker
-startup from overlapping synchronous preflight commands such as `git status`.
-Shutdown waits for the child `close` event so its stdio has drained, with bounded
-Git-tree and worker fallbacks if graceful EOF does not complete.
+The session process starts lazily at the first uncached object request. This
+keeps its startup from overlapping synchronous preflight commands such as
+`git status`. Shutdown closes its input and waits, bounded, for it to exit, and
+terminates it if it does not.
 
 Get both the ordinary-process baseline and the persistent-session probe with:
 
@@ -1225,13 +1223,14 @@ listing command. See [session safety rules](docs/architecture.md#142-invocation-
 engine for one invocation and `--forecast-engine worktree` the worktree
 simulator; without either, Windows uses the merge-tree engine and POSIX hosts
 the worktree simulator. `--engine native` (or `CAUSET_ENGINE=native`) selects
-the optional [native resolution-read binding](docs/native-engine.md) for one
-invocation. Its five supported operations report successful execution under
-`nativeReads`; unsupported operations and unavailable bindings use Git and appear
-under `fallbacks`. A missing prebuild reports `binding-missing`; an input the
-binding refuses by design, such as a SHA-256 repository or command-scope Git
-configuration, reports `unsupported-input`; `native-error` is reserved for
-anything else. Metrics also
+the [native read backend](docs/native-engine.md), gitoxide linked into `cst`,
+for one invocation. Its five supported operations report successful execution
+under `nativeReads`; unsupported operations use Git and appear under
+`fallbacks`. An input the backend refuses by design, such as a SHA-256
+repository or command-scope Git configuration, reports `unsupported-input`;
+`binding-missing`, from the time the backend was a separately built binding,
+now appears only under the test hook that simulates it; `native-error` is
+reserved for anything else. Metrics also
 include `engine` and `directReads`, the number of reads
 that bypassed the engine seam (always zero; such a read is refused in native
 mode). Trace output contains command names, durations, and whether a query
@@ -1249,13 +1248,12 @@ Compare the read engines operation by operation in any repository with:
 cst doctor --differential
 ```
 
-The report runs each of the 44 cataloged read operations of `src/engine.js`
-through the Git engine and the native engine against the current repository
-and lists per-operation result digests, process counts, and fallbacks
-(ADR-0019); the plain `cst doctor` output names the selected read and
-forecast engines. `implementation` says which CLI answered: `javascript`, or
-`rust` for the Rust CLI's native commands (ADR-0037), which report `node` as
-`null` because they run without Node.js.
+The report runs each of the 44 cataloged read operations of the engine seam
+(`native/engine/src/engine.rs`) through the Git engine and the native engine
+against the current repository and lists per-operation result digests, process
+counts, and fallbacks (ADR-0019); the plain `cst doctor` output names the
+selected read and forecast engines. `implementation` is `rust` and `node` is
+`null` (ADR-0037 §5); until v0.24.0 the JavaScript CLI answered `javascript`.
 
 Run an equality-checked comparison over a 12-change forecast with:
 
@@ -1393,7 +1391,7 @@ session path and the POSIX-default one-process path on every host, with each
 forecast engine forced (`CAUSET_FORECAST_ENGINE=worktree` and
 `CAUSET_FORECAST_ENGINE=merge-tree`) because the default engine differs by
 platform, and with `CAUSET_ENGINE=native`, which refuses any repository read
-that does not pass through `src/engine.js`. The GitHub Actions workflow in
+that does not pass through the engine seam. The GitHub Actions workflow in
 `.github/workflows/ci.yml` runs static checks for every PR and main push,
 with the default suite on Ubuntu and Windows for code PRs and on Ubuntu
 for main. Known documentation-only changes run static checks. The full matrix

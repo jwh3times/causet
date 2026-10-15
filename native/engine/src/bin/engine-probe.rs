@@ -1,6 +1,6 @@
 //! Answers Git engine requests, one JSON line in and one out, so the suites
-//! can run `src/engine.js` and the Rust engine over the same repositories and
-//! compare values and process counts operation for operation.
+//! can hold the engine's values and process counts, operation for operation,
+//! to the frozen answers of `src/engine.js` (#243).
 //!
 //! A request is either a group of calls,
 //! `{ "cwd", "engine", "session", "warm", "calls": [{ "op", "args", "options" }] }`,

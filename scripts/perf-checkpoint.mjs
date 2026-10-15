@@ -17,20 +17,23 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { hostProvenance } from "./benchmark-host.mjs";
 
-const FORMAT = "perf-checkpoint-v1";
+// v2 (#243): no JavaScript implementation, and `nativeEngine` from `cst doctor`
+// in place of the N-API `nativeBinding`.
+const FORMAT = "perf-checkpoint-v2";
 const script = fileURLToPath(import.meta.url);
 const root = path.resolve(path.dirname(script), "..");
 
 const USAGE = `Usage: node scripts/perf-checkpoint.mjs --host <label> --checkpoint <n> --output <file.json>
   [--markdown <file.md>]        also write the wiki summary
-  [--impl <name>=<executable>]  add an implementation (repeatable); "js" is always included
+  [--impl <name>=<executable>]  an implementation to measure (repeatable); the first is the
+                                reference. Default: rust=<this checkout's native/target/release build>
   [--samples <n>]               timed samples per measurement (default 21)
   [--warmup <n>]                untimed warm-up runs per measurement (default 3)
   [--suites <list>]             startup,reads,writes (default all)
-  [--engines <list>]            read engines: git,native (default both; native skipped without a binding)
+  [--engines <list>]            read engines: git,native (default both)
   [--real-rev <rev>]            real-clone revision (default v0.18.0)
   [--real-notes <commit>]       real-clone notes commit (default 4089785)
   [--real-retention <commit>]   real-clone retention commit (default 0435137)
@@ -62,7 +65,7 @@ function parseArgs(argv) {
     else if (flag === "--impl") {
       const [name, ...rest] = value().split("=");
       const executable = rest.join("=");
-      if (!name || !executable || name === "js") throw new Error(`--impl expects <name>=<executable> (not js)\n${USAGE}`);
+      if (!name || !executable) throw new Error(`--impl expects <name>=<executable>\n${USAGE}`);
       options.impls.push({ name, command: [path.resolve(executable)] });
     } else if (flag === "--samples") options.samples = Number(value());
     else if (flag === "--warmup") options.warmup = Number(value());
@@ -81,7 +84,11 @@ function parseArgs(argv) {
   if (!options.host || options.checkpoint === undefined || !options.output) throw new Error(USAGE);
   if (fs.existsSync(options.output)) throw new Error(`${options.output} exists; choose a new output file`);
   assert.ok(options.samples >= 5, "--samples must be at least 5");
-  options.impls.unshift({ name: "js", command: [process.execPath, path.join(root, "bin/cst.js")] });
+  if (options.impls.length === 0) {
+    const built = path.join(root, "native/target/release", process.platform === "win32" ? "cst.exe" : "cst");
+    if (!fs.existsSync(built)) throw new Error(`No --impl given and no build at ${built}; run npm run build:native`);
+    options.impls.push({ name: "rust", command: [built] });
+  }
   return options;
 }
 
@@ -192,12 +199,12 @@ const traceProcesses = (stderr) => stderr.split(/\r?\n/)
 
 // ------------------------------------------------------------------ fixtures
 
-function buildTemplate(dir, js) {
+function buildTemplate(dir, impl) {
   // A small deterministic repository: history, a compact landing with
   // receipts and carried provenance, a diverged feature branch of vlab
   // commits, and a Markdown spec. Built once per run; write scenarios copy it.
   fs.mkdirSync(dir, { recursive: true });
-  const vlab = (...args) => run(js.command[0], [...js.command.slice(1), ...args], dir);
+  const vlab = (...args) => run(impl.command[0], [...impl.command.slice(1), ...args], dir);
   git(dir, "init", "-q", "-b", "main");
   const write = (file, text) => {
     fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
@@ -402,8 +409,8 @@ function measure(options, fixtures, engines, results) {
             stats: stats(entry.samples), samplesMs: entry.samples,
           });
         }
-        const js = results.at(-sides.length);
-        process.stderr.write(`  ${scenario.suite}/${scenario.fixture} ${scenario.name} [${engine}] js median ${js.stats.medianMs} ms\n`);
+        const reference = results.at(-sides.length);
+        process.stderr.write(`  ${scenario.suite}/${scenario.fixture} ${scenario.name} [${engine}] ${reference.side} median ${reference.stats.medianMs} ms\n`);
       }
     }
   } finally {
@@ -437,7 +444,7 @@ function markdown(evidence) {
   lines.push(`- **Host:** \`${evidence.host.id}\`, ${evidence.host.cpuModels.join(", ").trim()}, ${evidence.host.logicalCpus} logical CPUs, ${Math.round(evidence.host.memoryBytes / 2 ** 30)} GiB, ${evidence.platform}`);
   lines.push(`- **Versions:** Node ${evidence.node}, ${evidence.git}. Source \`${evidence.sourceCommit.slice(0, 7)}\`, harness \`${evidence.scriptSha256.slice(0, 12)}\``);
   lines.push(`- **Implementations:** ${evidence.implementations.map((impl) => `\`${impl.name}\` (${impl.version})`).join(", ")}`);
-  lines.push(`- **Native binding:** ${evidence.nativeBinding.available ? `available (\`${evidence.nativeBinding.sha256?.slice(0, 12)}\`)` : `unavailable (${evidence.nativeBinding.reason})`}`);
+  lines.push(`- **Native engine:** ${evidence.nativeEngine.available ? `available (\`${evidence.nativeEngine.profile}\`)` : `unavailable (${evidence.nativeEngine.reason})`}`);
   lines.push(`- **Sampling:** ${evidence.settings.samples} timed samples after ${evidence.settings.warmup} warm-ups, interleaved across sides. Whole-process wall time`);
   lines.push(`- **Load:** ${evidence.load.map((item) => `${item.label} ${item.cpuPercent ?? "?"}% CPU (max ${item.cpuMaxPercent ?? "?"}%) / ${(item.freeMemoryBytes / 2 ** 30).toFixed(1)} GiB free`).join("; ")}${evidence.noisy ? " — **noisy host**" : ""}${evidence.note ? `. Note: ${evidence.note}` : ""}`);
   lines.push(`- **Fixtures:** ${Object.values(evidence.fixtures).map((fixture) => `\`${fixture.name}\`: ${fixture.description}${fixture.commits ? ` (${fixture.commits} commits)` : ""}`).join("; ")}`);
@@ -460,14 +467,14 @@ function markdown(evidence) {
       const ratio = (name) => { const item = group.find((entry) => entry.side === name); return item && floor ? `${Math.round((item.stats.medianMs / floor.stats.medianMs) * 100)}%` : "—"; };
       const procs = (name) => { const item = group.find((entry) => entry.side === name); return item?.processes ?? "—"; };
       const floorCell = floor ? `${floor.stats.medianMs.toFixed(1)}${bare ? `; bare Node ${bare.stats.medianMs.toFixed(1)}` : ""}` : "—";
-      const status = group.find((entry) => entry.side === "js")?.exitStatus;
+      const status = group.find((entry) => entry.side === impls[0])?.exitStatus;
       lines.push(`| ${fixture} | \`${scenario}\`${status ? ` (exits ${status})` : ""} | ${engine} | ${impls.map(cell).join(" | ")} | ${floorCell} | ${impls.map(ratio).join(" | ")} | ${impls.map(procs).join(" | ")} |`);
     }
     lines.push("");
   }
-  if (evidence.slowerThanJs.length) {
-    lines.push("### Slower than the JavaScript CLI (optimization candidates, not gates)", "");
-    for (const item of evidence.slowerThanJs) lines.push(`- ${item}`);
+  if (evidence.slowerThanReference.length) {
+    lines.push(`### Slower than \`${impls[0]}\` (optimization candidates, not gates)`, "");
+    for (const item of evidence.slowerThanReference) lines.push(`- ${item}`);
     lines.push("");
   }
   return lines.join("\n");
@@ -485,21 +492,16 @@ if (noisy && !options.allowNoisy) {
 }
 for (const impl of options.impls) {
   impl.version = run(impl.command[0], [...impl.command.slice(1), "--version"], root, childEnv()).stdout.trim();
-  impl.executableSha256 = impl.name === "js" ? null : sha256(fs.readFileSync(impl.command[0]));
+  impl.executableSha256 = sha256(fs.readFileSync(impl.command[0]));
 }
-const binding = path.join(root, "native/prebuilds", `${process.platform}-${process.arch}`, "causet-core.node");
-// Ask the engine module directly: `doctor` needs a repository, and a silent
-// "unavailable" here would skip every native-engine measurement.
-const { describeReadEngines } = await import(pathToFileURL(path.join(root, "src/engine.js")).href);
-const described = describeReadEngines().native;
-const nativeBinding = {
-  available: described.available, reason: described.reason, profile: described.profile,
-  sha256: fs.existsSync(binding) ? sha256(fs.readFileSync(binding)) : null,
-};
-if (options.engines.includes("native") && !nativeBinding.available) {
-  process.stderr.write(`native engine unavailable (${nativeBinding.reason}); reads run on the Git engine only. Build it with npm run build:native.\n`);
+// The reference implementation describes its native backend; `doctor` reads
+// this checkout's repository and writes nothing.
+const reference = options.impls[0];
+const nativeEngine = JSON.parse(run(reference.command[0], [...reference.command.slice(1), "doctor", "--json"], root).stdout).engine.native;
+if (options.engines.includes("native") && !nativeEngine.available) {
+  process.stderr.write(`native engine unavailable (${nativeEngine.reason}); reads run on the Git engine only.\n`);
 }
-const engines = options.engines.filter((engine) => engine !== "native" || nativeBinding.available);
+const engines = options.engines.filter((engine) => engine !== "native" || nativeEngine.available);
 const fixturesRoot = fs.mkdtempSync(path.join(os.tmpdir(), "vlab-perf-"));
 const results = [];
 const fixtures = {};
@@ -508,14 +510,20 @@ try {
   const setupStart = performance.now();
   fixtures.template = buildTemplate(path.join(fixturesRoot, "template"), options.impls[0]);
   fixtures.real = buildReal(path.join(fixturesRoot, "real"), options);
-  const { withScaleFixture } = await import(pathToFileURL(path.join(root, "src/scale-benchmark.js")).href);
+  // The scale benchmark's own fixture, which `CAUSET_TEST_SCALE_FIXTURE` keeps
+  // instead of measuring (until #243, src/scale-benchmark.js built it here).
   const baseline = JSON.parse(fs.readFileSync(path.join(root, "benchmarks/baseline.json"), "utf8"));
-  withScaleFixture({ ...baseline.profile, samples: 1 }, (repo, fixture) => {
-    fixtures.scale = { name: "scale", path: repo, description: `synthetic scale fixture, profile ${baseline.profile.name}: ${fixture.historyDepth} commits, ${fixture.workspaces} workspaces, ${fixture.causalNotes} causal notes, ${fixture.resolutions} resolutions, ${fixture.treeFiles} files`, ...fixture };
-    fixtureSetupMs = performance.now() - setupStart;
-    load.push(loadSample("after fixtures"));
-    measure(options, fixtures, engines, results);
-  });
+  const { profile } = baseline;
+  const fixture = JSON.parse(run(reference.command[0], [...reference.command.slice(1), "metadata", "benchmark",
+    "--history", String(profile.history), "--workspaces", String(profile.workspaces), "--notes", String(profile.notes),
+    "--resolutions", String(profile.resolutions), "--areas", String(profile.areas),
+    "--files-per-area", String(profile.filesPerArea), "--samples", "1", "--json"],
+  fixturesRoot, childEnv({ CAUSET_TEST_SCALE_FIXTURE: path.join(fixturesRoot, "scale") })).stdout);
+  const { repository: repo, ...described } = fixture;
+  fixtures.scale = { name: "scale", path: repo, description: `synthetic scale fixture, profile ${profile.name}: ${described.historyDepth} commits, ${described.workspaces} workspaces, ${described.causalNotes} causal notes, ${described.resolutions} resolutions, ${described.treeFiles} files`, ...described };
+  fixtureSetupMs = performance.now() - setupStart;
+  load.push(loadSample("after fixtures"));
+  measure(options, fixtures, engines, results);
 } finally {
   if (options.keep) process.stderr.write(`fixtures kept in ${fixturesRoot}\n`);
   else removeTree(fixturesRoot);
@@ -523,10 +531,10 @@ try {
 }
 load.push(loadSample("end"));
 const equalityProblems = checkEquality(results);
-const slowerThanJs = [];
-for (const item of results.filter((entry) => entry.kind === "impl" && entry.side !== "js")) {
-  const js = results.find((entry) => entry.side === "js" && entry.fixture === item.fixture && entry.scenario === item.scenario && entry.engine === item.engine);
-  if (js && item.stats.medianMs > js.stats.medianMs) slowerThanJs.push(`${item.fixture} \`${item.scenario}\` [${item.engine}]: ${item.side} ${item.stats.medianMs} ms vs js ${js.stats.medianMs} ms`);
+const slowerThanReference = [];
+for (const item of results.filter((entry) => entry.kind === "impl" && entry.side !== reference.name)) {
+  const base = results.find((entry) => entry.side === reference.name && entry.fixture === item.fixture && entry.scenario === item.scenario && entry.engine === item.engine);
+  if (base && item.stats.medianMs > base.stats.medianMs) slowerThanReference.push(`${item.fixture} \`${item.scenario}\` [${item.engine}]: ${item.side} ${item.stats.medianMs} ms vs ${reference.name} ${base.stats.medianMs} ms`);
 }
 const evidence = {
   format: FORMAT, checkpoint: options.checkpoint, startedAt, durationMs: Math.round(performance.now() - started),
@@ -536,10 +544,10 @@ const evidence = {
   host: hostProvenance(options.host), platform: `${os.type()} ${os.release()}`,
   node: process.version, git: git(root, "--version"),
   implementations: options.impls.map(({ name, command, version, executableSha256 }) => ({ name, command, version, executableSha256 })),
-  nativeBinding, engines, settings: { samples: options.samples, warmup: options.warmup, suites: options.suites, maxCpu: options.maxCpu },
+  nativeEngine, engines, settings: { samples: options.samples, warmup: options.warmup, suites: options.suites, maxCpu: options.maxCpu },
   noisy, note: options.note, load,
   fixtures: Object.fromEntries(Object.entries(fixtures).map(([key, { path: _path, ...rest }]) => [key, rest])),
-  equalityProblems, slowerThanJs, results,
+  equalityProblems, slowerThanReference, results,
 };
 fs.writeFileSync(options.output, `${JSON.stringify(evidence, null, 1)}\n`);
 if (options.markdown) fs.writeFileSync(options.markdown, `${markdown(evidence)}\n`);

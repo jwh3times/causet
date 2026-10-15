@@ -7,8 +7,8 @@
 //     --executable linux-x64-gnu=<path> --executable win32-x64=<path> \
 //     [--notices <platform>=<path> ...]
 //
-// The repository's own `package.json` keeps the JavaScript CLI as its command,
-// for development. The main package written here differs from it in
+// The repository's own `package.json` names no command: a checkout's `cst` is
+// the Rust build (#243). The main package written here differs from it in
 // exactly three members: `bin`, `scripts.preinstall` and
 // `optionalDependencies`, plus the generated `bin/native/checksums.json`.
 
@@ -77,8 +77,9 @@ export function packRelease(options) {
     fs.mkdirSync(directory, { recursive: true });
     fs.copyFileSync(executable, path.join(directory, published.file));
     fs.chmodSync(path.join(directory, published.file), 0o755);
+    // `npm run build:native` writes the notices beside this host's build.
     const notices = options.notices[platform]
-      ?? path.join(root, "native", "prebuilds", platform.split("-").slice(0, 2).join("-"), "THIRD-PARTY-NOTICES.txt");
+      ?? path.join(root, "native", "target", "release", "THIRD-PARTY-NOTICES.txt");
     if (!fs.existsSync(notices)) throw new Error(`No third-party notices for ${platform} at ${notices}; pass --notices ${platform}=<path>`);
     fs.copyFileSync(notices, path.join(directory, "THIRD-PARTY-NOTICES.txt"));
     fs.copyFileSync(path.join(root, "LICENSE"), path.join(directory, "LICENSE"));

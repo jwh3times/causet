@@ -153,7 +153,7 @@ pub fn run_git(args: &[String], options: &RunOptions) -> GitResult<GitOutput> {
       return Err(GitError::new(
         "internal-invariant",
         format!(
-          "git {command} was read outside the engine seam; every Git read must be an operation of src/engine.js."
+          "git {command} was read outside the engine seam; every Git read must be an operation of the engine's read catalog."
         ),
       ));
     }
