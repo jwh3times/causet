@@ -1,0 +1,29 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9fkgwkbea5ca4ab70a",
+      "mode": "compact",
+      "sourceRef": "chore/suites-run-rust",
+      "sourceHead": "d78c9d996bb6357f0aa767ffa42eb0df4d3bd8c5",
+      "sourceSubject": "test: fold path separators below the masked roots of the frozen answers",
+      "targetBefore": "ed862841e2bb6c140b742416150dfedd133fdbb9",
+      "landingCommit": "d41bc8b704b7eb8a332a589bb69da79de39ad161",
+      "base": "8cab55002959b5dd725303f623e05ce68bd593fe",
+      "absorbedCommits": [
+        "80f8ede48bdff3284fee7fae22e465875e029130",
+        "e6ac43df0c968082d474d34541e854375469a342",
+        "d78c9d996bb6357f0aa767ffa42eb0df4d3bd8c5"
+      ],
+      "absorbedChanges": [
+        "ch_0mv8wf1e2cfbbd88f3402",
+        "ch_0mv8yktno9f7ad1282d1c",
+        "ch_0mv8yptb83c1fa10f73dc"
+      ],
+      "resultTree": "7743898b8442a0a2f59a0247e92faffc7c801f59",
+      "createdAt": "2026-10-15T11:03:27.383Z"
+    }
+  ]
+}
