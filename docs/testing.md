@@ -206,18 +206,14 @@ evidence for the selected CLI is the tests *not* in that report.
 With `CAUSET_CLI` pointing at `bin/cst.js` explicitly, every mode passes exactly
 as it does with `CAUSET_CLI` unset; that run proves the indirection adds nothing.
 `CAUSET_CLI=native/target/release/cst.exe` (or `cst` off Windows) in all six
-modes is the qualification a ported command needs before it stops delegating
-(ADR-0037 decision 4).
+modes was the qualification each ported command needed (ADR-0037 decision 4).
 
-The Rust CLI (`native/cli`, #141) answers every command itself (#212). The one
-thing it still hands to the JavaScript CLI is an argument shape that CLI's own
-parser fails on, so the failure stays the oracle's. `CAUSET_DELEGATE=always` forces delegation of everything, to
-compare a ported command with the oracle, and `CAUSET_DELEGATE=never` refuses
-delegation, so what remains is only what the Rust CLI answers itself.
-`test/native-cli.test.js` uses `never` to compare every native answer (help,
-version, and each usage failure, human and JSON) with the JavaScript CLI byte
-for byte, and checks that a delegated command's output and exit status pass
-through unchanged. For the ported commands (`doctor`, `capabilities`, `graph`,
+The Rust CLI (`native/cli`, #141) answers every command itself (#212), and
+since #243 it has no route to the JavaScript CLI: `CAUSET_DELEGATE` and
+`CAUSET_JS_CLI` are ignored. An argument shape the JavaScript parser fails on by
+accident fails the same way natively. `test/native-cli.test.js` compares every
+native answer (help, version, and each usage failure, human and JSON) with the
+JavaScript CLI byte for byte. For the ported commands (`doctor`, `capabilities`, `graph`,
 `receipts`, `provenance`, `metadata status` and `validate`, `audit identity`,
 `resolve list` and `status`, `spec show` and `status`, `merge-plan`,
 `rebase-plan`, `proof-bundle`, and `verify-proof`, #144; `init`, `commit`, and `metadata retain`, `export`, `import` and `dispose`, #145; `branch`, `merge`,
