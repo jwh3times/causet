@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The Rust CLI no longer delegates to the JavaScript CLI** (#243, the first
+  step in retiring the JavaScript CLI, ADR-0037 §6). `CAUSET_DELEGATE` and
+  `CAUSET_JS_CLI` are ignored: `CAUSET_DELEGATE=always` no longer routes a
+  command through `bin/cst.js`, and an unknown mode is no longer refused. Every
+  command was already answered natively, so no output changes.
+
 ## 0.23.0
 
 **`cst` is the only command.** This release removes the `vlab` alias, as
