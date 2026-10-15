@@ -1,6 +1,7 @@
-//! The user-facing environment variables, read as `src/environment.js` reads
-//! them (ADR-0039 §5): `CAUSET_<name>` when present, even empty. The former
-//! `VLAB_<name>` is ignored since the migration window ended (§8).
+//! The user-facing environment variables, read as the JavaScript CLI's
+//! `src/environment.js` read them (ADR-0039 §5): `CAUSET_<name>` when present,
+//! even empty. The former `VLAB_<name>` is ignored since the migration window
+//! ended (§8).
 //!
 //! The JavaScript CLI turns a global flag (`--engine`, `--git-session`,
 //! `--trace-git`, `--forecast-engine`) into `CAUSET_<name>` in its own
@@ -11,7 +12,7 @@ use std::env;
 use std::sync::Mutex;
 
 /// Every user-facing variable, by the name after its prefix.
-pub const ENVIRONMENT_VARIABLES: [&str; 13] = [
+pub const ENVIRONMENT_VARIABLES: [&str; 12] = [
   "AGENT",
   "BENCHMARK_HOST",
   "CLI",
@@ -23,7 +24,6 @@ pub const ENVIRONMENT_VARIABLES: [&str; 13] = [
   "GIT_SESSION_DIAGNOSTICS_FILE",
   "LAUNCHER",
   "RELEASE_SET",
-  "REQUIRE_NATIVE",
   "TRACE",
 ];
 

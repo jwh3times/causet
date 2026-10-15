@@ -6,21 +6,18 @@ import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { beginGitMetrics, endGitMetrics, withReadEngine } from "../src/git.js";
-import { describeReadEngines } from "../src/engine.js";
-import { metadataStatus } from "../src/metadata.js";
-import { listNoteRecords } from "../src/notes.js";
-import { listResolutionRecords } from "../src/resolutions.js";
-import { resolutionCatalogFloor } from "../src/scale-benchmark.js";
 import { hostProvenance, selectBaseline } from "./benchmark-host.mjs";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const script = fileURLToPath(import.meta.url);
 const root = path.resolve(path.dirname(script), "..");
+// Each phase is one read-only command, run whole by the CLI under each engine.
+// Until #243 this also timed the JavaScript modules in-process; the Rust CLI's
+// whole-command time is the measurement now.
 const phases = {
-  noteCatalog: { read: listNoteRecords, cli: ["receipts", "--json"] },
-  resolutionCatalog: { read: listResolutionRecords, cli: ["resolve", "list", "--json"] },
-  metadataStatus: { read: (repo) => metadataStatus({ cwd: repo }), cli: ["metadata", "status", "--json"] },
+  noteCatalog: { cli: ["receipts", "--json"] },
+  resolutionCatalog: { cli: ["resolve", "list", "--json"] },
+  metadataStatus: { cli: ["metadata", "status", "--json"] },
 };
 const digest = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const percentile = (values, fraction) => [...values].sort((a, b) => a - b)[Math.ceil(values.length * fraction) - 1];
@@ -42,22 +39,7 @@ function snapshot(repo) {
   };
 }
 
-// Each phase gets a fresh process, including native binding initialization.
-if (process.argv[2] === "--sample") {
-  const [, , , repo, phase, engine] = process.argv;
-  assert.ok(Object.hasOwn(phases, phase));
-  assert.ok(["git", "native", "floor"].includes(engine));
-  assert.ok(engine !== "floor" || phase === "resolutionCatalog");
-  const result = withReadEngine(engine === "floor" ? "git" : engine, () => {
-    const collector = beginGitMetrics(phase);
-    const start = performance.now();
-    const value = engine === "floor" ? resolutionCatalogFloor(repo) ?? null : phases[phase].read(repo);
-    const durationMs = performance.now() - start;
-    const metrics = endGitMetrics(collector);
-    return { value, durationMs, metrics, native: engine === "native" ? describeReadEngines().native : null };
-  });
-  console.log(JSON.stringify(result));
-} else {
+{
   const args = process.argv.slice(2);
   assert.equal(args.length, 6, "Use --repo <disposable-clone> --host <stable-label> --output <new-file.json>.");
   assert.equal(args[0], "--repo");
@@ -76,10 +58,10 @@ if (process.argv[2] === "--sample") {
   const host = hostProvenance(label);
   const baseline = JSON.parse(fs.readFileSync(path.join(root, "benchmarks/baseline.json"), "utf8"));
   const selected = selectBaseline(baseline, host);
-  const native = describeReadEngines().native;
-  assert.equal(native.available, true, "Build the optional binding before comparing native execution.");
+  const native = JSON.parse(execute(cstCommand, [...cstPrefix(), "doctor", "--json"], repo).stdout).engine.native;
+  assert.equal(native.available, true, "The CLI under measurement must have its native backend.");
   const evidence = {
-    format: "real-repository-measurement-v1",
+    format: "real-repository-measurement-v2",
     sourceCommit: execute("git", ["rev-parse", "HEAD"], root).stdout.trim(),
     scriptSha256: createHash("sha256").update(fs.readFileSync(script)).digest("hex"),
     repositoryCommit: before.head,
@@ -94,9 +76,8 @@ if (process.argv[2] === "--sample") {
     native, measurements: {}, complete: false,
     limitations: [
       "One repository snapshot and one host; no representative-budget ratification or quiet-host claim.",
-      "Nine fresh processes per side; operating-system caches are not flushed. p95 is the maximum of nine samples.",
-      "The resolution raw-Git floor acquires retained objects; it does not validate domain records.",
-      "No floor is asserted for metadata validation or notes parsing. Native fallback is measured and retained.",
+      "Nine fresh processes per engine; operating-system caches are not flushed. p95 is the maximum of nine samples.",
+      "Whole-command times include process start; no raw-Git floor is measured (v1 timed the JavaScript modules and a floor in-process).",
       "Clones omit source worktree registries, private forecasts, and dirty drafts; these require separate workflow evidence.",
       "Whole receipts CLI reads are compared between engines separately; receipts are a subset of the note catalog.",
     ],
@@ -104,28 +85,14 @@ if (process.argv[2] === "--sample") {
   const save = () => fs.writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`);
   save();
   for (const [name, phase] of Object.entries(phases)) {
-    const samples = { git: [], native: [], ...(name === "resolutionCatalog" ? { floor: [] } : {}) };
     const cli = { git: [], native: [] };
     let oracle;
-    let cliOracle;
     for (let index = 0; index < 9; index += 1) {
-      const order = index % 2 === 0 ? Object.keys(samples) : Object.keys(samples).reverse();
-      for (const engine of order) {
-        const child = execute(process.execPath, [script, "--sample", repo, name, engine], root);
-        const sample = JSON.parse(child.stdout);
-        if (engine !== "floor") {
-          if (oracle === undefined) oracle = sample.value;
-          assert.deepEqual(sample.value, oracle, `${name}/${engine}: domain result changed`);
-          if (engine === "native") assert.equal(sample.native.available, true);
-        }
-        delete sample.value;
-        samples[engine].push({ ...sample, wholeProcessMs: child.wholeMs });
-      }
       for (const engine of index % 2 === 0 ? ["git", "native"] : ["native", "git"]) {
         const child = execute(cstCommand, [...cstPrefix(), ...phase.cli, "--engine", engine], repo);
         const value = JSON.parse(child.stdout);
-        if (cliOracle === undefined) cliOracle = value;
-        assert.deepEqual(value, cliOracle, `${name}/${engine}: CLI result changed`);
+        if (oracle === undefined) oracle = value;
+        assert.deepEqual(value, oracle, `${name}/${engine}: CLI result changed`);
         cli[engine].push(child.wholeMs);
       }
     }
@@ -137,13 +104,11 @@ if (process.argv[2] === "--sample") {
         noteRecords: oracle.scopes.sharedPortable.notes,
         resolutions: oracle.scopes.sharedPortable.resolutions,
       } : null,
-      samples,
-      phase: Object.fromEntries(Object.entries(samples).map(([engine, values]) => [engine, stats(values.map((value) => value.durationMs))])),
       cliSamplesMs: cli,
       wholeCli: Object.fromEntries(Object.entries(cli).map(([engine, values]) => [engine, stats(values)])),
     };
     save();
-    console.error(`${name}: identical domain and CLI results across engines`);
+    console.error(`${name}: identical CLI results across engines`);
   }
   assert.deepEqual(snapshot(repo), before, "Measured repository changed during the run.");
   execute("git", ["fsck", "--no-dangling"], repo);

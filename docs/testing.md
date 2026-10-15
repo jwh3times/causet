@@ -161,12 +161,11 @@ CAUSET_FORECAST_ENGINE=merge-tree npm test
 CAUSET_FORECAST_ENGINE=worktree npm test
 ```
 
-Run it with the native read engine selected. Build the optional binding with
-`npm run build:native` first to exercise its five supported operations. CI builds
-it on both platforms and sets `CAUSET_REQUIRE_NATIVE=1` so missing binaries cannot
-silently qualify fallback. A source checkout without a prebuild remains usable
-through Git. Every read must go through the engine seam (`src/engine.js`), because
-a read that bypasses the seam is refused in this mode (ADR-0019):
+Run it with the native read engine selected, which exercises the gitoxide
+backend's five supported operations; the backend is linked into `cst`, so there
+is nothing extra to build. Every read must go through the engine seam
+(`native/engine/src/engine.rs`), because a read that bypasses the seam is refused
+in this mode (ADR-0019):
 
 ```powershell
 $env:CAUSET_ENGINE = "native"
@@ -281,8 +280,7 @@ above. The suites skip when a probe is not built. Mutation fuzz targets,
 `fuzz-parsers`, `fuzz-model` and `fuzz-engine`, run in CI.
 
 CI's suite jobs also run the Rust crates' unit tests:
-`cargo test --workspace --exclude causet-binding`. The N-API binding is
-excluded because it links only inside Node. The scale benchmark's analysis is
+`cargo test --workspace`. The scale benchmark's analysis is
 one of them (`native/cli/src/scale_benchmark.rs`, until #243
 `test/scale-benchmark-analysis.test.js`).
 
@@ -394,9 +392,9 @@ all three transports**, session, fallback, and no session at all, because a
 fallback that returned different data would be worse than one that failed. The
 override is inert unless it parses as a positive integer, which is itself
 asserted, since it shrinks a safety bound.
-Two more test-only switches in `src/git.js` force the fallback paths without a
-broken Git. `CAUSET_TEST_GIT_SESSION_FAILURE=1` makes the object session spawn a
-nonexistent Git command, so its worker fails to start and the command completes
+Two more test-only switches in the Rust engine force the fallback paths without
+a broken Git. `CAUSET_TEST_GIT_SESSION_FAILURE=1` makes the object session spawn a
+nonexistent Git command, so its process fails to start and the command completes
 through ordinary processes; the suite asserts that the plan is identical and
 that the trace announces the fallback. `CAUSET_TEST_MERGE_TREE_SESSION_FAILURE=1`
 does the same to the merge-tree session, so a forecast records one merge-tree
@@ -404,8 +402,11 @@ fallback and reruns the whole queue in the worktree simulator with identical
 trees. `CAUSET_TEST_MERGE_TREE_GIT_VERSION=<version>` makes the merge-tree
 session report that Git version instead of the one its trace2 event names,
 which is how the `git-too-old` fallback is exercised on a host whose Git is new
-enough. Like `CAUSET_TEST_FAULT` and `CAUSET_TEST_GATE`, each is inert unless it is
-set exactly.
+enough. `CAUSET_TEST_SCALE_FIXTURE=<directory>` makes `cst metadata benchmark`
+build its fixture in that directory, answer with the fixture's description, and
+leave it there instead of measuring, which is how `scripts/perf-checkpoint.mjs`
+gets its scale fixture. Like `CAUSET_TEST_FAULT` and `CAUSET_TEST_GATE`, each is
+inert unless it is set exactly.
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan the Rust CLI, engine and model for every
 `GitError::new` and front-end failure, and fail if one names a code outside
@@ -977,8 +978,10 @@ How the installed command reaches the executable:
 - **A mismatch is refused.** The launcher and the copy both check the
   executable's SHA-256 against `checksums.json` and its `--version` against
   the main package's version.
-- **Without a platform package,** the launcher runs the JavaScript CLI and
-  says why on stderr.
+- **Without a platform package,** or on a platform with none published, the
+  launcher says what is missing and where `cst` is published, and exits 1; the
+  install itself succeeds. There is no JavaScript CLI to fall back to since
+  #243. The main package carries only `bin/native/`.
 
 `test/release-packaging.test.js` packs this host's set from the workspace's
 release build, installs it globally under a scratch prefix in each of those
@@ -1054,8 +1057,9 @@ so do not require every full-matrix job for ordinary PRs in branch protection.
 
 Each suite job fails unless exactly one test self-skipped — the too-old-Git
 case, which is covered with a spoofed version — so unsupported runner
-capabilities cannot silently pass. Linux jobs also fail if a session worker or
-`cat-file` process survives the suite (release-gate item 7).
+capabilities cannot silently pass. Linux jobs also fail if an object-session
+(`cat-file --batch`) or merge-tree-session (`merge-tree --stdin`) process
+survives the suite (release-gate item 7).
 
 The workflow does not run `npm run test:benchmark`: its baseline is per-host.
 The ordinary suite's repository-scale benchmark checks report consistency,
@@ -1099,9 +1103,8 @@ on `main`, and for pull requests touching `native/`, the harness, or the
 workflow. Hosted runners are shared, so absolute milliseconds are not
 comparable between runs. The job contributes what survives that: byte
 equality, exit status, Git process counts, and comparisons made within one
-run (native against the Git engine, each command against its Git floor, and
-the Rust CLI against the JavaScript CLI, which the job adds automatically once
-the workspace builds a `cst` binary). It posts the summary to the job page
+run (native against the Git engine, and each command against its Git floor;
+until #243 also the Rust CLI against the JavaScript CLI). It posts the summary to the job page
 and keeps the JSON as an artifact for 90 days. It fails only when the harness
 cannot measure, never on a timing.
 
@@ -1113,8 +1116,8 @@ page, and each checkpoint is recorded there.
 ### Measuring a real repository
 
 Use `scripts/measure-real-repository.mjs` for the read-only part of
-[#42](https://github.com/jwh3times/causet/issues/42). From a checkout with the
-optional native binding built (`npm run build:native`), run:
+[#42](https://github.com/jwh3times/causet/issues/42). From a checkout with
+`cst` built (`npm run build:native`), run:
 
 ```sh
 node scripts/measure-real-repository.mjs --repo <clean-disposable-clone> --host <stable-label> --output <new-file-outside-clone.json>
@@ -1127,19 +1130,18 @@ Use public-safe repository content for public evidence. A clone carries history
 and these refs, but not the source's workspace registry, private forecasts, or
 dirty files; actual workspace behavior needs separate pilot observations.
 
-The script compares notes, resolutions, and metadata status through Git and
-native engines, with nine fresh processes per side, alternating order. It
-checks complete domain and CLI JSON equality, retains phase and whole-CLI raw
-samples, process counts, native execution and fallbacks, and checks that HEAD,
-refs, and worktree status stayed unchanged. `git fsck` must also pass. A failed
-run leaves `complete: false` in its output; preserve it when investigating.
-Phase timing includes native initialization. Whole-CLI timing additionally
-includes Node startup, command parsing, and JSON output. With nine samples,
-the reported p95 is the maximum sample; this is not a population estimate.
-
-Only the resolution phase has a raw-Git acquisition floor, shared with
-ADR-0027's harness. This floor does not validate domain records. An empty
-resolution catalog measures its fast path, not populated-catalog performance.
+The script runs `cst receipts`, `cst resolve list` and `cst metadata status`
+under the Git and native engines, with nine fresh processes per engine,
+alternating order. It checks complete CLI JSON equality, retains the
+whole-command raw samples, and checks that HEAD, refs, and worktree status
+stayed unchanged. `git fsck` must also pass. A failed run leaves
+`complete: false` in its output; preserve it when investigating. Whole-command
+timing includes process start, command parsing, and JSON output. With nine
+samples, the reported p95 is the maximum sample; this is not a population
+estimate. Its format is `real-repository-measurement-v2`: v1, until #243, also
+timed the JavaScript modules in-process and a raw-Git floor for the resolution
+phase. An empty resolution catalog measures its fast path, not
+populated-catalog performance.
 Do not infer a metadata-validation budget from a cheaper command doing less
 work. No baseline is rewritten and no representative budget is ratified by
 this script. A matching host reference also does not prove the machine was

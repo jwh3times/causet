@@ -1,4 +1,5 @@
-//! Bounded, read-only Git acquisition. Domain validation stays in JavaScript.
+//! Bounded, read-only Git acquisition. Domain validation is the record model's
+//! (`causet-model`); this crate only reads objects.
 #![forbid(unsafe_code)]
 
 use gix::{ObjectId, Repository, objs::Kind};

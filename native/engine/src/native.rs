@@ -1,6 +1,6 @@
 //! The gitoxide backend: the five operations `causet-core` is qualified for
-//! (ADR-0027), with the checks `src/native-engine.js` applies around the
-//! N-API binding. A refusal whose message starts "unsupported " is an
+//! (ADR-0027), with the checks the JavaScript CLI applied around its N-API
+//! binding until #243. A refusal whose message starts "unsupported " is an
 //! unsupported input; anything else is a native error. Either way the seam
 //! answers with Git and records why.
 

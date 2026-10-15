@@ -256,8 +256,10 @@ fn dispatch<T>(
 }
 
 /// Whether the native engine can answer. It is compiled in, so it is
-/// available unless `CAUSET_TEST_NATIVE_BINDING=missing` simulates the
-/// JavaScript CLI without its optional prebuild, as the suites do.
+/// available unless `CAUSET_TEST_NATIVE_BINDING=missing` simulates an
+/// unavailable backend, as the suites do; the reason it then reports,
+/// `binding-missing`, is the one the JavaScript CLI's separately built binding
+/// reported before #243.
 pub fn native_available() -> bool {
   environment::test_hook("CAUSET_TEST_NATIVE_BINDING").as_deref() != Some("missing")
 }

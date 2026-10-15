@@ -27,7 +27,6 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { fixturePrefixes } from "../scripts/clean-demo-fixtures.mjs";
-import { VERSION } from "../src/version.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -163,14 +162,4 @@ test("every demo's fixture prefix is one demo:clean will sweep", () => {
     [],
     "demo fixtures npm run demo:clean would not remove:\n" + uncovered.join("\n"),
   );
-});
-
-test("src/version.js publishes the version package.json declares", () => {
-  // `vlab --version` and `vlab doctor` report src/version.js while npm
-  // publishes package.json. Both are edited by hand at every release, and
-  // nothing else notices when only one of them moves.
-  const manifest = JSON.parse(
-    fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"),
-  );
-  assert.equal(VERSION, manifest.version);
 });

@@ -4,11 +4,11 @@
 
 | Field | Value |
 | --- | --- |
-| Architecture baseline | v0.23.0 release |
+| Architecture baseline | v0.23.0 release, then #243 (the JavaScript CLI retired) |
 | Status | Current implementation reference |
-| Last updated | 2026-09-29 |
-| Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 20+ installs it through npm, runs the JavaScript CLI kept as the oracle, and runs the suites |
-| External runtime dependencies | Git. Node.js only where no executable is published, or when install scripts did not run |
+| Last updated | 2026-10-14 |
+| Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 20+ installs it through npm and runs the suites; there is no JavaScript implementation of the CLI since #243 |
+| External runtime dependencies | Git. Node.js only to launch the executable when npm install scripts did not run; a platform with no published executable is refused, not served by a fallback |
 
 This document explains the system that exists. [product.md](product.md) defines
 the desired product and its requirements. [adr](adr/README.md) records decisions
@@ -62,7 +62,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
                          v
                   +--------------+
                   |  cst CLI     |
-                  | src/cli.js   |
+                  | native/cli   |
                   +------+-------+
                          |
           +--------------+----------------+
@@ -76,15 +76,15 @@ substrate stays, and ADR-0001 is refined rather than superseded.
                          |
                          v
                   +--------------+
-                  | Git adapter  |
-                  |  src/git.js  |
+                  | Git engine   |
+                  |native/engine |
                   +------+-------+
                          |
               +----------+-----------+
               |                      |
               v                      v
       ordinary Git processes   optional invocation-scoped
-                               cat-file session worker
+                               cat-file session process
               |                      |
               +----------+-----------+
                          v
@@ -118,59 +118,85 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 ## 3. Source layout and component responsibilities
 
 <!-- generated:modules:start -->
-| File | Responsibility | Important dependencies |
+| File | Responsibility | Uses |
 | --- | --- | --- |
-| `bin/cst.js` | Minimal executable entry point and error/exit boundary | `src/cli.js` |
-| `bin/native/platform.js` | Locate the installed platform package's `cst` executable and refuse one whose digest or version is not this release's (ADR-0038) | Node built-ins only; `bin/native/checksums.json` as packed |
-| `bin/native/preinstall.js` | Install-time copy of the platform executable over the published launcher, so npm links `cst` to it | `bin/native/platform.js` |
-| `src/canonical-json.js` | The frozen `causet.canonical-json/v1` profile: RFC 8785 restricted to UTF-16-code-unit-sorted members and safe integers, refusing what it cannot serialize byte-identically | None |
-| `src/capabilities.js` | The `causet.capabilities/v1` document projected from the runtime registries, and negotiation as a pure function of two such documents (ADR-0033) | `src/schemas.js`, `src/metadata.js`, `src/metadata-envelope.js`, `src/canonical-json.js` |
-| `src/cli.js` | Argument parsing, command dispatch, human and JSON presentation, benchmarks | All domain modules |
-| `src/dispositions.js` | Resolving one parked conflict: keep-local or replace-local, the note rewrite it implies, and the recorded decision that stops the same disagreement being reported twice (ADR-0030) | `src/quarantine.js`, `src/metadata.js`, `src/notes.js` |
-| `src/engine.js` | The read-side engine seam: the catalog of 44 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison | `src/git.js`, `src/native-engine.js` |
-| `src/environment.js` | The user-facing environment variables, `CAUSET_*` (ADR-0039 §5); the former `VLAB_*` names are ignored since the migration window ended (§8) | None |
-| `src/errors.js` | Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `causet.error/v1` failure envelope (ADR-0021) | None |
-| `src/faults.js` | Test-only deterministic fault injection: `CAUSET_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `CAUSET_TEST_GATE` holds a process at a named point until a test releases it | None |
-| `src/forecasts.js` | Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts | Plan, operations helpers, specs, resolutions, Git |
-| `src/git-carriers.js` | Copy-on-write notes trees, typed dependency closure, bounded carrier parents, and checked ref commands | Engine, Git writes, schemas |
-| `src/git-session-worker.js` | Owns asynchronous `git cat-file --batch-command` stream for a synchronous caller | Worker threads, Git |
-| `src/git.js` | The Git engine: safe synchronous Git adapter, the Git implementation of every read operation, repository context, object and merge-tree sessions, engine selectors, the read-bypass rule, metrics | Git executable, workers |
-| `src/identity-audit.js` | Repository-wide logical identity audit (`causet.identity-audit/v1`): union-find over identity-preserving application edges, multi-trailer, multi-origin, and invariant findings, plus the near-duplicate provenance actor warning | Engine, notes |
-| `src/ids.js` | Unique protocol IDs, SHA-256, Git blob hashing, slugs | Node crypto |
-| `src/landings.js` | Compact and hard-squash landing mechanics and receipts | Git adapter, notes |
-| `src/locations.js` | Where metadata lives: the refs, runtime directories, manifest directory and workspace branch prefix; a repository's migration state, decided without a Git process, and the refusal of an unmigrated one (ADR-0039 §3, §8) | `src/engine.js`, `src/errors.js` |
-| `src/merge-plan.js` | Coverage proof lattice, effective base, patch candidates, plan formatting | Git adapter, notes |
-| `src/merge-tree-session-worker.js` | Owns one asynchronous `git merge-tree --stdin` stream for the synchronous merge-tree forecast engine | Worker threads, Git |
-| `src/metadata-envelope.js` | Canonical envelope manifest, integrity hash, payload bounds, and parser | Metadata, schemas |
-| `src/metadata-transfer.js` | Sanitized bundle export, dry-run inspection, conflict planning, staging, and atomic ref import | Metadata, envelope, Git |
-| `src/metadata.js` | Deterministic inventory, scope classification, integrity diagnostics, lineage, and accepted-record filtering | Git, schemas, specs |
-| `src/migration.js` | `cst migrate`: create the causet refs at the objects of their vcs-lab names, repoint the notes settings, move the runtime directories and stage the manifest move, never deleting; the migration marker, `doctor.migration`, and the advanced-former-ref check (ADR-0039 §3) | `src/locations.js`, `src/engine.js`, `src/git.js` (update-ref, config, mv), `src/store.js` |
-| `src/native-engine.js` | Optional in-process Node-API binding loader and conversion for the five bounded resolution-catalog read operations | Optional `native/prebuilds` binding, Node module and path utilities |
-| `src/notes.js` | Append/list/read causal records in `refs/notes/causet`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory | `src/git.js`, `src/store.js` |
-| `src/operations.js` | Commit/cherry-pick and reconciliation start/queue/continue/abort/finalize | Plan, forecast, notes, resolution/spec modules |
-| `src/pending-operation.js` | Safe reconciliation/rebase journal routing for shared conflict tools | Reconciliation and rebase state |
-| `src/proof-binding.js` | The Git bindings a proof bundle carries so a verifier without the repository can check it: the bound source inventory, reachability paths, receipt inclusion proofs, and the object-id recomputation that makes them proofs (ADR-0031) | `src/engine.js`, `src/git.js`, `src/schemas.js` |
-| `src/proof-bundle.js` | Portable coverage proof bundles and their independent verifier, which applies its own copy of the lattice (`PROOF_RULES`) and compares the evidence with the repository | Merge plan, canonical JSON, metadata, engine |
-| `src/provenance.js` | Declared authorship provenance (`causet.provenance/v1`): the closed role vocabulary, `CAUSET_AGENT`, declaration at commit time, and exact carry onto rewritten commits | Notes, IDs, schemas |
-| `src/quarantine.js` | The conflict policy's two local stores: parked conflicting records as one blob-bearing ref each under `refs/causet/quarantine/<lineage>/<record id>`, and the shared-local disposition registry (ADR-0030) | `src/engine.js`, `src/git.js`, `src/store.js`, `src/schemas.js` |
-| `src/rebase-forecast.js` | Rebase simulation orchestration, caller invariants, candidate pinning, the carried caller overlay and its second predicted tree, and private forecast presentation | Rebase plan, forecast simulator, target overlays, semantic version guards, Git adapter |
-| `src/rebase-interactive.js` | Declared interactive actions: their parsing, the shapes ADR-0035 refuses, the surviving-identity message rules, and the single-trailer check | Errors |
-| `src/rebase-operations.js` | Current-branch rebase replay, forecast enforcement, overlay reduction and re-materialization, conflict recovery, identity, and final receipts | Rebase plan/forecast, target overlays, Git, notes, specs, resolutions |
-| `src/rebase-plan.js` | Read-only rebase selection, actions, preserved merge topology, shape constraints, and deterministic fingerprint | Merge plan, rebase topology, Git adapter, IDs |
-| `src/rebase-state.js` | Worktree-private rebase journal path and atomic persistence | Git context, store |
-| `src/rebase-topology.js` | Range topology analysis, ADR-0034 merge shape scope, the rewrite program and its parent mapping, and the recreated-merge identity contract | Engine seam, errors |
-| `src/reconcile-state.js` | Worktree-private reconciliation journal and Git in-progress state probes | Repo context, filesystem |
-| `src/resolutions.js` | Exact three-way conflict signatures, candidate selection, result retention, outcome audit | Git adapter, notes, reconciliation state |
-| `src/retention.js` | Read-only retention preview and checked, idempotent historical backfill | Metadata, carriers, notes lock |
-| `src/scale-benchmark.js` | Bounded synthetic repository fixture, scan measurements, raw-Git floors for the phases with a plain-Git equivalent, semantic equality checks, and evidence-based optimization recommendations | Git, notes, metadata, resolutions, workspaces |
-| `src/schemas.js` | Supported schema registry, structural record validation, object-reference and resolution-signature rules | IDs |
-| `src/specs.js` | Markdown parsing, sparse manifest migration/indexing, deterministic merge, semantic resolution, benchmark | Git adapter, IDs, reconciliation state |
-| `src/store.js` | Common runtime directory and atomic JSON read/write | `src/git.js` |
-| `src/target-overlay.js` | Target overlays: resolving the checkpoint a `--target-checkpoint` forecast is about, predicting the tree the worktree holds after one is put back, and reducing, re-materializing, and restoring it without ever committing it (ADR-0028) | `src/engine.js`, `src/git.js`, `src/workspaces.js`, `src/store.js` |
-| `src/version.js` | Runtime version constant | None |
-| `src/workspace-lock.js` | Exclusive shared-local registry transaction lock, bounded refusal, and ownership-checked release | Store, errors, fault gates |
-| `src/workspaces.js` | Workspace registry/lifecycle, linked-worktree materialization, temporary-index checkpoints/history | Git adapter, store, workspace lock |
+| `native/core/src/bin/fuzz-parsers.rs` | Dependency-free, reproducible mutation fuzz target for every native byte parser. | causet-core |
+| `native/core/src/lib.rs` | Bounded, read-only Git acquisition. | None |
+| `native/model/src/bin/fuzz-model.rs` | Dependency-free, reproducible mutation fuzz target for the record model: the JSON parser every note, envelope and journal passes through, and every function that then reads the parsed value. | causet-model |
+| `native/model/src/bin/model-probe.rs` | Answers one JSON request per stdin line with one JSON line, so the suites can put this crate to many inputs in a single process and hold its answers to the frozen oracle's (#243). | causet-model |
+| `native/model/src/canonical.rs` | The canonical JSON profile (`docs/canonical-json/`, `src/canonical-json.js`) and the legacy sorted-key serializer that record digests still use (`canonicalJson` in `src/metadata.js`). | `json`, `sha256` |
+| `native/model/src/dates.rs` | Whether a record's `createdAt` is a timestamp. | None |
+| `native/model/src/errors.rs` | The failure envelope (ADR-0021) and its closed code vocabulary, shared by every command. | `json`, `registry` |
+| `native/model/src/ids.rs` | Logical identifiers (`src/ids.js`, `docs/identity/README.md`): `<namespace>_<minted><random>`, where `minted` is the millisecond clock in base 36 padded to nine characters and `random` is 48 bits in hex. | None |
+| `native/model/src/js.rs` | JavaScript value semantics over parsed JSON, for the ported commands that read records and documents the way `src/` does: property access, truthiness, strict equality, `ToString`, and the two sort orders (`Array.prototype.sort` without a comparator, and `String.localeCompare`). | `json` |
+| `native/model/src/json.rs` | JSON exactly as the JavaScript CLI sees it: `JSON.parse`, `JSON.stringify`, and ECMAScript number formatting. | None |
+| `native/model/src/lib.rs` | The record model every ported command shares (issue #142, ADR-0037): JSON as JavaScript reads and writes it, the canonical JSON profile and the legacy digest serializer, logical identifiers, SHA-256, the record-family and resource-bound registries with classification and validation, and the error vocabulary. | None |
+| `native/model/src/registry.rs` | The record-family and resource-bound registries and the error vocabulary, ported from `src/schemas.js` and `src/errors.js`. | None |
+| `native/model/src/schemas.rs` | Record classification, compatibility and structural validation, ported from `src/schemas.js`; the authority since #243. | `dates`, `js`, `json`, `registry`, `sha256` |
+| `native/model/src/sha256.rs` | SHA-256 (FIPS 180-4), the digest every causet identifier and hash uses. | None |
+| `native/engine/src/bin/engine-probe.rs` | Answers Git engine requests, one JSON line in and one out, so the suites can hold the engine's values and process counts, operation for operation, to the frozen answers of `src/engine.js` (#243). | causet-engine, causet-model |
+| `native/engine/src/bin/fuzz-engine.rs` | Dependency-free, reproducible mutation fuzz target for the Git engine's parsers of Git output. | causet-engine |
+| `native/engine/src/differential.rs` | The engine differential behind `cst doctor --differential`, as `runDifferential` in `src/engine.js` computes it: every cataloged operation run through each engine over probes derived from the repository itself, compared by the digest of its canonical value. | `engine`, `errors`, `locations`, `metrics`, `types`, causet-model |
+| `native/engine/src/engine.rs` | The read-side engine seam (ADR-0019), as `src/engine.js` defines it. | `environment`, `errors`, `metrics`, `text`, `types`, causet-model |
+| `native/engine/src/environment.rs` | The user-facing environment variables, read as the JavaScript CLI's `src/environment.js` read them (ADR-0039 §5): `CAUSET_<name>` when present, even empty. | None |
+| `native/engine/src/errors.rs` | `CliError` as the Git engine raises it: a message, a published code from the error vocabulary (ADR-0021), details, and the exit code. | causet-model |
+| `native/engine/src/git.rs` | The Git engine: the Git implementation of every operation in the catalog, as `src/git.js` implements it. | `engine`, `errors`, `process`, `session`, `text`, `types` |
+| `native/engine/src/lib.rs` | The Git engine the ported commands share (issue #143, ADR-0037), ported from `src/git.js` and `src/engine.js`; the only engine since #243: | None |
+| `native/engine/src/locations.rs` | Where causet keeps what it stores (ADR-0039 §1, §3), decided as `src/locations.js` decides it: from files alone, except in a reftable repository, whose refs cost one listing. | `engine`, `errors`, `text`, `types` |
+| `native/engine/src/merge_tree.rs` | The merge-tree session of ADR-0016: one `git merge-tree --stdin` process reused for every clean step of a forecast. | `environment`, `metrics`, `session`, `text`, causet-model |
+| `native/engine/src/metrics.rs` | Git metrics, trace lines and session diagnostics, as `src/git.js` keeps them: every active collector sees every Git process, session query and cache hit, every engine fallback, every native read and every direct read. | `engine`, `environment`, `text`, causet-model |
+| `native/engine/src/native.rs` | The gitoxide backend: the five operations `causet-core` is qualified for (ADR-0027), with the checks the JavaScript CLI applied around its N-API binding until #243. | `engine`, `text`, `types`, causet-core |
+| `native/engine/src/process.rs` | One Git process, as `runGit` in `src/git.js` launches it: the caller's environment plus `GIT_TERMINAL_PROMPT=0`, captured output, metrics, the object-session invalidation after a successful mutation, and the bypass rule of ADR-0019. | `engine`, `errors`, `metrics`, `session`, `text`, causet-model |
+| `native/engine/src/session.rs` | The invocation-scoped object session (ADR-0009): one persistent `git cat-file --batch-command` process per repository, answering `info` and `contents` queries for the life of a `with_object_session` call. | `environment`, `errors`, `metrics`, `text`, causet-model |
+| `native/engine/src/text.rs` | The JavaScript string operations the Git engine applies to Git's output, reproduced exactly: `String.prototype.trim`, `split(/\r?\n/)`, `split(/\s+/)`, `Number(text)`, the default `Array.prototype.sort`, the `Change-Id` trailer expression, and `path.resolve` / `path.join`. | None |
+| `native/engine/src/types.rs` | What the cataloged operations return, and `canonicalValue` of each: the JSON `src/engine.js` digests for the engine differential, with members sorted, `undefined` as `null`, and bytes as `{ bytes, sha256 }`. | `text`, causet-model |
+| `native/cli/src/audit.rs` | `cst audit identity`: the repository-wide identity audit of `src/identity-audit.js` (FR-ID-06) and its rendering in `src/cli.js`. | `notes`, causet-engine, causet-model |
+| `native/cli/src/capabilities.rs` | `cst capabilities` and `cst capabilities --against`, as `src/capabilities.js` and the formatters in `src/cli.js` answer them (ADR-0033). | `envelope`, `lineage`, causet-engine, causet-model |
+| `native/cli/src/cherry_pick.rs` | `cst cherry-pick`: `cherryPick` of `src/operations.js`, with the identity model's origin choice and coverage check. | `audit`, `host`, `metadata`, `notes_write`, `notes`, `provenance`, causet-engine, causet-model |
+| `native/cli/src/commit.rs` | `cst commit`: `createCommit` of `src/operations.js` with the declared provenance of `src/provenance.js`. | `host`, `notes_write`, `parsed`, causet-engine, causet-model |
+| `native/cli/src/dispose.rs` | `cst metadata dispose <record-id> --keep-local\|--replace-local`: `disposeConflict` of `src/dispositions.js`, with the parked-record reader and the disposition registry of `src/quarantine.js` (ADR-0030). | `envelope`, `host`, `metadata`, `notes_write`, `store`, causet-engine, causet-model |
+| `native/cli/src/doctor.rs` | `cst doctor`, as `src/cli.js` answers it. | `migration`, `parsed`, causet-engine, causet-model |
+| `native/cli/src/envelope.rs` | Reading a metadata envelope, as `readEnvelope` in `src/metadata-envelope.js` validates one: every check in its order, with the same refusals. | causet-engine, causet-model |
+| `native/cli/src/environment.rs` | The user-facing environment variables, read as `src/environment.js` reads them (ADR-0039 §5): `CAUSET_<name>` when present, even empty. | None |
+| `native/cli/src/export.rs` | `cst metadata export <directory>`: `exportMetadata` of `src/metadata-transfer.js` with the manifest of `src/metadata-envelope.js`. | `envelope`, `metadata`, `notes_write`, causet-engine, causet-model |
+| `native/cli/src/forecast.rs` | `cst forecast` and `cst workspace forecast`: `forecastReconciliation` and `forecastWorkspaces` of `src/forecasts.js`, the plan simulator they drive under either forecast engine (ADR-0016), and `formatForecast` of `src/cli.js`. | `envelope`, `export`, `host`, `plan`, `rebase_program`, `records`, `resolve`, `spec`, `target_overlay`, `workspaces`, causet-engine, causet-model |
+| `native/cli/src/front.rs` | The command front end: everything `main` in `src/cli.js` decides before a command touches the repository. | `parsed` |
+| `native/cli/src/host.rs` | What the notes lock and record ids need from the operating system, as Node provides it: `os.hostname()`, `process.kill(pid, 0)`, `randomBytes`, and the test hooks of `src/faults.js`. | causet-model |
+| `native/cli/src/import.rs` | `cst metadata import <directory> --dry-run\|--apply [--park-conflicts]`: `importMetadata` of `src/metadata-transfer.js`, with the parking of `src/quarantine.js` (ADR-0030). | `envelope`, `export`, `lineage`, `metadata`, `notes_write`, causet-engine, causet-model |
+| `native/cli/src/json.rs` | The failure envelope (ADR-0021) for a front-end refusal, rendered by the shared record model so every command writes the same bytes. | `front`, causet-model |
+| `native/cli/src/landing.rs` | `cst branch` and the landings `cst merge`, `compact-merge` and `hard-squash`: `src/cli.js` and `land` of `src/landings.js`. | `host`, `notes_write`, `provenance`, causet-engine, causet-model |
+| `native/cli/src/lineage.rs` | Repository lineage, as `src/metadata.js` states and compares it (`repositoryLineage`, `lineageIdentityId`, `lineageRelation`). | causet-engine, causet-model |
+| `native/cli/src/main.rs` | `cst`, the Rust command-line interface (ADR-0037). | causet-engine |
+| `native/cli/src/metadata.rs` | `cst metadata status` and `cst metadata validate`: the metadata inventory of `src/metadata.js` (`metadataSnapshot`, `publicStatus`), taken under one object session, with every validator in the JavaScript order so the same diagnostics arise, and the same Git processes run, at the same points. | `envelope`, `lineage`, `migration`, `records`, `store`, causet-engine, causet-model |
+| `native/cli/src/migration.rs` | `src/migration.js`: the state `cst doctor` shows, and `cst migrate`, which moves a repository's metadata from the names used before issue #159 to the current ones (ADR-0039 §3). | `envelope`, `spec`, `store`, causet-engine, causet-model |
+| `native/cli/src/native.rs` | Running a command once the front end has decided it: the part of `main` in `src/cli.js` after the front end, and the error reporting of `bin/cst.js` (ADR-0021), which it ported. | `audit`, `capabilities`, `cherry_pick`, `commit`, `dispose`, `doctor`, `export`, `forecast`, `import`, `landing`, `metadata`, `migration`, `notes`, `parsed`, `plan`, `proof`, `provenance`, `rebase_forecast`, `rebase`, `reconcile`, `records`, `resolve`, `retain`, `scale_benchmark`, `spec`, `store`, `workspaces`, causet-engine, causet-model |
+| `native/cli/src/notes.rs` | Reading causal notes, as `src/notes.js` reads them: one note parser shared by every reader, and the batched catalog reads (`readNotes`, `listNoteRecords`). | causet-engine, causet-model |
+| `native/cli/src/notes_write.rs` | Writing causal notes: the notes lock and `appendNote` of `src/notes.js`, and the note and retention carriers of `src/git-carriers.js`. | `envelope`, `host`, `store`, causet-engine, causet-model |
+| `native/cli/src/parsed.rs` | A command's arguments as `parseArgs` in `src/cli.js` returns them. | None |
+| `native/cli/src/plan.rs` | `cst merge-plan` and `cst rebase-plan`: the causal planners of `src/merge-plan.js` and `src/rebase-plan.js`, with the topology analysis of `src/rebase-topology.js`, the declared interactive program of `src/rebase-interactive.js`, and their renderings. | `metadata`, causet-engine, causet-model |
+| `native/cli/src/proof.rs` | `cst proof-bundle` and `cst verify-proof`: the portable proof bundle of `src/proof-bundle.js` and the Git bindings of `src/proof-binding.js`, with the command handling and rendering in `src/cli.js`. | `envelope`, `lineage`, `metadata`, `plan`, `records`, `spec`, `store`, causet-engine, causet-model |
+| `native/cli/src/provenance.rs` | `cst provenance`: the declared provenance of commits, read from their notes and never derived (FR-TRUST-04), as `src/cli.js` and `src/provenance.js` answer it. | `commit`, `notes_write`, `notes`, `parsed`, `records`, causet-engine, causet-model |
+| `native/cli/src/rebase.rs` | `cst rebase`: `src/rebase-operations.js`, the journaled causal rebase. | `envelope`, `forecast`, `host`, `notes_write`, `plan`, `provenance`, `rebase_forecast`, `rebase_program`, `reconcile`, `records`, `resolve`, `spec`, `target_overlay`, causet-engine, causet-model |
+| `native/cli/src/rebase_forecast.rs` | `cst rebase-forecast`: `forecastRebase` and `formatRebaseForecast` of `src/rebase-forecast.js`, a prediction of a causal rebase simulated away from the caller's worktree and saved for `cst rebase --use-forecast`. | `forecast`, `host`, `plan`, `records`, `resolve`, `spec`, `store`, `target_overlay`, causet-engine, causet-model |
+| `native/cli/src/rebase_program.rs` | The program a causal rebase runs, and the messages it commits: `rebaseProgram` of `src/forecasts.js`, `resolveStepParents` and `recreatedMergeMessage` of `src/rebase-topology.js`, and the message helpers of `src/rebase-interactive.js` (ADR-0034, ADR-0035). | causet-engine, causet-model |
+| `native/cli/src/reconcile.rs` | `cst reconcile`: starting a reconciliation, reporting on one, continuing one and aborting one, as `reconcile`, `reconciliationStatus`, `continueReconciliation` and `abortReconciliation` of `src/operations.js` do, with the journal of `src/reconcile-state.js`, `forecastForPlan` of `src/forecasts.js`, `publishResolution` of `src/resolutions.js`, and their renderings in `src/cli.js`. | `envelope`, `forecast`, `host`, `notes_write`, `notes`, `plan`, `provenance`, `records`, `resolve`, `spec`, `store`, `target_overlay`, `workspaces`, causet-engine, causet-model |
+| `native/cli/src/records.rs` | The human renderings of causal records in `src/cli.js`: `formatReceipts` (for `cst receipts`) and `formatCausalEdges` (for `cst graph`). | causet-engine, causet-model |
+| `native/cli/src/resolve.rs` | `cst resolve`: the retained resolution catalog of `src/resolutions.js` (`listResolutionRecords`), the pending operation's conflicts (`pendingResolutionStatus`), and the explicit decisions on them (`applyResolution` and `rejectResolution`), with their renderings in `src/cli.js`. | `envelope`, `metadata`, `notes`, `records`, `spec`, `store`, causet-engine, causet-model |
+| `native/cli/src/retain.rs` | `cst metadata retain`: the retention backfill of `src/retention.js`. | `host`, `metadata`, `notes_write`, causet-engine, causet-model |
+| `native/cli/src/scale_benchmark.rs` | `cst metadata benchmark`: `benchmarkRepositoryScale` of `src/scale-benchmark.js` and `formatScaleBenchmark` of `src/cli.js`. | `envelope`, `export`, `metadata`, `notes_write`, `notes`, `reconcile`, `resolve`, `workspaces`, causet-engine, causet-model |
+| `native/cli/src/spec.rs` | `cst spec show` and `cst spec status`: specification manifests as `src/specs.js` materializes them, and the semantic three-way merge planner a pending operation's conflicted Markdown runs through (`planSpecMerge`). | `envelope`, `export`, `host`, `records`, `resolve`, `store`, causet-engine, causet-model |
+| `native/cli/src/store.rs` | Local state files, read as `src/store.js` reads them. | `envelope`, causet-engine, causet-model |
+| `native/cli/src/target_overlay.rs` | Target overlays (ADR-0028), the uncommitted work a target workspace has captured in a checkpoint: `src/target-overlay.js`, from resolving and predicting an overlay for a forecast to carrying it through an application and putting it back. | `envelope`, `export`, `workspaces`, causet-engine, causet-model |
+| `native/cli/src/workspaces.rs` | `cst workspace` (every subcommand but `forecast`, which is in `forecast.rs`): `src/workspaces.js` and the registry lock of `src/workspace-lock.js`. | `envelope`, `export`, `host`, `notes_write`, `spec`, `store`, causet-engine, causet-model |
+| `bin/native/cst.exe` | The `cst` command as published (ADR-0038 §2). | `platform.js` |
+| `bin/native/platform.js` | Where the prebuilt `cst` executable for this host lives, and whether it is the one this package was released with (ADR-0038 §2, §5, §6). | None |
+| `bin/native/preinstall.js` | The main package's `preinstall` step (ADR-0038 §2): copy the platform package's executable over `cst.exe`, which until now is the Node launcher. | `platform.js` |
 <!-- generated:modules:end -->
+
+Most header comments name the JavaScript module the Rust file ported (`src/…`,
+`bin/cst.js`). Those files were removed by #243 and remain readable at the
+[v0.23.0 tag](https://github.com/jwh3times/causet/tree/v0.23.0); the names are
+kept as the port's lineage, and the behavior the suites hold is the Rust file's.
 
 Supporting test and maintenance tools:
 
@@ -178,14 +204,22 @@ Supporting test and maintenance tools:
 | --- | --- | --- |
 | `test/*.test.js` | Disposable-repository end-to-end contract suite (`integration.test.js`) and the focused suites [testing.md](testing.md) describes: schema catalog, canonical JSON, conformance, compatibility, hostile input, failure boundary, error envelope, provenance, object format, and repository hygiene | CLI and Git |
 | `test-support/git-environment.js` | The isolated Git environment every suite file imports: no system configuration and an empty global one; outside `test/` because `node --test` would run it as a test file | `node:test` |
+| `test/fixtures/oracle/*.json` | The retired JavaScript CLI's answers, frozen in #243, that the Rust model, engine, and CLI suites are still held to (`test-support/oracle-vectors.js`) | Model, engine, and CLI probes |
 | `scripts/*.mjs` | Reproducible user experiments and performance comparisons | Published CLI behavior |
 
-The code is intentionally dependency-free. Domain modules use synchronous APIs
-so a CLI command has a linear, auditable control flow. The Git session worker
-contains the asynchronous streaming boundary without converting the domain
-layer to promises. Domain modules read the repository only through
-`src/engine.js` and mutate it only through `runGit` from `src/git.js`; the
-"Git adapter" dependency named below means that pair (§14.4).
+The code is a Cargo workspace of four crates: `native/core` (`causet-core`,
+bounded read-only object acquisition through gitoxide), `native/model` (the
+record model), `native/engine` (the Git engine), and `native/cli` (the `cst`
+executable, one module per command family). Third-party crates are limited to
+gitoxide and crates it already brings into the workspace (pinned in
+`native/Cargo.lock`). Command modules are synchronous, so a CLI command has a
+linear, auditable control flow; the object and merge-tree sessions keep their
+streaming in reader threads behind a synchronous request
+(`native/engine/src/session.rs`, `native/engine/src/merge_tree.rs`). Command
+modules read the repository only through the engine seam
+(`native/engine/src/engine.rs`) and mutate it only through `run_git`
+(`native/engine/src/process.rs`); the "Git adapter" of §14 means that pair
+(§14.4).
 
 ## 4. State and identity model
 
@@ -274,7 +308,7 @@ identity belongs in tracked files.
 | Notes lock | Shared repository installation | `<common-git-dir>/causet/notes.lock` | Held for one append or one import; abandoned when its holder is gone (§15.4) |
 | Workspace registry lock | Shared repository installation | `<common-git-dir>/causet/workspaces.lock` | Held across one registry mutation and its Git operations; abandoned claims require recovery with all writers stopped (§12) |
 | Spec identity manifest | Tracked/repository portable | `.causet/specs/<source>.json` | Versioned with Markdown |
-| Persistent object session | One CLI invocation and worktree | Memory plus worker process | Closed at invocation end |
+| Persistent object session | One CLI invocation and worktree | Memory plus one `git cat-file` child process | Closed at invocation end |
 
 An ordinary clone's default refspec fetches branches, not
 `refs/notes/causet` or `refs/causet/*`. A complete causal read needs both:
@@ -292,7 +326,10 @@ Validated metadata envelopes remain the supported transfer path between
 clones; a direct ref fetch does not perform envelope validation, conflict
 preview, or quarantine.
 
-`src/store.js` writes JSON through a temporary file and same-directory rename.
+Every local JSON state file (journals, forecasts, registries) is written
+through a temporary file and same-directory rename (for example `write_journal`
+in `native/cli/src/spec.rs` and `save_workspaces` in
+`native/cli/src/workspaces.rs`); `native/cli/src/store.rs` reads them.
 Worktree-private paths are derived from `git rev-parse --git-dir`; shared paths
 are derived from `--git-common-dir`. This distinction is required for linked
 worktree correctness.
@@ -335,28 +372,28 @@ Command and automation output shapes (outside the persisted-family registry):
 
 | Schema | Purpose | Primary owner |
 | --- | --- | --- |
-| `causet.merge-plan/v1` | Source/target coverage plan | `merge-plan.js` |
-| `causet.proof-bundle/v1` | Merge plan plus the evidence its classification rests on, for an independent verifier | `proof-bundle.js` |
-| `causet.proof-verification/v1` | Integrity, classification, and repository verification result of a proof bundle | `proof-bundle.js` |
-| `causet.rebase-plan/v3` | Read-only causal rebase selection, preserved merge topology, shape constraints, and the declared interactive program | `rebase-plan.js` |
-| `causet.checkpoint/v1` | Checkpoint command result | `workspaces.js` |
-| `causet.workspace-prune/v1` | Preview/apply stale-path prune result | `workspaces.js` |
-| `causet.spec-merge-plan/v2` | Deterministic three-way semantic plan | `specs.js` |
-| `causet.spec-benchmark/v3` | Generated corpus measurements | `specs.js` |
-| `causet.repository-scale-benchmark/v1` | Disposable repository/shared-metadata volume, scan, raw-Git floor, process-amplification, and decision measurements | `scale-benchmark.js` |
-| `causet.metadata-status/v1` | Deterministic repository metadata inventory | `metadata.js` |
-| `causet.metadata-validation/v1` | Inventory plus strict/non-strict validity result | `metadata.js` |
-| `causet.metadata-export/v1` | Export result and process/storage metrics | `metadata-transfer.js` |
-| `causet.metadata-import-preview/v1` | Exact dry-run record/ref/object actions | `metadata-transfer.js` |
-| `causet.metadata-import/v1` | Applied/idempotent import result | `metadata-transfer.js` |
-| `causet.metadata-retention/v1` | Historical retention preview/apply counts, refs, and diagnostics | `retention.js` |
-| `causet.engine-differential/v1` | Operation-by-operation read-engine comparison | `engine.js` |
-| `causet.identity-audit/v1` | Repository-wide identity collision and duplicate-origin audit | `identity-audit.js` |
-| `causet.error/v1` | Failure envelope printed on stdout under `--json`, with a code from the closed vocabulary in `docs/schemas/errors.md` (ADR-0021) | `errors.js` |
+| `causet.merge-plan/v1` | Source/target coverage plan | `native/cli/src/plan.rs` |
+| `causet.proof-bundle/v1` | Merge plan plus the evidence its classification rests on, for an independent verifier | `native/cli/src/proof.rs` |
+| `causet.proof-verification/v1` | Integrity, classification, and repository verification result of a proof bundle | `native/cli/src/proof.rs` |
+| `causet.rebase-plan/v3` | Read-only causal rebase selection, preserved merge topology, shape constraints, and the declared interactive program | `native/cli/src/plan.rs` |
+| `causet.checkpoint/v1` | Checkpoint command result | `native/cli/src/workspaces.rs` |
+| `causet.workspace-prune/v1` | Preview/apply stale-path prune result | `native/cli/src/workspaces.rs` |
+| `causet.spec-merge-plan/v2` | Deterministic three-way semantic plan | `native/cli/src/spec.rs` |
+| `causet.spec-benchmark/v3` | Generated corpus measurements | `native/cli/src/spec.rs` |
+| `causet.repository-scale-benchmark/v1` | Disposable repository/shared-metadata volume, scan, raw-Git floor, process-amplification, and decision measurements | `native/cli/src/scale_benchmark.rs` |
+| `causet.metadata-status/v1` | Deterministic repository metadata inventory | `native/cli/src/metadata.rs` |
+| `causet.metadata-validation/v1` | Inventory plus strict/non-strict validity result | `native/cli/src/metadata.rs` |
+| `causet.metadata-export/v1` | Export result and process/storage metrics | `native/cli/src/export.rs` |
+| `causet.metadata-import-preview/v1` | Exact dry-run record/ref/object actions | `native/cli/src/import.rs` |
+| `causet.metadata-import/v1` | Applied/idempotent import result | `native/cli/src/import.rs` |
+| `causet.metadata-retention/v1` | Historical retention preview/apply counts, refs, and diagnostics | `native/cli/src/retain.rs` |
+| `causet.engine-differential/v1` | Operation-by-operation read-engine comparison | `native/engine/src/differential.rs` |
+| `causet.identity-audit/v1` | Repository-wide identity collision and duplicate-origin audit | `native/cli/src/audit.rs` |
+| `causet.error/v1` | Failure envelope printed on stdout under `--json`, with a code from the closed vocabulary in `docs/schemas/errors.md` (ADR-0021) | `native/model/src/errors.rs` |
 
 The executable validators and named object shapes of the Rust record model
-(`native/model`: `schemas.rs` and `registry.rs`) are the runtime authority
-since #243, which retired `src/schemas.js` from that role. Every family above, and the CLI's
+(`native/model`: `schemas.rs` and `registry.rs`) are the runtime authority.
+Every family above, and the CLI's
 JSON output contracts, are additionally published as standalone JSON Schema
 documents in the [schema catalog](schemas/README.md);
 `test/schema-catalog.test.js` fails the suite when a document and its
@@ -386,8 +423,8 @@ Completed reconciliation and rebase receipts contain
 metrics cover application-queue scopes, excluding planning, finalization,
 publication, and cleanup; they are not whole-command telemetry.
 
-`buildMergePlan(sourceRef)` performs these steps inside an optional Git object
-session:
+`merge_plan` (`native/cli/src/plan.rs`) performs these steps inside an optional
+Git object session:
 
 1. Resolve exact target and source commits.
 2. Compute their physical merge base.
@@ -440,8 +477,8 @@ because they establish different things:
 | `classification` | a `status` or `proof` that does not follow from the stated evidence, inconsistent summary counts, or duplicate commits, even when the hash was restated | no |
 | `repository` | fabricated evidence, incomplete or misidentified source history, and false counts or physical/effective bases | yes |
 
-The verifier applies its own copy of the lattice (`PROOF_RULES` in
-`src/proof-bundle.js`) rather than importing the planner's branch: a verifier
+The verifier applies its own copy of the lattice (`classify` in
+`native/cli/src/proof.rs`) rather than importing the planner's branch: a verifier
 sharing the planner's code would prove only that the code is self-consistent.
 It independently reads the ordered physical-base-to-source commit range through
 the engine seam, checks every commit's logical ID (including `git:<oid>` fallback)
@@ -470,9 +507,9 @@ unrelated target. Note contents are read in a batch after the reachability walk.
 
 ### 7.3 Read-only causal rebase plan
 
-`buildMergePlanBetween(ontoRef, sourceRef)` exposes the same proof lattice for
-an explicit target without switching `HEAD`. `buildRebasePlan` wraps that
-classification as `causet.rebase-plan/v3`:
+`build_merge_plan_between` (`native/cli/src/plan.rs`) exposes the same proof
+lattice for an explicit target without switching `HEAD`. `rebase_plan` wraps
+that classification as `causet.rebase-plan/v3`:
 
 - covered changes become `omit` actions with exact proofs;
 - candidate-equivalent changes become `review` and cannot enter the replay
@@ -504,13 +541,14 @@ before and after repeated planning.
 
 ### 7.4 Causal rebase forecast
 
-`forecastRebase` builds the exact rebase plan, refuses merge topology outside
+`forecast_rebase` (`native/cli/src/rebase_forecast.rs`) builds the exact rebase plan, refuses merge topology outside
 ADR-0034's v1 scope, and adapts the shared forecast simulator to start at
 `ontoHead`. A linear plan hands it the ordered `action: replay` queue, exactly
 as before. A merge-preserving plan hands it the whole rewrite program — the
 picks, the recreated merges, and the commits that collapse out — and each step
 states the parent it applies onto, because a program with merges jumps between
-lines. `src/rebase-topology.js` builds that program and resolves its parents,
+lines. `rebase_program` and `resolve_step_parents`
+(`native/cli/src/rebase_program.rs`) build that program and resolve its parents,
 and the forecast and the application call the same resolver, so the two cannot
 disagree by construction. Clean steps are labeled `causal-rebase`; conflict
 adaptations retain the exact/spec-aware simulation logic and are labeled
@@ -538,12 +576,13 @@ resolution settles it, anything else pauses in the journaled
 `awaiting-absorption` state, and the absorption cursor is recorded so a resume
 folds in the change that stopped rather than re-applying what came before it.
 
-`src/rebase-interactive.js` owns the declaration and its refusals, and mints no
-identity and reads no repository: the plan hands it a resolver so every
-expression is resolved through the session already open. Two note record
+`declared_interactive_actions` and `resolve_interactive_program`
+(`native/cli/src/plan.rs`) own the declaration and its refusals, and mint no
+identity: every expression is resolved through the engine seam inside the
+session the plan already holds. Two note record
 families carry what the identity-bearing actions produce. A
 `causet.amendment/v1` records that an identity's content diverged under an
-`edit`, and `src/merge-plan.js` reads it to downgrade a bare `Change-Id` match
+`edit`, and the merge planner (`native/cli/src/plan.rs`) reads it to downgrade a bare `Change-Id` match
 from `covered` to `candidate-equivalent` — the single change to the coverage
 lattice, and one that only ever weakens a conclusion. A
 `causet.interactive-absorption/v1` records which identities a surviving commit
@@ -552,7 +591,7 @@ comes from the record rather than from a second trailer on the commit.
 
 ### 7.5 Supervised causal rebase application
 
-`startRebase` operates only on the current named branch with a clean worktree.
+`start_rebase` (`native/cli/src/rebase.rs`) operates only on the current named branch with a clean worktree.
 It rebuilds the exact plan, rejects stale or incomplete forecast approval before
 mutation, writes `causet.rebase-operation/v3`, resets the branch to `ontoHead`,
 and cherry-picks only the ordered replay queue. Every forecasted step must
@@ -689,8 +728,8 @@ simulator with the reason recorded in the forecast. The engine needs Git
 2.49, the first version whose `merge-tree --stdin` flushes each record
 before reading the next request (bare tree operands date from 2.45 and
 `GIT_ATTR_SOURCE` from 2.43). The session process runs with
-`GIT_TRACE2_EVENT=2`, so its trace2 `version` event reaches the worker on
-stderr before Git reads any input; on older Git the worker refuses the first
+`GIT_TRACE2_EVENT=2`, so its trace2 `version` event reaches the session on
+stderr before Git reads any input; on older Git the session refuses the first
 request and the forecast records a `git-too-old` fallback naming that
 version, so the check costs no Git process on any path and never waits for
 the session timeout. Git's own stderr messages are kept apart from the
@@ -901,7 +940,7 @@ operations or protect against external Git removal/pruning.
 Registry writers (create, move, archive, restore, repair, and prune with
 `--apply`) take one shared lock **before reading registry or branch state**
 and retain it through validation, materialization, and the atomic JSON rename.
-`saveWorkspaces` requires that lock. Thus a contender always reads the latest
+`save_workspaces` (`native/cli/src/workspaces.rs`) requires that lock. Thus a contender always reads the latest
 published registry after the preceding writer finishes. Listing, checkpoint
 lookup, and prune previews read an atomic registry snapshot without locking.
 The lock serializes cooperating cst registry writers; older builds without
@@ -1030,7 +1069,8 @@ plan pins all input stage fingerprints and output Markdown/manifest hashes.
 ### 13.5 Integration with reconciliation
 
 Git commonly reports a conflict in the tracked sidecar even when Markdown
-blocks are independent. During forecast or a paused operation, `specs.js` reads
+blocks are independent. During forecast or a paused operation, the spec merge
+planner (`plan_spec_merge` in `native/cli/src/spec.rs`) reads
 the base/target/source Markdown and manifests in batches, builds a semantic
 plan, and exposes it as a deterministic decision. A forecast can pin and later
 authorize it. Without a forecast, `cst spec resolve` stages the explicit
@@ -1041,7 +1081,7 @@ Markdown and records `accepted` or `modified`.
 
 ### 14.1 Ordinary adapter
 
-`runGit(args, options)` uses argument arrays, controlled environment merging,
+`run_git(args, options)` (`native/engine/src/process.rs`) uses argument arrays, controlled environment merging,
 bounded buffers, explicit binary/text handling, and optional expected failure.
 Successful mutation commands invalidate any active object session. Active
 metric collectors record logical query count, process launches, duration,
@@ -1059,22 +1099,24 @@ Git directory as the current linked worktree's private Git directory.
 ### 14.2 Invocation-scoped session
 
 On Windows by default, or with `--git-session`/`CAUSET_GIT_SESSION=1`, a domain
-operation may open one `GitObjectSession` keyed by resolved worktree path. The
-session is initially only a scope and cache; its worker starts lazily when the
+operation may open one object session (`with_object_session` in
+`native/engine/src/session.rs`) keyed by resolved worktree path. The session is
+initially only a scope and cache; its child process starts lazily when the
 first uncached object request is ready, after synchronous preflight commands
-have completed. The worker thread owns:
+have completed. That child process is:
 
 ```text
 git cat-file --batch-command
 ```
 
-The synchronous main thread submits `info` or `contents` queries through a
-bounded shared-memory channel. The worker serializes requests and parses the
-streaming response. An unexpected Git exit rejects every pending request so the
-caller can fall back. Shutdown closes the batch-command input and waits for the
-child `close` event—after stdio drains—before acknowledging the caller. Bounded
-Windows process-tree termination and worker acknowledgement fallbacks prevent a
-failed close from retaining the CLI or leaving a session worker behind.
+The caller writes each `info` or `contents` query to the process's input and
+waits, within a fixed timeout, for the answers a reader thread parses from the
+streaming response; each response is held to a bounded size (1 MiB for `info`,
+64 MiB for `contents`). An unexpected Git exit fails the request, which
+disables the session so the caller falls back to ordinary processes. Shutdown
+closes the batch-command input, gives Git two seconds to exit, and then ends
+it (the whole process tree on Windows), so a failed close can neither retain
+the CLI nor leave a session process behind.
 
 Within an active object session, `listNoteEntries` reads the notes ref's tree
 and its two-hex-digit fanout directories through the same process used for
@@ -1093,20 +1135,19 @@ remains responsible for its duplicate-note concatenation behavior, which can
 create a combined blob even during listing. No partial catalog is returned.
 Without an active session the ordinary listing command is used directly.
 
-Opt-in lifecycle diagnostics record session/worker creation, request posting,
-shared-memory waits, Git request/response events, fallback, and shutdown.
-`CAUSET_GIT_SESSION_DIAGNOSTICS=1` writes one JSON line per event to stderr from
-the main thread (`[cst session]`, which also covers the merge-tree session
-below) and from the object-session worker (`[cst session-worker]`), and
+Opt-in lifecycle diagnostics record session creation, requests, cache hits,
+Git request/response events, fallback, and shutdown.
+`CAUSET_GIT_SESSION_DIAGNOSTICS=1` writes one JSON line per event to stderr,
+prefixed `[cst session]` (which also covers the merge-tree session below), and
 `CAUSET_GIT_SESSION_DIAGNOSTICS_FILE=<path>` additionally appends the same lines
 to that file, with a failed append ignored so diagnostics can never change
 session behaviour. They are disabled during normal operation and are intended
 for bounded process-tree investigation.
 
 The merge-tree forecast engine reuses the same shape: a `MergeTreeSession`
-whose worker owns one `git merge-tree --stdin` process for the forecast,
-answers each merge through the shared-memory channel, records merges as the
-synthetic `merge-tree-session` command with one counted process, and is
+(`native/engine/src/merge_tree.rs`) owns one `git merge-tree --stdin` process
+for the forecast, answers each merge through a reader thread, records merges
+as the synthetic `merge-tree-session` command with one counted process, and is
 closed within the same bounds when the simulation ends.
 
 ### 14.3 Cache and safety rules
@@ -1122,7 +1163,7 @@ closed within the same bounds when the simulation ends.
 - The session ends with the enclosing invocation; there is no background daemon
   or cross-command lock.
 - Closing or disabling a session waits only within fixed bounds and always
-  terminates the worker afterward.
+  terminates the Git process afterward.
 
 The ordinary path remains both fallback and semantic oracle. Equality matters
 more than raw wall time.
@@ -1130,39 +1171,45 @@ more than raw wall time.
 ### 14.4 Read-side engine seam
 
 Every repository read a domain module performs is one of the 44 operations
-cataloged in `src/engine.js`
+cataloged in `native/engine/src/engine.rs`
 ([ADR-0019](adr/0019-route-every-git-read-through-one-engine-seam.md)):
 repository and host context, object resolution and batched reads, history
 walks and commit metadata, refs and notes, and worktree, index, and status
-queries. `src/git.js` is the Git engine that implements each operation using
-ordinary Git processes or object-session queries. Introducing the seam
+queries. `native/engine/src/git.rs` is the Git engine that implements each
+operation using ordinary Git processes or object-session queries. Introducing the seam
 preserved process counts; the session notes traversal described above removes
 the separate listing process for supported trees. Composites such as
 `currentHead`, `changeIdForCommit`, and `assertClean` are derived from
 cataloged operations only. Mutations do not pass through the seam; they stay
-explicit `runGit` calls.
+explicit `run_git` calls.
 
 `CAUSET_ENGINE` or `--engine <git|native>` selects the read engine. `git` is
-the default everywhere and the oracle. `native` loads the optional Rust binding
-for the five resolution-catalog operations in ADR-0027. A missing prebuild reports
-`binding-missing` and every operation passes through to Git. When the
-selected engine lacks an operation or throws, the seam answers with Git and
-records the fallback with its reason: `unsupported` for an operation the
-binding does not implement, `unsupported-input` for an input it refuses by
+the default everywhere and the oracle. `native` selects the gitoxide backend
+(`native/engine/src/native.rs`, linked into `cst` with `causet-core`) for the
+five resolution-catalog operations in ADR-0027; see the
+[native engine](native-engine.md). An unavailable backend reports
+`binding-missing` and every operation passes through to Git; the backend is
+compiled in, so only the `CAUSET_TEST_NATIVE_BINDING=missing` test hook
+produces that reason. When the selected engine lacks an operation or fails,
+the seam answers with Git and records the fallback with its reason:
+`unsupported` for an operation the backend does not implement,
+`unsupported-input` for an input it refuses by
 design (a ref-rooted object name, a SHA-256 or reftable repository, an
 aliased path, command-scope configuration), and `native-error` for anything
-else, such as an exhausted budget or a malformed tree. `endGitMetrics` reports `engine`, the `fallbacks`
-aggregated per operation and reason, `nativeReads` counts, and `directReads`.
+else, such as an exhausted budget or a malformed tree. The metrics a collector
+returns (`metrics::end` in `native/engine/src/metrics.rs`) report `engine`, the
+`fallbacks` aggregated per operation and reason, `nativeReads` counts, and
+`directReads`.
 
 The bounded first native read increment is accepted in
 [ADR-0027](adr/0027-bound-native-read-engine-entry-by-the-resolution-catalog-budget.md)
 under the owner decision in #18, with dependency review recorded on #83 before
-code. [Native qualification](native-engine.md) requires available-binding tests
-to assert actual execution; fallback-only results do not qualify native performance.
+code. The [native engine](native-engine.md) tests assert actual native
+execution; fallback-only results do not qualify native performance.
 
-A read-only Git command that reaches `runGit` without the seam's private mark
+A read-only Git command that reaches `run_git` without the seam's private mark
 is a direct read: counted in `directReads`, traced, and refused in native
-mode. Two deliberate measurements are exempt, both marked `rawProbe`: the
+mode. Two deliberate measurements are exempt, both marked `raw_probe`: the
 doctor's process-cost probes, and the scale benchmark's raw-Git floors
 (issue #42). Both exist to measure what one Git process costs on this host,
 which is the one question the seam cannot answer about itself — routing them
@@ -1174,10 +1221,11 @@ object-session invalidation.
 `cst doctor --differential` runs every cataloged operation through each
 engine against the current repository, comparing result digests, process
 counts, and fallbacks operation by operation
-(`causet.engine-differential/v1`). Each probe uses only input shapes the
-native binding implements, such as OID-rooted object expressions, because an
-input it refuses falls back to Git and would put Git's answer on both sides;
-with a binding present, every operation it implements is compared natively.
+(`causet.engine-differential/v1`, `native/engine/src/differential.rs`). Each
+probe uses only input shapes the native backend implements, such as OID-rooted
+object expressions, because an input it refuses falls back to Git and would put
+Git's answer on both sides; with the backend available, every operation it
+implements is compared natively.
 The suite's `CAUSET_ENGINE=native` mode, one
 of the six modes [testing.md](testing.md) lists, proves that every read it
 exercises goes through the seam.
@@ -1230,7 +1278,7 @@ about which facts exist:
 
 1. **A conflicted fact contributes nothing, on both sides.** Neither copy proves
    coverage, serves as a resolution candidate, is displayed as provenance, or is
-   exported. `readCausalRecordCatalog` builds one conflict set from two sources:
+   exported. `read_causal_record_catalog` (`native/cli/src/metadata.rs`) builds one conflict set from two sources:
    an identifier duplicated inside the notes tree, and an identifier a parked
    incoming copy disputes.
 2. **Evidence reduces; nothing blocks.** The affected change is classified from
@@ -1442,7 +1490,7 @@ rather than refused. Bounds are the receiver's.
 
 `cst capabilities` prints the document and `cst capabilities --against` the
 report. Neither writes anything: in particular `capabilities` must not call
-`initLab`, because a command that states what a build can do has no business
+`init_lab` (`native/cli/src/store.rs`), because a command that states what a build can do has no business
 writing repository configuration.
 
 ### 15.2.1 Logical identity is not authentication
@@ -1467,7 +1515,8 @@ never denoted a verified signature and did not change this boundary.
 ### 15.4 What survives an interrupted publication
 
 Publication is the one stretch of a reconciliation that is not a single atomic
-act: several notes and refs move in sequence. `src/faults.js` names the points
+act: several notes and refs move in sequence. `fault_point` in
+`native/cli/src/host.rs` (the `CAUSET_TEST_FAULT` test hook) names the points
 where an interruption would be most damaging, and
 `test/failure-boundary.test.js` stops the process at each. What survives:
 
@@ -1494,11 +1543,12 @@ leaves inert records behind. They are not a correctness problem and
 history rewrite orphans records; they are also not collected.
 
 Publication is also the one stretch two worktrees can enter at once. Every
-record reaches the notes ref through a read-modify-write. `appendNote` builds
+record reaches the notes ref through a read-modify-write. `append_note`
+(`native/cli/src/notes_write.rs`) builds
 a candidate notes tree, preserving flat, fanned, and mixed layouts, and publishes
 notes and retention in one transaction that checks both previous tips. A new
 resolution ref participates in the same transaction. Foreign ref changes cause
-the transaction to refuse. `appendNote` and metadata import also hold
+the transaction to refuse. `append_note` and metadata import also hold
 one lock file, `<common-git-dir>/causet/notes.lock`, created exclusively
 the way Git creates its own lock files and costing no Git process. A lock
 whose holder is on this host and no longer running, or a minute-old lock
@@ -1508,7 +1558,7 @@ failure-boundary suite proves the window is closed by parking one publisher
 inside it with `CAUSET_TEST_GATE` while another runs.
 
 `refs/causet/retention` retains each published attachment and the typed closure
-specified by `referencedObjectsForRecord`. Its previous tip remains an ancestor
+specified by `referenced_objects` (`native/model/src/schemas.rs`). Its previous tip remains an ancestor
 of every new carrier. Objects survive branch deletion, reflog expiry, GC, note
 deletion, and operation abort; retention never substitutes for target ancestry.
 Before the checked transaction an interruption leaves only collectible candidate
@@ -1522,7 +1572,7 @@ idempotent. Missing objects remain quarantined and cause exit status 1, includin
 when valid facts were retained successfully. No automatic expiry or selective
 pruning is implemented; see [ADR-0025](adr/0025-retain-the-object-closure-of-published-causal-facts.md).
 
-`createCommit` acquires the same reentrant notes lock before `git commit` when
+`create_commit` (`native/cli/src/commit.rs`) acquires the same reentrant notes lock before `git commit` when
 actors are declared, retaining it through the provenance append. A refused lock
 therefore cannot create a commit or stage `--all` content. Commits with no actors
 skip the notes lock. Git failures release the claim without publishing a
@@ -1549,7 +1599,7 @@ lock without rewriting history.
 | Forecast result tree differs | Do not publish receipts; preserve abort path. |
 | Exact resolution is ambiguous | Require explicit record ID. |
 | Spec merge is ambiguous or metadata stale | Leave blocked; require manual edit/reindex. |
-| Persistent object worker fails | Mark session failed and use ordinary Git. |
+| Persistent object session process fails | Mark session failed and use ordinary Git. |
 | Merge-tree session fails or a forecast step is not clean | Discard the merge-tree attempt, rerun the whole queue in the worktree simulator, and record the reason in the forecast. |
 | Unknown/malformed/dangling causal record | Diagnose and quarantine it from coverage, resolution lookup, and export. |
 | A record identifier names more than one fact | Report `record-id-conflict` and exclude every copy from coverage, the resolution catalog, proof evidence, and export; the planner reads the whole notes tree so it applies the same rule as the validator (issue #87). |
@@ -1578,7 +1628,7 @@ lock without rewriting history.
 | Any failure under `--json` | Print a `causet.error/v1` envelope on stdout with a code from the closed vocabulary in `docs/schemas/errors.md`; stderr stays empty and the exit code is unchanged (ADR-0021). |
 
 Crash consistency between a successful Git mutation and a journal write is
-fault-injected at the named points of §15.4 (`src/faults.js`,
+fault-injected at the named points of §15.4 (`native/cli/src/host.rs`,
 `test/failure-boundary.test.js`): publication, the journal advance, and abort
 cleanup, for both reconciliation and causal rebase. Every other boundary is
 uncovered; production hardening must model and test process termination at
@@ -1599,7 +1649,7 @@ each of them.
 
 - Git is invoked without shell interpolation.
 - Object expressions reject newlines and protocol-breaking forms.
-- Output buffers and session shared-memory buffers are bounded.
+- Output buffers and session response sizes are bounded.
 - Every persisted record family has a published resource bound that is checked
   before the record is parsed and fails closed
   ([compatibility contract](schemas/compatibility.md) §4): an oversize
@@ -1628,7 +1678,8 @@ each of them.
 
 ## 18. Observability and benchmarks
 
-`beginGitMetrics`/`endGitMetrics` can nest around a domain phase. Reports include:
+Metric collectors (`metrics::begin`/`metrics::end` in
+`native/engine/src/metrics.rs`) can nest around a domain phase. Reports include:
 
 - logical command count;
 - actual process launches;
@@ -1718,11 +1769,12 @@ The current development baseline covers:
 - metadata validation and the resolution catalog agreeing on tag-pointing
   retention refs and bare-array notes, with an export/import round trip that
   carries a tag-pointing retention ref between clones.
-- the engine seam: no module other than the seam imports read operations
-  from the Git engine, unsupported or unavailable native operations pass through
+- the engine seam: the Git and gitoxide backends are private modules of
+  `native/engine`, so command modules reach them only through the seam;
+  unsupported or unavailable native operations pass through
   with recorded fallbacks and identical results, supported native operations
   assert actual execution, and a read outside the seam is
-  refused in native mode unless it is one of the two `rawProbe` measurements, the differential doctor reports every cataloged
+  refused in native mode unless it is one of the two `raw_probe` measurements, the differential doctor reports every cataloged
   operation equal, and invalid engine selections fail before any work.
 - the focused suites [testing.md](testing.md) describes: schema-catalog and
   compatibility agreement, canonical-JSON vectors, human/JSON conformance,
@@ -1822,13 +1874,15 @@ delivered as `workspace create --cone` (§12), and
 closed phase 0a by measuring and rejecting Git's read-side maintenance
 caches. The read-side engine seam of phase 0b is implemented
 ([ADR-0019](adr/0019-route-every-git-read-through-one-engine-seam.md), §14.4):
-every repository read is one of 43 cataloged operations, the native engine
+every repository read is one of 44 cataloged operations, the native engine
 is selectable with per-operation Git fallback, and the suite's `CAUSET_ENGINE=native`
 mode refuses any read outside the seam.
 The schema catalog, canonical-JSON profile, compatibility contract
 ([ADR-0020](adr/0020-freeze-per-family-compatibility-and-resource-bounds.md)),
 and conformance fixtures that complete phase 0b are delivered in v0.11.0.
-The five-operation optional binding is the bounded ADR-0027 increment;
+The five-operation gitoxide backend is the bounded ADR-0027 increment, and
+since #243 the whole CLI is the Rust executable
+([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md));
 the wider phase-1 exit criteria remain unmet. A canonical fact log with
 Git notes and refs as projections, private draft stacks, and any gateway
 remain behind Gate B, and
