@@ -2,9 +2,8 @@
 //! command touches the repository. It reproduces the JavaScript CLI's global
 //! flags, environment checks, help, version, generic option parsing, and each
 //! command's argument-only usage checks, in the same order, so those outcomes
-//! are answered natively byte for byte. Every command is ported, so nothing
-//! here chooses the JavaScript CLI: `Delegate` is only what
-//! `CAUSET_DELEGATE=always` asks for.
+//! are answered natively byte for byte. Every command is ported, so every
+//! invocation is answered here.
 
 use crate::parsed::{Opt, Parsed};
 
@@ -33,11 +32,6 @@ pub enum Outcome {
   /// command is not one of the two that answer there (ADR-0039 §8).
   Unmigrated {
     json: bool,
-  },
-  /// The JavaScript CLI answers, because `CAUSET_DELEGATE=always` asked for the
-  /// oracle (ADR-0037 §6).
-  Delegate {
-    command: String,
   },
   /// A ported command, answered by this CLI. `settings` are the variables its
   /// global flags select, as `setEnvironmentValue` would.
@@ -376,7 +370,7 @@ fn failure(message: &str, code: &'static str) -> Failure {
 }
 
 /// Each command's checks that `src/cli.js` makes from its arguments alone,
-/// before any repository access, in its order. `None` delegates.
+/// before any repository access, in its order. `None` when they pass.
 fn usage_check(command: &str, parsed: &Parsed, help: &str) -> Option<Failure> {
   let require = |present: bool, usage: &str| (!present).then(|| missing(usage));
   let p = |index| parsed.positional(index);
@@ -552,10 +546,6 @@ mod tests {
     }
   }
 
-  fn delegated(outcome: Outcome) -> bool {
-    matches!(outcome, Outcome::Delegate { .. })
-  }
-
   #[test]
   fn help_and_version_spellings() {
     for args in [
@@ -703,7 +693,7 @@ mod tests {
   }
 
   #[test]
-  fn nothing_is_delegated_by_the_front_end() {
+  fn the_front_end_answers_every_command() {
     // The input the JavaScript parser fails on by accident fails the same
     // way here, as prose even with --json.
     for args in [
@@ -719,7 +709,7 @@ mod tests {
       }
     }
     for args in [&["commit", "-m", "x"][..], &["spec", "benchmark"], &["migrate"]] {
-      assert!(!delegated(run(args)), "{args:?}");
+      assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
   }
 

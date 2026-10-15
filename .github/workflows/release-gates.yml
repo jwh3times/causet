@@ -65,7 +65,6 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then executable="$(cygpath -w "$executable.exe")"; fi
           "$executable" --version
           echo "CAUSET_CLI=$executable" >> "$GITHUB_ENV"
-          echo "CAUSET_DELEGATE=never" >> "$GITHUB_ENV"
       - name: Gate 4, every maintained demo completes
         run: |
           for demo in demo demo:conflict demo:resolution demo:forecast demo:spec demo:git-session; do

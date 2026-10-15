@@ -4,7 +4,7 @@
 
 use std::{env, ffi::OsString};
 
-pub fn value_os(name: &str) -> Option<OsString> {
+fn value_os(name: &str) -> Option<OsString> {
   env::var_os(format!("CAUSET_{name}"))
 }
 

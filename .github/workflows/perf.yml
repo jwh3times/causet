@@ -70,8 +70,8 @@ jobs:
           node scripts/build-native.mjs
       - name: Select implementations
         id: impls
-        # The workspace builds the Rust CLI, `cst` (#141), which answers what it
-        # has ported and delegates every other command to the JavaScript CLI.
+        # The workspace builds the Rust CLI, `cst` (#141), which answers every
+        # command itself.
         run: |
           for candidate in native/target/release/cst.exe native/target/release/cst; do
             if [ -f "$candidate" ]; then

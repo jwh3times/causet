@@ -1,11 +1,10 @@
 /**
  * The Rust CLI's native answers against the JavaScript oracle (ADR-0037, #141).
  *
- * The Rust `cst` answers every command itself (#212). This suite runs each
- * invocation through both CLIs, with the Rust CLI forbidden to delegate
- * (`CAUSET_DELEGATE=never`), and requires byte-identical stdout, stderr and exit
- * status, apart from what ADR-0037 §5 names. It then checks
- * `CAUSET_DELEGATE=always`, the one way left to reach the JavaScript CLI.
+ * The Rust `cst` answers every command itself (#212); it no longer delegates
+ * to the JavaScript CLI (#243). This suite runs each invocation through both
+ * CLIs and requires byte-identical stdout, stderr and exit status, apart from
+ * what ADR-0037 §5 names.
  *
  * This is the one suite that launches the JavaScript CLI directly rather than
  * through `test-support/cst-command.js`: the JavaScript CLI is the oracle here,
@@ -33,12 +32,12 @@ const rust = selectedCli && !/\.(?:c|m)?js$/.test(selectedCli)
   : fs.existsSync(built) ? built : null;
 const skip = rust ? false : "no Rust CLI build; run node scripts/build-native.mjs";
 
-// Outside any repository, so a delegated command cannot touch one.
+// Outside any repository, so a command cannot touch one.
 const outside = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-native-cli-")));
 after(() => fs.rmSync(outside, { recursive: true, force: true }));
 
 // The suite's mode variables would otherwise decide these cases for both sides.
-const neutral = { CAUSET_ENGINE: "", CAUSET_FORECAST_ENGINE: "", CAUSET_DELEGATE: "" };
+const neutral = { CAUSET_ENGINE: "", CAUSET_FORECAST_ENGINE: "" };
 
 function runOracle(args, env = {}) {
   return spawnSync(process.execPath, [oracle, ...args], {
@@ -54,12 +53,12 @@ function runRust(args, env = {}) {
   });
 }
 
-// Trace timings are the one volatile part of a delegated command's output.
+// Trace timings are the one volatile part of a traced command's output.
 const withoutTimings = (text) => text.replace(/^(\[cst trace\]) [\d.]+ms /gm, "$1 <ms> ");
 
-function assertSame(args, env = {}, rustEnv = { CAUSET_DELEGATE: "never" }) {
+function assertSame(args, env = {}) {
   const expected = runOracle(args, env);
-  const actual = runRust(args, { ...env, ...rustEnv });
+  const actual = runRust(args, env);
   const label = `${JSON.stringify(args)} ${JSON.stringify(env)}`;
   assert.equal(actual.error, undefined, label);
   assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
@@ -183,7 +182,7 @@ test("doctor is answered natively, as the JavaScript CLI answers it", { skip }, 
   for (const args of [["doctor"], ["doctor", "--differential"], ["--engine", "native", "doctor"]]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) cstPrefix();
-    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const actual = inRepo(rust, args);
     assert.equal(actual.status, 0, actual.stderr);
     assert.equal(actual.stderr, expected.stderr);
     const native = JSON.parse(actual.stdout);
@@ -230,7 +229,7 @@ test("capabilities is answered natively, byte for byte", { skip }, () => {
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) cstPrefix();
-    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const actual = inRepo(rust, args);
     const label = JSON.stringify(args);
     assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
     assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
@@ -291,7 +290,7 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) cstPrefix();
-    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const actual = inRepo(rust, args);
     const label = JSON.stringify(args);
     assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
     assert.equal(actual.stderr, expected.stderr, `stderr of ${label}`);
@@ -300,12 +299,12 @@ test("the record readers are answered natively, byte for byte", { skip }, () => 
   // Each implementation writes the same bundle bytes and verifies the other's.
   const oracleBundle = inRepo(process.execPath, [oracle, "proof-bundle", "HEAD~1"], {});
   if (rust === selectedCli) cstPrefix();
-  const rustBundle = inRepo(rust, ["proof-bundle", "HEAD~1"], { CAUSET_DELEGATE: "never" });
+  const rustBundle = inRepo(rust, ["proof-bundle", "HEAD~1"]);
   assert.equal(rustBundle.stdout, oracleBundle.stdout);
   const rustFile = path.join(outside, "rust-bundle.json");
   fs.writeFileSync(rustFile, rustBundle.stdout);
   assert.equal(inRepo(process.execPath, [oracle, "verify-proof", rustFile], {}).status, 0);
-  assert.equal(inRepo(rust, ["verify-proof", bundleFile], { CAUSET_DELEGATE: "never" }).status, 0);
+  assert.equal(inRepo(rust, ["verify-proof", bundleFile]).status, 0);
 });
 
 test("spec status plans a base whose manifest predates cst migrate, as the JavaScript CLI does (#183)", { skip }, () => {
@@ -350,7 +349,7 @@ test("spec status plans a base whose manifest predates cst migrate, as the JavaS
     const expected = oracleIn(args);
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: repo, encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify(args);
     assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
@@ -378,7 +377,7 @@ test("init writes the same configuration and runtime directory natively (#145)",
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: rustSide.repo, encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify([args, legacy]);
     assert.equal(actual.status, expected.status, `status of ${label}`);
@@ -439,7 +438,7 @@ test("commit publishes the same commit and declared provenance natively (#145)",
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: rustSide.repo, encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, "status of " + label);
@@ -486,7 +485,7 @@ test("metadata retain --apply publishes the same backfill natively (#145)", { sk
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: rustSide.repo, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: rustSide.repo, encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, "status of " + label);
@@ -519,7 +518,7 @@ test("metadata export writes the same envelope natively, byte for byte (#145)", 
   });
   if (rust === selectedCli) cstPrefix();
   const actual = spawnSync(rust, ["metadata", "export", "../envelope-rust"], {
-    cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    cwd: copy, encoding: "utf8", env: testEnv(neutral),
   });
   assert.equal(actual.status, expected.status, actual.stderr);
   assert.equal(
@@ -534,7 +533,7 @@ test("metadata export writes the same envelope natively, byte for byte (#145)", 
   }
   // An existing destination is refused the same way.
   const refused = spawnSync(rust, ["metadata", "export", "../envelope-rust", "--json"], {
-    cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+    cwd: copy, encoding: "utf8", env: testEnv(neutral),
   });
   const oracleRefused = spawnSync(process.execPath, [oracle, "metadata", "export", "../envelope-js", "--json"], {
     cwd: repo, encoding: "utf8", env: testEnv(neutral),
@@ -570,7 +569,7 @@ test("metadata import previews and applies an envelope as the JavaScript CLI doe
     const expected = oracleIn(clone, args);
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: copy, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: copy, encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, "status of " + label);
@@ -629,7 +628,7 @@ test("metadata dispose resolves a parked conflict as the JavaScript CLI does (#1
     const expected = oracleIn(oracleSide, args);
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: rustSide, encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: rustSide, encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, "status of " + label);
@@ -717,7 +716,7 @@ test("branch and the landings publish the same commits, receipts and carried pro
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1], encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, "status of " + label);
@@ -825,7 +824,7 @@ test("cherry-pick applies, forks and recognizes covered changes natively (#146)"
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1], encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(args) + " #" + index;
     assert.equal(actual.status, expected.status, "status of " + label);
@@ -946,7 +945,7 @@ test("workspace list, checkpoint and prune answer natively as the JavaScript CLI
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1].cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1].cwd, encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(args) + " #" + index;
     const [js, rs] = sides;
@@ -1080,7 +1079,7 @@ test("workspace create, move, archive, restore and repair answer natively as the
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, rs.args, {
-      cwd: rs.cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: rs.cwd, encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(js.args) + " #" + index;
     assert.equal(actual.status, expected.status, "status of " + label + "\n" + actual.stderr + expected.stderr);
@@ -1159,7 +1158,7 @@ test("spec merge-plan answers natively, byte for byte (#149)", { skip }, () => {
   ]) {
     const expected = inRepo(process.execPath, [oracle, ...args], {});
     if (rust === selectedCli) cstPrefix();
-    const actual = inRepo(rust, args, { CAUSET_DELEGATE: "never" });
+    const actual = inRepo(rust, args);
     const label = JSON.stringify(args);
     assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
     assert.equal(actual.stdout, expected.stdout, `stdout of ${label}`);
@@ -1260,7 +1259,7 @@ test("spec index writes the same manifests natively, single and --all (#149)", {
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1], encoding: "utf8", env: testEnv({ ...neutral, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1], encoding: "utf8", env: testEnv(neutral),
     });
     const label = JSON.stringify(args) + " #" + index;
     const local = (text, repo) => rename(text.split(JSON.stringify(repo).slice(1, -1)).join("<repo>").split(repo).join("<repo>"));
@@ -1368,7 +1367,7 @@ test("spec resolve applies a paused step's deterministic merges natively (#149)"
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1], encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(args) + " #" + index;
     // Each case must reach the path it is named for, not fail alike for another reason.
@@ -1527,7 +1526,7 @@ test("resolve apply and reject record decisions on a paused step natively (#147)
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1], encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(template) + " #" + index;
     // Each case must reach the path it is named for, not fail alike for another reason.
@@ -1736,7 +1735,7 @@ test("forecast simulates the same reconciliation natively under both engines (#1
       });
       if (rust === selectedCli) cstPrefix();
       const actual = spawnSync(rust, args, {
-        cwd: sides[1], encoding: "utf8", env: testEnv({ ...env, CAUSET_DELEGATE: "never" }),
+        cwd: sides[1], encoding: "utf8", env: testEnv(env),
       });
       const label = `${engine} ${JSON.stringify(args)} on ${kind} #${index}`;
       // Each case must reach the path it is named for, not fail alike for another reason.
@@ -1836,7 +1835,7 @@ test("forecast --target-checkpoint carries the same overlay natively (#147)", { 
     });
     if (rust === selectedCli) cstPrefix();
     const actual = spawnSync(rust, args, {
-      cwd: sides[1], encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }),
+      cwd: sides[1], encoding: "utf8", env: testEnv(dated),
     });
     const label = JSON.stringify(args) + " #" + index;
     assert.match(expected.stdout + expected.stderr, outcome, label);
@@ -1916,7 +1915,7 @@ function reconcileTwins(label, cases, build, { perSide = false, journalOf, extra
       return spawnSync(process.execPath, [oracle, ...args], { cwd, encoding: "utf8", env: testEnv(dated) });
     }
     if (rust === selectedCli) cstPrefix();
-    return spawnSync(rust, args, { cwd, encoding: "utf8", env: testEnv({ ...dated, CAUSET_DELEGATE: "never" }) });
+    return spawnSync(rust, args, { cwd, encoding: "utf8", env: testEnv(dated) });
   };
   const rename = (text, repo, side, hashes) => {
     const seen = new Map();
@@ -2590,7 +2589,7 @@ test("rebase-forecast simulates the same rewrite natively under both engines (#1
       });
       if (rust === selectedCli) cstPrefix();
       const actual = spawnSync(rust, args, {
-        cwd: fixture.cwd, encoding: "utf8", env: testEnv({ ...env, CAUSET_DELEGATE: "never" }),
+        cwd: fixture.cwd, encoding: "utf8", env: testEnv(env),
       });
       const label = `${engine} ${JSON.stringify(args)} on ${kind} #${index}`;
       // Each case must reach the path it is named for, not fail alike for another reason.
@@ -2987,7 +2986,7 @@ test("the benchmarks report the same counts natively, timings and the named esti
   ];
   for (const [args, outcome] of cases) {
     const expected = runOracle(args);
-    const actual = runRust(args, { CAUSET_DELEGATE: "never" });
+    const actual = runRust(args);
     const label = JSON.stringify(args);
     assert.match(expected.stdout + expected.stderr, outcome, label);
     assert.equal(actual.status, expected.status, `status of ${label}\n${actual.stderr}`);
@@ -2995,32 +2994,19 @@ test("the benchmarks report the same counts natively, timings and the named esti
     assert.equal(human(steady(actual.stdout)), human(steady(expected.stdout)), `stdout of ${label}`);
   }
   // The runtime description is the one member of `environment` that differs.
-  const described = JSON.parse(runRust(["metadata", "benchmark", ...small, "--json"], { CAUSET_DELEGATE: "never" }).stdout).environment;
+  const described = JSON.parse(runRust(["metadata", "benchmark", ...small, "--json"]).stdout).environment;
   assert.equal(described.implementation, "rust");
   assert.equal(described.node, null);
 });
 
-test("CAUSET_DELEGATE=always sends even native answers to the JavaScript CLI", { skip }, () => {
-  // CAUSET_JS_CLI naming a missing file proves the route: a native answer would
-  // not look for it.
+test("the former delegation variables no longer reach the JavaScript CLI", { skip }, () => {
+  // A delegated answer would need CAUSET_JS_CLI, which names a missing file,
+  // and an unknown CAUSET_DELEGATE mode was refused; both are ignored now.
   const missing = path.join(outside, "missing.js");
-  const forced = runRust(["--version"], { CAUSET_DELEGATE: "always", CAUSET_JS_CLI: missing });
-  assert.notEqual(forced.status, 0);
-  assert.equal(forced.stdout, "");
-  const native = runRust(["--version"], { CAUSET_JS_CLI: missing });
-  assert.equal(native.status, 0);
-  assertSame(["--version"], {}, { CAUSET_DELEGATE: "always" });
-  assertSame(["no-such-command", "--json"], {}, { CAUSET_DELEGATE: "always" });
-});
-
-test("CAUSET_DELEGATE accepts auto, always and never, and nothing else", { skip }, () => {
-  // Every command is ported, so `never` and `auto` answer alike.
-  for (const mode of ["never", "auto", ""]) {
-    const result = runRust(["--version"], { CAUSET_DELEGATE: mode });
+  for (const mode of ["always", "never", "sometimes"]) {
+    const result = runRust(["--version"], { CAUSET_DELEGATE: mode, CAUSET_JS_CLI: missing });
     assert.equal(result.status, 0, mode);
-    assert.match(result.stdout, /^causet \d/);
+    assert.equal(result.stderr, "", mode);
+    assert.match(result.stdout, /^causet \d/, mode);
   }
-  const invalid = runRust(["--version"], { CAUSET_DELEGATE: "sometimes" });
-  assert.equal(invalid.status, 1);
-  assert.match(invalid.stderr, /^cst: Unknown delegation mode 'sometimes'/);
 });
