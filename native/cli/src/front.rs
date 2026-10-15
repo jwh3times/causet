@@ -393,6 +393,10 @@ fn usage_check(command: &str, parsed: &Parsed, help: &str) -> Option<Failure> {
       .any(|key| parsed.truthy(key))
   };
   match command {
+    "provenance" if positional(0) == Some("declare") => require(
+      p(1),
+      "cst provenance declare <commit> --authored-by|--generated-by|--reviewed-by <actor>",
+    ),
     "init" | "graph" | "provenance" | "receipts" | "capabilities" | "doctor" | "migrate" => None,
     "commit" => require(parsed.truthy("message"), "cst commit -m <message>"),
     "branch" => require(p(0), "cst branch <name> [from]"),

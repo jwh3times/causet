@@ -1,14 +1,16 @@
 //! `cst provenance`: the declared provenance of commits, read from their
 //! notes and never derived (FR-TRUST-04), as `src/cli.js` and
-//! `src/provenance.js` answer it.
+//! `src/provenance.js` answer it; and `cst provenance declare`, which declares
+//! it for a commit that already exists (#246).
 
-use crate::commit::{Actor, normalize_actors, provenance_record};
+use crate::commit::{Actor, declared_actors, normalize_actors, provenance_record};
 use crate::notes::read_notes;
-use crate::notes_write::append_note;
+use crate::notes_write::{append_note, with_notes_lock};
 use crate::parsed::Parsed;
 use crate::records::not_callable;
 use causet_engine::engine;
 use causet_engine::errors::{GitError, GitResult};
+use causet_engine::text::extract_trailer;
 use causet_model::js::{get, join, nullish, text, to_js_string};
 use causet_model::json::{Object, Value, js, lossy, string};
 use causet_model::schemas::canonical_schema;
@@ -188,6 +190,54 @@ pub fn provenance(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
     return Ok(Value::Object(report));
   }
   Ok(string(&format_provenance(&entries)?))
+}
+
+/// `cst provenance declare <commit> [--authored-by|--generated-by|--reviewed-by <actor>]...`:
+/// the repair of docs/identity/README.md §7 for an attributed `cst commit`
+/// whose note was not published, and a declaration for any other commit. The
+/// record is the one `cst commit` writes: `origin: "declared"`, the change the
+/// commit's `Change-Id` trailer names (null without one, as the family
+/// defines it), and the actors given, `CAUSET_AGENT` included. The check for
+/// existing provenance and the write share the notes lock, so a retry or a
+/// concurrent declaration cannot add a second claim.
+pub fn declare(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
+  let revision = parsed.positionals.get(1).cloned().unwrap_or_default();
+  let actors = declared_actors(parsed)?;
+  if actors.is_empty() {
+    return Err(
+      GitError::new("usage-missing-argument", "Declare at least one actor for the commit.")
+        .details(format!(
+          "Name each with --authored-by, --generated-by or --reviewed-by, or set {AGENT_ENV}; provenance is declared, never inferred."
+        )),
+    );
+  }
+  let commit = engine::resolve_revision(&revision, cwd)?;
+  let change_id = extract_trailer(&engine::commit_message(&commit, cwd)?, "Change-Id");
+  let record = with_notes_lock(cwd, || {
+    if let Some((_, records)) = provenance_for(std::slice::from_ref(&commit), cwd)?.first() {
+      let count = records.len();
+      return Err(
+        GitError::new(
+          "already-exists",
+          format!(
+            "Commit '{commit}' already has {count} provenance record{}.",
+            if count == 1 { "" } else { "s" }
+          ),
+        )
+        .details(format!(
+          "Inspect it with 'cst provenance {commit}'. A declaration is never added beside an existing one: if that record disagrees with the original declaration, keep both as evidence for human review."
+        )),
+      );
+    }
+    let record = provenance_record(&commit, change_id.as_deref(), &actors, "declared", &[])?;
+    append_note(&commit, &record, cwd, &[])?;
+    Ok(record)
+  })?;
+  let mut result = Object::new();
+  result.set("commit", string(&commit));
+  result.set("changeId", change_id.as_deref().map_or(Value::Null, string));
+  result.set("provenance", record);
+  Ok(Value::Object(result))
 }
 
 /// `for (const actor of record.actors ?? [])`: an array's items, nothing for a

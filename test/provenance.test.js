@@ -157,6 +157,75 @@ test("provenance is declared, never inferred", () => {
   assert.doesNotMatch(human, /VCS Lab Provenance Test/);
 });
 
+test("provenance declare attaches one declaration to an existing commit", () => {
+  // The repair docs/identity/README.md §7 describes (#246): a commit that
+  // exists without the declaration its author meant to make. It writes the
+  // record `cst commit` would have written, and only once.
+  const repo = makeRepo();
+  write(repo, "f.txt", "one\n");
+  git(repo, "add", "-A");
+  vlab(repo, "commit", "-m", "undeclared cst commit");
+  const commit = git(repo, "rev-parse", "HEAD");
+  const changeId = git(repo, "log", "-1", "--format=%(trailers:key=Change-Id,valueonly)");
+
+  const declared = JSON.parse(vlab(
+    repo, "provenance", "declare", commit,
+    "--generated-by", "claude-opus-5", "--reviewed-by", "Jerry Holland", "--json",
+  ));
+  assert.equal(declared.commit, commit);
+  assert.equal(declared.changeId, changeId, "the change is the one the commit's trailer names");
+  assert.equal(declared.provenance.origin, "declared");
+  assert.equal(declared.provenance.changeId, changeId);
+  const [entry, ...others] = provenance(repo, commit);
+  assert.deepEqual(others, []);
+  assert.equal(entry.id, declared.provenance.id);
+  assert.deepEqual(actorsOf(entry), ["generated:claude-opus-5", "reviewed:Jerry Holland"]);
+
+  // A retry is refused and writes nothing, so it cannot duplicate the claim.
+  const notes = git(repo, "rev-parse", "refs/notes/causet");
+  const again = vlabResult(repo, ["provenance", "declare", commit, "--generated-by", "claude-opus-5", "--json"]);
+  assert.equal(again.status, 1);
+  assert.equal(JSON.parse(again.stdout).code, "already-exists");
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), notes);
+
+  const validation = JSON.parse(vlab(repo, "metadata", "validate", "--strict", "--json"));
+  assert.equal(validation.summary.errors, 0, "the declared record validates strictly");
+});
+
+test("provenance declare accepts a plain Git commit and refuses an empty declaration", () => {
+  const repo = makeRepo();
+  write(repo, "f.txt", "one\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "plain Git commit");
+
+  // Nothing declared, by flag or by CAUSET_AGENT: nothing to record, and
+  // silence stays silence.
+  const empty = vlabResult(repo, ["provenance", "declare", "HEAD", "--json"]);
+  assert.equal(empty.status, 1);
+  assert.equal(JSON.parse(empty.stdout).code, "usage-missing-argument");
+  assert.deepEqual(provenance(repo), []);
+  const missing = vlabResult(repo, ["provenance", "declare", "--generated-by", "x", "--json"]);
+  assert.equal(JSON.parse(missing.stdout).code, "usage-missing-argument");
+
+  // A commit with no Change-Id carries no logical change, so the record names
+  // none rather than the commit's git: fallback identity.
+  const declared = JSON.parse(vlabEnv(repo, { CAUSET_AGENT: "claude-opus-5" }, "provenance", "declare", "HEAD"));
+  assert.equal(declared.changeId, null);
+  assert.equal(declared.provenance.changeId, null);
+  assert.deepEqual(actorsOf(provenance(repo)[0]), ["generated:claude-opus-5"]);
+
+  // A container this build cannot read is refused, never overwritten.
+  write(repo, "g.txt", "two\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "a future container");
+  git(repo, "notes", "--ref=refs/notes/causet", "add", "-m", JSON.stringify({ schema: "causet.note/v9", records: [] }), "HEAD");
+  const notes = git(repo, "rev-parse", "refs/notes/causet");
+  const future = vlabResult(repo, ["provenance", "declare", "HEAD", "--generated-by", "claude-opus-5", "--json"]);
+  assert.equal(future.status, 1);
+  assert.equal(JSON.parse(future.stdout).code, "wrong-record-family");
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), notes);
+});
+
 test("a declared role outside the closed vocabulary is refused", () => {
   const repo = makeRepo();
   write(repo, "f.txt", "one\n");
