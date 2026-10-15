@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9gb8lec01ebcb07e49",
+      "mode": "compact",
+      "sourceRef": "docs/npm-package-descriptions",
+      "sourceHead": "77d1f78accf7057bab13e8ae6757a19123178f47",
+      "sourceSubject": "docs: say what each npm package is and which one to install",
+      "targetBefore": "74e8f82f3b6a4a6d8c902b5417751b95907190b4",
+      "landingCommit": "51b0e0bfd1aec935b05dbfcd4fd1c3272cfa973c",
+      "base": "74e8f82f3b6a4a6d8c902b5417751b95907190b4",
+      "absorbedCommits": [
+        "77d1f78accf7057bab13e8ae6757a19123178f47"
+      ],
+      "absorbedChanges": [
+        "ch_0mv9fs38v39e2b2a3e3f4"
+      ],
+      "resultTree": "79258287c42d6aa3b3b52a5fb842f3ef0d054658",
+      "createdAt": "2026-10-15T11:24:16.325Z"
+    }
+  ]
+}
