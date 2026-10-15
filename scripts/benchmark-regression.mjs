@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MERGE_TREE_ENGINE_MIN_GIT } from "../src/git.js";
+import { MERGE_TREE_ENGINE_MIN_GIT } from "../test-support/merge-tree-floor.js";
 import { BASELINE_SCHEMA, parseOptions, hostProvenance, migrateBaseline, selectBaseline, recordBaseline } from "./benchmark-host.mjs";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 

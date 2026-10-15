@@ -6,7 +6,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
-import { materializeResolutionCandidate } from "../src/resolutions.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 
@@ -234,12 +233,10 @@ test("exact resolution materialization preserves legacy bytes without certifying
   f.legacy();
   const old = f.commit();
   const bytes = fs.readFileSync(f.manifestFile, "utf8");
-  const blob = f.git("rev-parse", `${old}:.causet/specs/spec.md.json`);
   f.index();
   f.commit();
-  materializeResolutionCandidate({ path: ".causet/specs/spec.md.json" }, {
-    resultBlob: blob, resultMode: "100644",
-  }, f.root);
+  // Materialize the old manifest's exact blob, as an applied resolution does.
+  f.git("restore", "--source", old, "--staged", "--worktree", "--", ".causet/specs/spec.md.json");
   assert.equal(fs.readFileSync(f.manifestFile, "utf8"), bytes);
   const restored = f.commit();
   const plan = f.vlab("spec", "merge-plan", "spec.md", old, restored, restored);

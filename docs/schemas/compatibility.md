@@ -7,8 +7,9 @@ how large a record may be before it is refused or quarantined. It extends the
 [schema catalog](README.md) (ADR-0015 phase 0b, issue #11 item 4) and is decided
 by [ADR-0020](../adr/0020-freeze-per-family-compatibility-and-resource-bounds.md).
 
-**Authority.** `RECORD_FAMILIES` and `RESOURCE_BOUNDS` in `src/schemas.js` are
-the runtime authority; the tables below are their published description.
+**Authority.** `RECORD_FAMILIES` and `RESOURCE_BOUNDS` in the Rust record model
+(`native/model/src/registry.rs`) are the runtime authority (until #243,
+`src/schemas.js`); the tables below are their published description.
 `test/schema-compatibility.test.js` fails the suite when this document and the
 runtime registry disagree, and exercises each disposition against the real CLI.
 
@@ -255,7 +256,7 @@ migrated only by publishing a new record, never by rewriting a peer's note.
 
 ## 4. Resource bounds
 
-Every bound is a constant in `RESOURCE_BOUNDS` (`src/schemas.js`), not
+Every bound is a constant in `RESOURCE_BOUNDS` (`native/model/src/registry.rs`), not
 configuration, so every implementation of this contract agrees. Bounds are
 checked before a record is interpreted — a note over `noteContainerBytes` is
 never parsed — and each fails closed in the way its scope requires: a
@@ -280,12 +281,17 @@ receiver's**: the bound that governs what this build may send is the peer's, and
 the bound that governs what it may be sent is its own. A capability document
 advertises the bounds that apply to exchanged families, so a sender withholds an
 over-bound record and reports it rather than sending it to be refused
-(ADR-0033). `ADVERTISED_BOUNDS` and `UNADVERTISED_BOUNDS` in
-`src/capabilities.js` must together name every bound in the table above, each
+(ADR-0033). `ADVERTISED_BOUNDS` in `native/cli/src/capabilities.rs` and the
+table below must together name every bound in the table above, each
 unadvertised one carrying its reason, so a new bound cannot be added without
 deciding whether a peer needs it.
 
-`readJson` in `src/store.js` is the single reader for every worktree-private and
+| Unadvertised bound | Why a peer does not need it |
+| --- | --- |
+| `localStateBytes` | worktree-private and shared-local state, which no exchange carries |
+| `specManifestBytes` | tracked manifests, which move with ordinary Git content rather than through an exchange |
+
+`read_json` in `native/cli/src/store.rs` is the single reader for every worktree-private and
 shared-local document, which is why `localStateBytes` is enforced there and
 covers the reconciliation journal, the rebase journal, every stored forecast, and
 the workspace registry at once. The same reader refuses malformed JSON as a
@@ -294,7 +300,7 @@ domain error naming the file rather than surfacing a bare `SyntaxError`.
 ### Transport bounds
 
 These bound the Git plumbing rather than a record family, and are enforced in
-`src/git.js` and its workers. They are listed here so the complete set of limits
+the Rust engine (`native/engine`: `process.rs`, `session.rs`, `merge_tree.rs`). They are listed here so the complete set of limits
 is in one place.
 
 | Bound | Value | On excess |

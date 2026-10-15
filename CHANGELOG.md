@@ -7,6 +7,22 @@
   `CAUSET_JS_CLI` are ignored: `CAUSET_DELEGATE=always` no longer routes a
   command through `bin/cst.js`, and an unknown mode is no longer refused. Every
   command was already answered natively, so no output changes.
+- **The suites run the Rust CLI, and the Rust model is the authority** (#243,
+  the second step). `test-support/cst-command.js` defaults to
+  `native/target/release/cst`, so `npm test` needs `npm run build:native`
+  first and says so without it; `CAUSET_CLI` still selects another CLI. The
+  JavaScript-versus-Rust comparisons are held to the JavaScript oracle's
+  answers, recorded once and frozen under `test/fixtures/oracle/`: the model's
+  validators, registries and serializers, the engine's catalog with its
+  process counts, and every CLI invocation outside a repository. The
+  comparisons inside repositories, including either CLI finishing the other's
+  journal, end with the oracle. The validators and registries of
+  `native/model` replace `src/schemas.js` as the authority the schema catalog,
+  the compatibility contract and the error vocabulary are checked against,
+  and the reasons for the two unadvertised bounds move into
+  `docs/schemas/compatibility.md`. Suites that drove `src/` directly now drive
+  the Rust CLI or its probes; the scale benchmark's analysis cases are Rust
+  unit tests.
 
 ## 0.23.0
 

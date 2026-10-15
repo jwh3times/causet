@@ -21,7 +21,6 @@ import os from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
-import { environmentValue } from "../src/environment.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { bareEnvironment, smokeSequence } from "../test-support/installed-smoke.js";
 
@@ -30,7 +29,7 @@ const windows = process.platform === "win32";
 const target = windows && process.arch === "x64" ? "x86_64-pc-windows-msvc"
   : process.platform === "linux" && process.arch === "x64" ? "x86_64-unknown-linux-gnu" : null;
 const built = path.join(projectRoot, "native", "target", "release", windows ? "cst.exe" : "cst");
-const releaseSet = environmentValue("RELEASE_SET") ? path.resolve(environmentValue("RELEASE_SET")) : null;
+const releaseSet = process.env.CAUSET_RELEASE_SET ? path.resolve(process.env.CAUSET_RELEASE_SET) : null;
 const skip = !target ? `no archive is published for ${process.platform}-${process.arch}`
   : releaseSet || fs.existsSync(built) ? false : "no Rust CLI build; run node scripts/build-native.mjs";
 const version = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")).version;

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { MERGE_TREE_ENGINE_MIN_GIT } from "../src/git.js";
+import { MERGE_TREE_ENGINE_MIN_GIT } from "../test-support/merge-tree-floor.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), "causet-git-session-demo-"));

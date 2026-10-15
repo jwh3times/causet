@@ -10,13 +10,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
-import { ENVIRONMENT_VARIABLES, environmentValue, setEnvironmentValue } from "../src/environment.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const repo = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-environment-")));
 after(() => fs.rmSync(repo, { recursive: true, force: true }));
 execFileSync("git", ["init", "-q", repo], { env: testEnv() });
+
+// The published variables, as the Rust engine lists them.
+const listing = fs.readFileSync(new URL("../native/engine/src/environment.rs", import.meta.url), "utf8");
+const ENVIRONMENT_VARIABLES = [.../ENVIRONMENT_VARIABLES: \[&str; \d+\] = \[([^\]]*)\]/.exec(listing)[1]
+  .matchAll(/"([A-Z_]+)"/g)].map((match) => match[1]);
+assert.ok(ENVIRONMENT_VARIABLES.includes("ENGINE"), "the variable listing was read");
 
 // Unset every selector the suite's mode may carry, under both names, so each
 // case states exactly what it sets. `undefined` removes a variable from a spawn.
@@ -30,14 +35,14 @@ function cst(args, env) {
 }
 
 test("only the CAUSET_ name is read, even when empty", () => {
-  assert.equal(environmentValue("ENGINE", {}), undefined);
-  assert.equal(environmentValue("ENGINE", { VLAB_ENGINE: "native" }), undefined);
-  assert.equal(environmentValue("ENGINE", { CAUSET_ENGINE: "git", VLAB_ENGINE: "native" }), "git");
-  assert.equal(environmentValue("ENGINE", { CAUSET_ENGINE: "", VLAB_ENGINE: "native" }), "");
-  const env = { VLAB_TRACE: "0" };
-  setEnvironmentValue("TRACE", "1", env);
-  assert.deepEqual(env, { VLAB_TRACE: "0", CAUSET_TRACE: "1" });
-  assert.throws(() => environmentValue("ENGINES", {}), /not a published causet environment variable/);
+  // An empty CAUSET_ENGINE selects the default engine; the former name is not
+  // consulted in its place, so its invalid value goes unread.
+  for (const env of [{ CAUSET_ENGINE: "", VLAB_ENGINE: "bogus" }, { CAUSET_ENGINE: "git", VLAB_ENGINE: "bogus" }]) {
+    const result = cst(["version"], env);
+    assert.equal(result.status, 0, `${JSON.stringify(env)}: ${result.stderr}`);
+  }
+  const traced = cst(["doctor"], { CAUSET_TRACE: "1", VLAB_TRACE: "0" });
+  assert.match(traced.stderr, /^\[cst trace\] /m);
 });
 
 test("a former selector no longer selects, and is no longer validated", () => {

@@ -2,8 +2,9 @@
 //! JSON as JavaScript reads and writes it, the canonical JSON profile and the
 //! legacy digest serializer, logical identifiers, SHA-256, the record-family
 //! and resource-bound registries with classification and validation, and the
-//! error vocabulary. `src/` in the JavaScript CLI stays the authority;
-//! `test/rust-model.test.js` runs both against the same inputs.
+//! error vocabulary. Ported from `src/` in the JavaScript CLI, it is the
+//! authority since #243; `test/rust-model.test.js` holds it to the JavaScript
+//! oracle's frozen answers.
 #![forbid(unsafe_code)]
 
 pub mod canonical;

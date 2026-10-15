@@ -23,7 +23,6 @@ import os from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
-import { environmentValue } from "../src/environment.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { bareEnvironment, smokeSequence } from "../test-support/installed-smoke.js";
 import { packRelease } from "../scripts/pack-release.mjs";
@@ -33,7 +32,7 @@ const { hostKey, PLATFORMS } = createRequire(import.meta.url)("../bin/native/pla
 const windows = process.platform === "win32";
 const built = path.join(projectRoot, "native", "target", "release", windows ? "cst.exe" : "cst");
 const platform = PLATFORMS[hostKey()];
-const releaseSet = environmentValue("RELEASE_SET") ? path.resolve(environmentValue("RELEASE_SET")) : null;
+const releaseSet = process.env.CAUSET_RELEASE_SET ? path.resolve(process.env.CAUSET_RELEASE_SET) : null;
 const skip = !platform ? `no platform package is published for ${hostKey()}`
   : releaseSet || fs.existsSync(built) ? false : "no Rust CLI build; run node scripts/build-native.mjs";
 const version = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")).version;

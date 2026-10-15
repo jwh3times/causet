@@ -1,6 +1,8 @@
-//! The record-family and resource-bound registries of `src/schemas.js` and the
-//! error vocabulary of `src/errors.js`. The JavaScript modules stay the
-//! authority; `test/rust-model.test.js` fails when these tables and theirs differ.
+//! The record-family and resource-bound registries and the error vocabulary,
+//! ported from `src/schemas.js` and `src/errors.js`. Since #243 these tables are
+//! the authority: `docs/schemas/compatibility.md` and `docs/schemas/errors.md`
+//! must agree with them, and `test/rust-model.test.js` holds them to the
+//! JavaScript oracle's frozen copy.
 
 pub struct Family {
   pub name: &'static str,

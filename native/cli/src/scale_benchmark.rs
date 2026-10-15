@@ -1083,4 +1083,123 @@ mod tests {
     assert_eq!(percentile(&[3.0, 1.0, 2.0], 0.95), 3.0);
     assert_eq!(percentile(&[5.0], 0.5), 5.0);
   }
+
+  // The analysis cases test/scale-benchmark-analysis.test.js held against
+  // `buildAnalysis` in src/scale-benchmark.js until #243.
+
+  const FIXTURE: Fixture = Fixture {
+    workspaces: 2,
+    resolutions: 8,
+    note_targets: 11,
+  };
+
+  /// Every phase at `median_ms`, with 2, 3 and 4 median processes, then the
+  /// overrides `(phase, member, value)`.
+  fn measurements(median_ms: f64, overrides: &[(&str, &str, f64)]) -> Object {
+    let mut phases = vec![
+      ("workspaceStatus", median_ms, 2.0),
+      ("noteCatalog", median_ms, 3.0),
+      ("resolutionCatalog", median_ms, 4.0),
+    ];
+    for (phase, member, value) in overrides {
+      let entry = phases.iter_mut().find(|entry| entry.0 == *phase).expect("a measured phase");
+      match *member {
+        "medianMs" => entry.1 = *value,
+        "medianProcesses" => entry.2 = *value,
+        other => panic!("unknown member {other}"),
+      }
+    }
+    let members: Vec<String> = phases
+      .iter()
+      .map(|(phase, ms, processes)| format!(r#""{phase}":{{"medianMs":{ms},"medianProcesses":{processes}}}"#))
+      .collect();
+    match causet_model::json::parse(&format!("{{{}}}", members.join(","))) {
+      Ok(Value::Object(object)) => object,
+      other => panic!("measurements did not parse: {other:?}"),
+    }
+  }
+
+  /// The JSON text of the member at `path`.
+  fn at(analysis: &Value, path: &[&str]) -> String {
+    let mut value = Some(analysis);
+    for name in path {
+      value = get(value, name);
+    }
+    stringify(value.unwrap_or_else(|| panic!("no member at {path:?}")))
+  }
+
+  /// `recommendations[index].<member>` as text.
+  fn recommendation(analysis: &Value, index: usize, member: &str) -> String {
+    match get(Some(analysis), "recommendations") {
+      Some(Value::Array(items)) => js_text(get(items.get(index), member)),
+      other => panic!("no recommendations: {other:?}"),
+    }
+  }
+
+  #[test]
+  fn batched_scans_below_or_exactly_at_the_budget_request_more_host_evidence() {
+    for time in [4999.0, 5000.0] {
+      let analysis = build_analysis(&measurements(time, &[]), &FIXTURE, 5000);
+      assert_eq!(at(&analysis, &["phasesOverBudget"]), "[]");
+      assert_eq!(at(&analysis, &["nextAction"]), r#""increase-fixture-volume-and-collect-more-hosts""#);
+      assert_eq!(at(&analysis, &["persistentIndex", "recommendedNow"]), "false");
+      assert_eq!(recommendation(&analysis, 0, "priority"), "retain-batched-scan");
+      assert_eq!(at(&analysis, &["residentService", "recommendedNow"]), "false");
+    }
+  }
+
+  #[test]
+  fn slow_hosts_recommend_catalog_evaluation_without_recommending_a_service() {
+    let measured = measurements(5000.0, &[("noteCatalog", "medianMs", 5001.0)]);
+    let analysis = build_analysis(&measured, &FIXTURE, 5000);
+    assert_eq!(at(&analysis, &["phasesOverBudget"]), r#"["noteCatalog"]"#);
+    assert_eq!(at(&analysis, &["nextAction"]), r#""evaluate-incremental-catalogs""#);
+    assert_eq!(at(&analysis, &["persistentIndex", "recommendedNow"]), "true");
+    assert_eq!(recommendation(&analysis, 0, "priority"), "measure-index-after-batching");
+    assert_eq!(at(&analysis, &["residentService", "recommendedNow"]), "false");
+  }
+
+  #[test]
+  fn tiny_fixtures_distinguish_a_fixed_batch_cost_from_latency_on_slow_hosts() {
+    let tiny = Fixture {
+      workspaces: 0,
+      resolutions: 2,
+      note_targets: 11,
+    };
+    let analysis = build_analysis(&measurements(6000.0, &[]), &tiny, 5000);
+    assert_eq!(at(&analysis, &["processAmplification", "decidable", "resolutionCatalog"]), "false");
+    let areas: Vec<(String, String)> = (0..2)
+      .map(|index| (recommendation(&analysis, index, "area"), recommendation(&analysis, index, "priority")))
+      .collect();
+    assert_eq!(
+      areas,
+      [
+        ("resolution-catalog".to_string(), "increase-fixture-volume".to_string()),
+        ("note-catalog".to_string(), "measure-index-after-batching".to_string()),
+      ]
+    );
+    assert_eq!(at(&analysis, &["recommendations"]).matches(r#""area""#).count(), 2);
+    assert_eq!(
+      at(&analysis, &["phasesOverBudget"]),
+      r#"["noteCatalog","resolutionCatalog","workspaceStatus"]"#
+    );
+    assert_eq!(at(&analysis, &["nextAction"]), r#""evaluate-incremental-catalogs""#);
+    assert_eq!(at(&analysis, &["persistentIndex", "recommendedNow"]), "true");
+  }
+
+  #[test]
+  fn representative_process_amplification_takes_priority_over_indexing() {
+    let measured = measurements(6000.0, &[("workspaceStatus", "medianProcesses", 20.0)]);
+    let ten = Fixture {
+      workspaces: 10,
+      resolutions: 8,
+      note_targets: 11,
+    };
+    let analysis = build_analysis(&measured, &ten, 5000);
+    assert_eq!(at(&analysis, &["processAmplification", "decidable", "workspaceStatus"]), "true");
+    assert_eq!(recommendation(&analysis, 0, "priority"), "batch-first");
+    assert_eq!(at(&analysis, &["nextAction"]), r#""batch-process-amplified-scans""#);
+    assert_eq!(at(&analysis, &["persistentIndex", "recommendedNow"]), "false");
+    assert_eq!(at(&analysis, &["residentService", "recommendedNow"]), "false");
+  }
 }

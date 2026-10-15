@@ -7,9 +7,10 @@
  * wrong-family record, an exceeded bound each imply a different response — and
  * a contract a caller cannot read is not much of one.
  *
- * Two of these tests are static. They scan the source rather than run it,
- * because the property that matters is "every raise site is classified", and
- * no amount of exercising the CLI proves that about the sites no test reaches.
+ * Two of these tests are static. They scan the Rust source rather than run
+ * it, because the property that matters is "every raise site is classified",
+ * and no amount of exercising the CLI proves that about the sites no test
+ * reaches. The vocabulary itself is the Rust model's (`native/model`, #243).
  */
 
 import assert from "node:assert/strict";
@@ -19,13 +20,16 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ERROR_CODES, ERROR_ENVELOPE_SCHEMA } from "../src/errors.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { registry } from "../test-support/model-probe.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const sourceDir = path.join(projectRoot, "src");
+const { errorCodes: ERROR_CODES, errorEnvelopeSchema: ERROR_ENVELOPE_SCHEMA } = registry();
+
+const sourceDirs = ["native/cli/src", "native/engine/src", "native/model/src"]
+  .map((directory) => path.join(projectRoot, directory));
 
 const created = [];
 after(() => {
@@ -35,53 +39,49 @@ after(() => {
 });
 
 /**
- * Every `new CliError(...)` argument list in a source file, found by matching
- * parentheses rather than by a regex that would stop at the first `)` inside a
- * template literal or a nested call.
+ * Every place the Rust source raises a coded failure: each `GitError::new`,
+ * whose first argument is the code, and each front-end `failure(message,
+ * code)` or `Failure { code }`. A site either names its code as a literal
+ * (`code`) or forwards one from a typed refusal it was handed (`forwarded`),
+ * whose own raise site is checked where it is created.
  */
-function raiseSites(text) {
+function raiseSites(text, file) {
+  const line = (index) => text.slice(0, index).split("\n").length;
   const sites = [];
-  const opener = /new CliError\(/g;
-  let match;
-  while ((match = opener.exec(text)) !== null) {
-    let index = match.index + match[0].length;
-    let depth = 1;
-    let quote = null;
-    let template = 0;
-    while (index < text.length && depth > 0) {
-      const character = text[index];
-      if (quote) {
-        if (character === "\\") { index += 2; continue; }
-        if (quote === "`" && character === "$" && text[index + 1] === "{") {
-          template += 1; index += 2; continue;
-        }
-        if (quote === "`" && character === "}" && template > 0) {
-          template -= 1; index += 1; continue;
-        }
-        if (character === quote && template === 0) quote = null;
-        index += 1;
-        continue;
-      }
-      if (character === '"' || character === "'" || character === "`") {
-        quote = character; index += 1; continue;
-      }
-      if (character === "(") depth += 1;
-      else if (character === ")") depth -= 1;
-      index += 1;
-    }
-    sites.push({
-      line: text.slice(0, match.index).split("\n").length,
-      args: text.slice(match.index + match[0].length, index - 1),
-    });
+  for (const match of text.matchAll(/GitError::new\(\s*([^,]*),/g)) {
+    const literal = /^"([a-z-]+)"$/.exec(match[1].trim());
+    sites.push(literal
+      ? { line: line(match.index), code: literal[1] }
+      : { line: line(match.index), forwarded: match[1].trim() });
+  }
+  // The front end's own helper; `merge_tree.rs` has an unrelated `failure`.
+  const failureCall = file.endsWith("cli/src/front.rs") ? /(?<!fn )\bfailure\(\s*(?:"(?:[^"\\]|\\.)*"|[^,()"]+(?:\([^()]*\))?)\s*,\s*([^)]*?)\s*,?\s*\)/g : null;
+  for (const match of failureCall ? text.matchAll(failureCall) : []) {
+    const literal = /^"([a-z-]+)"$/.exec(match[1].trim());
+    sites.push(literal
+      ? { line: line(match.index), code: literal[1] }
+      : { line: line(match.index), forwarded: match[1].trim() });
+  }
+  for (const match of text.matchAll(/\bFailure \{[^}]*?\bcode:\s*"([a-z-]+)"/g)) {
+    sites.push({ line: line(match.index), code: match[1] });
   }
   return sites;
 }
 
+function rustSources(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return rustSources(full);
+    return entry.name.endsWith(".rs") ? [full] : [];
+  });
+}
+
 function allRaiseSites() {
   const found = [];
-  for (const name of fs.readdirSync(sourceDir).filter((f) => f.endsWith(".js"))) {
-    const text = fs.readFileSync(path.join(sourceDir, name), "utf8");
-    for (const site of raiseSites(text)) found.push({ file: name, ...site });
+  for (const file of sourceDirs.flatMap(rustSources)) {
+    const text = fs.readFileSync(file, "utf8");
+    const name = path.relative(projectRoot, file).replaceAll(path.sep, "/");
+    for (const site of raiseSites(text, name)) found.push({ file: name, ...site });
   }
   return found;
 }
@@ -115,22 +115,24 @@ test("every raise site carries a code from the published vocabulary", () => {
   // an uncoded raise site is a defect wherever it is, including in the paths
   // no test reaches. There is deliberately no `unknown` code to fall back to,
   // so a new raise site cannot be added without deciding what it means.
+  // The Rust type system already requires a code at every site; what it cannot
+  // require is that the code is a published one, or that a site which forwards
+  // a code forwards one it was handed rather than computing it.
   const sites = allRaiseSites();
   assert.ok(sites.length > 200, `expected the whole source scanned, found ${sites.length}`);
 
   const uncoded = [];
   const unpublished = [];
   for (const site of sites) {
-    const match = site.args.match(/\bcode:\s*"([a-z-]+)"/);
-    if (!match) {
-      uncoded.push(`${site.file}:${site.line}`);
+    if (site.forwarded !== undefined) {
+      if (!/^(?:[a-z_]+\.)?code$/.test(site.forwarded)) uncoded.push(`${site.file}:${site.line} -> ${site.forwarded}`);
       continue;
     }
-    if (!Object.hasOwn(ERROR_CODES, match[1])) {
-      unpublished.push(`${site.file}:${site.line} -> ${match[1]}`);
+    if (!Object.hasOwn(ERROR_CODES, site.code)) {
+      unpublished.push(`${site.file}:${site.line} -> ${site.code}`);
     }
   }
-  assert.deepEqual(uncoded, [], `raise sites with no error code:\n${uncoded.join("\n")}`);
+  assert.deepEqual(uncoded, [], `raise sites whose code is neither a literal nor forwarded:\n${uncoded.join("\n")}`);
   assert.deepEqual(
     unpublished,
     [],
@@ -144,8 +146,7 @@ test("the published vocabulary has no dead members", () => {
   // one later is a version bump, so it should not be added speculatively.
   const used = new Set();
   for (const site of allRaiseSites()) {
-    const match = site.args.match(/\bcode:\s*"([a-z-]+)"/);
-    if (match) used.add(match[1]);
+    if (site.code) used.add(site.code);
   }
   const dead = Object.keys(ERROR_CODES).filter((code) => !used.has(code));
   assert.deepEqual(dead, [], `codes in ERROR_CODES that nothing raises: ${dead.join(", ")}`);
@@ -167,9 +168,10 @@ test("every code states what it means", () => {
 });
 
 test("the published vocabulary and the runtime map say the same thing", () => {
-  // docs/schemas/errors.md is the published contract and src/errors.js is the
-  // runtime authority, exactly as docs/schemas/ and src/schemas.js relate for
-  // record families (ADR-0020). Publishing a table nothing checks is how the
+  // docs/schemas/errors.md is the published contract and the Rust model's
+  // ERROR_CODES (`native/model/src/registry.rs`) is the runtime authority,
+  // exactly as docs/schemas/ and the model relate for record families
+  // (ADR-0020, #243). Publishing a table nothing checks is how the
   // two drift.
   const published = fs.readFileSync(
     path.join(projectRoot, "docs", "schemas", "errors.md"),

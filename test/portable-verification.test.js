@@ -4,10 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { RESOURCE_BOUNDS } from "../src/schemas.js";
-import { bundleHash } from "../src/proof-bundle.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { hashedSha256, registry } from "../test-support/model-probe.js";
+
+const RESOURCE_BOUNDS = registry().bounds;
 
 
 function exec(command, args, cwd, options = {}) {
@@ -98,7 +99,7 @@ function bundleFor(repo, parent, source = "feature", name = "proof.json") {
 
 /** Rehash and rewrite a mutated bundle, the way a forger would. */
 function resign(file, bundle) {
-  bundle.integrity.bundleHash = bundleHash(bundle);
+  bundle.integrity.bundleHash = hashedSha256(bundle);
   fs.writeFileSync(file, JSON.stringify(bundle, null, 2));
   return file;
 }

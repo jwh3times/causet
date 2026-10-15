@@ -5,14 +5,36 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
-import { RECORD_FAMILIES, referencedObjectsForRecord, schemaClassification, validateNoteRecord } from "../src/schemas.js";
-import { canonicalJson as legacyCanonicalJson } from "../src/metadata.js";
-import { available as modelProbeAvailable, jsReferences, jsValidation, probe as modelProbe } from "../test-support/model-probe.js";
+import { probe as modelProbe, registry } from "../test-support/model-probe.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schemasDir = path.join(projectRoot, "docs", "schemas");
+
+// The runtime authority is the Rust record model (`native/model`, #243),
+// reached through its probe.
+const RECORD_FAMILIES = new Map(registry().families.map(({ name, ...policy }) => [name, policy]));
+const schemaClassification = (schema) => modelProbe([{ op: "classify", schema }])[0].classification;
+const validateNoteRecords = (records, format = "sha1") =>
+  modelProbe(records.map((record) => ({ op: "validate", text: JSON.stringify(record), format })))
+    .map((reply) => reply.errors);
+
+// The Rust sources a schema identifier can be used in, without their unit
+// tests, which name identifiers no build uses.
+const RUST_SOURCES = ["native/cli/src", "native/engine/src", "native/model/src"];
+function rustSourceTexts() {
+  const texts = [];
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".rs")) texts.push(fs.readFileSync(full, "utf8").split("#[cfg(test)]")[0]);
+    }
+  };
+  for (const directory of RUST_SOURCES) walk(path.join(projectRoot, directory));
+  return texts;
+}
 
 // causet.forecast/v1 is accepted when reading stored forecasts but never
 // written; the catalog lists it as superseded without a document.
@@ -191,15 +213,14 @@ function assertValid(schemaId, value, label) {
 // Static catalog checks
 // ---------------------------------------------------------------------------
 
-test("every schema identifier used in src has exactly one catalog document", () => {
+test("every schema identifier the Rust CLI uses has exactly one catalog document", () => {
   const used = new Set();
-  for (const file of fs.readdirSync(path.join(projectRoot, "src"))) {
-    const content = fs.readFileSync(path.join(projectRoot, "src", file), "utf8");
+  for (const content of rustSourceTexts()) {
     for (const match of content.matchAll(/causet\.[a-z-]+\/v\d+/g)) used.add(match[0]);
   }
   // The compatibility registry holds versions as data rather than as literal
   // identifiers, so a family's registered, readable, and written versions are
-  // part of what src/ uses even when no literal string names them.
+  // part of what the CLI uses even when no literal string names them.
   for (const [family, policy] of RECORD_FAMILIES) {
     for (const version of [...policy.registered, ...policy.readable, ...policy.written]) {
       used.add(`${family}/v${version}`);
@@ -207,7 +228,7 @@ test("every schema identifier used in src has exactly one catalog document", () 
   }
   for (const id of used) {
     if (SUPERSEDED_WITHOUT_DOCUMENT.has(id) || PROFILE_IDENTIFIERS.has(id)) continue;
-    assert.ok(documents.has(id), `schema '${id}' is used in src/ but has no document in docs/schemas/`);
+    assert.ok(documents.has(id), `schema '${id}' is used in native/ but has no document in docs/schemas/`);
   }
   for (const id of PROFILE_IDENTIFIERS) {
     assert.ok(used.has(id), `profile identifier '${id}' is no longer referenced; drop it from the allowlist`);
@@ -215,13 +236,13 @@ test("every schema identifier used in src has exactly one catalog document", () 
   }
   for (const id of documents.keys()) {
     assert.ok(used.has(id) || HISTORICAL_OUTPUT_DOCUMENTS.has(id),
-      `document '${id}' names a schema no src/ module uses`);
+      `document '${id}' names a schema the Rust CLI does not use`);
   }
   for (const [id, successor] of HISTORICAL_OUTPUT_DOCUMENTS) {
     assert.ok(documents.has(id), `historical output '${id}' must keep its document`);
     assert.equal(documents.get(id).document["x-causet-scope"], "cli-output");
     assert.ok(documents.has(successor) && used.has(successor),
-      `historical output '${id}' must name a documented successor still used by src/`);
+      `historical output '${id}' must name a documented successor the Rust CLI still uses`);
   }
   for (const id of SUPERSEDED_WITHOUT_DOCUMENT) {
     assert.ok(used.has(id), `superseded schema '${id}' is no longer referenced; drop it from the allowlist`);
@@ -253,12 +274,12 @@ test("document identity, file naming, and scope agree with the runtime registry"
     const classification = schemaClassification(id);
     if (scope === "cli-output") {
       assert.equal(classification.known, false,
-        `'${id}' is registered in src/schemas.js but its document claims cli-output scope`);
+        `'${id}' is registered in the Rust model but its document claims cli-output scope`);
     } else {
       assert.ok(scopeToClassification.has(scope), `'${id}' has unsupported scope '${scope}'`);
-      assert.equal(classification.known, true, `'${id}' is not registered in src/schemas.js`);
+      assert.equal(classification.known, true, `'${id}' is not registered in the Rust model`);
       assert.equal(classification.scope, scopeToClassification.get(scope),
-        `scope of '${id}' disagrees with src/schemas.js`);
+        `scope of '${id}' disagrees with the Rust model`);
     }
   }
 });
@@ -583,13 +604,20 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
 test("every published note record satisfies its document and the runtime validator", { timeout: 600_000 }, () => {
   const state = scenario();
   const families = new Set();
-  for (const record of state.noteRecords) {
+  const verdicts = validateNoteRecords(state.noteRecords);
+  const verdictsSha256 = validateNoteRecords(state.noteRecords, "sha256");
+  const references = modelProbe(state.noteRecords.map((record) => ({ op: "refs", text: JSON.stringify(record) })));
+  for (const [index, record] of state.noteRecords.entries()) {
     const classification = schemaClassification(record.schema);
     assert.equal(classification.scope, "note-record",
       `unexpected published record schema '${record.schema}'`);
     families.add(record.schema);
-    assert.deepEqual(validateNoteRecord(record), [],
+    assert.deepEqual(verdicts[index], [],
       `runtime validator rejects published record '${record.id}' (${record.schema})`);
+    // Both object formats are judged without a throw, and every referenced
+    // object is listed (#172).
+    assert.ok(Array.isArray(verdictsSha256[index]), `sha256 validation of '${record.id}' answers`);
+    assert.ok(Array.isArray(references[index].objects), `references of '${record.id}' are listed`);
     assertValid(record.schema, record, `published record '${record.id}'`);
   }
   assert.deepEqual(
@@ -607,24 +635,6 @@ test("every published note record satisfies its document and the runtime validat
     ],
     "the scenario must publish every note-record family",
   );
-  // The Rust record model (#142) must reach the same verdicts, reference the
-  // same objects, and digest the same bytes for every record the scenario
-  // publishes, in both object formats.
-  if (!modelProbeAvailable) return;
-  const requests = state.noteRecords.flatMap((record) => [
-    { op: "validate", text: JSON.stringify(record), format: "sha1" },
-    { op: "validate", text: JSON.stringify(record), format: "sha256" },
-    { op: "refs", text: JSON.stringify(record) },
-    { op: "serialize", text: JSON.stringify(record) },
-  ]);
-  const replies = modelProbe(requests);
-  for (const [index, record] of state.noteRecords.entries()) {
-    const label = `${record.id} (${record.schema})`;
-    assert.deepEqual(replies[index * 4], jsValidation(validateNoteRecord, record, "sha1"), `Rust sha1 validation of ${label}`);
-    assert.deepEqual(replies[index * 4 + 1], jsValidation(validateNoteRecord, record, "sha256"), `Rust sha256 validation of ${label}`);
-    assert.deepEqual(replies[index * 4 + 2], jsReferences(referencedObjectsForRecord, record), `Rust references of ${label}`);
-    assert.equal(replies[index * 4 + 3].legacy, legacyCanonicalJson(record), `Rust digest bytes of ${label}`);
-  }
 });
 
 test("documents are at least as strict as the runtime validator on missing fields", { timeout: 600_000 }, () => {
@@ -634,10 +644,14 @@ test("documents are at least as strict as the runtime validator on missing field
     if (!sampleByFamily.has(record.schema)) sampleByFamily.set(record.schema, record);
   }
   for (const [family, record] of sampleByFamily) {
-    for (const field of Object.keys(record)) {
+    const mutants = Object.keys(record).map((field) => {
       const mutant = { ...record };
       delete mutant[field];
-      const runtimeErrors = validateNoteRecord(mutant);
+      return [field, mutant];
+    });
+    const verdicts = validateNoteRecords(mutants.map(([, mutant]) => mutant));
+    for (const [index, [field, mutant]] of mutants.entries()) {
+      const runtimeErrors = verdicts[index];
       if (runtimeErrors.length === 0) continue;
       const documentErrors = validateAgainst(family, mutant);
       assert.ok(

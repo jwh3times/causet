@@ -5,11 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
-import { resolutionSignatureFor } from "../src/schemas.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
-const notesModule = new URL("../src/notes.js", import.meta.url).href;
-const resolutionsModule = new URL("../src/resolutions.js", import.meta.url).href;
+// Until #243 the writer cases below called src/notes.js and src/resolutions.js
+// directly. They now reach the Rust writer through the CLI: `cst commit
+// --authored-by` appends provenance to a commit a post-commit hook has already
+// given a notes tree of the shape under test, and a conflicted `cst reconcile`
+// publishes a resolution.
 const RETENTION = "refs/causet/retention";
 const NOTES = "refs/notes/causet";
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", env: testEnv(), stdio: ["pipe", "pipe", "pipe"] }).trim();
@@ -100,19 +102,56 @@ for (const format of ["sha1", "sha256"]) {
   }
 }
 
-function resolutionScript(repo) {
-  const stage = name => ({ mode: "100644", blob: gitInput(repo, ["hash-object", "-w", "--stdin"], `${name} standalone blob\n`) });
-  const outcome = {
-    algorithm: "ordered-three-way-blobs/v1", base: stage("base"), ours: stage("ours"), theirs: stage("theirs"),
-    resultBlob: git(repo, "rev-parse", "HEAD:base.txt"), resultMode: "100644", path: "base.txt", decision: "created",
-  };
-  outcome.signature = resolutionSignatureFor(outcome);
-  return `import { publishResolution } from ${JSON.stringify(resolutionsModule)};
-    publishResolution(${JSON.stringify(outcome)}, { id: "test_application", appliedCommit: ${JSON.stringify(git(repo, "rev-parse", "HEAD"))} });`;
+/**
+ * Pause a reconciliation on a conflict in `base.txt` and stage its resolution,
+ * so that `reconcile --continue` publishes a resolution: a `source` branch and
+ * the target each changed the line.
+ */
+function stageResolution(repo) {
+  git(repo, "switch", "-c", "source");
+  fs.writeFileSync(path.join(repo, "base.txt"), "source\n");
+  git(repo, "commit", "-am", "source");
+  git(repo, "switch", "main");
+  fs.writeFileSync(path.join(repo, "base.txt"), "target\n");
+  git(repo, "commit", "-am", "target");
+  assert.equal(JSON.parse(run(repo, ["reconcile", "source", "--json"]).stdout).code, "conflict-paused");
+  fs.writeFileSync(path.join(repo, "base.txt"), "resolved\n");
+  git(repo, "add", "base.txt");
 }
-function scriptRun(repo, script, env = {}) {
-  return spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: repo, encoding: "utf8", env: testEnv(env) });
+function publishResolution(repo) {
+  stageResolution(repo);
+  vlab(repo, "reconcile", "--continue", "--json");
+  return git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions");
 }
+
+/**
+ * Commit `name` with declared provenance after a post-commit hook has run
+ * `script`, an ES module given the new commit as `head` and the helpers `git`
+ * and `gitInput`; the provenance is then appended to the notes tree it left.
+ * Returns the CLI's result and the commit.
+ */
+function commitOntoNotesTree(repo, parent, name, script, env = {}) {
+  const module = path.join(parent, `${name}-hook.mjs`);
+  fs.writeFileSync(module, `import { execFileSync } from "node:child_process";
+const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+const gitInput = (args, input) => execFileSync("git", args, { input, encoding: "utf8" }).trim();
+const head = git("rev-parse", "HEAD");
+${script}
+`);
+  const hook = path.join(repo, ".git", "hooks", "post-commit");
+  fs.mkdirSync(path.dirname(hook), { recursive: true });
+  const slash = (file) => file.replaceAll("\\", "/");
+  fs.writeFileSync(hook, `#!/bin/sh\nexec "${slash(process.execPath)}" "${slash(module)}"\n`);
+  fs.chmodSync(hook, 0o755);
+  fs.writeFileSync(path.join(repo, `${name}.txt`), `${name}\n`);
+  git(repo, "add", ".");
+  const result = run(repo, ["commit", "-m", name, "--authored-by", "retention test", "--json"], env);
+  fs.rmSync(hook);
+  return { result, head: git(repo, "rev-parse", "HEAD") };
+}
+const recordCount = (repo, head) => JSON.parse(git(repo, "notes", "--ref=causet", "show", head)).records.length;
+const portableRefs = (repo) => git(repo, "for-each-ref", "--format=%(refname) %(objectname)",
+  NOTES, RETENTION, "refs/causet/resolutions");
 
 test("retained interrupted receipts survive abort and GC without covering the restored target", (t) => {
   const { repo, parent } = fixture(t);
@@ -137,8 +176,10 @@ test("large dependency sets bound carrier parent fan-in and retain every commit"
   const carriedFrom = Array.from({ length: 80 }, (_, index) => gitInput(repo, ["commit-tree", tree], `origin ${index}\n`));
   const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_many", commit: head,
     changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "carried", carriedFrom };
-  const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
-  assert.equal(result.status, 0, result.stderr);
+  // An old writer's note: the record without its retention, which backfill builds.
+  gitInput(repo, ["notes", "--ref=causet", "add", "-f", "-F", "-", head],
+    JSON.stringify({ schema: "causet.note/v1", records: [record] }));
+  assert.equal(vlab(repo, "metadata", "retain", "--apply", "--json").changed, true);
   gc(repo, parent);
   for (const line of git(repo, "rev-list", "--parents", RETENTION).split("\n")) assert.ok(line.split(" ").length <= 65);
   for (const oid of carriedFrom) assert.equal(git(repo, "cat-file", "-t", oid), "commit");
@@ -147,7 +188,7 @@ test("large dependency sets bound carrier parent fan-in and retain every commit"
 
 test("import refuses a locked retention ref without publishing notes or resolution refs", (t) => {
   const { repo, parent } = fixture(t);
-  assert.equal(scriptRun(repo, resolutionScript(repo)).status, 0);
+  assert.notEqual(publishResolution(repo), "");
   const envelope = path.join(parent, "envelope");
   vlab(repo, "metadata", "export", envelope, "--json");
   const clone = path.join(parent, "clone");
@@ -163,98 +204,113 @@ test("import refuses a locked retention ref without publishing notes or resoluti
   assert.equal(vlab(clone, "metadata", "import", envelope, "--apply", "--json").changed, true);
 });
 
-test("publication after importing fanned notes replaces the existing leaf", (t) => {
+test("publication onto a fanned note replaces the existing leaf", (t) => {
   const { repo, parent } = fixture(t);
-  const head = generatedChange(repo, "original");
-  roundTrip(repo, parent, 1);
-  const clone = path.join(parent, "clone");
-  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_added", commit: head,
-    changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
-  const result = scriptRun(clone, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(git(clone, "notes", "--ref=causet", "list").split("\n").length, 1);
-  assert.equal(JSON.parse(git(clone, "notes", "--ref=causet", "show", head)).records.length, 2);
-  gc(clone, parent);
-  assert.equal(vlab(clone, "metadata", "validate", "--json").summary.acceptedPortableRecords, 2);
+  // The new commit's note, as an earlier writer left it, under a fanned path.
+  const { result, head } = commitOntoNotesTree(repo, parent, "fanned", `
+const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_existing", commit: head,
+  changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
+const note = gitInput(["hash-object", "-w", "--stdin"], JSON.stringify({ schema: "causet.note/v1", records: [record] }));
+const fan = gitInput(["mktree"], "100644 blob " + note + "\\t" + head.slice(2) + "\\n");
+const root = gitInput(["mktree"], "040000 tree " + fan + "\\t" + head.slice(0, 2) + "\\n");
+git("update-ref", "refs/notes/causet", gitInput(["commit-tree", root], "fanned notes\\n"));
+`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(git(repo, "notes", "--ref=causet", "list").split("\n").length, 1);
+  assert.equal(recordCount(repo, head), 2);
+  gc(repo, parent);
+  assert.equal(vlab(repo, "metadata", "validate", "--json").summary.acceptedPortableRecords, 2);
 });
 
 test("mixed flat and fanned notes preserve unrelated notes and opaque entries", (t) => {
-  const { repo } = fixture(t);
-  const head = generatedChange(repo, "mixed");
-  const base = git(repo, "rev-parse", "HEAD^");
-  const previous = git(repo, "rev-parse", NOTES);
-  const noteBlob = git(repo, "notes", "--ref=causet", "list", head);
-  const opaque = gitInput(repo, ["hash-object", "-w", "--stdin"], "opaque notes tree content\n");
-  const fanned = gitInput(repo, ["mktree"], `100644 blob ${opaque}\t${base.slice(2)}\n`);
-  const root = gitInput(repo, ["mktree"], `100644 blob ${noteBlob}\t${head}\n040000 tree ${fanned}\t${base.slice(0, 2)}\n100644 blob ${opaque}\topaque.txt\n`);
-  const mixed = gitInput(repo, ["commit-tree", root, "-p", previous], "mixed notes\n");
-  git(repo, "update-ref", NOTES, mixed, previous);
-  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_mixed", commit: head,
-    changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
-  const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
-  assert.equal(result.status, 0, result.stderr);
+  const { repo, parent } = fixture(t);
+  const base = git(repo, "rev-parse", "HEAD");
+  const { result, head } = commitOntoNotesTree(repo, parent, "mixed", `
+const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_existing", commit: head,
+  changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
+const note = gitInput(["hash-object", "-w", "--stdin"], JSON.stringify({ schema: "causet.note/v1", records: [record] }));
+const opaque = gitInput(["hash-object", "-w", "--stdin"], "opaque notes tree content\\n");
+const base = ${JSON.stringify(base)};
+const fanned = gitInput(["mktree"], "100644 blob " + opaque + "\\t" + base.slice(2) + "\\n");
+const root = gitInput(["mktree"], "100644 blob " + note + "\\t" + head + "\\n040000 tree " + fanned + "\\t"
+  + base.slice(0, 2) + "\\n100644 blob " + opaque + "\\topaque.txt\\n");
+git("update-ref", "refs/notes/causet", gitInput(["commit-tree", root], "mixed notes\\n"));
+`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const opaque = git(repo, "rev-parse", `${NOTES}:opaque.txt`);
   assert.equal(git(repo, "notes", "--ref=causet", "list").split("\n").length, 2);
-  assert.equal(JSON.parse(git(repo, "notes", "--ref=causet", "show", head)).records.length, 2);
+  assert.equal(recordCount(repo, head), 2);
   assert.equal(git(repo, "notes", "--ref=causet", "list", base), opaque);
-  assert.equal(git(repo, "rev-parse", `${NOTES}:opaque.txt`), opaque);
+  assert.equal(git(repo, "cat-file", "-p", opaque), "opaque notes tree content");
 });
 
 test("opaque hexadecimal directories are not mistaken for Git notes fan-out", (t) => {
-  const { repo } = fixture(t);
-  const head = git(repo, "rev-parse", "HEAD");
-  const opaque = gitInput(repo, ["hash-object", "-w", "--stdin"], "opaque content\n");
-  const directory = gitInput(repo, ["mktree"], `100644 blob ${opaque}\topaque.txt\n`);
-  const tree = gitInput(repo, ["mktree"], `040000 tree ${directory}\t${head.slice(0, 4)}\n`);
-  const notes = gitInput(repo, ["commit-tree", tree], "opaque notes tree\n");
-  git(repo, "update-ref", NOTES, notes);
-  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_opaque", commit: head,
-    changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
-  const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(git(repo, "notes", "--ref=causet", "show", head)).records.length, 1);
-  assert.equal(git(repo, "rev-parse", `${NOTES}:${head.slice(0, 4)}/opaque.txt`), opaque);
+  const { repo, parent } = fixture(t);
+  const { result, head } = commitOntoNotesTree(repo, parent, "hexadecimal", `
+const opaque = gitInput(["hash-object", "-w", "--stdin"], "opaque content\\n");
+const directory = gitInput(["mktree"], "100644 blob " + opaque + "\\topaque.txt\\n");
+const tree = gitInput(["mktree"], "040000 tree " + directory + "\\t" + head.slice(0, 4) + "\\n");
+git("update-ref", "refs/notes/causet", gitInput(["commit-tree", tree], "opaque notes tree\\n"));
+`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(recordCount(repo, head), 1);
+  const opaque = git(repo, "rev-parse", `${NOTES}:${head.slice(0, 4)}/opaque.txt`);
+  assert.equal(git(repo, "cat-file", "-p", opaque), "opaque content");
 });
 
 test("an opaque tree occupying an attachment path is never overwritten", (t) => {
-  const { repo } = fixture(t);
-  const head = git(repo, "rev-parse", "HEAD");
-  const opaque = gitInput(repo, ["hash-object", "-w", "--stdin"], "opaque content\n");
-  const directory = gitInput(repo, ["mktree"], `100644 blob ${opaque}\topaque.txt\n`);
-  const tree = gitInput(repo, ["mktree"], `040000 tree ${directory}\t${head}\n`);
-  git(repo, "update-ref", NOTES, gitInput(repo, ["commit-tree", tree], "opaque notes tree\n"));
-  const before = refs(repo);
-  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_collision", commit: head,
-    changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
-  const result = scriptRun(repo, `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`);
+  const { repo, parent } = fixture(t);
+  let before;
+  const { result, head } = commitOntoNotesTree(repo, parent, "collision", `
+const opaque = gitInput(["hash-object", "-w", "--stdin"], "opaque content\\n");
+const directory = gitInput(["mktree"], "100644 blob " + opaque + "\\topaque.txt\\n");
+const tree = gitInput(["mktree"], "040000 tree " + directory + "\\t" + head + "\\n");
+git("update-ref", "refs/notes/causet", gitInput(["commit-tree", tree], "opaque notes tree\\n"));
+`);
+  // The commit stands; its provenance is refused, and nothing causet publishes moved.
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /non-note object occupies/);
-  assert.equal(refs(repo), before);
-  assert.equal(git(repo, "rev-parse", `${NOTES}:${head}/opaque.txt`), opaque);
+  assert.match(JSON.parse(result.stdout).details, /non-note object occupies/);
+  before = git(repo, "rev-parse", NOTES);
+  assert.equal(git(repo, "cat-file", "-p", git(repo, "rev-parse", `${NOTES}:${head}/opaque.txt`)), "opaque content");
+  assert.equal(git(repo, "rev-parse", NOTES), before);
+  assert.equal(spawnSync("git", ["rev-parse", "--verify", "--quiet", RETENTION], { cwd: repo, env: testEnv() }).status, 1,
+    "no retention was published for the refused record");
 });
 
 test("independent resolution stage blobs survive GC and envelope transfer", (t) => {
   const { repo, parent } = fixture(t);
-  const published = scriptRun(repo, resolutionScript(repo));
-  assert.equal(published.status, 0, published.stderr);
+  assert.notEqual(publishResolution(repo), "");
+  // The source's side of the conflict is reachable only through retention once
+  // its branch is gone.
+  const theirs = git(repo, "rev-parse", "source:base.txt");
+  git(repo, "branch", "-D", "source");
   gc(repo, parent);
-  assert.equal(vlab(repo, "metadata", "validate", "--json").summary.acceptedPortableRecords, 1);
-  roundTrip(repo, parent, 1);
+  assert.equal(git(repo, "cat-file", "-t", theirs), "blob");
+  const validation = vlab(repo, "metadata", "validate", "--json").summary;
+  assert.equal(validation.errors, 0);
+  roundTrip(repo, parent, validation.acceptedPortableRecords);
 });
 
 test("a resolution, its note, and object retention publish together across hard exits", (t) => {
   for (const point of ["retention:before-publish", "retention:after-publish"]) {
     const { repo, parent } = fixture(t);
-    const script = resolutionScript(repo);
-    const before = refs(repo);
-    assert.equal(scriptRun(repo, script, { CAUSET_TEST_FAULT: point }).status, 70);
+    stageResolution(repo);
+    const before = portableRefs(repo);
+    assert.equal(run(repo, ["reconcile", "--continue", "--json"], { CAUSET_TEST_FAULT: point }).status, 70);
+    const resolutions = git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions");
     if (point.endsWith("before-publish")) {
-      assert.equal(refs(repo), before);
-      assert.equal(scriptRun(repo, script).status, 0, "a new writer abandons the exited writer's lock");
+      assert.equal(portableRefs(repo), before, "nothing is published before the transaction");
+      assert.equal(resolutions, "");
+    } else {
+      assert.equal(resolutions.split("\n").length, 1, "the resolution ref moved with its note");
+      assert.notEqual(git(repo, "rev-parse", NOTES), before.match(/refs\/notes\/causet (\S+)/)?.[1]);
+      assert.ok(git(repo, "rev-parse", RETENTION));
     }
+    // The interrupted reconciliation is still abortable, and what was
+    // published survives collection.
+    vlab(repo, "reconcile", "--abort", "--json");
     gc(repo, parent);
-    assert.equal(vlab(repo, "metadata", "validate", "--json").summary.acceptedPortableRecords, 1);
-    assert.equal(git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions").split("\n").length, 1);
-    assert.ok(git(repo, "rev-parse", RETENTION));
+    assert.equal(vlab(repo, "metadata", "validate", "--json").summary.errors, 0);
   }
 });
 
@@ -314,27 +370,28 @@ test("empty retention preview and apply leave refs and object storage unchanged"
 
 test("a foreign notes writer causes atomic publication to refuse without moving retention", async (t) => {
   const { repo, parent } = fixture(t);
-  const head = generatedChange(repo, "concurrent");
+  generatedChange(repo, "concurrent");
   const retention = git(repo, "rev-parse", RETENTION);
   const gate = path.join(parent, "gate");
-  const record = { schema: "causet.provenance/v1", type: "provenance", id: "prov_concurrent", commit: head,
-    changeId: null, actors: [{ role: "generated", actor: "test" }], origin: "declared", carriedFrom: [] };
-  const script = `import { appendNote } from ${JSON.stringify(notesModule)}; appendNote(${JSON.stringify(head)}, ${JSON.stringify(record)});`;
-  const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+  fs.writeFileSync(path.join(repo, "next.txt"), "next\n");
+  git(repo, "add", ".");
+  const child = spawn(cstCommand, [...cstPrefix(), "commit", "-m", "next", "--generated-by", "retention test", "--json"], {
     cwd: repo, env: testEnv({ CAUSET_TEST_GATE: "notes:after-read", CAUSET_TEST_GATE_FILE: gate }), stdio: ["ignore", "pipe", "pipe"],
   });
-  let stderr = "";
-  child.stderr.on("data", chunk => { stderr += chunk; });
+  let output = "";
+  child.stdout.on("data", chunk => { output += chunk; });
+  child.stderr.on("data", chunk => { output += chunk; });
   const exited = new Promise(resolve => child.on("close", resolve));
   t.after(() => { if (child.exitCode === null) child.kill(); });
   const deadline = Date.now() + 20000;
   while (!fs.existsSync(`${gate}.reached`) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
-  assert.ok(fs.existsSync(`${gate}.reached`), stderr);
-  git(repo, "notes", "--ref=causet", "add", "-f", "-m", "foreign writer", head);
+  assert.ok(fs.existsSync(`${gate}.reached`), output);
+  // The writer has read the notes; another writer moves them under it.
+  git(repo, "notes", "--ref=causet", "add", "-f", "-m", "foreign writer", "HEAD~1");
   const foreign = git(repo, "rev-parse", NOTES);
   fs.writeFileSync(gate, "release");
   assert.notEqual(await exited, 0);
   assert.equal(git(repo, "rev-parse", NOTES), foreign);
   assert.equal(git(repo, "rev-parse", RETENTION), retention);
-  assert.match(stderr, /cannot lock ref|is at .* but expected/);
+  assert.match(output, /cannot lock ref|is at .* but expected/);
 });

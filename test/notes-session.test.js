@@ -1,25 +1,23 @@
+/**
+ * The notes listing the object session answers, held to `git notes list`, in
+ * the Rust engine through its probe (until #243, in `src/engine.js`).
+ */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { beginGitMetrics, endGitMetrics, withGitObjectSession } from "../src/git.js";
-import { listNoteEntries, readGitObjects } from "../src/engine.js";
+import { available, probe, unavailableReason } from "../test-support/engine-probe.js";
 import { testEnv } from "../test-support/git-environment.js";
+
+const skip = available ? false : unavailableReason;
 
 function fixture(t, format = "sha1") {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-notes-session-"));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const env = testEnv({ CAUSET_GIT_SESSION: "1", CAUSET_ENGINE: "git" });
-  const previous = new Map(Object.keys(env).map(key => [key, process.env[key]]));
-  Object.assign(process.env, env);
-  t.after(() => {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
   const git = (args, input) => {
     const result = spawnSync("git", args, {
       cwd, env, input, encoding: "utf8", windowsHide: true, maxBuffer: 128 * 1024 * 1024,
@@ -34,8 +32,8 @@ function fixture(t, format = "sha1") {
   const tree = entries => git(["mktree", "--missing"], entries.map(entry =>
     `${entry.mode ?? "100644"} ${entry.type ?? "blob"} ${entry.oid ?? blob}\t${entry.name}\n`,
   ).join(""));
-  const publish = oid => git(["update-ref", "refs/notes/causet",
-    git(["commit-tree", oid, "-m", "Notes fixture"])]);
+  const notesCommit = oid => git(["commit-tree", oid, "-m", "Notes fixture"]);
+  const publish = oid => git(["update-ref", "refs/notes/causet", notesCommit(oid)]);
   const oracle = (ref = "causet") => {
     const output = git(["notes", `--ref=${ref}`, "list"]);
     return output ? output.split(/\r?\n/).map(line => {
@@ -43,20 +41,18 @@ function fixture(t, format = "sha1") {
       return { note, target };
     }) : [];
   };
-  const listing = (ref = "causet") => withGitObjectSession(cwd, () => {
-    const collector = beginGitMetrics("notes-listing");
-    try {
-      return { entries: listNoteEntries(ref, cwd), metrics: endGitMetrics(collector) };
-    } catch (error) {
-      endGitMetrics(collector);
-      throw error;
-    }
-  });
-  return { cwd, git, blob, tree, publish, oracle, listing, width: blob.length };
+  /** The replies to `calls`, in one session of the probe, under `extra` variables. */
+  const session = (calls, extra = {}) =>
+    probe([{ cwd, engine: "git", session: true, calls }], { ...env, ...extra })[0].results;
+  const listing = (ref = "causet", extra = {}) => {
+    const [reply] = session([{ op: "listNoteEntries", args: [ref] }], extra);
+    return { entries: reply.value ?? [], error: reply.error, metrics: reply.metrics };
+  };
+  return { cwd, git, blob, tree, notesCommit, publish, oracle, session, listing, width: blob.length };
 }
 
 for (const format of ["sha1", "sha256"]) {
-  test(`session notes match Git for flat, mixed, opaque and deepest fanout trees (${format})`, t => {
+  test(`session notes match Git for flat, mixed, opaque and deepest fanout trees (${format})`, { skip }, t => {
     const f = fixture(t, format);
     const target = "ab".repeat(f.width / 2);
     let subtree = f.tree([{ name: "ab", mode: "100755" }]);
@@ -82,12 +78,12 @@ for (const format of ["sha1", "sha256"]) {
       assert.equal(actual.entries.length, 4);
       assert.ok(actual.entries.some(entry => entry.target === target));
       assert.equal(actual.metrics.processes, 1);
-      assert.ok(actual.metrics.byCommand.every(entry => entry.command !== "notes"));
+      assert.ok(actual.metrics.commands.every(entry => entry.command !== "notes"));
     }
   });
 }
 
-test("duplicate attachments delegate the whole listing to Git's combined blob", t => {
+test("duplicate attachments delegate the whole listing to Git's combined blob", { skip }, t => {
   const f = fixture(t);
   const other = f.git(["hash-object", "-w", "--stdin"], "other\n");
   const target = "ab" + "1".repeat(f.width - 2);
@@ -102,45 +98,41 @@ test("duplicate attachments delegate the whole listing to Git's combined blob", 
   assert.equal(actual.entries.length, 1);
   assert.notEqual(actual.entries[0].note, f.blob);
   assert.notEqual(actual.entries[0].note, other);
-  assert.ok(actual.metrics.byCommand.some(entry => entry.command === "notes"));
+  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
 });
 
-test("notes sessions reread moved refs and retain ordinary listing when disabled", t => {
+test("notes sessions reread moved refs and retain ordinary listing when disabled", { skip }, t => {
   const f = fixture(t);
   f.publish(f.tree([{ name: "1".repeat(f.width) }]));
-  withGitObjectSession(f.cwd, () => {
-    assert.equal(listNoteEntries("causet", f.cwd)[0].target, "1".repeat(f.width));
-    f.publish(f.tree([{ name: "2".repeat(f.width) }]));
-    assert.equal(listNoteEntries("causet", f.cwd)[0].target, "2".repeat(f.width));
-  });
-  process.env.CAUSET_GIT_SESSION = "0";
-  const actual = f.listing();
+  const moved = f.notesCommit(f.tree([{ name: "2".repeat(f.width) }]));
+  const [before, , after] = f.session([
+    { op: "listNoteEntries", args: ["causet"] },
+    { op: "$run", args: [["update-ref", "refs/notes/causet", moved]] },
+    { op: "listNoteEntries", args: ["causet"] },
+  ]);
+  assert.equal(before.value[0].target, "1".repeat(f.width));
+  assert.equal(after.value[0].target, "2".repeat(f.width));
+  const actual = f.listing("causet", { CAUSET_GIT_SESSION: "0" });
   assert.deepEqual(actual.entries, f.oracle());
   assert.equal(actual.metrics.processes, 1);
   assert.equal(actual.metrics.sessionQueries, 0);
 });
 
-test("missing notes refs and unavailable session responses retain Git behavior", t => {
+test("missing notes refs and unavailable session responses retain Git behavior", { skip }, t => {
   const f = fixture(t);
   const missing = f.listing();
   assert.deepEqual(missing.entries, []);
   assert.equal(missing.metrics.processes, 1);
-  assert.ok(missing.metrics.byCommand.every(entry => entry.command !== "notes"));
+  assert.ok(missing.metrics.commands.every(entry => entry.command !== "notes"));
   f.publish(f.tree([]));
   assert.deepEqual(f.listing().entries, []);
   f.publish(f.tree([{ name: "a".repeat(f.width) }, { name: "opaque".repeat(100) }]));
-  const previous = process.env.CAUSET_TEST_SESSION_BUFFER_BYTES;
-  process.env.CAUSET_TEST_SESSION_BUFFER_BYTES = "512";
-  t.after(() => {
-    if (previous === undefined) delete process.env.CAUSET_TEST_SESSION_BUFFER_BYTES;
-    else process.env.CAUSET_TEST_SESSION_BUFFER_BYTES = previous;
-  });
-  const actual = f.listing();
+  const actual = f.listing("causet", { CAUSET_TEST_SESSION_BUFFER_BYTES: "512" });
   assert.deepEqual(actual.entries, f.oracle());
-  assert.ok(actual.metrics.byCommand.some(entry => entry.command === "notes"));
+  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
 });
 
-test("notes tree traversal budget falls back without dropping attachments", t => {
+test("notes tree traversal budget falls back without dropping attachments", { skip }, t => {
   const f = fixture(t);
   const names = Array.from({ length: 33 }, (_, index) => index.toString(16).padStart(2, "0"));
   const leaf = f.tree([{ name: "a".repeat(f.width - 4) }]);
@@ -149,10 +141,10 @@ test("notes tree traversal budget falls back without dropping attachments", t =>
   const actual = f.listing();
   assert.deepEqual(actual.entries, f.oracle());
   assert.equal(actual.entries.length, 1089);
-  assert.ok(actual.metrics.byCommand.some(entry => entry.command === "notes"));
+  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
 });
 
-test("a missing notes subtree preserves Git's failure result instead of a partial catalog", t => {
+test("a missing notes subtree preserves Git's failure result instead of a partial catalog", { skip }, t => {
   const f = fixture(t);
   f.publish(f.tree([
     { name: "1".repeat(f.width) },
@@ -164,10 +156,10 @@ test("a missing notes subtree preserves Git's failure result instead of a partia
   assert.notEqual(oracle.status, 0);
   const actual = f.listing();
   assert.deepEqual(actual.entries, []);
-  assert.ok(actual.metrics.byCommand.some(entry => entry.command === "notes"));
+  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
 });
 
-test("oversized notes trees fall back to Git rather than publishing a partial listing", t => {
+test("oversized notes trees fall back to Git rather than publishing a partial listing", { skip }, t => {
   const f = fixture(t);
   const raw = Buffer.alloc(65537 * 256);
   for (let index = 0; index < 65537; index += 1) {
@@ -179,24 +171,24 @@ test("oversized notes trees fall back to Git rather than publishing a partial li
   f.publish(root);
   const actual = f.listing();
   assert.deepEqual(actual.entries, f.oracle());
-  assert.ok(actual.metrics.byCommand.some(entry => entry.command === "notes"));
+  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
 });
 
-test("listing notes and reading their blobs share one Git process", t => {
+test("listing notes and reading their blobs share one Git process", { skip }, t => {
   const f = fixture(t);
   f.publish(f.tree([{ name: "a".repeat(f.width) }]));
-  const collector = beginGitMetrics("notes-with-blobs");
-  withGitObjectSession(f.cwd, () => {
-    const entries = listNoteEntries("causet", f.cwd);
-    const [blob] = readGitObjects(entries.map(entry => entry.note), f.cwd);
-    assert.equal(blob.content.toString(), "note\n");
-  });
-  const metrics = endGitMetrics(collector);
-  assert.equal(metrics.processes, 1);
-  assert.equal(metrics.directReads, 0);
+  const [listed, read] = f.session([
+    { op: "listNoteEntries", args: ["causet"] },
+    { op: "readGitObjects", args: [[f.blob]] },
+  ]);
+  assert.deepEqual(listed.value.map(entry => entry.note), [f.blob]);
+  const [blob] = read.value;
+  assert.equal(blob.content.sha256, createHash("sha256").update("note\n").digest("hex"));
+  assert.equal(listed.metrics.processes + read.metrics.processes, 1);
+  assert.equal(listed.metrics.directReads + read.metrics.directReads, 0);
 });
 
-test("noncanonical tree modes delegate to Git instead of losing numeric precision", t => {
+test("noncanonical tree modes delegate to Git instead of losing numeric precision", { skip }, t => {
   const f = fixture(t);
   const target = "a".repeat(f.width);
   const raw = Buffer.concat([
@@ -208,5 +200,5 @@ test("noncanonical tree modes delegate to Git instead of losing numeric precisio
   assert.deepEqual(expected, [{ note: f.blob, target }]);
   const actual = f.listing();
   assert.deepEqual(actual.entries, expected);
-  assert.ok(actual.metrics.byCommand.some(entry => entry.command === "notes"));
+  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
 });

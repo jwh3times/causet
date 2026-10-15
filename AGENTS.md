@@ -7,11 +7,11 @@ modules such as `merge-plan.js`, `workspaces.js`, and `metadata.js`; `src/cli.js
 owns command parsing and presentation. `bin/cst.js` is the executable entry
 point. `test/integration.test.js` exercises the real CLI against disposable Git
 repositories, `test/schema-catalog.test.js` keeps the published JSON
-Schema catalog in `docs/schemas/` in agreement with the runtime validators in
-`src/schemas.js` (which remain the authority), and
+Schema catalog in `docs/schemas/` in agreement with the runtime validators of
+the Rust record model in `native/model` (the authority since #243), and
 `test/schema-compatibility.test.js` keeps the published compatibility contract
-in `docs/schemas/compatibility.md` in agreement with the `RECORD_FAMILIES` and
-`RESOURCE_BOUNDS` registries in the same module, and
+in `docs/schemas/compatibility.md` in agreement with its `RECORD_FAMILIES` and
+`RESOURCE_BOUNDS` registries, and
 `test/conformance.test.js` runs the human/JSON parity fixtures in
 `docs/conformance/fixtures.json` against the real CLI.
 `test-support/git-environment.js` is the isolated Git environment every suite
@@ -29,11 +29,12 @@ mirror.
 
 ## Build, Test, and Development Commands
 
-Developing and testing need Node.js 20+ and Git 2.40+. The released `cst` is
-the Rust executable in `native/`, which needs Git only; `src/` is the
-JavaScript CLI, kept as the oracle the suites compare it with (ADR-0037).
-There are no npm dependencies. `npm run build:native` builds the Rust side,
-which the Rust comparisons need and skip without.
+Developing and testing need Node.js 20+, Git 2.40+ and the Rust toolchain
+`native/rust-toolchain.toml` pins. The released `cst` is the Rust executable
+in `native/`, which needs Git only, and it is what the suites run (#243):
+`npm run build:native` builds it, and `npm test` fails without it. `src/` is
+the JavaScript CLI, retired by #243; its answers from the oracle period are
+frozen under `test/fixtures/oracle/`. There are no npm dependencies.
 
 - `npm test` runs the complete Node integration suite.
 - `npm run test:docs` checks local Markdown link targets.
@@ -104,9 +105,9 @@ changes, run `npm test`, `CAUSET_GIT_SESSION=1 npm test`, `CAUSET_GIT_SESSION=0 
 (the session default differs by platform, so both are forced on every host),
 `CAUSET_FORECAST_ENGINE=worktree npm test`, `CAUSET_FORECAST_ENGINE=merge-tree npm test`
 (the default forecast engine differs by platform), and `CAUSET_ENGINE=native npm test`
-(every read must pass through `src/engine.js`; never call `runGit` for a read
-in a domain module). Every CLI launch in the suites goes through
-`test-support/cst-command.js`; never spawn `bin/cst.js` directly, so that
+(every read must pass through the engine seam, `native/engine/src/engine.rs`).
+Every CLI launch in the suites goes through `test-support/cst-command.js`,
+which runs the Rust build; never spawn a CLI directly, so that
 `CAUSET_CLI=<executable> npm test` can run the same suites against another
 implementation of the CLI (ADR-0037). No numeric coverage threshold is
 defined; preserve the behavioral and failure-safety guarantees in

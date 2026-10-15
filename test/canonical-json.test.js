@@ -1,15 +1,22 @@
+/**
+ * The shared canonical-JSON vectors (`docs/canonical-json/vectors.json`)
+ * against the Rust model that serializes and hashes every record
+ * (`native/model`, the authority since #243), through its probe, and the
+ * manifest-hash vector against the shipped envelope reader, through the CLI.
+ */
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { CANONICAL_JSON_PROFILE, canonicalJson } from "../src/canonical-json.js";
-import { canonicalJson as legacyCanonicalJson } from "../src/metadata.js";
-import { readEnvelope } from "../src/metadata-envelope.js";
-import { canonicalSchema, METADATA_LINEAGE_ALGORITHM } from "../src/schemas.js";
-import { sha256 } from "../src/ids.js";
+import { testEnv } from "../test-support/git-environment.js";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { probe, registry } from "../test-support/model-probe.js";
 
+const canonicalOf = (value) => probe([{ op: "canonical", text: JSON.stringify(value) }])[0];
+const legacyOf = (value) => probe([{ op: "serialize", text: JSON.stringify(value) }])[0].legacy;
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const vectors = JSON.parse(
   fs.readFileSync(path.join(projectRoot, "docs", "canonical-json", "vectors.json"), "utf8"),
@@ -20,7 +27,8 @@ test("the shared vector file names the frozen profile", () => {
   // The vectors are frozen and name the profile by its label before issue #159:
   // the same algorithm (ADR-0039 §1).
   assert.equal(vectors.profile, "vcs-lab.canonical-json/v1");
-  assert.equal(canonicalSchema(vectors.profile), CANONICAL_JSON_PROFILE);
+  const { canonicalProfile, legacyNamespace, schemaNamespace } = registry();
+  assert.equal(vectors.profile.replace(legacyNamespace, schemaNamespace), canonicalProfile);
   assert.equal(vectors.hashAlgorithm, "sha256");
   assert.ok(vectors.vectors.length > 0);
   assert.ok(vectors.encoders.length > 0);
@@ -29,9 +37,9 @@ test("the shared vector file names the frozen profile", () => {
 
 test("every shared vector serializes and hashes to its frozen bytes", () => {
   for (const vector of vectors.vectors) {
-    const canonical = canonicalJson(vector.input);
+    const { canonical, sha256 } = canonicalOf(vector.input);
     assert.equal(canonical, vector.canonical, `vector '${vector.name}'`);
-    assert.equal(sha256(canonical), vector.sha256, `vector '${vector.name}' hash`);
+    assert.equal(sha256, vector.sha256, `vector '${vector.name}' hash`);
     assert.deepEqual(
       JSON.parse(canonical),
       vector.input,
@@ -60,7 +68,7 @@ test("the legacy digest serializer agrees on data without integer-like member na
     if (hasIntegerLikeMemberName(vector.input)) continue;
     compared += 1;
     assert.equal(
-      legacyCanonicalJson(vector.input),
+      legacyOf(vector.input),
       vector.canonical,
       `vector '${vector.name}': the byte-identical-migration claim for lineage and manifest hashes rests on this`,
     );
@@ -74,7 +82,7 @@ test("the legacy digest serializer diverges on integer-like member names", () =>
   );
   assert.ok(vector, "the member-sorting vector must exist");
   assert.ok(hasIntegerLikeMemberName(vector.input));
-  const legacy = legacyCanonicalJson(vector.input);
+  const legacy = legacyOf(vector.input);
   assert.notEqual(
     legacy,
     vector.canonical,
@@ -85,37 +93,25 @@ test("the legacy digest serializer diverges on integer-like member names", () =>
 
 test("every reject in the vector file is refused", () => {
   for (const reject of vectors.rejects) {
-    assert.throws(
-      () => canonicalJson(reject.input),
-      TypeError,
-      `reject '${reject.name}' must throw`,
-    );
+    const reply = probe([{ op: "canonical", text: JSON.stringify(reject.input) }])[0];
+    assert.equal(typeof reply.error, "string", `reject '${reject.name}' must be refused`);
   }
 });
 
-test("values JSON cannot represent faithfully are refused", () => {
-  const rejects = [
-    ["NaN", Number.NaN],
-    ["positive infinity", Number.POSITIVE_INFINITY],
-    ["negative infinity", Number.NEGATIVE_INFINITY],
-    ["negative zero", -0],
-    ["2^53", 2 ** 53],
-    ["non-integer", 1.0000001],
-    ["undefined member", { present: 1, missing: undefined }],
-    ["undefined array element", [undefined]],
-    ["bigint", 10n],
-    ["date", new Date(0)],
-    ["buffer", Buffer.from("bytes")],
-    ["map", new Map()],
-    ["set", new Set()],
-    ["function", () => {}],
-    ["symbol member", { key: Symbol("value") }],
-  ];
-  for (const [name, value] of rejects) {
-    assert.throws(() => canonicalJson(value), TypeError, `${name} must throw`);
+test("numbers the profile cannot represent faithfully are refused", () => {
+  // JSON text can spell these; the profile still refuses them. Values JSON
+  // text cannot spell at all (NaN, undefined, a BigInt) never reach the model.
+  for (const [name, text] of [
+    ["negative zero", "-0"],
+    ["2^53", "9007199254740992"],
+    ["non-integer", "1.0000001"],
+    ["nested non-integer", '{"ratio":[1.5]}'],
+  ]) {
+    const reply = probe([{ op: "canonical", text }])[0];
+    assert.equal(typeof reply.error, "string", `${name} must be refused`);
   }
-  assert.equal(canonicalJson(2 ** 53 - 1), "9007199254740991");
-  assert.equal(canonicalJson(0), "0");
+  assert.equal(probe([{ op: "canonical", text: "9007199254740991" }])[0].canonical, "9007199254740991");
+  assert.equal(probe([{ op: "canonical", text: "0" }])[0].canonical, "0");
 });
 
 test("the repository-lineage encoder vector matches the runtime identity algorithm", () => {
@@ -123,9 +119,10 @@ test("the repository-lineage encoder vector matches the runtime identity algorit
     entry.name.startsWith("repository-lineage/"),
   );
   assert.ok(encoder, "lineage encoder vector present");
-  assert.equal(encoder.input.algorithm, METADATA_LINEAGE_ALGORITHM);
-  assert.equal(canonicalJson(encoder.input), encoder.canonical);
-  assert.equal(sha256(encoder.canonical), encoder.sha256);
+  assert.equal(encoder.input.algorithm, registry().lineageAlgorithm);
+  const { canonical, sha256 } = canonicalOf(encoder.input);
+  assert.equal(canonical, encoder.canonical);
+  assert.equal(sha256, encoder.sha256);
   assert.equal(encoder.id, `lineage_${encoder.sha256}`);
 });
 
@@ -135,31 +132,43 @@ test("the manifest-hash encoder vector is accepted by the shipped envelope reade
   );
   assert.ok(encoder, "manifest-hash encoder vector present");
 
-  const payload = structuredClone(encoder.manifest);
-  delete payload.integrity;
-  delete payload.signatures;
-  assert.equal(canonicalJson(payload), encoder.hashedPayloadCanonical);
-  assert.equal(sha256(encoder.hashedPayloadCanonical), encoder.manifestHash);
+  const [hashed] = probe([{ op: "hashed", text: JSON.stringify(encoder.manifest) }]);
+  assert.equal(hashed.canonical, encoder.hashedPayloadCanonical);
+  assert.equal(hashed.sha256, encoder.manifestHash);
   assert.equal(encoder.manifest.integrity.manifestHash, encoder.manifestHash);
 
-  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-canonical-vector-")));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  // The envelope reader runs in `metadata import`. This repository shares no
+  // root with the vector's lineage, so an intact manifest passes the integrity
+  // check and is refused at the next one, the lineage.
+  const parent = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-canonical-vector-")));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const repo = path.join(parent, "repo");
+  const directory = path.join(parent, "envelope");
+  fs.mkdirSync(repo);
+  fs.mkdirSync(directory);
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo, env: testEnv() });
+  execFileSync("git", ["-c", "user.name=Vector", "-c", "user.email=vector@example.invalid",
+    "commit", "-q", "--allow-empty", "-m", "root"], { cwd: repo, env: testEnv() });
   const manifestPath = path.join(directory, "manifest.json");
+  const importing = (manifest) => {
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const result = spawnSync(cstCommand, [...cstPrefix(), "metadata", "import", directory, "--dry-run", "--json"],
+      { cwd: repo, encoding: "utf8", env: testEnv() });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    return JSON.parse(result.stdout);
+  };
 
-  fs.writeFileSync(manifestPath, `${JSON.stringify(encoder.manifest, null, 2)}\n`);
-  const envelope = readEnvelope(directory);
-  assert.equal(envelope.manifest.integrity.manifestHash, encoder.manifestHash);
+  const intact = importing(encoder.manifest);
+  assert.equal(intact.code, "unsupported-repository-shape");
+  assert.match(intact.message, /lineage is unrelated/);
 
   const tampered = structuredClone(encoder.manifest);
   tampered.excludedScopes = ["tampered"];
-  fs.writeFileSync(manifestPath, `${JSON.stringify(tampered, null, 2)}\n`);
-  assert.throws(() => readEnvelope(directory), /integrity check failed/);
+  assert.equal(importing(tampered).code, "integrity-check-failed");
 
   const unrepresentable = structuredClone(encoder.manifest);
   unrepresentable.ratio = 1.5;
-  fs.writeFileSync(manifestPath, `${JSON.stringify(unrepresentable, null, 2)}\n`);
-  assert.throws(
-    () => readEnvelope(directory),
-    /not representable in the canonical JSON profile/,
-  );
+  const refused = importing(unrepresentable);
+  assert.equal(refused.code, "malformed-input");
+  assert.match(refused.message, /not representable in the canonical JSON profile/);
 });

@@ -1,12 +1,11 @@
 import os from "node:os";
-import { environmentValue } from "../src/environment.js";
 
 export const BASELINE_SCHEMA = "vcs-lab.benchmark-baseline/v3";
 const LEGACY_SCHEMA = "vcs-lab.benchmark-baseline/v2";
 
 /** Operator-assigned labels avoid publishing hostnames or machine identifiers. */
 export function parseOptions(args, env = process.env) {
-  const options = { record: false, json: false, host: environmentValue("BENCHMARK_HOST", env) || null };
+  const options = { record: false, json: false, host: env.CAUSET_BENCHMARK_HOST || null };
   let suppliedHost = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -40,7 +39,7 @@ export function hostProvenance(id, env = process.env) {
     // Recorded under the variables' names before #159, so baselines stay
     // comparable; the values are read from `CAUSET_*` alone (ADR-0039 §8).
     overrides: Object.fromEntries(["ENGINE", "GIT_SESSION", "FORECAST_ENGINE"]
-      .map((name) => [`VLAB_${name}`, environmentValue(name, env) || null])),
+      .map((name) => [`VLAB_${name}`, env[`CAUSET_${name}`] || null])),
   };
 }
 

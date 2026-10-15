@@ -1,5 +1,6 @@
 //! The failure envelope (ADR-0021) and its closed code vocabulary, shared by
-//! every command. `src/errors.js` stays the authority for the vocabulary.
+//! every command. The vocabulary, ported from `src/errors.js`, is
+//! `registry::ERROR_CODES`, the authority since #243.
 
 use crate::json::{Object, Value, js, stringify_pretty};
 use crate::registry::{ERROR_CODES, ERROR_ENVELOPE_SCHEMA};

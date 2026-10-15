@@ -6,14 +6,17 @@ outputs (FR-GIT-06; ADR-0015 phase 0b, tracked by issue #11). Each
 `*.schema.json` file is a standalone JSON Schema (draft 2020-12) document for
 one `family/version`.
 
-**Authority.** The executable validators and the schema registry in
-`src/schemas.js` remain the runtime authority: they decide what the CLI
-accepts, quarantines, and publishes. These documents are the published
-description of those contracts. `test/schema-catalog.test.js` fails the suite
-when the two disagree: every schema identifier used in `src/` must have a
-document (or be listed as superseded below), records produced by the real CLI
-must satisfy their documents, and a note record the runtime validator rejects
-for a missing field must be rejected by its document too.
+**Authority.** The executable validators and the schema registry of the Rust
+record model (`native/model`: `schemas.rs` and `registry.rs`) are the runtime
+authority: they decide what the CLI accepts, quarantines, and publishes. These
+documents are the published description of those contracts. Until #243 the
+JavaScript `src/schemas.js` held that role; the model was ported from it
+byte for byte. `test/schema-catalog.test.js` reaches the model through its
+probe (`test-support/model-probe.js`) and fails the suite when the two
+disagree: every schema identifier the Rust CLI uses must have a document (or be
+listed as superseded below), records produced by the real CLI must satisfy
+their documents, and a note record the runtime validator rejects for a missing
+field must be rejected by its document too.
 
 **Companion documents.** [compatibility.md](compatibility.md) freezes the
 compatibility, migration, unknown-version, and resource-bound rules per family;
@@ -40,12 +43,13 @@ and rebase timing snapshots include and exclude.
   version, which versions each family reads and writes, what a reader does
   with a version it does not know, and how large a record may be are frozen
   per family in [compatibility.md](compatibility.md) (ADR-0020), whose runtime
-  authority is `RECORD_FAMILIES` and `RESOURCE_BOUNDS` in `src/schemas.js`.
+  authority is `RECORD_FAMILIES` and `RESOURCE_BOUNDS` in
+  `native/model/src/registry.rs`.
   In short: unknown portable record schemas are quarantined rather than
   consumed (`cst metadata status` reports them), and unsupported private,
   shared-local, tracked, or envelope schemas are refused with an error.
 - `x-causet-scope` annotates each document with its persistence scope and
-  must agree with `schemaClassification` in `src/schemas.js`; `cli-output`
+  must agree with the model's `schema_classification`; `cli-output`
   marks a family that exists only as command output.
 
 ## Record families

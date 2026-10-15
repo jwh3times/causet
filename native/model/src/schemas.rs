@@ -1,5 +1,5 @@
 //! Record classification, compatibility and structural validation, ported from
-//! `src/schemas.js`, which stays the authority. The validators follow the
+//! `src/schemas.js`; the authority since #243. The validators follow the
 //! JavaScript expressions they port. A member of the wrong type is a field
 //! error and is never read as an array (#172); only `resolutionSignatureFor`,
 //! whose callers pass trusted stages, can still throw, as [`Thrown`].

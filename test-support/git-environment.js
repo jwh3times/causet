@@ -2,7 +2,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach } from "node:test";
-import { environmentValue } from "../src/environment.js";
 import { cliInvocations, resetCliInvocations, selectedCli } from "./cst-command.js";
 
 /**
@@ -56,7 +55,7 @@ if (selectedCli) {
   afterEach((t) => {
     if (cliInvocations() === 0) {
       t.diagnostic(`did not invoke the CLI under test (${selectedCli}); module-level test`);
-      const report = environmentValue("CLI_REPORT");
+      const report = process.env.CAUSET_CLI_REPORT;
       if (report) {
         fs.appendFileSync(report,
           `${JSON.stringify({ file: process.argv[1] ?? null, test: t.fullName })}\n`);
