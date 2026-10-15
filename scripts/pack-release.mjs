@@ -99,6 +99,7 @@ export function packRelease(options) {
       repository: manifest.repository,
       homepage: manifest.homepage,
       bugs: manifest.bugs,
+      author: manifest.author,
       license: manifest.license,
       os: target.os,
       cpu: target.cpu,

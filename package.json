@@ -47,5 +47,6 @@
   "engines": {
     "node": ">=20"
   },
+  "author": "Jerry Holland",
   "license": "MIT"
 }
