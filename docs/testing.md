@@ -961,9 +961,9 @@ node scripts/pack-release.mjs --out dist --executable linux-x64-gnu=native/targe
 
 The main package it writes differs from this checkout's `package.json` in
 `bin`, `scripts.preinstall` and `optionalDependencies`, and adds
-`bin/native/checksums.json`. The checkout's own manifest keeps the JavaScript
-CLI as its command, for development: a release is what this script packs,
-never a plain `npm pack` of the checkout.
+`bin/native/checksums.json`. The checkout's own manifest names no command (#243):
+a release is what this script packs, never a plain `npm pack` of the
+checkout.
 
 How the installed command reaches the executable:
 
