@@ -153,6 +153,10 @@ Causal edges
         0,
       ))
     }
+    // Always printed as JSON, as `cst commit` is: the result is an object.
+    "provenance" if parsed.positionals.first().map(String::as_str) == Some("declare") => {
+      Ok((crate::provenance::declare(parsed, cwd)?, 0))
+    }
     "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
     "forecast" => {
       let source = parsed.positionals.first().cloned().unwrap_or_default();

@@ -297,7 +297,9 @@ Git commit and note publication are still separate writes. If the note write
 fails after commit creation, the error names the retained commit and reports
 partial completion. Keep that commit and follow the
 [provenance repair procedure](docs/identity/README.md#7-repairing-a-declared-provenance-publication)
-instead of blindly repeating the commit.
+instead of blindly repeating the commit: once the notes write can succeed,
+`cst provenance declare <commit>` with the original actors attaches the
+declaration, and refuses if the commit already has one.
 
 After a hard squash, `git blame` attributes every absorbed line to the landing commit and the original authorship is gone. The landing receipt already names the absorbed commits, so causet carries their declared provenance onto the landing as the union of their actors, marked `carried` and naming its sources.
 
@@ -861,7 +863,7 @@ Run `cst --help` for the current command list. The most useful commands are:
 | `cst workspace ...` | Worktree-backed lifecycle, checkpoints, and committed/checkpoint forecasts |
 | `cst spec ...` | Incremental indexing, block merge planning, explicit resolution, and corpus benchmarks |
 | `cst receipts` | Inspect causal records as text or JSON |
-| `cst provenance` | Read declared authorship provenance, carried across rewrites |
+| `cst provenance` | Read declared authorship provenance, carried across rewrites; `cst provenance declare` declares it for an existing commit |
 | `cst audit identity` | Repository-wide Change-ID collision and duplicate-origin audit |
 | `cst metadata ...` | Inventory, validate, transfer, and benchmark accepted metadata facts and scan paths |
 | `cst doctor --benchmark` | Sample ordinary Git latency and persistent object-session reuse |

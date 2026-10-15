@@ -196,6 +196,7 @@ rendering at all.
 | `cst resolve reject` | Projection `{operationId, rejected: [{path, candidates}]}` |
 | `cst resolve list` | Array of `causet.resolution/v1` with `attachedTo`, `discoveredRef`, and `commit` projections added |
 | `cst provenance [<rev>] [--all]` | `{ revision, inspected, entries[] }`; each entry projects one `causet.provenance/v1` record with the commit subject added |
+| `cst provenance declare <commit>` | Projection `{commit, changeId, provenance}` with `provenance` the `causet.provenance/v1` record attached; always JSON. Refuses with `already-exists` when the commit already has provenance |
 | `cst cherry-pick` | `causet.application/v1`, or the no-op projection `{noOp, reason, originCommit, originChangeId, targetBefore}` |
 | `cst receipts` | Array of note records (any note-record family above) with `attachedTo` added |
 | `cst metadata status` | `causet.metadata-status/v1` |

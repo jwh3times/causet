@@ -175,7 +175,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/cli/src/parsed.rs` | A command's arguments as `parseArgs` in `src/cli.js` returns them. | None |
 | `native/cli/src/plan.rs` | `cst merge-plan` and `cst rebase-plan`: the causal planners of `src/merge-plan.js` and `src/rebase-plan.js`, with the topology analysis of `src/rebase-topology.js`, the declared interactive program of `src/rebase-interactive.js`, and their renderings. | `metadata`, causet-engine, causet-model |
 | `native/cli/src/proof.rs` | `cst proof-bundle` and `cst verify-proof`: the portable proof bundle of `src/proof-bundle.js` and the Git bindings of `src/proof-binding.js`, with the command handling and rendering in `src/cli.js`. | `envelope`, `lineage`, `metadata`, `plan`, `records`, `spec`, `store`, causet-engine, causet-model |
-| `native/cli/src/provenance.rs` | `cst provenance`: the declared provenance of commits, read from their notes and never derived (FR-TRUST-04), as `src/cli.js` and `src/provenance.js` answer it. | `commit`, `notes_write`, `notes`, `parsed`, `records`, causet-engine, causet-model |
+| `native/cli/src/provenance.rs` | `cst provenance`: the declared provenance of commits, read from their notes and never derived (FR-TRUST-04), as `src/cli.js` and `src/provenance.js` answer it; and `cst provenance declare`, which declares it for a commit that already exists (#246). | `commit`, `notes_write`, `notes`, `parsed`, `records`, causet-engine, causet-model |
 | `native/cli/src/rebase.rs` | `cst rebase`: `src/rebase-operations.js`, the journaled causal rebase. | `envelope`, `forecast`, `host`, `notes_write`, `plan`, `provenance`, `rebase_forecast`, `rebase_program`, `reconcile`, `records`, `resolve`, `spec`, `target_overlay`, causet-engine, causet-model |
 | `native/cli/src/rebase_forecast.rs` | `cst rebase-forecast`: `forecastRebase` and `formatRebaseForecast` of `src/rebase-forecast.js`, a prediction of a causal rebase simulated away from the caller's worktree and saved for `cst rebase --use-forecast`. | `forecast`, `host`, `plan`, `records`, `resolve`, `spec`, `store`, `target_overlay`, causet-engine, causet-model |
 | `native/cli/src/rebase_program.rs` | The program a causal rebase runs, and the messages it commits: `rebaseProgram` of `src/forecasts.js`, `resolveStepParents` and `recreatedMergeMessage` of `src/rebase-topology.js`, and the message helpers of `src/rebase-interactive.js` (ADR-0034, ADR-0035). | causet-engine, causet-model |
@@ -1581,7 +1581,8 @@ provenance record; successful nested appends reuse the outer claim.
 This ordering closes the lock-refusal window, not the gap between two durable
 writes. A caught provenance-publication failure reports that the commit already
 exists, names it, preserves the original failure classification, and directs the
-caller to [manual provenance repair](identity/README.md#7-repairing-a-declared-provenance-publication).
+caller to the [provenance repair](identity/README.md#7-repairing-a-declared-provenance-publication),
+`cst provenance declare`.
 An abrupt process exit can still leave a commit without provenance and without
 that diagnostic. There is no commit-publication journal or automatic rollback;
 recovery attaches the original declaration to the retained commit under the notes

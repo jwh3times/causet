@@ -67,7 +67,7 @@ each is recorded in `fixtures.json` so a change to any of them is visible.
 
 ### Commands with no human rendering
 
-`commit`, `merge`, `compact-merge`, `hard-squash`, `cherry-pick`,
+`commit`, `provenance declare`, `merge`, `compact-merge`, `hard-squash`, `cherry-pick`,
 `reconcile --abort`, `rebase --abort`, `workspace create`, `workspace list`,
 `workspace checkpoint`, `workspace move`, `workspace archive`,
 `workspace restore`, `workspace repair`, `workspace prune`, `proof-bundle`,

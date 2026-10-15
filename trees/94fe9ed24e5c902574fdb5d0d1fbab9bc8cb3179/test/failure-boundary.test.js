@@ -1374,10 +1374,19 @@ test("a post-commit notes failure identifies the retained commit and permits pro
   assert.equal(fs.readFileSync(blockedRef, "utf8"), "test-held Git ref lock\n");
   assert.deepEqual(JSON.parse(vlab(repo, "provenance", commit, "--json")).entries, []);
   fs.rmSync(blockedRef);
-  // The documented repair (docs/identity/README.md §7) runs the declaration
-  // API of a v0.23.0 checkout, the last with the JavaScript CLI (#243); a
-  // retry of the commit itself is what the details forbid. Once the lock is
-  // gone, the retained commit is still the head and still undeclared.
+  // The documented repair (docs/identity/README.md §7): declare the original
+  // actors on the retained commit, rather than retry the commit, which is what
+  // the details forbid (#246).
+  assert.match(error.details, /cst provenance declare/);
   assert.equal(git(repo, "rev-parse", "HEAD"), commit);
-  assert.deepEqual(JSON.parse(vlab(repo, "provenance", commit, "--json")).entries, []);
+  const repaired = JSON.parse(vlab(repo, "provenance", "declare", commit, "--generated-by", "agent:test", "--json"));
+  assert.equal(repaired.commit, commit);
+  assert.equal(repaired.changeId, git(repo, "log", "-1", "--format=%(trailers:key=Change-Id,valueonly)", commit));
+  const entries = JSON.parse(vlab(repo, "provenance", commit, "--json")).entries;
+  assert.deepEqual(entries.map((entry) => [entry.origin, entry.actors]), [["declared", [{ role: "generated", actor: "agent:test" }]]]);
+  // A second repair is refused, so a retried procedure cannot duplicate it.
+  const again = refusal(vlabResult(repo, ["provenance", "declare", commit, "--generated-by", "agent:test", "--json"]));
+  assert.equal(again.code, "already-exists");
+  assert.equal(JSON.parse(vlab(repo, "provenance", commit, "--json")).entries.length, 1);
+  assert.equal(git(repo, "rev-parse", "HEAD"), commit);
 });
