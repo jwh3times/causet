@@ -13,6 +13,14 @@
   a claim. It prints JSON, as `cst commit` does. The v0.23.0-checkout repair
   procedure is gone, and `cst commit`'s refusal names the command. A branch or
   tag named `declare` is now read with `cst provenance refs/heads/declare`.
+- **The documented low-level fetch of the causal refs names each one** (#258).
+  The README, `docs/architecture.md` and `docs/testing.md` gave a
+  `refs/causet/*` glob, which also copies the publisher's checkpoint refs and
+  parked conflicts into the clone. They now fetch `refs/notes/causet`,
+  `refs/causet/retention` and `refs/causet/resolutions/*` by name. A clone that
+  used the glob may hold another clone's refs there; list them with
+  `git for-each-ref refs/causet/checkpoints refs/causet/checkpoint-history refs/causet/quarantine`
+  and compare against its own workspaces and imports before removing any.
 
 ## 0.24.0
 
