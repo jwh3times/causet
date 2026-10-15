@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mv9l4fxx8303039bafb4",
+      "mode": "compact",
+      "sourceRef": "docs/npm-author",
+      "sourceHead": "d840180869c046371d232f608700efc1f57cb86e",
+      "sourceSubject": "chore: name the author in the npm packages",
+      "targetBefore": "51b0e0bfd1aec935b05dbfcd4fd1c3272cfa973c",
+      "landingCommit": "33c8e32ca0f56314ad36fc3a57739ffe0dd2d5e3",
+      "base": "51b0e0bfd1aec935b05dbfcd4fd1c3272cfa973c",
+      "absorbedCommits": [
+        "d840180869c046371d232f608700efc1f57cb86e"
+      ],
+      "absorbedChanges": [
+        "ch_0mv9hcc2t0483be44086f"
+      ],
+      "resultTree": "9e14b0e138b12e2e6d91cf4a17c53bb8137d4585",
+      "createdAt": "2026-10-15T13:38:57.337Z"
+    }
+  ]
+}
