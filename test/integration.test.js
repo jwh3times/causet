@@ -6,14 +6,16 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { MERGE_TREE_ENGINE_MIN_GIT } from "../src/git.js";
-import { VERSION } from "../src/version.js";
-import { pseudoRefTarget, reachableCommits } from "../src/engine.js";
+import { MERGE_TREE_ENGINE_MIN_GIT } from "../test-support/merge-tree-floor.js";
+import { reachableCommits } from "../src/engine.js";
 import { recordsReachableFrom } from "../src/notes.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { hashedSha256, probe as modelProbe, registry } from "../test-support/model-probe.js";
+import { probe as engineProbe } from "../test-support/engine-probe.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { version: VERSION } = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
 
 test("cst is the only command: the vlab alias was removed in 0.23.0", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
@@ -5756,38 +5758,31 @@ test("merge-tree forecasts fall back when a queued change is a merge commit", (t
   assert.equal(git(repo, "rev-parse", "HEAD"), git(repo, "rev-parse", "main"));
 });
 
-test("logical identifiers follow the versioned protocol and do not collide", async () => {
-  const ids = await import(
-    pathToFileURL(path.join(projectRoot, "src", "ids.js")).href
-  );
-  const {
-    ID_ENTROPY_BITS,
-    ID_NAMESPACES,
-    LOGICAL_ID_PROFILE,
-    isLogicalId,
-    newId,
-    parseLogicalId,
-  } = ids;
+test("logical identifiers follow the versioned protocol and do not collide", () => {
+  const { idEntropyBits, idNamespaces, logicalIdProfile } = registry();
+  const parseLogicalId = (value) => modelProbe([{ op: "logical-id", value }])[0];
+  const isLogicalId = (parsed, namespace) => parsed.valid && parsed.namespace === namespace;
 
-  assert.equal(LOGICAL_ID_PROFILE, "causet.logical-id/v1");
-  assert.equal(ID_ENTROPY_BITS, 48);
+  assert.equal(logicalIdProfile, "causet.logical-id/v1");
+  assert.equal(idEntropyBits, 48);
 
   // Form: every namespace mints something the parser accepts and splits the
   // same way, including the namespaces that contain underscores, which a
   // split-on-first-underscore parser would get wrong.
-  for (const namespace of Object.keys(ID_NAMESPACES)) {
-    const id = newId(namespace);
-    const parsed = parseLogicalId(id);
+  const namespaces = Object.keys(idNamespaces);
+  const mintedPerNamespace = modelProbe(namespaces.map((prefix) => ({ op: "new-id", prefix })));
+  for (const [index, namespace] of namespaces.entries()) {
+    const parsed = parseLogicalId(mintedPerNamespace[index].id);
     assert.equal(parsed.valid, true, `${namespace} must mint a valid identifier`);
     assert.equal(parsed.namespace, namespace, `${namespace} must round-trip`);
     assert.equal(parsed.minted.length, 9);
     assert.equal(parsed.random.length, 12);
     assert.match(parsed.random, /^[0-9a-f]{12}$/);
-    assert.equal(isLogicalId(id, namespace), true);
-    assert.equal(isLogicalId(id, "ch"), namespace === "ch");
+    assert.equal(isLogicalId(parsed, namespace), true);
+    assert.equal(isLogicalId(parsed, "ch"), namespace === "ch");
   }
   assert.ok(
-    Object.keys(ID_NAMESPACES).some((namespace) => namespace.includes("_")),
+    namespaces.some((namespace) => namespace.includes("_")),
     "the underscore case must actually be exercised",
   );
 
@@ -5802,22 +5797,18 @@ test("logical identifiers follow the versioned protocol and do not collide", asy
   assert.equal(parseLogicalId("ch_0mthy2bwb66595f2dcc6Z").reason, "malformed");
   assert.equal(parseLogicalId("").reason, "not-a-string");
   assert.equal(parseLogicalId(null).reason, "not-a-string");
-  assert.equal(isLogicalId(`rsig_${"a".repeat(64)}`), false, "signatures are derived, not minted");
+  assert.equal(parseLogicalId(`rsig_${"a".repeat(64)}`).valid, false, "signatures are derived, not minted");
 
-  // Collision behaviour. Minting many identifiers as fast as possible puts a
-  // large share of them inside the same millisecond, which is the only window
-  // in which two can collide at all.
+  // Collision behaviour. Minting many identifiers as fast as possible, in one
+  // probe process, puts a large share of them inside the same millisecond,
+  // which is the only window in which two can collide at all.
   const COUNT = 20_000;
-  const minted = new Set();
-  const randoms = new Set();
-  const clocks = new Set();
-  for (let index = 0; index < COUNT; index += 1) {
-    const id = newId("ch");
-    minted.add(id);
-    const parsed = parseLogicalId(id);
-    randoms.add(parsed.random);
-    clocks.add(parsed.minted);
-  }
+  const mintedIds = modelProbe(Array.from({ length: COUNT }, () => ({ op: "new-id", prefix: "ch" })))
+    .map((reply) => reply.id);
+  const parsedIds = modelProbe(mintedIds.map((value) => ({ op: "logical-id", value })));
+  const minted = new Set(mintedIds);
+  const randoms = new Set(parsedIds.map((parsed) => parsed.random));
+  const clocks = new Set(parsedIds.map((parsed) => parsed.minted));
   assert.equal(minted.size, COUNT, "no two minted identifiers may be equal");
   assert.equal(randoms.size, COUNT, "the random half alone must not repeat at this scale");
   assert.ok(
@@ -5828,7 +5819,7 @@ test("logical identifiers follow the versioned protocol and do not collide", asy
   // The clock partitions but does not order: it is not a sort key, and the
   // protocol says so. What must hold is that it is a plausible base36 clock.
   const now = Date.now();
-  const sample = parseLogicalId(newId("ch"));
+  const sample = parseLogicalId(modelProbe([{ op: "new-id", prefix: "ch" }])[0].id);
   const decoded = parseInt(sample.minted, 36);
   assert.ok(
     Math.abs(decoded - now) < 60_000,
@@ -5991,10 +5982,7 @@ test("the identity audit warns about near-duplicate provenance actor names", (t)
   assert.doesNotMatch(human, /logical identity is not unambiguous/);
 });
 
-test("a proof bundle lets a verifier recompute coverage instead of trusting it", async (t) => {
-  const { canonicalJson } = await import(
-    pathToFileURL(path.join(projectRoot, "src", "canonical-json.js")).href
-  );
+test("a proof bundle lets a verifier recompute coverage instead of trusting it", (t) => {
   const { repo } = makeRepo(t);
   write(repo, "a.txt", "base\n");
   git(repo, "add", ".");
@@ -6041,10 +6029,8 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
   assert.equal(honest.repository.checked, true);
   assert.equal(honest.repository.matches, true);
 
-  const rehash = (value) => {
-    const { integrity, signatures, ...payload } = value;
-    return createHash("sha256").update(canonicalJson(payload)).digest("hex");
-  };
+  // The bundle hash covers everything but `integrity` and `signatures`.
+  const rehash = (value) => hashedSha256(value);
 
   // 2. A doctored claim with a stale hash fails both checks.
   const doctored = JSON.parse(JSON.stringify(bundle));
@@ -6129,7 +6115,6 @@ test("a proof bundle lets a verifier recompute coverage instead of trusting it",
 });
 
 test("proof verification binds rehashed claims to the complete source history and bases", async (t) => {
-  const { bundleHash } = await import("../src/proof-bundle.js");
   const { repo, parent } = makeRepo(t);
   write(repo, "base.txt", "base\n");
   git(repo, "add", ".");
@@ -6150,7 +6135,7 @@ test("proof verification binds rehashed claims to the complete source history an
   assert.notEqual(bundle.effectiveBase.commit, bundle.physicalBase);
   const file = path.join(parent, "proof.json");
   const verify = (value, ...args) => {
-    value.integrity.bundleHash = bundleHash(value);
+    value.integrity.bundleHash = hashedSha256(value);
     fs.writeFileSync(file, JSON.stringify(value));
     return vlabResult(repo, "verify-proof", file, ...args);
   };
@@ -6230,9 +6215,8 @@ test("proof verification binds rehashed claims to the complete source history an
   git(repo, "switch", "main");
   const disconnected = git(repo, "commit-tree", `${bundle.physicalBase}^{tree}`, "-m", "Disconnected root");
   git(repo, "update-ref", "refs/heads/disconnected", disconnected);
-  const { repositoryLineage } = await import("../src/metadata.js");
   const unreadable = structuredClone(bundle);
-  unreadable.repository.lineage = repositoryLineage(repo);
+  unreadable.repository.lineage = JSON.parse(vlab(repo, "capabilities", "--json")).repository.lineage;
   unreadable.source = { ref: "disconnected", head: disconnected };
   const refused = verify(unreadable, "--json");
   assert.notEqual(refused.status, 0);
@@ -6778,7 +6762,13 @@ test("a branch named CHERRY_PICK_HEAD does not pass for a pending cherry-pick", 
   // Git metadata is untrusted input. `rev-parse CHERRY_PICK_HEAD` resolves a
   // branch of that name when no pick is pending, which the sequencer-state
   // reads must not mistake for one; and when a pick is pending the branch
-  // must not hide it.
+  // must not hide it. The Rust engine answers through its probe.
+  const pseudoRefTarget = (name, cwd) => {
+    const [reply] = engineProbe([{ cwd, engine: "git", calls: [{ op: "pseudoRefTarget", args: [name] }] }], testEnv());
+    const [result] = reply.results;
+    assert.equal(result.error, undefined, JSON.stringify(result.error));
+    return result.value;
+  };
   const { repo } = makeRepo(t);
   write(repo, "a.txt", "base\n");
   git(repo, "add", ".");

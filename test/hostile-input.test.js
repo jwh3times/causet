@@ -4,9 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
-import { RESOURCE_BOUNDS } from "../src/schemas.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { registry } from "../test-support/model-probe.js";
+
+const RESOURCE_BOUNDS = registry().bounds;
 
 
 // ---------------------------------------------------------------------------

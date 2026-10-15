@@ -6,7 +6,8 @@ run history-changing manual experiments in a valuable repository.
 
 ## Requirements
 
-- Node.js 20 or newer, which runs the suites and the JavaScript CLI they use as the oracle; the installed `cst` itself needs none
+- Node.js 20 or newer, which runs the suites; the installed `cst` itself needs none
+- Rust (the toolchain `native/rust-toolchain.toml` pins), to build the `cst` the suites run with `npm run build:native`
 - Git 2.40 or newer (Git 2.49 or newer to exercise the merge-tree forecast
   engine; the merge-tree scenarios skip on older Git, where one scenario
   verifies the immediate `git-too-old` fallback instead)
@@ -23,8 +24,12 @@ verifies hard-squash, cherry-pick, rebase, provenance, and raw resolution-stage
 dependencies across local GC and envelope round trips, for SHA-1 and SHA-256.
 Interrupted publication followed by abort must preserve valid facts while
 granting no target coverage. Hard-exit and competing-writer tests exercise the
-checked notes/retention/resolution transaction; a locked retention ref must
-leave import destinations unchanged.
+checked notes/retention/resolution transaction, through a conflicted
+`cst reconcile --continue` that publishes a resolution and a gated
+`cst commit`; a locked retention ref must leave import destinations unchanged.
+The notes-tree cases (a fanned leaf, mixed flat and fanned notes, opaque
+hexadecimal directories, an opaque tree on the attachment path) let a
+post-commit hook lay out the tree `cst commit` then appends its provenance to.
 
 Backfill tests cover read-only preview, quarantine, idempotence, and shared
 retention from a linked worktree. Carrier tests bound parent fan-in at 64 and
@@ -178,12 +183,14 @@ supported profile, parser fuzz target, optional packaging, and ADR-0027's separa
 latency gate. Git transport tests explicitly select Git; native oracle tests
 assert executed operations and zero Git processes for supported inputs.
 
-**Running the suites against another CLI implementation.** Every CLI launch in
-the suites, the demos, `scripts/benchmark-regression.mjs`, and the whole-command
-part of `scripts/measure-real-repository.mjs` goes through
-`test-support/cst-command.js`. By default that is this checkout's JavaScript
-CLI (`node bin/cst.js`). `CAUSET_CLI=<path>` selects another implementation, such
-as a Rust build of the CLI (ADR-0037, #140):
+**The CLI the suites run.** Every CLI launch in the suites, the demos,
+`scripts/benchmark-regression.mjs`, and the whole-command part of
+`scripts/measure-real-repository.mjs` goes through `test-support/cst-command.js`.
+Since #243 that is this checkout's Rust build, `native/target/release/cst`
+(`cst.exe` on Windows), which `npm run build:native` produces; without it the
+first test that runs the CLI fails and names the command. CI's suite jobs build
+it before `npm test`. `CAUSET_CLI=<path>` selects another implementation
+(ADR-0037, #140):
 - a `.js`, `.mjs` or `.cjs` path runs under the current Node;
 - any other path is executed directly;
 - a path that does not exist stops the run.
@@ -193,129 +200,101 @@ CAUSET_CLI=path/to/cst npm test
 CAUSET_CLI=path/to/cst CAUSET_ENGINE=native npm test   # combines with every mode
 ```
 
-Some tests exercise the JavaScript modules directly and never launch the CLI;
-they cannot say anything about another implementation. Rather than a
-hand-maintained list, the suite counts CLI invocations per test. When
-`CAUSET_CLI` is set, each test that made none is reported with a diagnostic line,
-`did not invoke the CLI under test (…); module-level test`. With
-`CAUSET_CLI_REPORT=<file>` set as well, it also appends one JSON line per such
-test to that file, so a whole run can be counted. Those tests still run and
-still pass or fail against the JavaScript modules, but a `CAUSET_CLI` run's
-evidence for the selected CLI is the tests *not* in that report.
+Some tests check a module or a probe and never launch the CLI; they say nothing
+about a selected implementation. Rather than a hand-maintained list, the suite
+counts CLI invocations per test. When `CAUSET_CLI` is set, each test that made
+none is reported with a diagnostic line, `did not invoke the CLI under test (…);
+module-level test`. With `CAUSET_CLI_REPORT=<file>` set as well, it also appends
+one JSON line per such test to that file, so a whole run can be counted.
 
-With `CAUSET_CLI` pointing at `bin/cst.js` explicitly, every mode passes exactly
-as it does with `CAUSET_CLI` unset; that run proves the indirection adds nothing.
-`CAUSET_CLI=native/target/release/cst.exe` (or `cst` off Windows) in all six
-modes was the qualification each ported command needed (ADR-0037 decision 4).
+**The JavaScript oracle, frozen.** Until #243 three suites put the Rust
+implementation and the JavaScript one in `src/` on the same inputs and required
+the same answers. ADR-0037's oracle period ended with v0.23.0, so those answers
+were recorded once from `src/` and committed under `test/fixtures/oracle/`; the
+suites now hold the Rust side to them. A frozen group is either the values
+themselves or, for a large corpus, a string of 8-digit SHA-256 prefixes of each
+case's expected answer (`test-support/oracle-vectors.js`); a mismatch names the
+case and prints the Rust answer. The inputs live beside the suites, in
+`test-support/model-corpus.js`, `engine-corpus.js` and `cli-corpus.js`, and a
+change to one invalidates its frozen answers. There is no oracle to re-record
+from: changing a corpus or an answer means deciding that the Rust answer is
+right, and saying so in the change.
 
-The Rust CLI (`native/cli`, #141) answers every command itself (#212), and
-since #243 it has no route to the JavaScript CLI: `CAUSET_DELEGATE` and
-`CAUSET_JS_CLI` are ignored. An argument shape the JavaScript parser fails on by
-accident fails the same way natively. `test/native-cli.test.js` compares every
-native answer (help, version, and each usage failure, human and JSON) with the
-JavaScript CLI byte for byte. For the ported commands (`doctor`, `capabilities`, `graph`,
-`receipts`, `provenance`, `metadata status` and `validate`, `audit identity`,
-`resolve list` and `status`, `spec show` and `status`, `merge-plan`,
-`rebase-plan`, `proof-bundle`, and `verify-proof`, #144; `init`, `commit`, and `metadata retain`, `export`, `import` and `dispose`, #145; `branch`, `merge`,
-`compact-merge`, `hard-squash` and `cherry-pick`, #146; `workspace list`,
-`checkpoint`, `prune`, `create`, `move`, `archive`, `restore` and `repair`,
-`spec index`, `spec merge-plan` and `spec resolve`, #149; `resolve apply`,
-`resolve reject`, `forecast`, and `reconcile`, #147; `workspace forecast`, #149; `rebase-forecast` and `rebase`, #148; `migrate`, `metadata benchmark` and `spec benchmark`, #212), it also compares their output in a repository. For `reconcile` and `rebase` a case
-that names two roles runs with either CLI in each, so a forecast one CLI wrote
-(under each forecast engine, or by `workspace forecast --source-checkpoint`) is
-consumed by the other, and a journal one
-started is reported on, continued or aborted by the other. The only members allowed to differ are
-`implementation` and `node`, the runtime description ADR-0037 §5 permits. It uses the `CAUSET_CLI` executable, or else the release build
-`node scripts/build-native.mjs` produces, and skips when neither exists.
+- `test/native-cli.test.js` runs the Rust CLI on every invocation the two CLIs
+  were compared on outside a repository: help and version, the global flag and
+  environment failures, each flag without its value, every argument-only usage
+  failure human and JSON, the camel-case input the JavaScript parser failed on
+  by accident, `doctor` and the record readers outside a repository, the
+  build-scoped capability document, and the benchmarks. The version, the
+  directory the cases run in, trace timings, the benchmark's environment and
+  timings, and the capability document's hashes are masked. It also checks that
+  the runtime describes itself as the Rust CLI (ADR-0037 §5) and that the
+  former delegation variables, `CAUSET_DELEGATE` and `CAUSET_JS_CLI`, are
+  ignored. The comparisons inside repositories, including that a journal or a
+  forecast one CLI wrote was finished or consumed by the other, ended with the
+  oracle; the integration, conformance, schema and failure-boundary suites
+  hold the Rust CLI to the same behavior in every mode.
+- `test/rust-model.test.js` runs the Rust record model (`native/model`, #142)
+  through the `model-probe` executable (`test-support/model-probe.js`) and
+  holds it to the oracle's answers for:
+  - the canonical-JSON vectors, and 1,500 generated documents through the
+    canonical, hashed-payload and legacy serializers (compact and pretty are
+    checked against `JSON.stringify` itself);
+  - the registries, every family, bound, error code and namespace, in order;
+  - classification, compatibility and readability for every family, version
+    and spelling;
+  - the validators and referenced objects over every real record of the
+    v0.19.1 fixture and every one-member mutation of each, in both object
+    formats, where a malformed member must be a field error, never a throw
+    (#172);
+  - resolution signatures, logical identifiers, and `createdAt` timestamps,
+    judged by the ECMAScript date-time format alone, including strings V8's
+    non-ISO `Date.parse` fallback would read (#173); SHA-256 is checked
+    against `node:crypto`. Generated member names avoid escapes, because Node
+    26.4's `JSON.parse` could mis-name an escaped member after an earlier
+    object primed the same member path; fixed cases cover those names.
+- `test/rust-engine.test.js` runs the Rust Git engine (`native/engine`, #143)
+  through the `engine-probe` executable (`test-support/engine-probe.js`). The
+  repositories are dated, so object IDs are stable, and the scratch directory
+  and the host's Git version are masked. For every call the value or the error
+  (code, message, details and exit code) and every count must be the oracle's:
+  processes, session queries and cache hits; fallbacks, native reads and direct
+  reads; the per-command counts. Timings are not compared. The requests cover
+  every catalog operation and its failure paths, with and without an object
+  session, on a history with trailers, a merge, tags, notes, specs and a locked
+  linked worktree, a stopped cherry-pick, an empty repository and a SHA-256
+  repository; the native engine's answers and each fallback reason; the session
+  cache and its invalidation by a mutation; the bypass rule; the merge-tree
+  session's clean, conflicted and refused steps and the four session failure
+  hooks (skipped on a Git older than the merge-tree engine needs); and the
+  engine differential, whose Git column must match the oracle's operation for
+  operation. A clone of this repository, whose history changes with every
+  commit, is held to the Rust engine itself: its differential must be equal,
+  and every catalog call must answer alike with and without a session.
 
-The Rust record model (`native/model`, #142) is what the ported commands will
-share: JSON as JavaScript parses and writes it, canonical JSON and the legacy
-digest serializer, logical identifiers, SHA-256, the record-family and
-resource-bound registries, classification, the note-record validators, and the
-error vocabulary. `src/` stays the authority. `test/rust-model.test.js` runs
-both on the same inputs through the `model-probe` executable
-(`test-support/model-probe.js`) and requires identical results:
-
-- the canonical-JSON vectors, and 1,500 generated documents through the
-  canonical, hashed-payload, compact, pretty and legacy serializers;
-- registry equality, including every family, bound, error code and namespace;
-- classification, compatibility and readability for every family, version
-  and spelling;
-- the validators and referenced objects over every real record of the v0.19.1
-  fixture and every one-member mutation of each, in both object formats,
-  where a malformed member must be a field error in both, never a throw
-  (#172);
-- resolution signatures, logical identifiers, SHA-256 and `createdAt`
-  timestamps.
-
-`test/schema-catalog.test.js` adds the same check for every record its live
-scenario publishes. Timestamps are judged by the ECMAScript date-time format
-on both sides, including strings V8's non-ISO `Date.parse` fallback would read
-(#173). One limit is deliberate: generated member names avoid escapes, because
-Node 26.4's `JSON.parse` can mis-name an escaped member after an earlier object
-primed the same member path (fixed cases cover those names instead). Both
-suites skip when the probe is not built.
-
-The Rust Git engine (`native/engine`, #143) is the layer every ported command
-will sit on:
-- the 44-operation read catalog behind one backend trait, with the Git backend
-  and the gitoxide backend for its five operations;
-- the object and merge-tree sessions, as child processes without a worker;
-- explicit mutations and the bypass rule;
-- the metrics;
-- the engine differential.
-
-`src/git.js` and `src/engine.js` stay the authority. `test/rust-engine.test.js`
-runs each request through both, the Rust side through the `engine-probe`
-executable (`test-support/engine-probe.js`). For every call, the two must agree
-on the canonical value or the error (code, message, details and exit code), and
-on every count:
-- processes, session queries and cache hits;
-- fallbacks, native reads and direct reads;
-- the per-command counts.
-
-Timings are the only metrics not compared. The requests cover:
-- every catalog operation and its failure paths, with and without an object
-  session, on these repositories:
-  - a history with trailers, a merge, tags, notes, specs and a locked linked
-    worktree;
-  - a stopped cherry-pick;
-  - an empty repository;
-  - a SHA-256 repository;
-  - a clone of this repository with its notes;
-- the native engine's answers and each fallback reason;
-- the session cache and its invalidation by a mutation;
-- the bypass rule;
-- the merge-tree session's clean, conflicted and refused steps;
-- the four session failure hooks;
-- the engine differential, whose Git column must match the JavaScript
-  differential digest for digest and process for process.
-
-An operation added to `src/engine.js` without its Rust counterpart fails the
-suite. The two differentials must list the same catalog, so a new operation
-needs:
-- its Git implementation in `native/engine/src/git.rs`;
-- its catalog line in `native/engine/src/engine.rs`;
-- its probe in `native/engine/src/differential.rs`;
-- its arm in `native/engine/src/bin/engine-probe.rs`;
-- a call in `test/rust-engine.test.js`.
-
-Because the JavaScript side runs every request before the probe replays them,
-a request that mutates a repository restores it before it ends. The suite
-skips when the probe is not built. A mutation fuzz target, `fuzz-engine`, runs
-every parser of Git output in CI.
+A new engine operation needs its Git implementation in
+`native/engine/src/git.rs`, its catalog line in `native/engine/src/engine.rs`,
+its probe in `native/engine/src/differential.rs` and its arm in
+`native/engine/src/bin/engine-probe.rs`. It changes the catalog the frozen
+differentials list, so their answers are re-recorded from the Rust engine, as
+above. The suites skip when a probe is not built. Mutation fuzz targets,
+`fuzz-parsers`, `fuzz-model` and `fuzz-engine`, run in CI.
 
 CI's suite jobs also run the Rust crates' unit tests:
 `cargo test --workspace --exclude causet-binding`. The N-API binding is
-excluded because it links only inside Node.
+excluded because it links only inside Node. The scale benchmark's analysis is
+one of them (`native/cli/src/scale_benchmark.rs`, until #243
+`test/scale-benchmark-analysis.test.js`).
 
 The suite includes `test/schema-catalog.test.js`, which keeps the published
 JSON Schema catalog in `docs/schemas/` in agreement with the executable
-validators in `src/schemas.js`: every schema identifier used in `src/` must
-have a catalog document, records produced by the real CLI must satisfy their
-documents, and a note record the runtime validator rejects for a missing
-field must be rejected by its document too. A new or changed record family is
-not complete until its catalog document passes these checks.
+validators of the Rust record model (`native/model`, the authority since #243),
+through its probe: every schema identifier the Rust CLI uses (`native/cli`,
+`native/engine` and `native/model`, outside their unit tests) must have a
+catalog document, records produced by the real CLI must satisfy their documents
+and the model's validator, and a note record the validator rejects for a
+missing field must be rejected by its document too. A new or changed record
+family is not complete until its catalog document passes these checks.
 `test/canonical-json.test.js` verifies the frozen canonical-JSON profile
 against the shared vectors in `docs/canonical-json/vectors.json`; a future
 native implementation must pass the same vector file byte for byte.
@@ -396,7 +375,8 @@ prune previews stay available. The repository-wide guard also covers unregistere
 missing and live worktrees. Malformed, null, and unknown-version journals refuse
 by presence, while a caller's journal does not block archiving a different target.
 
-`test/notes-session.test.js` compares notes listings directly with Git for
+`test/notes-session.test.js` compares the Rust engine's notes listings, through
+its probe, directly with Git for
 SHA-1 and SHA-256, mixed flat and deepest legal fanout trees, executable notes,
 uppercase hexadecimal paths, opaque entries, moved refs, and duplicate
 attachments. It checks complete fallback on session failures and traversal
@@ -427,14 +407,16 @@ which is how the `git-too-old` fallback is exercised on a host whose Git is new
 enough. Like `CAUSET_TEST_FAULT` and `CAUSET_TEST_GATE`, each is inert unless it is
 set exactly.
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
-its checks are **static**: they scan `src/` for every `new CliError` and fail
-if one carries no code or a code outside `ERROR_CODES`, and fail in the other
-direction if a published code is raised nowhere. That is deliberate. The
+its checks are **static**: they scan the Rust CLI, engine and model for every
+`GitError::new` and front-end failure, and fail if one names a code outside
+`ERROR_CODES` or forwards anything but a code it was handed, and fail in the
+other direction if a published code is raised nowhere. That is deliberate. The
 property worth guaranteeing is "every raise site is classified", and no amount
 of exercising the CLI proves anything about the sites no test reaches — there
-are 232 of them, and the suite reaches a fraction. A third check keeps
+are nearly 300 of them, and the suite reaches a fraction. A third check keeps
 `docs/schemas/errors.md` and the runtime map in agreement, the same relation
-`docs/schemas/` and `src/schemas.js` hold for record families.
+`docs/schemas/` and the Rust model hold for record families (until #243 the
+scan read `src/`).
 
 The behavioural checks pin what changed for callers: a `--json` failure is an
 envelope on stdout with stderr empty, the human path's prose and every exit
@@ -704,11 +686,13 @@ verifies and reports `lineageRelation: fork` (issue #89).
 The test skips itself if the host Git cannot create a SHA-256 repository.
 `test/schema-compatibility.test.js` keeps the published compatibility contract
 in `docs/schemas/compatibility.md` in agreement with `RECORD_FAMILIES` and
-`RESOURCE_BOUNDS` in `src/schemas.js`, and exercises each disposition against
-the real CLI: an unreadable journal, registry, or forecast is refused without
-being rewritten, a note container from another build survives a refused
-receipt publication byte for byte, and an oversize note is quarantined with a
-diagnostic rather than failing the command. A new record family, a new version,
+`RESOURCE_BOUNDS` in the Rust model, through its probe, and exercises each
+disposition against the real CLI: an unreadable journal, registry, or forecast
+is refused without being rewritten, a note container from another build
+survives a refused receipt publication byte for byte, and an oversize note is
+quarantined with a diagnostic rather than failing the command. A post-commit
+hook puts the foreign or oversize note on the commit `cst commit` is about to
+declare provenance for, which is how the receipt writer meets it. A new record family, a new version,
 or a changed bound is not complete until these checks pass.
 
 Run the maintained demonstrations when changing their workflows:

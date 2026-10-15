@@ -5,29 +5,24 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import {
-  EXCHANGED_SCOPES,
-  EXCHANGE_FEATURES,
-  RECORD_FAMILIES,
-  LEGACY_SCHEMA_NAMESPACE,
-  RESOURCE_BOUNDS,
-  SCHEMA_NAMESPACE,
-  canonicalSchema,
-  schemaClassification,
-  schemaCompatibility,
-  withinBound,
-} from "../src/schemas.js";
-import {
-  ADVERTISED_BOUNDS,
-  UNADVERTISED_BOUNDS,
-  capabilityDocument,
-} from "../src/capabilities.js";
-import { appendNote, readNote } from "../src/notes.js";
-import { forecastForPlan } from "../src/forecasts.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { probe as modelProbe, registry } from "../test-support/model-probe.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// The registries are the Rust record model's (`native/model`, the authority
+// since #243), reached through its probe.
+const {
+  bounds: RESOURCE_BOUNDS,
+  exchangeFeatures: EXCHANGE_FEATURES,
+  exchangedScopes: EXCHANGED_SCOPES,
+  legacyNamespace: LEGACY_SCHEMA_NAMESPACE,
+  schemaNamespace: SCHEMA_NAMESPACE,
+} = registry();
+const RECORD_FAMILIES = new Map(registry().families.map(({ name, ...policy }) => [name, policy]));
+const classify = (schemas) => modelProbe(schemas.map((schema) => ({ op: "classify", schema })));
+const schemaCompatibility = (schema) => classify([schema])[0].compatibility;
 
 const compatibilityDoc = fs.readFileSync(
   path.join(projectRoot, "docs", "schemas", "compatibility.md"),
@@ -148,7 +143,7 @@ test("the advertised document equals the registries it projects", () => {
   // ADR-0033 requires this direction specifically: a registry change that is
   // not advertised must fail the suite, because a peer negotiating from a stale
   // document would conclude something this build will not honour.
-  const document = capabilityDocument({ repository: null });
+  const document = buildCapabilities();
 
   const advertised = new Map(document.families.map((entry) => [entry.family, entry]));
   const exchanged = [...RECORD_FAMILIES].filter(([, policy]) =>
@@ -174,10 +169,6 @@ test("the advertised document equals the registries it projects", () => {
   }
 
   assert.deepEqual(document.features, [...EXCHANGE_FEATURES].sort());
-  assert.deepEqual(
-    Object.keys(document.bounds).sort(),
-    [...ADVERTISED_BOUNDS].sort(),
-  );
   for (const [name, value] of Object.entries(document.bounds)) {
     assert.equal(value, RESOURCE_BOUNDS[name], `advertised value of '${name}'`);
   }
@@ -185,16 +176,20 @@ test("the advertised document equals the registries it projects", () => {
 
 test("every resource bound is either advertised or deliberately not", () => {
   // The partition is what stops a new bound from being added without deciding
-  // whether a peer needs it.
-  const decided = [...ADVERTISED_BOUNDS, ...Object.keys(UNADVERTISED_BOUNDS)].sort();
+  // whether a peer needs it: the build advertises some, and compatibility.md
+  // gives the reason for each of the others.
+  const advertised = Object.keys(buildCapabilities().bounds);
+  const unadvertised = new Map(tableRows("| Unadvertised bound | Why a peer does not need it |")
+    .map(([name, reason]) => [plain(name), reason]));
+  const decided = [...advertised, ...unadvertised.keys()].sort();
   assert.deepEqual(decided, Object.keys(RESOURCE_BOUNDS).sort(),
-    "ADVERTISED_BOUNDS and UNADVERTISED_BOUNDS must together name every bound");
+    "the advertised bounds and compatibility.md's unadvertised ones must together name every bound");
   assert.deepEqual(
-    ADVERTISED_BOUNDS.filter((name) => name in UNADVERTISED_BOUNDS),
+    advertised.filter((name) => unadvertised.has(name)),
     [],
     "a bound cannot be both advertised and not",
   );
-  for (const [name, reason] of Object.entries(UNADVERTISED_BOUNDS)) {
+  for (const [name, reason] of unadvertised) {
     assert.ok(reason.split(/\s+/).length >= 6,
       `'${name}' must say why a peer does not need it`);
   }
@@ -230,7 +225,7 @@ test("every family resolves its own versions and disposes of the rest by scope",
 });
 
 test("an unregistered family and a malformed identifier are never readable", () => {
-  for (const schema of ["causet.not-a-family/v1", "causet.landing", "", null, undefined, 7]) {
+  for (const schema of ["causet.not-a-family/v1", "causet.landing", "", null, 7]) {
     const compatibility = schemaCompatibility(schema);
     assert.equal(compatibility.readable, false, `'${String(schema)}' must not be readable`);
     assert.equal(compatibility.disposition, "unknown-family", `'${String(schema)}' disposition`);
@@ -244,36 +239,43 @@ test("the legacy spelling of every family resolves exactly as the family does (A
     for (const version of [...policy.registered, Math.max(...policy.registered) + 1]) {
       const current = `${family}/v${version}`;
       const legacy = `${legacyFamily}/v${version}`;
-      assert.equal(canonicalSchema(legacy), current);
-      assert.deepEqual(schemaCompatibility(legacy), schemaCompatibility(current), legacy);
+      const [legacyReply, currentReply] = classify([legacy, current]);
+      assert.deepEqual(legacyReply.compatibility, currentReply.compatibility, legacy);
       assert.deepEqual(
-        { ...schemaClassification(legacy), legacyName: false },
-        schemaClassification(current),
+        { ...legacyReply.classification, legacyName: false },
+        currentReply.classification,
         legacy,
       );
-      assert.equal(schemaClassification(legacy).legacyName, true);
+      assert.equal(legacyReply.classification.legacyName, true);
     }
   }
-  // Only the namespace is aliased: anything else is left exactly as given.
-  for (const other of ["causet", "vcs-labs.landing/v1", "xvcs-lab.landing/v1", "causet.landing/v1", null]) {
-    assert.equal(canonicalSchema(other), other);
+  // Only the namespace is aliased: a near miss is no family at all.
+  for (const [other, reply] of [["vcs-labs.landing/v1", "xvcs-lab.landing/v1", "causet"]]
+    .flat().map((schema) => [schema, classify([schema])[0]])) {
+    assert.equal(reply.classification.known, false, other);
+    assert.equal(reply.classification.legacyName, false, other);
   }
 });
 
 test("no writer emits a legacy vcs-lab.* identifier (ADR-0039 §2)", () => {
+  // The Rust sources outside their unit tests and the probe and fuzzing
+  // executables under `src/bin`, which write nothing a repository keeps.
   const offenders = [];
-  for (const file of fs.readdirSync(path.join(projectRoot, "src"))) {
-    if (!file.endsWith(".js")) continue;
-    const text = fs.readFileSync(path.join(projectRoot, "src", file), "utf8");
-    for (const match of text.matchAll(/\bvcs-lab\.[a-z][a-z-]*/g)) offenders.push(`src/${file}: ${match[0]}`);
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) { if (entry.name !== "bin") walk(full); continue; }
+      if (!entry.name.endsWith(".rs")) continue;
+      const text = fs.readFileSync(full, "utf8").split("#[cfg(test)]")[0];
+      for (const match of text.matchAll(/\bvcs-lab\.[a-z][a-z-]*/g)) {
+        offenders.push(`${path.relative(projectRoot, full)}: ${match[0]}`);
+      }
+    }
+  };
+  for (const directory of ["native/cli/src", "native/engine/src", "native/model/src"]) {
+    walk(path.join(projectRoot, directory));
   }
   assert.deepEqual(offenders, []);
-});
-
-test("bounds are checked at the boundary and an unknown bound name throws", () => {
-  assert.equal(withinBound("noteContainerRecords", RESOURCE_BOUNDS.noteContainerRecords), true);
-  assert.equal(withinBound("noteContainerRecords", RESOURCE_BOUNDS.noteContainerRecords + 1), false);
-  assert.throws(() => withinBound("noSuchBound", 0), /Unknown resource bound/);
 });
 
 // ---------------------------------------------------------------------------
@@ -315,6 +317,35 @@ function repository(t) {
   git(repo, "add", "-A");
   exec(cstCommand, [...cstPrefix(), "commit", "-m", "base"], repo);
   return repo;
+}
+
+/** The build-scoped capability document, outside any repository. */
+function buildCapabilities() {
+  const outside = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-compatibility-outside-")));
+  try {
+    return JSON.parse(exec(cstCommand, [...cstPrefix(), "capabilities", "--json"], outside));
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Commit with declared provenance, after a `post-commit` hook has put `note`
+ * on the new commit: the provenance record must then be appended to a
+ * container causet did not write. Returns the commit and the CLI's result.
+ */
+function commitOnto(repo, note) {
+  const noteFile = path.join(path.dirname(repo), "planted-note.json");
+  fs.writeFileSync(noteFile, note);
+  const hook = path.join(repo, ".git", "hooks", "post-commit");
+  fs.mkdirSync(path.dirname(hook), { recursive: true });
+  fs.writeFileSync(hook, `#!/bin/sh\ngit notes --ref=causet add -f -F "${noteFile.replaceAll("\\", "/")}" HEAD\n`);
+  fs.chmodSync(hook, 0o755);
+  fs.appendFileSync(path.join(repo, "a.txt"), "more\n");
+  git(repo, "add", "-A");
+  const result = vlabResult(repo, "commit", "-m", "planted", "--authored-by", "compatibility-test", "--json");
+  fs.rmSync(hook);
+  return { commit: git(repo, "rev-parse", "HEAD"), result };
 }
 
 function labDir(repo) {
@@ -408,14 +439,17 @@ test("a forecast version this build cannot read is refused with a version-aware 
     path.join(forecasts, `${id}.json`),
     `${JSON.stringify({ schema: "causet.forecast/v9", id, steps: 42 }, null, 2)}\n`,
   );
-  assert.throws(
-    () => forecastForPlan(id, {}, repo),
-    (error) => {
-      assert.match(error.message, /unsupported schema "causet\.forecast\/v9"/);
-      assert.match(error.details, /reads v1, v2 of that family/);
-      return true;
-    },
-  );
+  git(repo, "switch", "-c", "source");
+  fs.writeFileSync(path.join(repo, "source.txt"), "source\n");
+  git(repo, "add", "-A");
+  exec(cstCommand, [...cstPrefix(), "commit", "-m", "source"], repo);
+  git(repo, "switch", "main");
+  const future = vlabResult(repo, "reconcile", "source", "--use-forecast", id, "--json");
+  assert.equal(future.status, 1);
+  const refused = JSON.parse(future.stdout);
+  assert.equal(refused.code, "unknown-schema-version");
+  assert.match(refused.message, /unsupported schema "causet\.forecast\/v9"/);
+  assert.match(refused.details, /reads v1, v2 of that family/);
 
   // The superseded but still readable v1 passes the schema gate and fails
   // later, on the staleness check, rather than on its version.
@@ -424,54 +458,51 @@ test("a forecast version this build cannot read is refused with a version-aware 
     path.join(forecasts, `${legacy}.json`),
     `${JSON.stringify({ schema: "causet.forecast/v1", id: legacy }, null, 2)}\n`,
   );
-  assert.throws(
-    () => forecastForPlan(legacy, { targetHead: "x", sourceHead: "y", changes: [] }, repo),
-    (error) => {
-      assert.doesNotMatch(error.message, /unsupported schema/);
-      return true;
-    },
-  );
+  const superseded = vlabResult(repo, "reconcile", "source", "--use-forecast", legacy, "--json");
+  assert.equal(superseded.status, 1);
+  const stale = JSON.parse(superseded.stdout);
+  assert.equal(stale.code, "stale-forecast");
+  assert.doesNotMatch(stale.message, /unsupported schema/);
+  assert.equal(git(repo, "status", "--porcelain"), "", "neither refusal starts a reconciliation");
 });
 
 test("publishing a receipt never overwrites a note container this build cannot read", (t) => {
   const repo = repository(t);
-  const head = git(repo, "rev-parse", "HEAD");
   const foreign = `${JSON.stringify({
     schema: "causet.note/v2",
     records: [{ schema: "causet.landing/v9", type: "landing", id: "rec_future" }],
   }, null, 2)}\n`;
-  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", head], {
-    cwd: repo,
-    input: foreign,
-    encoding: "utf8",
-    env: testEnv(),
-  });
+  const { commit, result } = commitOnto(repo, foreign);
 
-  // The container yields no records, and its bytes survive a refused append.
-  assert.deepEqual(readNote(head, repo).records, [], "a foreign container must yield no records");
-  assert.throws(
-    () => appendNote(head, { schema: "causet.landing/v1", type: "landing", id: "rec_new" }, repo),
-    /is not a causet\.note\/v1 container/,
-  );
+  // The commit stands, its provenance is refused, and the peer's bytes survive.
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.code, "wrong-record-family");
+  assert.match(refusal.details, /is not a causet\.note\/v1 container/);
   assert.equal(
-    git(repo, "notes", "--ref=causet", "show", head),
+    git(repo, "notes", "--ref=causet", "show", commit),
     foreign.trim(),
     "the peer's note must be byte-for-byte intact after the refusal",
   );
+  // And it yields no records to a reader.
+  const status = JSON.parse(vlabResult(repo, "metadata", "status", "--json").stdout);
+  assert.equal(status.scopes.sharedPortable.notes.records.some((record) => record.commit === commit), false,
+    "a foreign container must yield no records");
 });
 
 test("an oversize note is quarantined unparsed and reported by metadata status", (t) => {
   const repo = repository(t);
-  const head = git(repo, "rev-parse", "HEAD");
   const filler = "x".repeat(RESOURCE_BOUNDS.noteContainerBytes);
-  execFileSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", head], {
-    cwd: repo,
-    input: `${JSON.stringify({ schema: "causet.note/v1", records: [], filler })}\n`,
-    encoding: "utf8",
-    env: testEnv(),
-  });
+  const oversizeNote = `${JSON.stringify({ schema: "causet.note/v1", records: [], filler })}\n`;
+  const { commit, result } = commitOnto(repo, oversizeNote);
 
-  assert.deepEqual(readNote(head, repo).records, [], "an oversize note must not be parsed");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.code, "resource-bound-exceeded");
+  assert.match(refusal.details, /exceeds a published note-container resource bound/);
+  const noteBlob = git(repo, "notes", "--ref=causet", "list", commit);
+  assert.equal(Number(git(repo, "cat-file", "-s", noteBlob)), oversizeNote.length,
+    "the oversize note must be left as it was");
 
   const status = vlabResult(repo, "metadata", "status", "--json");
   assert.equal(status.status, 0, "an oversize peer note must not fail the command");
@@ -481,9 +512,6 @@ test("an oversize note is quarantined unparsed and reported by metadata status",
   assert.equal(oversize[0].severity, "warning");
   assert.equal(oversize[0].scope, "shared-portable");
   assert.match(oversize[0].message, /noteContainerBytes/);
-
-  assert.throws(
-    () => appendNote(head, { schema: "causet.landing/v1", type: "landing", id: "rec_new" }, repo),
-    /exceeds a published note-container resource bound/,
-  );
+  assert.equal(report.scopes.sharedPortable.notes.records.some((record) => record.commit === commit), false,
+    "an oversize note must not be parsed");
 });

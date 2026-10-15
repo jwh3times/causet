@@ -4,12 +4,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+/**
+ * The Windows MAX_PATH boundary for retained resolution refs, whose lock path
+ * is `<common git dir>/refs/causet/resolutions/rsig_<64>/<blob>.lock`. The
+ * fixtures put that path at 259 or 260 characters. Until #243 the first three
+ * cases called the JavaScript publisher directly; they now publish through a
+ * conflicted `cst reconcile --continue`, which measures the same path.
+ */
 import { testEnv } from "../test-support/git-environment.js";
-import { resolutionSignatureFor } from "../src/schemas.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-
-const publisher = new URL("../src/resolutions.js", import.meta.url).href;
-const errors = new URL("../src/errors.js", import.meta.url).href;
 
 function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, env: testEnv(), encoding: "utf8" }).trim();
@@ -32,35 +35,47 @@ function fixture(t, rootLength, objectFormat = "sha1") {
   return { repo, parent };
 }
 
-function publish(repo, overrides = {}) {
-  const script = `
-    import { publishResolution } from ${JSON.stringify(publisher)};
-    import { errorEnvelope } from ${JSON.stringify(errors)};
-    const outcome = JSON.parse(process.argv[1]);
-    try { console.log(JSON.stringify(publishResolution(outcome, { id: "application", appliedCommit: process.argv[2] }))); }
-    catch (error) { console.log(JSON.stringify(errorEnvelope(error))); process.exitCode = 1; }
-  `;
-  const outcome = {
-    signature: resolutionSignatureFor({}),
-    algorithm: "ordered-three-way-blobs/v1", base: null, ours: null, theirs: null,
-    resultBlob: git(repo, "rev-parse", "HEAD:a.txt"),
-    resultMode: "100644",
-    ...overrides,
-  };
-  const result = spawnSync(process.execPath,
-    ["--input-type=module", "-e", script, JSON.stringify(outcome), git(repo, "rev-parse", "HEAD")],
-    { cwd: repo, env: testEnv(), encoding: "utf8" });
+const cst = (cwd, ...args) => spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, env: testEnv(), encoding: "utf8" });
+
+/**
+ * In `cwd`, conflict `a.txt` between a new branch `name` and the checked-out
+ * branch, pause a reconciliation on it, and stage a resolution: new content,
+ * or the file's deletion. Returns the result of `reconcile --continue`, which
+ * publishes the resolution, with its parsed stdout.
+ */
+function publish(cwd, name, { remove = false } = {}) {
+  const start = git(cwd, "rev-parse", "HEAD");
+  git(cwd, "switch", "-c", name);
+  fs.writeFileSync(path.join(cwd, "a.txt"), `${name} source\n`);
+  git(cwd, "commit", "-am", `${name} source`);
+  git(cwd, "switch", "-");
+  fs.writeFileSync(path.join(cwd, "a.txt"), `${name} target\n`);
+  git(cwd, "commit", "-am", `${name} target`);
+  assert.notEqual(git(cwd, "rev-parse", "HEAD"), start);
+  assert.equal(JSON.parse(cst(cwd, "reconcile", name, "--json").stdout).code, "conflict-paused");
+  if (remove) git(cwd, "rm", "-q", "a.txt");
+  else {
+    fs.writeFileSync(path.join(cwd, "a.txt"), `${name} resolved\n`);
+    git(cwd, "add", "a.txt");
+  }
+  const result = cst(cwd, "reconcile", "--continue", "--json");
   return { ...result, value: JSON.parse(result.stdout) };
+}
+
+/** Give up a reconciliation `publish` left paused, and put `a.txt` back. */
+function abandon(cwd) {
+  assert.equal(cst(cwd, "reconcile", "--abort", "--json").status, 0);
+  if (!fs.existsSync(path.join(cwd, "a.txt"))) git(cwd, "checkout", "--", "a.txt");
 }
 
 test("resolution retention diagnoses the Windows lock-path boundary and supports long paths", (t) => {
   const short = fixture(t, 114).repo;
-  assert.equal(publish(short).status, 0);
+  assert.equal(publish(short, "short").status, 0);
   const { repo, parent } = fixture(t, 115);
   const linked = path.join(parent, "linked");
   git(repo, "worktree", "add", "-b", "linked", linked);
   // A short linked worktree still stores shared refs in the long common dir.
-  const failed = publish(linked);
+  const failed = publish(linked, "long");
   if (process.platform !== "win32") {
     assert.equal(failed.status, 0, failed.stdout + failed.stderr);
     return;
@@ -71,18 +86,23 @@ test("resolution retention diagnoses the Windows lock-path boundary and supports
   assert.match(failed.value.details, /at least 1 characters/);
   assert.ok(failed.value.details.includes(path.join(repo, ".git", "refs")));
   assert.equal(git(repo, "for-each-ref", "refs/causet/resolutions"), "");
+  abandon(linked);
   // A deletion has a shorter ref suffix and must not be rejected by root length.
-  assert.equal(publish(linked, { resultBlob: null, resultMode: null }).status, 0);
+  assert.equal(publish(linked, "deletion", { remove: true }).status, 0);
   git(repo, "config", "core.longpaths", "true");
-  assert.equal(publish(linked).status, 0);
+  fs.writeFileSync(path.join(linked, "a.txt"), "restored\n");
+  git(linked, "add", "a.txt");
+  git(linked, "commit", "-m", "restore a.txt");
+  assert.equal(publish(linked, "longpaths").status, 0);
 });
 
 test("SHA-256 resolution failures measure the longer object ID in the ref path", (t) => {
   const { repo } = fixture(t, 115, "sha256");
-  const failed = publish(repo);
+  const failed = publish(repo, "sha256");
   if (process.platform !== "win32") {
     assert.equal(failed.status, 0, failed.stdout + failed.stderr);
-    assert.equal(failed.value.resultBlob.length, 64);
+    const [ref] = git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions").split("\n");
+    assert.equal(ref.split("/").at(-1).length, 64);
     return;
   }
   assert.equal(failed.status, 1);
@@ -92,15 +112,23 @@ test("SHA-256 resolution failures measure the longer object ID in the ref path",
 });
 
 test("an existing resolution lock retains the Git error classification", (t) => {
-  const { repo } = fixture(t, process.platform === "win32" ? 114 : 160);
+  const length = process.platform === "win32" ? 114 : 160;
+  // Identical content gives a twin the same blobs, and so the same resolution
+  // ref, which names the lock to hold in the repository under test.
+  const twin = fixture(t, length).repo;
+  git(twin, "config", "core.longpaths", "true");
+  assert.equal(publish(twin, "locked").status, 0);
+  const [ref] = git(twin, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions").split("\n");
+  const { repo } = fixture(t, length);
   git(repo, "config", "core.longpaths", "true");
-  const blob = git(repo, "rev-parse", "HEAD:a.txt");
-  const lock = path.join(repo, ".git", "refs", "causet", "resolutions", resolutionSignatureFor({}), `${blob}.lock`);
+  const lock = path.join(repo, ".git", ...ref.split("/")) + ".lock";
   fs.mkdirSync(path.dirname(lock), { recursive: true });
   fs.writeFileSync(lock, "");
-  const failed = publish(repo);
-  assert.equal(failed.status, 1);
+  const failed = publish(repo, "locked");
+  assert.notEqual(failed.status, 0);
+  assert.equal(failed.status, failed.value.exitCode, "the exit status is the envelope's");
   assert.equal(failed.value.code, "git-command-failed");
+  assert.match(failed.value.details, /cannot lock ref/);
   assert.ok(fs.existsSync(lock));
 });
 

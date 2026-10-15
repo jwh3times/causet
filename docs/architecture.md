@@ -354,14 +354,15 @@ Command and automation output shapes (outside the persisted-family registry):
 | `causet.identity-audit/v1` | Repository-wide identity collision and duplicate-origin audit | `identity-audit.js` |
 | `causet.error/v1` | Failure envelope printed on stdout under `--json`, with a code from the closed vocabulary in `docs/schemas/errors.md` (ADR-0021) | `errors.js` |
 
-The executable JavaScript validators and named object shapes in
-`src/schemas.js` are the runtime authority. Every family above, and the CLI's
+The executable validators and named object shapes of the Rust record model
+(`native/model`: `schemas.rs` and `registry.rs`) are the runtime authority
+since #243, which retired `src/schemas.js` from that role. Every family above, and the CLI's
 JSON output contracts, are additionally published as standalone JSON Schema
 documents in the [schema catalog](schemas/README.md);
 `test/schema-catalog.test.js` fails the suite when a document and its
 validator disagree. Repository-lineage IDs and the envelope manifest hash
 are computed under the frozen canonical JSON profile
-`causet.canonical-json/v1` (`src/canonical-json.js`, specified with shared
+`causet.canonical-json/v1` (`native/model/src/canonical.rs`, specified with shared
 test vectors in the [canonical JSON profile](canonical-json/README.md));
 record digests keep their frozen legacy serialization for byte stability.
 Human-readable and `--json` output of the same command are held to the
@@ -372,7 +373,7 @@ Compatibility, migration, unknown-version, and resource-bound rules are frozen
 per family in the [compatibility contract](schemas/compatibility.md)
 ([ADR-0020](adr/0020-freeze-per-family-compatibility-and-resource-bounds.md)),
 whose runtime authority is `RECORD_FAMILIES` and `RESOURCE_BOUNDS` in
-`src/schemas.js`: unknown portable record schemas are quarantined rather than
+`native/model/src/registry.rs`: unknown portable record schemas are quarantined rather than
 consumed and their notes are never rewritten, while an unreadable private,
 shared-local, tracked, or envelope record refuses the command instead of being
 interpreted. Schema-version changes still require migration/compatibility

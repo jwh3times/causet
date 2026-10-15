@@ -1,5 +1,5 @@
 //! The Git engine the ported commands share (issue #143, ADR-0037), ported
-//! from `src/git.js` and `src/engine.js`, which stay the authority:
+//! from `src/git.js` and `src/engine.js`; the only engine since #243:
 //!
 //! - [`engine`]: the read catalog of ADR-0019 behind one [`engine::ReadBackend`]
 //!   trait, with the Git backend and the gitoxide backend of ADR-0027, the

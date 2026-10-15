@@ -4,9 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { RECORD_FAMILIES, RESOURCE_BOUNDS } from "../src/schemas.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { registry } from "../test-support/model-probe.js";
+
+// The registries the document is drawn from, as the Rust model holds them.
+const RECORD_FAMILIES = new Map(registry().families.map(({ name, ...policy }) => [name, policy]));
+const RESOURCE_BOUNDS = registry().bounds;
 
 
 function exec(command, args, cwd, options = {}) {

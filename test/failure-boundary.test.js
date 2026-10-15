@@ -5,9 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { FAULT_EXIT_CODE } from "../src/faults.js";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+
+// The status a fault point exits with, as the Rust CLI defines it.
+const FAULT_EXIT_CODE = Number(/const FAULT_EXIT_CODE: i32 = (\d+);/
+  .exec(fs.readFileSync(new URL("../native/cli/src/host.rs", import.meta.url), "utf8"))[1]);
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -790,24 +793,16 @@ test("a journal without a branch record is trusted only while Git still holds it
 });
 
 /**
- * A publisher: one process appending one record to `commit` through the real
- * `appendNote`, the path every receipt takes. No command appends to a commit
- * its caller names, so the publisher is a script rather than the CLI; the
- * race under test is between processes, so it is a process.
+ * A publisher: one `cst commit` declaring provenance for `name.txt` in `cwd`,
+ * which appends its record to the notes the whole repository shares. Until
+ * #243 this called the JavaScript `appendNote` directly; the race under test is
+ * between processes, so it is still a process.
  */
-function publisher(repo, commit, recordId, env = {}) {
-  const notes = pathToFileURL(path.join(projectRoot, "src", "notes.js")).href;
-  const script = [
-    `import { appendNote } from ${JSON.stringify(notes)};`,
-    `appendNote(${JSON.stringify(commit)}, {`,
-    `  schema: "causet.provenance/v1", type: "provenance", id: ${JSON.stringify(recordId)},`,
-    `  commit: ${JSON.stringify(commit)}, changeId: null, origin: "declared", carriedFrom: [],`,
-    '  actors: [{ role: "generated", actor: "concurrent test" }],',
-    "  createdAt: new Date().toISOString(),",
-    "});",
-  ].join("\n");
-  const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
-    cwd: repo,
+function publisher(cwd, name, env = {}) {
+  write(cwd, `${name}.txt`, `${name}\n`);
+  git(cwd, "add", "-A");
+  const child = spawn(cstCommand, [...cstPrefix(), "commit", "-m", name, "--generated-by", "concurrent test", "--json"], {
+    cwd,
     env: testEnv(env),
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -835,20 +830,22 @@ const noteRecordIds = (repo, commit) =>
   JSON.parse(git(repo, "notes", "--ref=causet", "show", commit)).records
     .map((record) => record.id);
 
-test("two publishers appending to one commit at once lose no record", async () => {
+test("two publishers appending to the notes at once lose no record", async () => {
   const repo = makeReconcilable();
-  const commit = git(repo, "rev-parse", "HEAD");
+  const linked = path.join(path.dirname(repo), "second-worktree");
+  git(repo, "worktree", "add", "-q", "-b", "second", linked);
   const gate = path.join(path.dirname(repo), "gate");
-  const first = publisher(repo, commit, "first", {
+  const first = publisher(repo, "first", {
     CAUSET_TEST_GATE: "notes:after-read",
     CAUSET_TEST_GATE_FILE: gate,
   });
   await until(() => fs.existsSync(`${gate}.reached`));
 
-  // The first publisher has read the container and is about to write it
-  // back. Without the lock the second would run to completion here, and the
-  // first's write would then replace the container the second appended to.
-  const second = publisher(repo, commit, "second");
+  // The first publisher has read the notes and is about to write them back.
+  // Without the lock the second, in another worktree of the same repository,
+  // would run to completion here, and the first's write would then replace
+  // the notes the second appended to.
+  const second = publisher(linked, "second");
   const early = await Promise.race([second.done, pause(1_500).then(() => null)]);
   assert.equal(
     early,
@@ -860,13 +857,15 @@ test("two publishers appending to one commit at once lose no record", async () =
   const [firstResult, secondResult] = await Promise.all([first.done, second.done]);
   assert.equal(firstResult.status, 0, firstResult.stderr);
   assert.equal(secondResult.status, 0, secondResult.stderr);
-  assert.deepEqual(noteRecordIds(repo, commit).sort(), ["first", "second"]);
+  for (const result of [firstResult, secondResult]) {
+    const { commit, provenance } = JSON.parse(result.stdout);
+    assert.deepEqual(noteRecordIds(repo, commit), [provenance.id]);
+  }
   assert.equal(fs.existsSync(path.join(repo, ".git", "causet", "notes.lock")), false);
 });
 
 test("a lock whose holder is gone is abandoned, and a live holder's is respected", async () => {
   const repo = makeReconcilable();
-  const commit = git(repo, "rev-parse", "HEAD");
   const lockPath = path.join(repo, ".git", "causet", "notes.lock");
   const claim = (pid, hostname) =>
     `${JSON.stringify({ pid, hostname, createdAt: new Date().toISOString() })}\n`;
@@ -874,7 +873,7 @@ test("a lock whose holder is gone is abandoned, and a live holder's is respected
   // Linux caps pids at 2^22 and Windows allots multiples of four, so this pid
   // belongs to no process on any supported host: a publisher that crashed.
   fs.writeFileSync(lockPath, claim(4_194_305, os.hostname()));
-  const afterCrash = await publisher(repo, commit, "after-crash").done;
+  const afterCrash = await publisher(repo, "after-crash").done;
   assert.equal(afterCrash.status, 0, afterCrash.stderr);
   assert.equal(fs.existsSync(lockPath), false);
 
@@ -883,9 +882,10 @@ test("a lock whose holder is gone is abandoned, and a live holder's is respected
   fs.writeFileSync(lockPath, claim(1, "elsewhere.invalid"));
   const old = new Date(Date.now() - 120_000);
   fs.utimesSync(lockPath, old, old);
-  const afterRemote = await publisher(repo, commit, "after-remote").done;
+  const afterRemote = await publisher(repo, "after-remote").done;
   assert.equal(afterRemote.status, 0, afterRemote.stderr);
   assert.equal(fs.existsSync(lockPath), false);
+  const commit = git(repo, "rev-parse", "HEAD");
 
   // This test process holds the lock and is running, so a publisher waits its
   // budget and refuses rather than taking the lock from it. Through the CLI,
@@ -910,7 +910,10 @@ test("a lock whose holder is gone is abandoned, and a live holder's is respected
   assert.equal(fs.existsSync(lockPath), true);
   fs.rmSync(lockPath);
 
-  assert.deepEqual(noteRecordIds(repo, commit), ["after-crash", "after-remote"]);
+  for (const result of [afterCrash, afterRemote]) {
+    const published = JSON.parse(result.stdout);
+    assert.deepEqual(noteRecordIds(repo, published.commit), [published.provenance.id]);
+  }
   const retried = JSON.parse(vlab(repo, "commit", "-m", "held", "--generated-by", "agent:test", "--json"));
   assert.equal(git(repo, "rev-parse", "HEAD^"), commit);
   assert.deepEqual(retried.provenance.actors, [{ role: "generated", actor: "agent:test" }]);
@@ -1084,11 +1087,23 @@ test("old foreign and malformed workspace lock claims are preserved", () => {
 });
 
 test("workspace lock release preserves a replacement claim", async () => {
-  const { withWorkspaceRegistryLock } = await import("../src/workspace-lock.js");
   const repo = makeReconcilable();
   const lock = workspaceRuntime(repo, "workspaces.lock");
+  const gate = path.join(path.dirname(repo), "replacement-gate");
   const replacement = JSON.stringify({ pid: process.pid, hostname: os.hostname(), token: "replacement" });
-  withWorkspaceRegistryLock(repo, () => { fs.writeFileSync(lock, replacement); });
+  // While the writer holds the lock, its claim is replaced; releasing the lock
+  // must leave a claim that is no longer its own.
+  const writer = workspaceWriter(repo, ["create", "replaced"], {
+    CAUSET_TEST_GATE: "workspaces:after-read", CAUSET_TEST_GATE_FILE: gate,
+  });
+  try {
+    await until(() => fs.existsSync(`${gate}.reached`));
+    assert.ok(fs.existsSync(lock), "the writer holds the registry lock at the gate");
+    fs.writeFileSync(lock, replacement);
+  } finally {
+    fs.writeFileSync(gate, "");
+  }
+  await writer.done;
   assert.equal(fs.readFileSync(lock, "utf8"), replacement);
 });
 
