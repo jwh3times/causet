@@ -11,11 +11,11 @@ import { testEnv } from "../test-support/git-environment.js";
 const planner = fileURLToPath(new URL("../scripts/ci-plan.mjs", import.meta.url));
 
 test("routine code changes use two PR suites and one main suite", () => {
-  assert.deepEqual(planCi("pull_request", ["src/git.js"]).include, [
+  assert.deepEqual(planCi("pull_request", ["native/engine/src/git.rs"]).include, [
     { os: "ubuntu-latest", node: 24, mode: "default" },
     { os: "windows-latest", node: 24, mode: "default" },
   ]);
-  assert.deepEqual(planCi("push", ["src/git.js"]).include, [
+  assert.deepEqual(planCi("push", ["native/engine/src/git.rs"]).include, [
     { os: "ubuntu-latest", node: 24, mode: "default" },
   ]);
 });
@@ -25,7 +25,7 @@ test("only known documentation paths omit automatic suites", () => {
     assert.equal(planCi(event, ["README.md", "AGENTS.md", "CLAUDE.md", "CHANGELOG.md",
       "docs/testing.md", "docs/adr/example.md", ".agents/skills/end-session/SKILL.md",
       ".claude/skills/end-session/SKILL.md"]).include.length, 0);
-    for (const files of [null, [], ["README.md", "src/cli.js"], ["docs/conformance/fixtures.json"],
+    for (const files of [null, [], ["README.md", "native/cli/src/main.rs"], ["docs/conformance/fixtures.json"],
       ["docs/schemas/new.schema.json"], ["package.json"], ["test/fixture.md"], ["unknown.md"],
       [".github/workflows/ci.yml"], [".agents/skills/example/script.mjs"], ["scripts/ci-plan.mjs"]]) {
       assert.ok(planCi(event, files).include.length > 0, JSON.stringify({ event, files }));

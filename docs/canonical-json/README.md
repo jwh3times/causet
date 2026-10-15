@@ -3,11 +3,12 @@
 `causet.canonical-json/v1` is the frozen byte-exact serialization used for
 every new hash or signature over structured causet data (ADR-0015 phase 0b,
 issue #11 item 3). It is [RFC 8785][jcs] (the JSON Canonicalization Scheme)
-restricted to a value space that every planned implementation — Node today,
-Rust behind the phase 1 engine seam — serializes byte-identically without
-floating-point formatting rules. `src/canonical-json.js` is the reference
-implementation; [`vectors.json`](vectors.json) is the shared conformance
-fixture every implementation must reproduce exactly.
+restricted to a value space that any implementation serializes
+byte-identically without floating-point formatting rules. `canonical_json` in
+`native/model/src/canonical.rs` is the reference implementation (the
+JavaScript one it was ported from was retired in #243);
+[`vectors.json`](vectors.json) is the shared conformance fixture every
+implementation must reproduce exactly.
 
 [jcs]: https://www.rfc-editor.org/rfc/rfc8785
 
@@ -64,13 +65,13 @@ means the frozen serialization above; changing any row is a version bump.
 
 | Encoder | Serialization | Status |
 | --- | --- | --- |
-| Repository lineage ID (`git-root-commits-sha256/v1`, `src/metadata.js`) | Profile | Computed through `src/canonical-json.js` since 2026-08-30 with byte-identical results; existing lineage IDs are unchanged. |
-| Envelope `integrity.manifestHash` (`src/metadata-envelope.js`) | Profile, over the manifest without its reserved `integrity` and `signatures` members | Computed through `src/canonical-json.js` since 2026-08-30 with byte-identical results; a manifest the profile cannot represent fails closed. |
-| Capability document `integrity.documentHash` (`src/capabilities.js`) | Profile, over the document without its reserved `integrity` and `signatures` members | The same rule as the envelope, through the same `hashedPayload` helper, so a future detached signature covers exactly the bytes either hash covered (ADR-0033). |
-| Record digest, record-equality comparison, export key (`canonicalJson` in `src/metadata.js`, used by `src/metadata-transfer.js`) | Legacy sorted-key `JSON.stringify` that also accepts the non-integer timing numbers stored in receipts, and that inherits ECMAScript property enumeration — integer-like member names are emitted first, so its output is not code-unit sorted for such names | Frozen as-is: envelopes persist these digests, so their bytes must never change. New hashes must not use it. |
-| Resolution signature (`ordered-three-way-blobs/v1`, `src/schemas.js`) | Fixed insertion-order `JSON.stringify` of `{algorithm, base, ours, theirs}` | Outside the profile, versioned by its own algorithm tag; byte-stable. |
-| Merge/rebase plan fingerprints (`src/forecasts.js`, `src/rebase-plan.js`) | Fixed insertion-order `JSON.stringify` of selected plan fields | Outside the profile; worktree-private staleness checks only, never exported. |
-| Engine differential result digest (`src/engine.js`) | Internal sorted digest that also flattens Sets and Maps | Outside the profile; in-process comparison only, never persisted. |
+| Repository lineage ID (`git-root-commits-sha256/v1`, `native/cli/src/lineage.rs`) | Profile | Computed through the profile since 2026-08-30 with byte-identical results; existing lineage IDs are unchanged. |
+| Envelope `integrity.manifestHash` (`manifest_hash` in `native/cli/src/envelope.rs`) | Profile, over the manifest without its reserved `integrity` and `signatures` members | Computed through the profile since 2026-08-30 with byte-identical results; a manifest the profile cannot represent fails closed. |
+| Capability document `integrity.documentHash` (`native/cli/src/capabilities.rs`) | Profile, over the document without its reserved `integrity` and `signatures` members | The same rule as the envelope, through the same `hashed_payload` helper (`native/model/src/canonical.rs`), so a future detached signature covers exactly the bytes either hash covered (ADR-0033). |
+| Record digest, record-equality comparison, export key (`legacy_canonical_json` and `record_digest` in `native/model/src/canonical.rs`, used by metadata status, export, and import) | Legacy sorted-key `JSON.stringify` that also accepts the non-integer timing numbers stored in receipts, and that inherits ECMAScript property enumeration — integer-like member names are emitted first, so its output is not code-unit sorted for such names | Frozen as-is: envelopes persist these digests, so their bytes must never change. New hashes must not use it. |
+| Resolution signature (`ordered-three-way-blobs/v1`, `resolution_signature` in `native/model/src/schemas.rs`) | Fixed insertion-order `JSON.stringify` of `{algorithm, base, ours, theirs}` | Outside the profile, versioned by its own algorithm tag; byte-stable. |
+| Merge/rebase plan fingerprints (`plan_fingerprint` in `native/cli/src/forecast.rs`, `fingerprint` in `native/cli/src/plan.rs`) | Fixed insertion-order `JSON.stringify` of selected plan fields | Outside the profile; worktree-private staleness checks only, never exported. |
+| Engine differential result digest (`digest` in `native/engine/src/differential.rs`, over the canonical values of `native/engine/src/types.rs`) | Internal sorted digest, with bytes represented as `{ bytes, sha256 }` | Outside the profile; in-process comparison only, never persisted. |
 
 ## Test vectors
 
@@ -88,17 +89,21 @@ document with three sections:
   vector is a structurally valid envelope manifest the shipped reader
   accepts.
 - **`rejects`** — inputs an implementation must refuse. Only rejects that
-  JSON can represent faithfully appear in the file; the ones it cannot
-  (`NaN`, infinities, negative zero, `undefined`, non-JSON host values) are
-  asserted in `test/canonical-json.test.js`.
+  JSON can represent faithfully appear in the file. Numbers JSON text can
+  spell but the profile still refuses (negative zero, `2^53`, non-integers)
+  are asserted in `test/canonical-json.test.js`; values JSON text cannot
+  spell at all (`NaN`, infinities, `undefined`, non-JSON host values) never
+  reach the Rust model, which serializes only parsed JSON.
 
 `test/canonical-json.test.js` verifies the reference implementation against
-this file on every `npm test` run. It additionally pins that the legacy
+this file on every `npm test` run, through the `model-probe` executable
+(`native/model/src/bin/model-probe.rs`), and checks the manifest-hash vector
+against the shipped envelope reader through the CLI. It additionally pins that the legacy
 digest serializer produces identical bytes for profile-conformant data
 without integer-like member names — the property the byte-identical
 migration of the lineage and manifest hashes rests on — and that it diverges
-on the member-sorting vector, which is why new hashes must use the profile. The
-phase 1 Rust implementation must consume the same file and reproduce every
+on the member-sorting vector, which is why new hashes must use the profile.
+Any further implementation must consume the same file and reproduce every
 byte before it may compute any hash (ADR-0015).
 
 `causet.canonical-json/v1` and `vcs-lab.canonical-json-vectors/v1` are

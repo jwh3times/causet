@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **The JavaScript CLI is removed** (#243, the last step; ADR-0037 §6). `src/`,
+  `bin/cst.js` and the N-API binding (`native/binding`, the `causet-core.node`
+  prebuild, `CAUSET_REQUIRE_NATIVE`) are gone; `cst` is the Rust executable
+  alone. `--engine native` and `CAUSET_ENGINE=native` are unchanged: they select
+  the gitoxide backend linked into `cst`.
+  - Breaking for npm installs on a platform without a published executable
+    (anything but Windows x64 and Linux x64 with glibc): `cst` no longer falls
+    back to the JavaScript CLI. It says what is missing and where `cst` is
+    published, and exits 1; build it from a checkout instead. The main package
+    now carries only its launcher, `bin/native/`.
+  - A checkout's `package.json` names no command; `npm run build:native` builds
+    the `cst` it runs. The help text lives in `native/cli/src/help.txt`, and the
+    Rust build takes the version from `package.json`.
+  - The provenance repair of `docs/identity/README.md` §7 runs from a v0.23.0
+    checkout, the last with the JavaScript declaration API.
+  - The engine's refusal of a read outside its seam names the read catalog
+    rather than `src/engine.js`.
+  - `scripts/measure-real-repository.mjs` (format v2) and
+    `scripts/perf-checkpoint.mjs` (format v2) measure the Rust CLI only;
+    `scripts/qualify-native.mjs` is removed. The checkpoint's scale fixture comes
+    from `cst metadata benchmark` under the new `CAUSET_TEST_SCALE_FIXTURE` test
+    hook. The architecture tables are generated from the Rust sources' header
+    comments, and `docs/architecture-modules.json` is removed.
 - **The Rust CLI no longer delegates to the JavaScript CLI** (#243, the first
   step in retiring the JavaScript CLI, ADR-0037 §6). `CAUSET_DELEGATE` and
   `CAUSET_JS_CLI` are ignored: `CAUSET_DELEGATE=always` no longer routes a

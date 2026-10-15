@@ -99,9 +99,10 @@ test("the package set carries matching versions and recorded digests", { skip },
   assert.ok(packed.tarballs.length >= 2, "a main package and at least this host's platform package");
   assert.match(sums, new RegExp(`^${packed.checksums[platform.package].sha256}  ${platform.package}/${platform.file}$`, "m"));
   for (const file of packed.tarballs) assert.match(sums, new RegExp(`^[0-9a-f]{64}  ${path.basename(file)}$`, "m"));
-  // The checkout's own manifest keeps the JavaScript CLI as its command, for development.
+  // The checkout's own manifest names no command, and publishes only the launcher (#243).
   const checkout = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
-  assert.equal(checkout.bin.cst, "./bin/cst.js");
+  assert.equal(checkout.bin, undefined);
+  assert.deepEqual(checkout.files, ["bin/native/"]);
   assert.equal(checkout.optionalDependencies, undefined);
 });
 
@@ -164,11 +165,12 @@ test("an executable that is not this release's is refused, by the launcher and b
   assert.equal(startsWithShebang(installed.target), true);
 });
 
-test("without a platform package, cst runs the JavaScript CLI and says why", { skip }, () => {
+test("without a platform package, cst says what is missing and where cst is published", { skip }, () => {
+  // There is no JavaScript CLI to fall back to since #243 (decision 1).
   const installed = install([mainTarball()], ["--omit=optional", ...withScripts]);
   assert.equal(startsWithShebang(installed.target), true);
   const reported = cst(installed, ["--version"]);
-  assert.equal(reported.status, 0, reported.stderr);
-  assert.equal(reported.stdout, `causet ${version}\n`);
-  assert.match(reported.stderr, /^cst: the optional package @holland-vip\/causet-\S+ is not installed; running the JavaScript CLI\.\n$/);
+  assert.equal(reported.status, 1);
+  assert.equal(reported.stdout, "");
+  assert.match(reported.stderr, /^cst: the optional package @holland-vip\/causet-\S+ is not installed\. causet publishes cst for win32-x64 and linux-x64-gnu; on any other platform, build it from a source checkout with npm run build:native \(https:\/\/github\.com\/jwh3times\/causet#develop-from-a-checkout\)\.\n$/);
 });

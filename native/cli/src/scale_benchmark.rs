@@ -595,9 +595,22 @@ pub fn benchmark_repository_scale(options: &Options) -> GitResult<Value> {
       "The scale benchmark is limited to 5,000 total note and resolution records.",
     ));
   }
+  // A test hook (#243): build the fixture in the named directory, stop once it
+  // is built, and leave it there for the caller to measure, as the JavaScript
+  // `withScaleFixture` did for scripts/perf-checkpoint.mjs. The answer is the
+  // fixture's description alone.
+  if let Some(kept) = causet_engine::environment::test_hook("CAUSET_TEST_SCALE_FIXTURE") {
+    std::fs::create_dir_all(&kept).map_err(|error| io(&error, "mkdir", &kept))?;
+    let mut setup = Some(metrics::begin("scale-fixture-setup"));
+    let outcome = benchmark_in(&kept, &sizes, &mut setup, true);
+    if let Some(setup) = setup {
+      metrics::end(setup);
+    }
+    return outcome;
+  }
   let root = crate::export::temporary_directory("causet-scale-benchmark-")?;
   let mut setup = Some(metrics::begin("scale-fixture-setup"));
-  let outcome = benchmark_in(&root, &sizes, &mut setup);
+  let outcome = benchmark_in(&root, &sizes, &mut setup, false);
   if let Some(setup) = setup {
     metrics::end(setup);
   }
@@ -611,6 +624,7 @@ fn benchmark_in(
   root: &str,
   sizes: &Sizes,
   setup: &mut Option<metrics::CollectorId>,
+  fixture_only: bool,
 ) -> GitResult<Value> {
   let repo = text::join(root, "repo");
   let worktree_root = text::join(root, "worktrees");
@@ -760,6 +774,10 @@ fn benchmark_in(
   fixture.set("areas", count(sizes.areas));
   fixture.set("filesPerArea", count(sizes.files_per_area));
   fixture.set("treeFiles", count(sizes.areas * sizes.files_per_area));
+  if fixture_only {
+    fixture.set("repository", string(&repo));
+    return Ok(Value::Object(fixture));
+  }
 
   let mut created_full: Vec<String> = Vec::new();
   let mut created_cone: Vec<String> = Vec::new();

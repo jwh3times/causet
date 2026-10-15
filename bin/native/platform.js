@@ -2,8 +2,8 @@
 
 // Where the prebuilt `cst` executable for this host lives, and whether it is
 // the one this package was released with (ADR-0038 §2, §5, §6). Shared by the
-// launcher (`cst.exe`) and the `preinstall` copy. CommonJS, because both run
-// before, or instead of, the ESM JavaScript CLI.
+// launcher (`cst.exe`) and the `preinstall` copy. CommonJS, so that both run
+// under any Node that installs the package.
 
 const { execFileSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
@@ -24,6 +24,13 @@ function libc() {
   if (process.platform !== "linux") return null;
   const header = process.report?.getReport?.().header;
   return header?.glibcVersionRuntime ? "gnu" : "musl";
+}
+
+/** What a host without its executable is told: where `cst` is published, and how else to get it. */
+function unavailable(reason) {
+  return `${reason}. causet publishes cst for ${Object.keys(PLATFORMS).join(" and ")}; `
+    + "on any other platform, build it from a source checkout with npm run build:native "
+    + "(https://github.com/jwh3times/causet#develop-from-a-checkout).";
 }
 
 function hostKey() {
@@ -85,4 +92,4 @@ function verify(found) {
   }
 }
 
-module.exports = { hostKey, locate, packageRoot, PLATFORMS, sha256, verify };
+module.exports = { hostKey, locate, packageRoot, PLATFORMS, sha256, unavailable, verify };
