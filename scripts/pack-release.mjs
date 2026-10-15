@@ -24,8 +24,8 @@ const { PLATFORMS } = createRequire(import.meta.url)("../bin/native/platform.js"
 
 /** What npm needs to install a platform package only where it runs. */
 const TARGETS = {
-  "win32-x64": { os: ["win32"], cpu: ["x64"], rust: "x86_64-pc-windows-msvc" },
-  "linux-x64-gnu": { os: ["linux"], cpu: ["x64"], libc: ["glibc"], rust: "x86_64-unknown-linux-gnu" },
+  "win32-x64": { os: ["win32"], cpu: ["x64"], rust: "x86_64-pc-windows-msvc", label: "Windows x64" },
+  "linux-x64-gnu": { os: ["linux"], cpu: ["x64"], libc: ["glibc"], rust: "x86_64-unknown-linux-gnu", label: "Linux x64 (glibc)" },
 };
 
 function parse(argv) {
@@ -94,7 +94,8 @@ export function packRelease(options) {
     fs.writeFileSync(path.join(directory, "package.json"), `${JSON.stringify({
       name: published.package,
       version: manifest.version,
-      description: `The causet cst executable for ${target.rust}.`,
+      // npm search lists this beside the main package; say which one to install.
+      description: `The prebuilt cst executable of ${manifest.name} for ${target.label}. Install ${manifest.name}, which adds this package on a matching host.`,
       repository: manifest.repository,
       homepage: manifest.homepage,
       bugs: manifest.bugs,

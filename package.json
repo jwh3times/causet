@@ -1,7 +1,17 @@
 {
   "name": "@holland-vip/causet",
   "version": "0.23.0",
-  "description": "Git-backed causal source control: records how changes move between Git histories, with verifiable receipts, declared provenance, and portable metadata.",
+  "description": "An experimental causal source-control layer over Git, as the cst command: records how changes move between Git histories, with verifiable receipts, declared provenance, and portable metadata. Prebuilt for Windows x64 and Linux x64 (glibc).",
+  "keywords": [
+    "git",
+    "version-control",
+    "source-control",
+    "vcs",
+    "merge",
+    "rebase",
+    "provenance",
+    "cli"
+  ],
   "type": "module",
   "repository": {
     "type": "git",

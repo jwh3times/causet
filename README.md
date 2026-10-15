@@ -1,6 +1,6 @@
 # causet
 
-causet (command `cst`) is a local prototype with a dependency-free Git engine for experimenting with the source-control ideas discussed in this project:
+causet (command `cst`) is a local prototype, built on Git, for experimenting with the source-control ideas discussed in this project:
 
 - Git remains a real compatibility and storage layer.
 - logical changes keep a stable `Change-Id` across rebase and cherry-pick;
