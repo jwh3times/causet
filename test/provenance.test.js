@@ -230,10 +230,15 @@ test("a declared role outside the closed vocabulary is refused", () => {
   const repo = makeRepo();
   write(repo, "f.txt", "one\n");
   git(repo, "add", "-A");
-  // The flag itself is unknown, so it parses as a boolean and declares nothing
-  // rather than inventing a role.
-  vlab(repo, "commit", "-m", "one", "--assisted-by", "somebody");
+  // The flag itself is unknown, so the commit is refused before anything is
+  // written rather than inventing a role or dropping the flag (#257).
+  const head = git(repo, "rev-parse", "HEAD");
+  const unknown = vlabResult(repo, ["commit", "-m", "one", "--assisted-by", "somebody", "--json"]);
+  assert.equal(unknown.status, 1);
+  assert.equal(JSON.parse(unknown.stdout).code, "usage-unknown-option");
+  assert.equal(git(repo, "rev-parse", "HEAD"), head, "an unknown role flag commits nothing");
   assert.deepEqual(provenance(repo), [], "an unknown role flag declares nothing");
+  vlab(repo, "commit", "-m", "one");
 
   // An empty actor is refused rather than recorded as an anonymous claim.
   write(repo, "g.txt", "two\n");

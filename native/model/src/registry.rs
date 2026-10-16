@@ -273,6 +273,10 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
     "The command or subcommand does not exist. Check the spelling against --help.",
   ),
   (
+    "usage-unknown-option",
+    "The command does not take an option that was given. Check the spelling against --help, or run Git for Git's own option.",
+  ),
+  (
     "usage-conflicting-options",
     "Two options that cannot be combined were both given. Choose one.",
   ),
