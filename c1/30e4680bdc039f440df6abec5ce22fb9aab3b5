@@ -20,6 +20,24 @@
       ],
       "resultTree": "0077ae781325aa40d26e6dfca70641eb30c9e9a7",
       "createdAt": "2026-10-16T06:00:33.388Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mvak6sg9a69538e6d310",
+      "commit": "c130e4680bdc039f440df6abec5ce22fb9aab3b5",
+      "changeId": null,
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "8ec770d3f5c48b230648720ee03ec016eec8c365"
+      ],
+      "createdAt": "2026-10-16T06:00:33.417Z"
     }
   ]
 }
