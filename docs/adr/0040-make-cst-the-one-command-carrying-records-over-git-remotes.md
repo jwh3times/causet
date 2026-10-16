@@ -1,6 +1,7 @@
 # ADR-0040: Make `cst` the one command, carrying records over ordinary Git remotes
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Decided:** 2026-10-15
 - **Date:** 2026-10-15
 - **Owners:** Repository maintainers
 - **Implementation:** remote commands [#255](https://github.com/jwh3times/causet/issues/255),
@@ -193,3 +194,23 @@ causal landing. `cst clone` is `git clone`, then `cst init`, then `cst fetch`.
    changes frozen oracle answers that today ignore them (#257).
 7. The order: passthrough (#256) and #257 can ship first; the remote commands
    (#255) follow.
+
+## Owner decision (2026-10-15)
+
+Accepted as proposed.
+
+1. Product §5's non-goal is reversed for synchronization through `cst`'s
+   remote commands, which run only in ADR-0030's park mode. The §5 text changes
+   when those commands ship (#255).
+2. The carried set and its exact refspecs are accepted; checkpoints,
+   quarantine and every future `refs/causet/*` family are local by default.
+3. `cst push` carries the records by default, and `--no-records` pushes only
+   what `git push` would.
+4. `cst push` refuses while a conflict parked from that remote is undisposed.
+5. Every command `cst` does not define passes through to Git, with `cst git`
+   as the explicit escape.
+6. Colliding commands refuse options they do not define with
+   `usage-unknown-option`; the frozen oracle answers that change are
+   re-recorded, each with the reason in the change (#257).
+7. Order, not put separately and taken as proposed: #257 and passthrough (#256)
+   first, then the remote commands (#255).
