@@ -40,8 +40,10 @@ const usageFailures = [
   ["workspace", "forecast"], ["workspace", "forecast", "t"],
   ["spec"], ["spec", "bogus"], ["spec", "index"], ["spec", "show"],
   ["spec", "merge-plan", "f", "b", "o"],
-  ["no-such-command"], ["--json"], ["x", "-m", "--json"],
-  ["unknown \"quoted\" \\ — command"], ["UPPER"], ["Commit"],
+  // A first word `cst` does not answer is Git's since ADR-0040 (#256), so
+  // "no-such-command", "UPPER", "Commit" and the like left this list;
+  // `test/git-passthrough.test.js` compares them with Git instead.
+  ["--json"],
 ];
 
 const plain = (args, env = {}) => ({ args, env });
@@ -81,7 +83,7 @@ export function cliGroups(outside) {
       plain(["version"], { ...unset, VLAB_ENGINE: "bogus", CAUSET_ENGINE: "git" }),
       plain(["version"], { ...unset, VLAB_ENGINE: "native", CAUSET_ENGINE: "bogus" }),
     ],
-    valueFlags: [...valueFlags.map((flag) => plain(["commit", "--json", flag])), plain(["no-such-command", "-m"])],
+    valueFlags: valueFlags.map((flag) => plain(["commit", "--json", flag])),
     usage: usageFailures.flatMap((args) => [plain(args), plain([...args, "--json"])]),
     // A repeatable flag spelled in camel case first leaves `true` under its
     // key, and spreading that was a TypeError the JavaScript CLI printed as

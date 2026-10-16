@@ -1096,12 +1096,13 @@
     {
       "name": "unknown-command",
       "argv": [
-        "no-such-command",
+        "metadata",
+        "no-such-subcommand",
         "--json"
       ],
       "stage": "clean",
       "code": "usage-unknown-command",
-      "reason": "Dispatch reaches the per-command options before it rejects the name, so even this failure honours --json."
+      "reason": "Dispatch reaches the per-command options before it rejects the name, so even this failure honours --json. An unknown first word is Git's since ADR-0040, so the name refused here is a subcommand."
     },
     {
       "name": "unknown-option",
