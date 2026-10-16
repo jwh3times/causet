@@ -85,9 +85,10 @@ export function cliGroups(outside) {
     ],
     valueFlags: valueFlags.map((flag) => plain(["commit", "--json", flag])),
     usage: usageFailures.flatMap((args) => [plain(args), plain([...args, "--json"])]),
-    // A repeatable flag spelled in camel case first leaves `true` under its
+    // A repeatable flag spelled in camel case first left `true` under its
     // key, and spreading that was a TypeError the JavaScript CLI printed as
-    // prose, even with --json; the Rust CLI reproduces it (#152).
+    // prose, even with --json (#152). A camel-case value option is refused
+    // by name since #262; these answers were re-recorded then.
     accident: [
       ["commit", "--authoredBy", "--authored-by", "a"],
       ["--trace-git", "commit", "--authoredBy", "--authored-by", "a"],
