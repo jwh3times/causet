@@ -1033,7 +1033,7 @@ recorded in an ADR when it changes a durable decision.
    ([#37](https://github.com/jwh3times/causet/issues/37),
    [#40](https://github.com/jwh3times/causet/issues/40)), which
    [ADR-0040](adr/0040-make-cst-the-one-command-carrying-records-over-git-remotes.md)
-   proposes as `cst fetch` and `cst push` over ordinary Git remotes
+   accepts as `cst fetch` and `cst push` over ordinary Git remotes
    ([#255](https://github.com/jwh3times/causet/issues/255)), and which copy
    is *true*, which is question 4.
 3. Should logical Change IDs be repository-scoped, globally namespaced, or
