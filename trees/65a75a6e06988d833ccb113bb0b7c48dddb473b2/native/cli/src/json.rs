@@ -30,6 +30,7 @@ mod tests {
       "usage-invalid-option-value",
       "usage-missing-argument",
       "usage-unknown-command",
+      "usage-unknown-option",
     ] {
       assert!(causet_model::errors::is_published_code(code), "{code}");
     }
