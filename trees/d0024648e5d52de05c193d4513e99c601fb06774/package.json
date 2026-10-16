@@ -1,6 +1,6 @@
 {
   "name": "@holland-vip/causet",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "An experimental causal source-control layer over Git, as the cst command: records how changes move between Git histories, with verifiable receipts, declared provenance, and portable metadata. Prebuilt for Windows x64 and Linux x64 (glibc).",
   "keywords": [
     "git",
