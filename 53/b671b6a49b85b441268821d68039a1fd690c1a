@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvahzouhe676c6202e05",
+      "mode": "compact",
+      "sourceRef": "chore/release-0.25.0",
+      "sourceHead": "836509b0ec4884d3d182c36742b18fc3d941ca00",
+      "sourceSubject": "chore: prepare v0.25.0, the release that makes cst the one command",
+      "targetBefore": "0eceb1b4b90d963cb57e0c6e7ce39083d228532d",
+      "landingCommit": "53b671b6a49b85b441268821d68039a1fd690c1a",
+      "base": "0eceb1b4b90d963cb57e0c6e7ce39083d228532d",
+      "absorbedCommits": [
+        "836509b0ec4884d3d182c36742b18fc3d941ca00"
+      ],
+      "absorbedChanges": [
+        "ch_0mvagssw6b1e89df6ae6f"
+      ],
+      "resultTree": "d0024648e5d52de05c193d4513e99c601fb06774",
+      "createdAt": "2026-10-16T04:59:02.924Z"
+    }
+  ]
+}
