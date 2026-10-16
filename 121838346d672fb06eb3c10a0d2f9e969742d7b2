@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvabzlod5e52e70e5573",
+      "mode": "compact",
+      "sourceRef": "docs/adr-0040-accept",
+      "sourceHead": "14bd02830b76ae7240d3ed698ede4f2d07285311",
+      "sourceSubject": "docs: accept ADR-0040 as proposed",
+      "targetBefore": "8683364a5ba73c3ccc0eedd45aeae03ab7b36614",
+      "landingCommit": "121838346d672fb06eb3c10a0d2f9e969742d7b2",
+      "base": "8683364a5ba73c3ccc0eedd45aeae03ab7b36614",
+      "absorbedCommits": [
+        "14bd02830b76ae7240d3ed698ede4f2d07285311"
+      ],
+      "absorbedChanges": [
+        "ch_0mvaawrejc6c86de897e6"
+      ],
+      "resultTree": "aee3c662b1d9caa8f2293cc6350dee52dd98550e",
+      "createdAt": "2026-10-16T02:11:01.121Z"
+    }
+  ]
+}
