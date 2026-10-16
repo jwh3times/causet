@@ -38,7 +38,7 @@ The other machine sees only what reached `origin/main`. Fetch, then list
 everything that has not:
 
 ```bash
-git fetch origin --prune
+cst fetch origin --prune
 git status --porcelain --untracked-files=all   # uncommitted or untracked changes
 git stash list
 git worktree list                              # run git status --porcelain in each extra worktree
@@ -47,7 +47,7 @@ git log --oneline origin/main..HEAD            # current branch commits main lac
 git branch -vv --no-merged origin/main         # local branches main lacks
 git branch -r --no-merged origin/main          # pushed branches main lacks
 gh pr list --repo jwh3times/causet --state open --author @me
-git for-each-ref refs/notes/causet refs/notes/vcs-lab; git ls-remote origin refs/notes/causet refs/notes/vcs-lab
+git for-each-ref refs/notes/causet refs/causet/retention; git ls-remote origin refs/notes/causet refs/causet/retention
 ```
 
 A branch landed with `cst merge --compact` and never reset onto `main` still

@@ -942,8 +942,13 @@ is the record of what they are and why:
   would put a commit on `main` with no landing receipt and no carried
   provenance. Merge commits stay enabled because GitHub requires one method.
 - **The causal refs are not covered.** Rulesets apply to branches and tags
-  only, so `refs/notes/causet` and `refs/causet/*` rely on being pushed
-  fast-forward, and atomically with `main`.
+  only, so `refs/notes/causet` and `refs/causet/retention` rely on being
+  pushed fast-forward, never forced, and no later than the commits they
+  describe. `cst push` does exactly that (ADR-0040): it pushes them in one
+  atomic push, merging the remote's first when it has moved, and only then
+  pushes the branch or `main` (#269). This repository pushes every work
+  branch and every landing with `cst push` and reconciles with `cst fetch`;
+  the landing procedure on the wiki has the commands.
 
 To read them: `gh api repos/jwh3times/causet/rulesets`, and
 `gh api repos/jwh3times/causet/rules/branches/main` for what applies to
