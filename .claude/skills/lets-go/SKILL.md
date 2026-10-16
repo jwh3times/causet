@@ -91,13 +91,13 @@ The document describes the other machine at handoff time. Compare it with this
 one:
 
 ```bash
-git fetch origin --prune
+cst fetch origin --prune
 git status --porcelain
 git branch --show-current
 git log --oneline -1 origin/main
 ```
 
-- On a clean `main` behind `origin/main`: `git pull --ff-only`.
+- On a clean `main` behind `origin/main`: `cst pull --ff-only`.
 - `origin/main` newer than the commit the document names: read those commits
   before relying on the document.
 - The document's `Not merged to main` section: confirm each branch reached
