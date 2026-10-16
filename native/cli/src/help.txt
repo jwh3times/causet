@@ -82,6 +82,6 @@ Global diagnostics:
                      process (default on Windows; needs Git 2.49, else falls back)
   --engine <git|native>
                      answer repository reads with Git processes (the default and
-                     the oracle) or with the native core, which passes every
-                     read through to Git until its binding exists; each fallback
-                     is recorded in the Git metrics of the result
+                     the oracle) or with the native core, which answers the
+                     reads it is qualified for and passes the rest to Git; each
+                     fallback is recorded in the Git metrics of the result

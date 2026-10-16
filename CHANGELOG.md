@@ -11,6 +11,10 @@
   `usage-unknown-option`, naming the spelling to use; boolean flags such as
   `--allowEmpty` keep their camel-case spelling. A provenance record that
   already names the actor `true` is left as it is.
+- **`cst --help` describes `--engine native` as it behaves** (#271). It said
+  the native core passed every read through to Git until its binding existed;
+  the core answers the reads it is qualified for, and only the rest fall back
+  to Git, each fallback recorded in the Git metrics.
 
 ## 0.25.0
 
