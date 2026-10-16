@@ -1104,6 +1104,19 @@
       "reason": "Dispatch reaches the per-command options before it rejects the name, so even this failure honours --json."
     },
     {
+      "name": "unknown-option",
+      "argv": [
+        "commit",
+        "--amend",
+        "-m",
+        "x",
+        "--json"
+      ],
+      "stage": "clean",
+      "code": "usage-unknown-option",
+      "reason": "An option the command does not take is refused before anything is written, never ignored: cst commit --amend once made a new commit (#257)."
+    },
+    {
       "name": "operation-already-pending",
       "argv": [
         "reconcile",

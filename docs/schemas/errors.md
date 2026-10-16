@@ -44,6 +44,7 @@ code is a defect, not a category.
 | --- | --- |
 | `usage-missing-argument` | A required argument or flag value was absent. Supply it. |
 | `usage-unknown-command` | The command or subcommand does not exist. Check the spelling against --help. |
+| `usage-unknown-option` | The command does not take an option that was given. Check the spelling against --help, or run Git for Git's own option. |
 | `usage-conflicting-options` | Two options that cannot be combined were both given. Choose one. |
 | `usage-invalid-option-value` | An option value was outside its accepted set or range. Choose a permitted value. |
 

@@ -13,6 +13,16 @@
   a claim. It prints JSON, as `cst commit` does. The v0.23.0-checkout repair
   procedure is gone, and `cst commit`'s refusal names the command. A branch or
   tag named `declare` is now read with `cst provenance refs/heads/declare`.
+- **A command refuses an option it does not take** (#257, ADR-0040 decision
+  6). Every command used to drop an undefined option without a word, so
+  `cst commit --amend -m x` made a new commit, and a short option such as `-d`
+  in `cst branch -d x` was read as the branch name. Such an option is now
+  refused before anything is written, with the new error code
+  `usage-unknown-option`; for `init`, `commit`, `branch`, `merge`, `rebase` and
+  `cherry-pick` the message names Git's own command. Every documented option
+  and its camel-case spelling is still accepted, and `--json` is accepted by
+  every command. Breaking for a script that passed an option a command
+  ignored: remove it.
 - **The documented low-level fetch of the causal refs names each one** (#258).
   The README, `docs/architecture.md` and `docs/testing.md` gave a
   `refs/causet/*` glob, which also copies the publisher's checkpoint refs and

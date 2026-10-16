@@ -4,6 +4,9 @@
 //! command's argument-only usage checks, in the same order, so those outcomes
 //! are answered natively byte for byte. Every command is ported, so every
 //! invocation is answered here.
+//!
+//! One decision departs from it on purpose: an option a command does not take
+//! is refused (`unknown_option`, #257), where the JavaScript CLI dropped it.
 
 use crate::parsed::{Opt, Parsed};
 
@@ -235,6 +238,9 @@ pub fn decide(
   if !matches!(command, "migrate" | "doctor") && unmigrated(&settings) {
     return Outcome::Unmigrated { json };
   }
+  if let Some(failure) = unknown_option(command, &args[1..], &parsed) {
+    return Outcome::Fail { failure, json };
+  }
   match usage_check(command, &parsed, help) {
     Some(failure) => Outcome::Fail { failure, json },
     None if is_native(command, &parsed) => Outcome::Native {
@@ -353,6 +359,106 @@ fn parse_args(args: &[&str]) -> Result<Parsed, Failure> {
     }
   }
   Ok(parsed)
+}
+
+const ACTORS: &[&str] = &["authoredBy", "generatedBy", "reviewedBy"];
+const INTERACTIVE: &[&str] = &["from", "reword", "edit", "squash", "fixup"];
+
+/// The option keys a command reads, by the key `parse_args` stores them
+/// under, so a camel-case spelling is accepted wherever its kebab-case one is.
+/// `--json` is every command's: it selects the failure envelope (ADR-0021).
+/// `None` for a command or subcommand that does not exist, which
+/// `usage_check` refuses by name.
+fn allowed_options(command: &str, parsed: &Parsed) -> Option<Vec<&'static str>> {
+  let subcommand = parsed.positionals.first().map(String::as_str);
+  let keys: Vec<&'static str> = match (command, subcommand) {
+    ("init" | "graph" | "receipts" | "branch" | "proof-bundle" | "merge-plan", _) => vec![],
+    ("commit", _) => [&["message", "all", "allowEmpty"][..], ACTORS].concat(),
+    ("provenance", Some("declare")) => ACTORS.to_vec(),
+    ("provenance", _) => vec!["all"],
+    ("merge", _) => vec!["message", "compact", "hardSquash"],
+    ("compact-merge" | "hard-squash", _) => vec!["message"],
+    ("verify-proof", _) => vec!["offline", "anchorsFrom"],
+    ("rebase-plan", _) => INTERACTIVE.to_vec(),
+    ("rebase-forecast", _) => [INTERACTIVE, &["targetCheckpoint", "acceptCandidates"]].concat(),
+    ("rebase", _) => [
+      INTERACTIVE,
+      &["acceptCandidates", "useForecast", "status", "continue", "fork", "abort", "message"],
+    ]
+    .concat(),
+    ("forecast", _) => vec!["targetCheckpoint", "acceptCandidates"],
+    ("reconcile", _) => vec!["acceptCandidates", "useForecast", "status", "continue", "fork", "abort"],
+    ("resolve", None | Some("status" | "list")) => vec![],
+    ("resolve", Some("apply" | "reject")) => vec!["all", "resolution"],
+    ("cherry-pick", _) => vec!["fork", "repeat"],
+    ("audit", Some("identity")) => vec![],
+    ("metadata", Some("status" | "export")) => vec![],
+    ("metadata", Some("validate")) => vec!["strict"],
+    ("metadata", Some("retain")) => vec!["dryRun", "apply"],
+    ("metadata", Some("import")) => vec!["dryRun", "apply", "parkConflicts"],
+    ("metadata", Some("dispose")) => vec!["keepLocal", "replaceLocal", "reason"],
+    ("metadata", Some("benchmark")) => vec![
+      "history", "workspaces", "notes", "resolutions", "samples", "budgetMs", "areas", "filesPerArea",
+    ],
+    ("capabilities", _) => vec!["against"],
+    ("workspace", Some("list" | "move" | "archive")) => vec![],
+    ("workspace", Some("create")) => vec!["from", "path", "owner", "focus", "cone"],
+    ("workspace", Some("checkpoint")) => vec!["label"],
+    ("workspace", Some("restore" | "repair")) => vec!["path"],
+    ("workspace", Some("prune")) => vec!["dryRun", "apply"],
+    ("workspace", Some("forecast")) => vec!["sourceCheckpoint", "targetCheckpoint", "acceptCandidates"],
+    ("spec", Some("index")) => vec!["force", "all"],
+    ("spec", Some("show" | "merge-plan" | "status")) => vec![],
+    ("spec", Some("resolve")) => vec!["all"],
+    ("spec", Some("benchmark")) => vec!["documents", "blocks"],
+    ("doctor", _) => vec!["benchmark", "samples", "warmup", "differential"],
+    ("migrate", _) => vec!["dryRun"],
+    _ => return None,
+  };
+  Some([keys, vec!["json"]].concat())
+}
+
+/// The commands whose names Git also has: an option `cst`'s command does not
+/// define is most likely Git's, so the refusal names Git's command (ADR-0040).
+const GIT_NAMES: &[&str] = &["init", "commit", "branch", "merge", "rebase", "cherry-pick"];
+
+/// The first option in `args` that `command` does not define (#257). It walks
+/// `args` as `parse_args` does, so a flag's value is never mistaken for an
+/// option, and a short option other than `-m` (which `parse_args` would have
+/// taken for a positional) is refused too.
+fn unknown_option(command: &str, args: &[&str], parsed: &Parsed) -> Option<Failure> {
+  let allowed = allowed_options(command, parsed)?;
+  let mut index = 0;
+  while index < args.len() {
+    let item = args[index];
+    index += 1;
+    let key = if item == "-m" {
+      "message".to_string()
+    } else if item.starts_with("--") {
+      option_key(item)
+    } else if item.starts_with('-') && item.len() > 1 {
+      String::new()
+    } else {
+      continue;
+    };
+    if REPEATABLE_FLAGS.contains(&item) || VALUE_FLAGS.contains(&item) {
+      index += 1;
+    }
+    if !allowed.contains(&key.as_str()) {
+      let git = if GIT_NAMES.contains(&command) {
+        format!(" For Git's own '{command}', run 'git {command}'.")
+      } else {
+        String::new()
+      };
+      let message =
+        format!("Unknown option '{item}' for 'cst {command}'. Run 'cst --help' for the options it takes.{git}");
+      return Some(Failure {
+        message,
+        code: "usage-unknown-option",
+      });
+    }
+  }
+  None
 }
 
 fn missing(usage: &str) -> Failure {
@@ -715,6 +821,47 @@ mod tests {
     for args in [&["commit", "-m", "x"][..], &["spec", "benchmark"], &["migrate"]] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }
+  }
+
+  #[test]
+  fn an_option_a_command_does_not_take_is_refused_by_name() {
+    // #257: `cst commit --amend` made a new commit, and `cst branch -d x`
+    // took `-d` for the branch name.
+    for (args, item, command) in [
+      (&["commit", "--amend", "-m", "x"][..], "--amend", "commit"),
+      (&["branch", "-d", "foo"], "-d", "branch"),
+      (&["merge", "feature", "--no-ff"], "--no-ff", "merge"),
+      (&["commit", "-am", "x"], "-am", "commit"),
+      (&["commit", "-m", "x", "--from", "main"], "--from", "commit"),
+    ] {
+      let (message, code, json) = failed(run(args));
+      assert_eq!(code, "usage-unknown-option", "{args:?}");
+      assert!(!json, "{args:?}");
+      assert!(message.starts_with(&format!("Unknown option '{item}' for 'cst {command}'.")), "{message}");
+      assert!(message.ends_with(&format!("run 'git {command}'.")), "{message}");
+    }
+    let (message, code, json) = failed(run(&["receipts", "--all", "--json"]));
+    assert_eq!((code, json), ("usage-unknown-option", true));
+    assert!(!message.contains("git receipts"), "{message}");
+    for args in [
+      &["workspace", "list", "--path", "x"][..],
+      &["metadata", "status", "--strict"],
+      &["spec", "show", "a.md", "--all"],
+      &["compact-merge", "feature", "--hard-squash"],
+    ] {
+      assert_eq!(failed(run(args)).1, "usage-unknown-option", "{args:?}");
+    }
+    // A flag's value is never read as an option, camel-case spellings stay
+    // accepted, and an unknown command or subcommand is still refused by name.
+    for args in [
+      &["commit", "-m", "--amend"][..],
+      &["commit", "--allowEmpty", "-m", "x"],
+      &["workspace", "create", "w", "--path", "-x"],
+    ] {
+      assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
+    }
+    assert_eq!(failed(run(&["no-such", "--amend"])).1, "usage-unknown-command");
+    assert_eq!(failed(run(&["metadata", "nope", "--amend"])).1, "usage-unknown-command");
   }
 
   #[test]
