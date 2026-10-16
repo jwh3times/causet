@@ -223,7 +223,8 @@ right, and saying so in the change.
   were compared on outside a repository: help and version, the global flag and
   environment failures, each flag without its value, every argument-only usage
   failure human and JSON, the camel-case input the JavaScript parser failed on
-  by accident, `doctor` and the record readers outside a repository, the
+  by accident (refused by name since #262, its answers re-recorded then),
+  `doctor` and the record readers outside a repository, the
   build-scoped capability document, and the benchmarks. The version, the
   directory the cases run in, trace timings, the benchmark's environment and
   timings, and the capability document's hashes are masked. It also checks that

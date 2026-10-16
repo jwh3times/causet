@@ -58,9 +58,8 @@ pub fn declared_actors(parsed: &Parsed) -> GitResult<Vec<Actor>> {
     let values: Vec<String> = match parsed.options.get(key) {
       Some(Opt::Values(values)) => values.clone(),
       Some(Opt::Value(value)) if !value.is_empty() => vec![value.clone()],
-      // A later `--authoredBy` replaces the list with `true`, which
-      // `String(true)` names as an actor.
-      Some(Opt::Flag) => vec!["true".to_string()],
+      // A camel-case spelling never reaches here (#262), so a flag is no
+      // actor; it is never named "true".
       _ => Vec::new(),
     };
     for actor in values {

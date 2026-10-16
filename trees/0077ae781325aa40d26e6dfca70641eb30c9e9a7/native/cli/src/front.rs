@@ -283,6 +283,13 @@ pub fn decide(
       settings,
     };
   }
+  if let Some((item, flag, json)) = camel_value_option(&args[1..]) {
+    return fail(
+      format!("Unknown option '{item}' for 'cst {command}'. Spell it '{flag}', followed by its value."),
+      "usage-unknown-option",
+      json,
+    );
+  }
   let parsed = match parse_args(&args[1..]) {
     Ok(parsed) => parsed,
     Err(failure) => {
@@ -369,9 +376,39 @@ fn option_key(item: &str) -> String {
   key
 }
 
-/// `parseArgs` in `src/cli.js`, including the one input it fails on by
-/// accident: a repeatable flag spelled in camel case first leaves `true`
-/// under its key, and the spread of that is a `TypeError`.
+/// The first camel-case spelling of an option that takes a value, with its
+/// kebab-case spelling and whether `--json` was given (#262). `parse_args`
+/// consumes a value only after a kebab-case spelling, so `--generatedBy agent`
+/// would store `true` under the key and drop `agent`: a provenance claim by an
+/// actor named "true". A boolean flag keeps its camel-case spelling.
+fn camel_value_option(args: &[&str]) -> Option<(String, &'static str, bool)> {
+  let mut found = None;
+  let mut json = false;
+  let mut index = 0;
+  while index < args.len() {
+    let item = args[index];
+    index += 1;
+    if REPEATABLE_FLAGS.contains(&item) || VALUE_FLAGS.contains(&item) {
+      index += 1;
+    } else if item == "--json" {
+      json = true;
+    } else if found.is_none() && item.starts_with("--") {
+      let key = option_key(item);
+      let flag = REPEATABLE_FLAGS
+        .iter()
+        .chain(VALUE_FLAGS)
+        .find(|flag| flag.starts_with("--") && option_key(flag) == key);
+      if let Some(flag) = flag {
+        found = Some((item.to_string(), *flag));
+      }
+    }
+  }
+  found.map(|(item, flag)| (item, flag, json))
+}
+
+/// `parseArgs` in `src/cli.js`. A value option spelled in camel case never
+/// reaches it (`camel_value_option`), so a repeatable flag's key only ever
+/// holds its values.
 fn parse_args(args: &[&str]) -> Result<Parsed, Failure> {
   let mut parsed = Parsed::default();
   let mut index = 0;
@@ -392,18 +429,11 @@ fn parse_args(args: &[&str]) -> Result<Parsed, Failure> {
       };
       if repeatable {
         match parsed.options.get_mut(&key) {
-          None => {
+          Some(Opt::Values(values)) => values.push(value.to_string()),
+          _ => {
             parsed
               .options
               .insert(key, Opt::Values(vec![value.to_string()]));
-          }
-          Some(Opt::Values(values)) => values.push(value.to_string()),
-          Some(_) => {
-            // V8's own wording; it is printed as prose, never as an envelope.
-            return Err(Failure {
-              message: "(options[key] ?? []) is not iterable".to_string(),
-              code: "internal-invariant",
-            });
           }
         }
       } else {
@@ -864,20 +894,23 @@ mod tests {
 
   #[test]
   fn the_front_end_answers_every_command() {
-    // The input the JavaScript parser fails on by accident fails the same
-    // way here, as prose even with --json.
-    for args in [
-      &["commit", "--authoredBy", "--authored-by", "a"][..],
-      &["commit", "--json", "--generatedBy", "--generated-by", "a"],
+    // #262: a value option spelled in camel case is refused, naming its
+    // spelling, where the JavaScript parser recorded `true` or failed with a
+    // TypeError. A boolean flag keeps its camel-case spelling.
+    for (args, item, flag, json) in [
+      (&["commit", "--authoredBy", "--authored-by", "a"][..], "--authoredBy", "--authored-by", false),
+      (&["commit", "--json", "--generatedBy", "--generated-by", "a"], "--generatedBy", "--generated-by", true),
+      (&["commit", "-m", "x", "--generatedBy", "agent"], "--generatedBy", "--generated-by", false),
+      (&["reconcile", "x", "--useForecast", "f", "--json"], "--useForecast", "--use-forecast", true),
+      (&["metadata", "benchmark", "--budgetMs", "5"], "--budgetMs", "--budget-ms", false),
     ] {
-      match run(args) {
-        Outcome::Fail { failure, json } => {
-          assert_eq!(failure.message, "(options[key] ?? []) is not iterable");
-          assert!(!json);
-        }
-        other => panic!("{args:?} gave {other:?}"),
-      }
+      let (message, code, enveloped) = failed(run(args));
+      assert_eq!((code, enveloped), ("usage-unknown-option", json), "{args:?}");
+      assert!(message.contains(&format!("'{item}'")) && message.contains(&format!("'{flag}'")), "{message}");
     }
+    // A camel-case word that is a flag's value is not an option.
+    assert!(matches!(run(&["commit", "-m", "--generatedBy"]), Outcome::Native { .. }));
+    assert!(matches!(run(&["commit", "-m", "x", "--allowEmpty"]), Outcome::Native { .. }));
     for args in [&["commit", "-m", "x"][..], &["spec", "benchmark"], &["migrate"]] {
       assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
     }

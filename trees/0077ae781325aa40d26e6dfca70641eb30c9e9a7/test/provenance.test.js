@@ -240,6 +240,14 @@ test("a declared role outside the closed vocabulary is refused", () => {
   assert.deepEqual(provenance(repo), [], "an unknown role flag declares nothing");
   vlab(repo, "commit", "-m", "one");
 
+  // A camel-case spelling of a role flag is refused by name, rather than
+  // recording an actor named "true" and dropping the value (#262).
+  const camel = vlabResult(repo, ["commit", "-m", "one", "--generatedBy", "agent", "--json"]);
+  assert.equal(camel.status, 1);
+  assert.equal(JSON.parse(camel.stdout).code, "usage-unknown-option");
+  assert.match(JSON.parse(camel.stdout).message, /Spell it '--generated-by'/);
+  assert.deepEqual(provenance(repo), [], "nothing was declared");
+
   // An empty actor is refused rather than recorded as an anonymous claim.
   write(repo, "g.txt", "two\n");
   git(repo, "add", "-A");
