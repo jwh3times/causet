@@ -99,6 +99,32 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "workspace restore",
 ];
 
+/// The first words `cst` answers itself: each command's first word, and the
+/// help and version spellings the front end reads.
+fn is_cst_word(word: &str) -> bool {
+  matches!(word, "help" | "version")
+    || NATIVE_COMMANDS
+      .iter()
+      .any(|command| command.split(' ').next() == Some(word))
+}
+
+/// Whether an invocation is Git's (ADR-0040): `Some(n)` when it runs `git`
+/// with the arguments after the first `n`. `cst git <arguments>` is Git's
+/// whatever follows, and so is any first word `cst` does not answer itself.
+/// A first word that begins with `-` is `cst`'s, so the global flags and the
+/// help and version spellings keep their meaning; a global flag is never read
+/// from a passthrough command.
+pub fn passthrough(raw: &[String]) -> Option<usize> {
+  let first = raw.first()?;
+  if first == "git" {
+    Some(1)
+  } else if first.is_empty() || first.starts_with('-') || is_cst_word(first) {
+    None
+  } else {
+    Some(0)
+  }
+}
+
 /// Whether this invocation is a ported command: the command, or for a command
 /// with subcommands, the command and its subcommand.
 fn is_native(command: &str, parsed: &Parsed) -> bool {
@@ -446,7 +472,7 @@ fn unknown_option(command: &str, args: &[&str], parsed: &Parsed) -> Option<Failu
     }
     if !allowed.contains(&key.as_str()) {
       let git = if GIT_NAMES.contains(&command) {
-        format!(" For Git's own '{command}', run 'git {command}'.")
+        format!(" For Git's own '{command}', run 'cst git {command}'.")
       } else {
         String::new()
       };
@@ -824,6 +850,36 @@ mod tests {
   }
 
   #[test]
+  fn every_word_cst_does_not_answer_is_gits() {
+    let words = |args: &[&str]| passthrough(&args.iter().map(|item| item.to_string()).collect::<Vec<_>>());
+    for args in [&["status"][..], &["log", "--oneline"], &["UPPER"], &["Commit"], &["switch", "-c", "x"]] {
+      assert_eq!(words(args), Some(0), "{args:?}");
+    }
+    for args in [&["git"][..], &["git", "commit", "--amend"], &["git", "status", "--json"]] {
+      assert_eq!(words(args), Some(1), "{args:?}");
+    }
+    for args in [
+      &[][..],
+      &[""],
+      &["help"],
+      &["version"],
+      &["--help"],
+      &["-V"],
+      &["--json"],
+      &["--trace-git", "status"],
+      &["commit", "--amend"],
+      &["metadata", "nope"],
+      &["resolve"],
+      &["audit"],
+      &["spec"],
+      &["workspace"],
+      &["merge-plan", "x"],
+    ] {
+      assert_eq!(words(args), None, "{args:?}");
+    }
+  }
+
+  #[test]
   fn an_option_a_command_does_not_take_is_refused_by_name() {
     // #257: `cst commit --amend` made a new commit, and `cst branch -d x`
     // took `-d` for the branch name.
@@ -838,7 +894,7 @@ mod tests {
       assert_eq!(code, "usage-unknown-option", "{args:?}");
       assert!(!json, "{args:?}");
       assert!(message.starts_with(&format!("Unknown option '{item}' for 'cst {command}'.")), "{message}");
-      assert!(message.ends_with(&format!("run 'git {command}'.")), "{message}");
+      assert!(message.ends_with(&format!("run 'cst git {command}'.")), "{message}");
     }
     let (message, code, json) = failed(run(&["receipts", "--all", "--json"]));
     assert_eq!((code, json), ("usage-unknown-option", true));

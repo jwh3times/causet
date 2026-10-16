@@ -237,7 +237,8 @@ test("a pre-dispatch failure keeps prose, because no output mode is known yet", 
   // The boundary is narrower than "before the command word": global flags are
   // consumed before the per-command options are parsed, so a failure there has
   // no --json to honor even when one was typed. Everything from the argument
-  // parse onward is enveloped, which includes an unknown command.
+  // parse onward is enveloped, which includes an unknown subcommand. (An
+  // unknown first word is Git's since ADR-0040, and Git answers it.)
   const repo = makeRepo();
 
   const globalFlag = run(repo, "--git-session", "--no-git-session", "receipts", "--json");
@@ -245,7 +246,7 @@ test("a pre-dispatch failure keeps prose, because no output mode is known yet", 
   assert.equal(globalFlag.stdout, "", "no envelope: the mode was not known yet");
   assert.match(globalFlag.stderr, /^cst: Choose only one of/m);
 
-  const unknownCommand = run(repo, "no-such-command", "--json");
+  const unknownCommand = run(repo, "metadata", "no-such-subcommand", "--json");
   assert.notEqual(unknownCommand.status, 0);
   assert.equal(
     JSON.parse(unknownCommand.stdout).code,

@@ -1,5 +1,6 @@
 //! `cst`, the Rust command-line interface (ADR-0037). `front` decides each
-//! invocation byte for byte as the JavaScript CLI did, and `native` runs it.
+//! invocation byte for byte as the JavaScript CLI did, and `native` runs it;
+//! a command `cst` does not define is Git's, and runs `git` (ADR-0040).
 #![forbid(unsafe_code)]
 
 mod audit;
@@ -48,6 +49,10 @@ const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
 
 fn main() {
   let raw: Vec<OsString> = env::args_os().skip(1).collect();
+  let words: Vec<String> = raw.iter().map(|item| item.to_string_lossy().into_owned()).collect();
+  if let Some(skip) = front::passthrough(&words) {
+    process::exit(git(&raw[skip..]));
+  }
   let outcome = decide(&raw);
   let mut stdout = std::io::stdout().lock();
   let mut stderr = std::io::stderr().lock();
@@ -91,6 +96,35 @@ fn main() {
     }
   };
   process::exit(code);
+}
+
+/// Run Git with `args` exactly as given (ADR-0040), as Git itself: on Unix
+/// `cst` becomes the `git` process, so signals, the terminal, a pager, an
+/// editor and the exit status are Git's with nothing between. Windows has no
+/// exec; there `git` runs as a child with the standard streams inherited and
+/// its status returned.
+fn git(args: &[OsString]) -> i32 {
+  let mut command = process::Command::new("git");
+  command.args(args);
+  match run_as_git(&mut command) {
+    Ok(code) => code,
+    Err(error) => {
+      eprintln!("cst: could not run git: {error}");
+      1
+    }
+  }
+}
+
+#[cfg(unix)]
+fn run_as_git(command: &mut process::Command) -> std::io::Result<i32> {
+  use std::os::unix::process::CommandExt;
+  // Returns only when the exec failed.
+  Err(command.exec())
+}
+
+#[cfg(not(unix))]
+fn run_as_git(command: &mut process::Command) -> std::io::Result<i32> {
+  Ok(command.status()?.code().unwrap_or(1))
 }
 
 /// The front end sees what the JavaScript CLI would see. Node decodes an

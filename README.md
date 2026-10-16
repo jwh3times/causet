@@ -178,25 +178,32 @@ Create a disposable repository:
 ```bash
 mkdir causet-playground
 cd causet-playground
-git init -b main
-git config user.name "Local Tester"
-git config user.email "tester@example.test"
+cst git init -b main
+cst config user.name "Local Tester"
+cst config user.email "tester@example.test"
 cst init
 ```
+
+Every command here is `cst`. `cst init`, `cst commit`, `cst branch` and
+`cst merge` are causet's own; `cst add`, `cst switch`, `cst config` and any
+other command `cst` does not define run Git with the same arguments, and
+`cst git <arguments>` runs Git for any command, the names causet defines
+included, which is how `cst git init` creates the repository that `cst init`
+then prepares (ADR-0040).
 
 Create a base and a feature with stable change identities:
 
 ```bash
 echo base > app.txt
-git add app.txt
+cst add app.txt
 cst commit -m "base"
 
 cst branch feature
 echo feature > feature.txt
-git add feature.txt
+cst add feature.txt
 cst commit -m "feature part one"
 echo more >> feature.txt
-git add feature.txt
+cst add feature.txt
 cst commit -m "feature part two"
 ```
 
@@ -208,10 +215,10 @@ commit whose tree is unchanged. Either way the commit receives its
 ### Recommended compact landing
 
 ```bash
-git switch main
+cst switch main
 cst merge feature --compact
-git log --first-parent --oneline
-git show -s --format=%P HEAD
+cst log --first-parent --oneline
+cst show -s --format=%P HEAD
 ```
 
 The first-parent log contains one landing unit, while the commit has a real second parent. Stock Git can safely merge the branches later.
@@ -223,23 +230,23 @@ The first-parent log contains one landing unit, while the commit has a real seco
 Repeat the experiment with another feature:
 
 ```bash
-git switch -c hard-feature main
+cst switch -c hard-feature main
 echo first > hard.txt
-git add hard.txt
+cst add hard.txt
 cst commit -m "hard feature one"
 echo second >> hard.txt
-git add hard.txt
+cst add hard.txt
 cst commit -m "hard feature two"
 
-git switch main
+cst switch main
 cst merge hard-feature --hard-squash
 
-git switch hard-feature
+cst switch hard-feature
 echo continuation > continuation.txt
-git add continuation.txt
+cst add continuation.txt
 cst commit -m "hard feature continuation"
 
-git switch main
+cst switch main
 cst merge-plan hard-feature
 cst reconcile hard-feature
 ```
@@ -867,6 +874,23 @@ Run `cst --help` for the current command list. The most useful commands are:
 | `cst audit identity` | Repository-wide Change-ID collision and duplicate-origin audit |
 | `cst metadata ...` | Inventory, validate, transfer, and benchmark accepted metadata facts and scan paths |
 | `cst doctor --benchmark` | Sample ordinary Git latency and persistent object-session reuse |
+| `cst git <arguments>` | Run Git for any command, including the names `cst` defines (`cst git commit --amend`) |
+
+Every other command is Git's ([ADR-0040](docs/adr/0040-make-cst-the-one-command-carrying-records-over-git-remotes.md)):
+`cst status`, `cst log`, `cst add`, `cst switch` and the rest run `git` with
+the same arguments, the same terminal, and Git's exit status, so `cst` is the
+only command a session needs. On Unix `cst` becomes the `git` process; on
+Windows it runs `git` and waits. A flag after a passed-through command is
+Git's, so `--json` and `--engine` there mean what Git makes of them. For now
+`cst fetch`, `cst pull`, `cst push` and `cst clone` pass through too and do
+not carry the causal records; until they do
+([#255](https://github.com/jwh3times/causet/issues/255)), move them as
+[Metadata locations](#metadata-locations) describes.
+
+A command `cst` defines refuses an option it does not take with
+`usage-unknown-option` rather than ignoring it; for `init`, `commit`,
+`branch`, `merge`, `rebase` and `cherry-pick` the refusal names `cst git` and
+the command, for Git's own form.
 
 For ordinary Git commits without a `Change-Id`, `cst cherry-pick` recognizes
 exact target ancestry and validated, reachable identity-preserving application

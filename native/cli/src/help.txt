@@ -63,6 +63,11 @@ Usage:
   cst migrate [--dry-run] [--json]              move vcs-lab metadata to the causet names
   cst doctor [--benchmark] [--samples <n>] [--warmup <n>] [--differential]
   cst version
+  cst git <arguments>                           run Git, whatever the command
+
+Every other command is Git's: cst status, cst log, cst add and the rest run
+git with the same arguments. For now that includes fetch, pull, push and
+clone, which do not yet carry the causal records.
 
 Plan legend: '=' proven covered/omit, '?' heuristic review, '+' new/replay.
 
