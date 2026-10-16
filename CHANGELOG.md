@@ -2,17 +2,17 @@
 
 ## Unreleased
 
-- **`cst provenance declare <commit>` declares provenance for an existing
-  commit** (#246). It is the repair `docs/identity/README.md` §7 describes for
-  an attributed `cst commit` whose note was not published, and it accepts any
-  commit, a plain Git one included. It takes `--authored-by`, `--generated-by`
-  and `--reviewed-by` and reads `CAUSET_AGENT`, as `cst commit` does; it writes
-  one `causet.provenance/v1` record with `origin: "declared"` and the commit's
-  `Change-Id` (null without one), under the notes lock. A commit that already
-  has provenance is refused with `already-exists`, so a retry cannot duplicate
-  a claim. It prints JSON, as `cst commit` does. The v0.23.0-checkout repair
-  procedure is gone, and `cst commit`'s refusal names the command. A branch or
-  tag named `declare` is now read with `cst provenance refs/heads/declare`.
+## 0.25.0
+
+**`cst` is the one command** (ADR-0040). `cst clone`, `cst pull` and
+`cst push` carry the causal records with Git's own work, every command `cst`
+does not define runs Git, and `cst git <arguments>` reaches Git directly, so a
+session no longer switches between `git` and `cst`. Breaking in three places:
+`cst fetch`, `pull`, `push` and `clone` now move records (`--no-records` gives
+Git's behaviour); an unknown first word gets Git's answer rather than
+`usage-unknown-command`; and an option a command does not take is refused
+rather than ignored.
+
 - **`cst fetch`, `cst pull`, `cst push` and `cst clone` carry the causal
   records** (#255, ADR-0040). Each runs Git's command with your arguments and
   moves `refs/notes/causet`, `refs/causet/retention` and
@@ -31,21 +31,32 @@
   `git` with the same arguments, the same terminal and Git's exit status; on
   Unix `cst` becomes the `git` process. `cst git <arguments>` runs Git for any
   command, including the names `cst` defines, so `cst git commit --amend` is
-  Git's amend. An unknown first word is
-  now Git's to answer, so `cst no-such-command` prints Git's message instead
-  of `usage-unknown-command`; that code remains for an unknown subcommand,
-  such as `cst metadata no-such-subcommand`. The README's walkthrough uses
-  `cst` alone.
+  Git's amend. An unknown first word is now Git's to answer, so
+  `cst no-such-command` prints Git's message instead of
+  `usage-unknown-command`; that code remains for an unknown subcommand, such
+  as `cst metadata no-such-subcommand`. The README's walkthrough uses `cst`
+  alone.
 - **A command refuses an option it does not take** (#257, ADR-0040 decision
   6). Every command used to drop an undefined option without a word, so
   `cst commit --amend -m x` made a new commit, and a short option such as `-d`
   in `cst branch -d x` was read as the branch name. Such an option is now
   refused before anything is written, with the new error code
   `usage-unknown-option`; for `init`, `commit`, `branch`, `merge`, `rebase` and
-  `cherry-pick` the message names `cst git` and the command, for Git's own. Every documented option
-  and its camel-case spelling is still accepted, and `--json` is accepted by
-  every command. Breaking for a script that passed an option a command
+  `cherry-pick` the message names `cst git` and the command, for Git's own.
+  Every documented option and its camel-case spelling is still accepted, and
+  `--json` is accepted by every command. Breaking for a script that passed an option a command
   ignored: remove it.
+- **`cst provenance declare <commit>` declares provenance for an existing
+  commit** (#246). It is the repair `docs/identity/README.md` §7 describes for
+  an attributed `cst commit` whose note was not published, and it accepts any
+  commit, a plain Git one included. It takes `--authored-by`, `--generated-by`
+  and `--reviewed-by` and reads `CAUSET_AGENT`, as `cst commit` does; it writes
+  one `causet.provenance/v1` record with `origin: "declared"` and the commit's
+  `Change-Id` (null without one), under the notes lock. A commit that already
+  has provenance is refused with `already-exists`, so a retry cannot duplicate
+  a claim. It prints JSON, as `cst commit` does. The v0.23.0-checkout repair
+  procedure is gone, and `cst commit`'s refusal names the command. A branch or
+  tag named `declare` is now read with `cst provenance refs/heads/declare`.
 - **The documented low-level fetch of the causal refs names each one** (#258).
   The README, `docs/architecture.md` and `docs/testing.md` gave a
   `refs/causet/*` glob, which also copies the publisher's checkpoint refs and
