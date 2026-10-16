@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvacisqa4b1c51b344f2",
+      "mode": "compact",
+      "sourceRef": "fix/257-refuse-unknown-options",
+      "sourceHead": "e5f7fee27f1929ea6affc50b50d6f2953ecd180d",
+      "sourceSubject": "Merge branch 'main' into fix/257-refuse-unknown-options",
+      "targetBefore": "121838346d672fb06eb3c10a0d2f9e969742d7b2",
+      "landingCommit": "ca18236c1d2032c4f76e4084c684420d9814dc44",
+      "base": "121838346d672fb06eb3c10a0d2f9e969742d7b2",
+      "absorbedCommits": [
+        "a9a4bb35001b41a87fc1838270fe02b405a5d476",
+        "e5f7fee27f1929ea6affc50b50d6f2953ecd180d"
+      ],
+      "absorbedChanges": [
+        "ch_0mvab9h5k5d5c7eeadddc",
+        "git:e5f7fee27f1929ea6affc50b50d6f2953ecd180d"
+      ],
+      "resultTree": "65a75a6e06988d833ccb113bb0b7c48dddb473b2",
+      "createdAt": "2026-10-16T02:25:56.726Z"
+    }
+  ]
+}
