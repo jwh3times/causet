@@ -65,7 +65,7 @@ for (const [group, title] of [
   ["globalFailures", "global flag and environment failures are answered as prose, as the JavaScript CLI answered them"],
   ["valueFlags", "a flag without its value is answered as prose even with --json"],
   ["usage", "every argument-only usage failure is answered as the JavaScript CLI answered it, human and JSON"],
-  ["accident", "the input the JavaScript parser failed on by accident fails the same way"],
+  ["accident", "the input the JavaScript parser failed on by accident is refused by name (#262)"],
   ["outsideRepository", "doctor and the record readers refuse outside a repository as the JavaScript CLI did"],
   ["capabilities", "the build-scoped capability document is the JavaScript CLI's"],
   ["benchmarks", "the benchmarks report the JavaScript CLI's counts, timings and the named estimates aside (#212)"],
@@ -78,15 +78,18 @@ for (const [group, title] of [
   });
 }
 
-test("every usage failure fails, and the camel-case accident is prose even with --json", { skip }, () => {
+test("every usage failure fails, and a camel-case value option is refused by name", { skip }, () => {
   for (const { args } of groups.usage.filter(({ args }) => !args.includes("--json"))) {
     assert.notEqual(runRust(args).status, 0, JSON.stringify(args));
   }
+  // The JavaScript CLI failed on these with a TypeError, and recorded an
+  // actor named "true" for `--generatedBy agent`; both are refused (#262).
   for (const { args } of groups.accident) {
     const result = runRust(args);
     assert.equal(result.status, 1);
-    assert.equal(result.stdout, "");
-    assert.equal(result.stderr, "cst: (options[key] ?? []) is not iterable\n");
+    const message = args.includes("--json") ? JSON.parse(result.stdout).message : result.stderr;
+    assert.match(message, /Unknown option '--(authoredBy|generatedBy)' for 'cst commit'\. Spell it '--(authored|generated)-by'/);
+    if (args.includes("--json")) assert.equal(JSON.parse(result.stdout).code, "usage-unknown-option");
   }
 });
 

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A value option spelled in camel case is refused** (#262). The parser took
+  a value only after the kebab-case spelling, so `--generatedBy agent`
+  recorded a provenance claim by an actor named `true` and dropped `agent`,
+  and `--authoredBy --authored-by a` failed with a JavaScript `TypeError`
+  message. The camel-case spelling of any option that takes a value
+  (`--generatedBy`, `--useForecast`, `--budgetMs`, …) is now refused with
+  `usage-unknown-option`, naming the spelling to use; boolean flags such as
+  `--allowEmpty` keep their camel-case spelling. A provenance record that
+  already names the actor `true` is left as it is.
+
 ## 0.25.0
 
 **`cst` is the one command** (ADR-0040). `cst clone`, `cst pull` and
