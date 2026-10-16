@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvbmbkvi08a8098a0eda",
+      "mode": "compact",
+      "sourceRef": "fix/engine-help-text",
+      "sourceHead": "0b843acc2ff218893310cda9483501decc64df33",
+      "sourceSubject": "fix: describe the native engine in cst --help as it behaves",
+      "targetBefore": "3fb4d58a8af1736cd76a3c232e7a10401b05be0f",
+      "landingCommit": "95d46ed8592bef176b4546d45ad505fcf75255b3",
+      "base": "3fb4d58a8af1736cd76a3c232e7a10401b05be0f",
+      "absorbedCommits": [
+        "0b843acc2ff218893310cda9483501decc64df33"
+      ],
+      "absorbedChanges": [
+        "ch_0mvbl80i2a6aa5b248ddb"
+      ],
+      "resultTree": "885e96e4cda6c6be97c02fbf29ae4cc178317133",
+      "createdAt": "2026-10-16T23:48:02.289Z"
+    }
+  ]
+}
