@@ -13,13 +13,25 @@
   a claim. It prints JSON, as `cst commit` does. The v0.23.0-checkout repair
   procedure is gone, and `cst commit`'s refusal names the command. A branch or
   tag named `declare` is now read with `cst provenance refs/heads/declare`.
+- **`cst fetch`, `cst pull`, `cst push` and `cst clone` carry the causal
+  records** (#255, ADR-0040). Each runs Git's command with your arguments and
+  moves `refs/notes/causet`, `refs/causet/retention` and
+  `refs/causet/resolutions/*` with it, so a clone that uses only `cst` needs
+  no refspecs. A fetch stages the remote's records under
+  `refs/causet-remote/<remote>/` and imports them as an envelope in park mode:
+  an unreadable record is excluded and a conflicting one is parked, never
+  overwriting a local fact. A push sends the records first, atomically and
+  never forced, then runs `git push`; it fetches and retries when the remote's
+  records moved, and refuses while a parked conflict has no disposition.
+  `--no-records` runs Git's command alone; `--json` reports what moved
+  (`fetch`, `push`, `clone`). Checkpoints and parked conflicts never leave the
+  clone, and `cst push --mirror` is refused.
 - **`cst` passes every command it does not define through to Git** (#256,
   ADR-0040). `cst status`, `cst log`, `cst add`, `cst switch` and the rest run
   `git` with the same arguments, the same terminal and Git's exit status; on
   Unix `cst` becomes the `git` process. `cst git <arguments>` runs Git for any
   command, including the names `cst` defines, so `cst git commit --amend` is
-  Git's amend. `cst fetch`, `pull`, `push` and `clone` pass through for now
-  and do not carry the causal records yet (#255). An unknown first word is
+  Git's amend. An unknown first word is
   now Git's to answer, so `cst no-such-command` prints Git's message instead
   of `usage-unknown-command`; that code remains for an unknown subcommand,
   such as `cst metadata no-such-subcommand`. The README's walkthrough uses

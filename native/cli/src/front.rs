@@ -36,6 +36,15 @@ pub enum Outcome {
   Unmigrated {
     json: bool,
   },
+  /// `cst fetch`, `pull`, `push` or `clone` (ADR-0040): Git's command with
+  /// `args`, which also carries the records unless `--no-records` was given.
+  Sync {
+    command: String,
+    args: Vec<String>,
+    json: bool,
+    records: bool,
+    settings: Vec<(&'static str, String)>,
+  },
   /// A ported command, answered by this CLI. `settings` are the variables its
   /// global flags select, as `setEnvironmentValue` would.
   Native {
@@ -99,10 +108,16 @@ pub const NATIVE_COMMANDS: &[&str] = &[
   "workspace restore",
 ];
 
+/// The commands that run Git's command of the same name and carry the
+/// records with it (ADR-0040). Their arguments are Git's, so the front end
+/// reads only `--json` and `--no-records` from them.
+pub const SYNC_COMMANDS: [&str; 4] = ["fetch", "pull", "push", "clone"];
+
 /// The first words `cst` answers itself: each command's first word, and the
 /// help and version spellings the front end reads.
 fn is_cst_word(word: &str) -> bool {
   matches!(word, "help" | "version")
+    || SYNC_COMMANDS.contains(&word)
     || NATIVE_COMMANDS
       .iter()
       .any(|command| command.split(' ').next() == Some(word))
@@ -248,6 +263,25 @@ pub fn decide(
   }
   if matches!(command, "version" | "--version" | "-V") {
     return Outcome::Version;
+  }
+  if SYNC_COMMANDS.contains(&command) {
+    let own = |item: &&str| matches!(*item, "--json" | "--no-records");
+    let json = args[1..].contains(&"--json") && command != "pull";
+    let records = !args[1..].contains(&"--no-records");
+    if command != "clone" && unmigrated(&settings) {
+      return Outcome::Unmigrated { json };
+    }
+    return Outcome::Sync {
+      command: command.to_string(),
+      args: args[1..]
+        .iter()
+        .filter(|item| !own(item) || (**item == "--json" && command == "pull"))
+        .map(|item| item.to_string())
+        .collect(),
+      json,
+      records,
+      settings,
+    };
   }
   let parsed = match parse_args(&args[1..]) {
     Ok(parsed) => parsed,
@@ -857,6 +891,9 @@ mod tests {
     }
     for args in [&["git"][..], &["git", "commit", "--amend"], &["git", "status", "--json"]] {
       assert_eq!(words(args), Some(1), "{args:?}");
+    }
+    for command in SYNC_COMMANDS {
+      assert_eq!(words(&[command, "origin"]), None, "{command}");
     }
     for args in [
       &[][..],

@@ -205,6 +205,7 @@ rendering at all.
 | `cst metadata export` | `causet.metadata-export/v1` (writes a `causet.metadata-envelope/v1` manifest) |
 | `cst metadata import --dry-run` | `causet.metadata-import-preview/v1` |
 | `cst metadata import --apply` | `causet.metadata-import/v1` |
+| `cst fetch`, `cst push`, `cst clone` with `--json` | Projection `{command, gitStatus, records, error}`: `gitStatus` is Git's exit status, `records` is `null` with `--no-records` and otherwise one entry per remote, and `error` is `null` or `{code, message}` from the closed vocabulary. A fetch entry is `{remote, direction: "fetch", staged: {notes, retention, resolutions}, upToDate, excluded, import, merged: {notes, retention}}` with `import` a `causet.metadata-import/v1` (or `null` when up to date) and each `merged` member `unchanged`, `fast-forward` or `merge`; a push entry is `{remote, direction: "push", fetched, skipped, attempts, upToDate, pushed}` with `fetched` the fetch entries a moved remote required. `cst pull` has no JSON form |
 | `cst metadata dispose` | `causet.metadata-disposition/v1` (records a `causet.disposition/v1` entry) |
 | `cst capabilities` | `causet.capabilities/v1`; repository-scoped inside a repository, build-scoped outside one |
 | `cst capabilities --against` | `causet.capability-report/v1`; exits non-zero when a family is reduced or blocked, while the exchange itself remains possible |

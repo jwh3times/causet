@@ -166,7 +166,10 @@ The v0.x laboratory does not claim to provide:
 - a production-ready replacement for Git;
 - a hosted forge, code-review product, or authorization service;
 - cryptographic trust for locally generated receipts;
-- automatic remote synchronization of all causal metadata;
+- synchronization of causal metadata by anything but `cst`'s own remote
+  commands: `cst fetch`, `pull`, `push` and `clone` carry the records in
+  ADR-0030 park mode (ADR-0040), and a plain `git fetch` or `git push` still
+  carries none;
 - a native content-addressed database or wire protocol before Gate B of the
   native implementation gate (§15);
 - virtual or lazy filesystem materialization before Gate B;
@@ -301,7 +304,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 | FR-GIT-05 | P1 | Repository initialization shall configure causal-note display and rewrite behavior without modifying tracked files. | Implemented | Integration test verifies clean status after initialization. |
 | FR-GIT-06 | P1 | Human-readable output shall have a JSON equivalent for state needed by automation. | Complete | Core plans, receipts, forecasts, workspaces, specs, and operations support JSON; the versioned CLI output/schema catalog in `docs/schemas/` maps every `--json` command to its contract; and `docs/conformance/` pins per-command human/JSON parity field by field, enumerating the commands that have no human rendering and the state that is deliberately text-only. The suite fails when a renderer drops a required member or starts printing one declared JSON-only. The failure path is covered too (ADR-0021): a `--json` refusal prints `causet.error/v1` on stdout with a classification code from the closed vocabulary in `docs/schemas/errors.md`, and `docs/conformance/` pins the code each declared failure reports. |
 | FR-GIT-07 | P1 | The CLI shall accept explicit compatibility/performance controls without changing domain semantics. | Implemented | `--git-session`, `--no-git-session`, and `--forecast-engine` produce equality-checked forecasts; `--engine` selects the read engine behind the equality-tested seam of ADR-0019 and every fallback is reported. |
-| FR-GIT-08 | P2 | A supported metadata synchronization command shall move all required causal records between clones. | Implemented experimentally | Fresh-clone round-trip reproduces coverage, resolution catalog, and spec identity without manual ref knowledge. |
+| FR-GIT-08 | P2 | A supported metadata synchronization command shall move all required causal records between clones. | Implemented experimentally | Fresh-clone round-trip reproduces coverage, resolution catalog, and spec identity without manual ref knowledge: by envelope (`cst metadata export/import`), and over an ordinary Git remote by `cst clone`, `fetch`, `pull` and `push` (ADR-0040, `test/remote-records.test.js`). |
 
 ### 9.2 Logical change identity
 

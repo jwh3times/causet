@@ -38,6 +38,7 @@ mod retain;
 mod scale_benchmark;
 mod spec;
 mod store;
+mod sync;
 mod target_overlay;
 mod workspaces;
 
@@ -66,6 +67,18 @@ fn main() {
       drop(stdout);
       drop(stderr);
       native::run(&command, &parsed, &settings)
+    }
+    Outcome::Sync {
+      command,
+      args,
+      json,
+      records,
+      settings,
+    } => {
+      drop(stdout);
+      drop(stderr);
+      native::select(&settings);
+      sync::run(&command, &args, json, records, &native::canonical_working_directory())
     }
     Outcome::Help => {
       let _ = writeln!(stdout, "{HELP}");
