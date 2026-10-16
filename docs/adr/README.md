@@ -68,7 +68,7 @@ sequence in §15.
 | [0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) | Accepted | Reimplement the CLI in Rust as a byte-identical port under Gate A discipline, delegating unported commands to the JavaScript CLI until cutover |
 | [0038](0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md) | Accepted; amended twice 2026-09-28 and once 2026-10-08 (install scripts over GitHub releases become the primary channel, npm the second) | Deliver the Rust CLI as per-platform npm packages; a preinstall copy puts the executable at the bin target so `vlab` runs without Node, with a Node launcher as the fallback |
 | [0039](0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) | Accepted | Move persisted `vcs-lab` identifiers to `causet` through `cst migrate` and a permanent read alias, never rewriting an existing record |
-| [0040](0040-make-cst-the-one-command-carrying-records-over-git-remotes.md) | Proposed | Make `cst` the one command: `cst fetch`, `pull`, `push` and `clone` carry records over ordinary Git remotes in park mode, and every other command passes through to Git |
+| [0040](0040-make-cst-the-one-command-carrying-records-over-git-remotes.md) | Accepted | Make `cst` the one command: `cst fetch`, `pull`, `push` and `clone` carry records over ordinary Git remotes in park mode, and every other command passes through to Git |
 
 ## Creating or changing an ADR
 
