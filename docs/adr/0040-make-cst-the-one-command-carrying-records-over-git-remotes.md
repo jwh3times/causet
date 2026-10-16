@@ -1,6 +1,6 @@
 # ADR-0040: Make `cst` the one command, carrying records over ordinary Git remotes
 
-- **Status:** Accepted
+- **Status:** Accepted; implementation notes 2026-10-15 (#255)
 - **Decided:** 2026-10-15
 - **Date:** 2026-10-15
 - **Owners:** Repository maintainers
@@ -214,3 +214,33 @@ Accepted as proposed.
    re-recorded, each with the reason in the change (#257).
 7. Order, not put separately and taken as proposed: #257 and passthrough (#256)
    first, then the remote commands (#255).
+
+## Implementation notes (2026-10-15, #255)
+
+Built as decided, with three refinements the contract above did not settle.
+None changes a decision; each is recorded here rather than rewriting the
+text the owner accepted.
+
+1. **Records first, then Git's push, not one atomic push.** One atomic push
+   needs the caller's refspecs on the command line, and naming any refspec
+   turns off what `git push` would otherwise choose (`push.default`, the
+   upstream, `--all`), while `--force` and `--force-with-lease` would apply to
+   the carried refs too. So `cst push` pushes the carried refs in one atomic,
+   never-forced push, and only after it succeeds runs `git push` with the
+   caller's arguments untouched. The property atomicity was for still holds:
+   a branch never reaches the remote before the records about it. Records
+   that arrive for a branch Git then refuses are harmless, since their
+   objects travel in the retention ref. `--delete` pushes no records. The
+   records push skips client hooks (`--no-verify`), so a `pre-push` hook runs
+   once, on the caller's own push.
+2. **A push refuses while any parked conflict lacks a disposition**, not only
+   one parked from that remote. A parked record carries the lineage of its
+   source, which every clone of one repository shares, so the remote it came
+   from is not recorded; and pushing over any undisposed conflict would
+   spread one side of it.
+3. **The fetch of the carried refs is a second `git fetch`** after the
+   caller's, in the same `cst` invocation, so the caller's arguments and the
+   remote's configured refspecs behave exactly as under Git. A remote named
+   only by URL or path is staged under `refs/causet-remote/url-<digest>`.
+   `cst pull` has no `--json`, because Git's merge output already uses
+   standard output.

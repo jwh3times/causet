@@ -874,6 +874,7 @@ Run `cst --help` for the current command list. The most useful commands are:
 | `cst audit identity` | Repository-wide Change-ID collision and duplicate-origin audit |
 | `cst metadata ...` | Inventory, validate, transfer, and benchmark accepted metadata facts and scan paths |
 | `cst doctor --benchmark` | Sample ordinary Git latency and persistent object-session reuse |
+| `cst fetch`, `cst pull`, `cst push`, `cst clone` | Git's commands, carrying the causal records with them (see [Records over Git remotes](#records-over-git-remotes)) |
 | `cst git <arguments>` | Run Git for any command, including the names `cst` defines (`cst git commit --amend`) |
 
 Every other command is Git's ([ADR-0040](docs/adr/0040-make-cst-the-one-command-carrying-records-over-git-remotes.md)):
@@ -881,11 +882,7 @@ Every other command is Git's ([ADR-0040](docs/adr/0040-make-cst-the-one-command-
 the same arguments, the same terminal, and Git's exit status, so `cst` is the
 only command a session needs. On Unix `cst` becomes the `git` process; on
 Windows it runs `git` and waits. A flag after a passed-through command is
-Git's, so `--json` and `--engine` there mean what Git makes of them. For now
-`cst fetch`, `cst pull`, `cst push` and `cst clone` pass through too and do
-not carry the causal records; until they do
-([#255](https://github.com/jwh3times/causet/issues/255)), move them as
-[Metadata locations](#metadata-locations) describes.
+Git's, so `--json` and `--engine` there mean what Git makes of them.
 
 A command `cst` defines refuses an option it does not take with
 `usage-unknown-option` rather than ignoring it; for `init`, `commit`,
@@ -931,6 +928,46 @@ attachment readable; `metadata validate` then reports `missing-attachment`
 even though the origin is healthy. Fetch the refs as shown under
 [Metadata locations](#metadata-locations) before interpreting validation from
 a low-level same-origin read.
+
+### Records over Git remotes
+
+`cst fetch`, `cst pull`, `cst push` and `cst clone` take Git's arguments, run
+Git's command, and carry the records with it
+([ADR-0040](docs/adr/0040-make-cst-the-one-command-carrying-records-over-git-remotes.md)),
+so a clone that only ever uses `cst` never needs a refspec:
+
+```bash
+cst clone https://example.test/project.git   # git clone, cst init, then the records
+cst pull                                       # git pull, then the records
+cst push -u origin feature                     # the records first, then git push
+```
+
+- **What moves:** `refs/notes/causet`, `refs/causet/retention` and
+  `refs/causet/resolutions/*`, each by name. Checkpoints, parked conflicts
+  and every other `refs/causet/*` ref stay in the clone.
+- **Fetching** stages the remote's records under
+  `refs/causet-remote/<remote>/`, then brings them in exactly as
+  `cst metadata import --apply --park-conflicts` brings in an envelope: every
+  record is validated, an unreadable one is excluded, and a record whose id
+  names different content here is parked rather than overwriting anything
+  ([ADR-0030](docs/adr/0030-define-conflict-policy-for-competing-causal-facts.md)).
+  The remote's notes and retention commits become parents of this clone's,
+  so the next push is a fast-forward.
+- **Pushing** sends the records first, in one atomic push that is never
+  forced, and only then runs `git push` with your arguments, so a branch never
+  reaches the remote before the records about it. If the remote's records
+  moved since your last fetch, `cst push` fetches and merges them and tries
+  again. While a parked conflict has no disposition, `cst push` refuses
+  before anything moves: pushing would replace the remote's copy without a
+  decision. Run `cst metadata dispose`, or push without the records. Your
+  `pre-push` hook runs once, on Git's push of your refs; the records push
+  skips client hooks.
+- **`--no-records`** runs Git's command alone. `--json` prints a report of the
+  records moved (`cst fetch`, `cst push` and `cst clone`; `cst pull` prints
+  Git's merge output on standard output and has no JSON form).
+- `cst push --mirror` is refused, because it would push the clone's local
+  refs too; `cst git push --mirror` is Git's own. A plain `git fetch` or
+  `git push` still carries no records.
 
 For notes created by an older version, preview and apply an explicit backfill:
 
@@ -1164,9 +1201,11 @@ running `cst migrate` again fast-forwards the new ref, and refuses if both moved
 their `vcs-lab.*` identifiers forever and are read as the `causet.*` families they name.
 Existing `vlab/ws/<name>` workspace branches keep their names; new workspaces use `causet/ws/<name>`.
 
-The supported transfer path is `cst metadata export/import`. For a low-level
-same-origin read, fetch the notes, the retention root and the resolution refs
-together, each by name:
+`cst fetch` and `cst push` carry these refs for you
+([Records over Git remotes](#records-over-git-remotes)), and
+`cst metadata export/import` moves them as a file. For a low-level
+same-origin read with Git alone, fetch the notes, the retention root and the
+resolution refs together, each by name:
 
 ```bash
 git fetch origin 'refs/notes/causet:refs/notes/causet' \

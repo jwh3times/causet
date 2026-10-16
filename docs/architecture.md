@@ -186,6 +186,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/cli/src/scale_benchmark.rs` | `cst metadata benchmark`: `benchmarkRepositoryScale` of `src/scale-benchmark.js` and `formatScaleBenchmark` of `src/cli.js`. | `envelope`, `export`, `metadata`, `notes_write`, `notes`, `reconcile`, `resolve`, `workspaces`, causet-engine, causet-model |
 | `native/cli/src/spec.rs` | `cst spec show` and `cst spec status`: specification manifests as `src/specs.js` materializes them, and the semantic three-way merge planner a pending operation's conflicted Markdown runs through (`planSpecMerge`). | `envelope`, `export`, `host`, `records`, `resolve`, `store`, causet-engine, causet-model |
 | `native/cli/src/store.rs` | Local state files, read as `src/store.js` reads them. | `envelope`, causet-engine, causet-model |
+| `native/cli/src/sync.rs` | `cst fetch`, `cst pull`, `cst push` and `cst clone` (ADR-0040): Git's commands, which also carry the shared-portable records between this clone and an ordinary Git remote. | `envelope`, `export`, `import`, `native`, `notes_write`, `store`, causet-engine, causet-model |
 | `native/cli/src/target_overlay.rs` | Target overlays (ADR-0028), the uncommitted work a target workspace has captured in a checkpoint: `src/target-overlay.js`, from resolving and predicting an overlay for a forecast to carrying it through an application and putting it back. | `envelope`, `export`, `workspaces`, causet-engine, causet-model |
 | `native/cli/src/workspaces.rs` | `cst workspace` (every subcommand but `forecast`, which is in `forecast.rs`): `src/workspaces.js` and the registry lock of `src/workspace-lock.js`. | `envelope`, `export`, `host`, `notes_write`, `spec`, `store`, causet-engine, causet-model |
 | `bin/native/cst.exe` | The `cst` command as published (ADR-0038 §2). | `platform.js` |
@@ -300,6 +301,7 @@ identity belongs in tracked files.
 | Resolution result objects | Shared repository | `refs/causet/resolutions/<signature>/<result-blob>` | Hidden ref prevents GC; envelope transports accepted refs |
 | Workspace registry | Shared repository installation | `<common-git-dir>/causet/workspaces.json` | Local; not automatically remote-portable |
 | Parked conflicting records | Shared repository installation | `refs/causet/quarantine/<source-lineage>/<record-id>`, one blob per dispute | Local; nothing fetches or pushes the namespace. Removed by a disposition (ADR-0030) |
+| A remote's staged records | Shared repository installation | `refs/causet-remote/<remote>/notes`, `…/retention`, `…/resolutions/*`; a remote named only by URL or path uses `url-<digest>` | Written by `cst fetch` before validation, replaced on the next fetch from that remote; nothing pushes the namespace (ADR-0040) |
 | Conflict dispositions | Shared repository installation | `<common-git-dir>/causet/dispositions.json` | Local on purpose: two clones may dispose the same conflict differently, and the disagreement is real |
 | Checkpoints | Shared repository | Latest under `refs/causet/checkpoints/<workspace-id>`; prior snapshots under `refs/causet/checkpoint-history/<workspace-id>/<oid>` | Local immutable snapshots retained across materialization changes |
 | Pending reconciliation | One linked worktree | `<worktree-git-dir>/causet/reconciliation.json` | Cleared on complete/abort |
@@ -329,9 +331,18 @@ would also copy the publisher's checkpoints and parked conflicts
 (`refs/causet/checkpoints/**`, `refs/causet/checkpoint-history/**`,
 `refs/causet/quarantine/**`), which the table above keeps local.
 
-Validated metadata envelopes remain the supported transfer path between
-clones; a direct ref fetch does not perform envelope validation, conflict
-preview, or quarantine.
+`cst fetch`, `cst pull`, `cst push` and `cst clone` carry exactly these refs
+(ADR-0040, `native/cli/src/sync.rs`). A fetch stages the remote's refs under
+`refs/causet-remote/<remote>/`, exports them as an envelope from a disposable
+repository whose object store borrows this clone's, and imports that
+envelope with `--park-conflicts`, so a remote is validated exactly as a
+metadata envelope is. The remote's notes and retention commits then become
+parents of the local ones (a new commit with the local tree when the two
+differ), so the next push is a fast-forward. A push refuses while any parked
+conflict lacks a disposition, pushes the carried refs atomically and never
+forced, refetching and retrying when the remote's refs moved, and only then
+runs `git push` with the caller's arguments. A direct ref fetch with Git
+alone performs none of this validation.
 
 Every local JSON state file (journals, forecasts, registries) is written
 through a temporary file and same-directory rename (for example `write_journal`
