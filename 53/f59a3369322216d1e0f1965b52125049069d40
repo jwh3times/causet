@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvbsjhol0a37e27f7018",
+      "mode": "compact",
+      "sourceRef": "fix/pull-json-refusal",
+      "sourceHead": "f114c1ad17463b8c1f244cb863deaed23e188699",
+      "sourceSubject": "fix: refuse cst pull --json in cst's voice",
+      "targetBefore": "658c2000b7e388a6967a576fe3424dbbcc2eba6d",
+      "landingCommit": "53f59a3369322216d1e0f1965b52125049069d40",
+      "base": "658c2000b7e388a6967a576fe3424dbbcc2eba6d",
+      "absorbedCommits": [
+        "f114c1ad17463b8c1f244cb863deaed23e188699"
+      ],
+      "absorbedChanges": [
+        "ch_0mvbrxbi6f38cc736c64d"
+      ],
+      "resultTree": "f1a0fc010ab8305917deee39609280e700dc732e",
+      "createdAt": "2026-10-17T02:42:09.097Z"
+    }
+  ]
+}
