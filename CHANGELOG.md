@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.25.1
+
+**Two fixes to 0.25.0.** The more serious one: a value option spelled in
+camel case, such as `--generatedBy agent`, recorded provenance naming an
+actor `true`. It is now refused, with the spelling to use.
+
 - **A value option spelled in camel case is refused** (#262). The parser took
   a value only after the kebab-case spelling, so `--generatedBy agent`
   recorded a provenance claim by an actor named `true` and dropped `agent`,
