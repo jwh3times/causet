@@ -8,7 +8,7 @@
 | Document version | 1.0 |
 | Product baseline | v0.25.1 release |
 | Status | Active product baseline |
-| Last updated | 2026-10-16 |
+| Last updated | 2026-10-17 |
 | Primary audience | Maintainers, contributors, protocol designers, and AI coding agents |
 | Decision owner | Repository maintainers |
 
@@ -26,11 +26,20 @@ authority is:
 
 ## 1. Executive summary
 
-causet is a Git-compatible laboratory for a modern source-control model. It
-keeps Git's object model, repositories, branches, commits, worktrees, and
-interoperable command-line behavior while testing additional causal and
-semantic information that Git does not preserve reliably through squash,
-rebase, cherry-pick, and parallel AI-agent workflows.
+causet is to become a standalone, distributed version control system that
+does not use Git and replaces it
+([ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)).
+It combines the best of Git, the best of Subversion, and what software
+development with AI agents needs: declared and verified provenance,
+parallel agent work, and the large volume of instructions and documentation an
+AI-driven process produces.
+
+Today causet runs over Git, and that is its evaluation step. It keeps Git's
+object model, repositories, branches, commits, worktrees, and interoperable
+command-line behavior while testing additional causal and semantic information
+that Git does not preserve reliably through squash, rebase, cherry-pick, and
+parallel AI-agent workflows. What the evaluation shows decides the native
+system's semantics.
 
 The central product hypothesis is that source control needs more than commit
 ancestry. A useful modern system must distinguish:
@@ -42,18 +51,13 @@ ancestry. A useful modern system must distinguish:
 - a workspace and its private in-progress operation state;
 - stable semantic entities inside high-volume specifications.
 
-The prototype must remain useful with ordinary Git at every step. It may add
-metadata and stronger planning, but it must not make a repository unreadable,
-unrecoverable, or unworkable when `cst` is absent. A native store, service, or
-wire protocol is justified only after local experiments establish that the
-semantics are correct and valuable.
-
-**End state (proposed).** The owner stated on 2026-10-17 that cst is meant to
-become a standalone, distributed version control system that does not use Git
-and replaces it. Running over Git is the evaluation step.
-[ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
-(Proposed) records that direction, and how it changes the thesis below and
-Gate B (§15). Until it is accepted, this document's laboratory scope stands.
+A repository cst runs over Git must remain useful with ordinary Git at every
+step. cst may add metadata and stronger planning, but it must not make such a
+repository unreadable, unrecoverable, or unworkable when `cst` is absent. The
+native system is built one subsystem at a time, in phases N1–N6, each entering
+through its own ADR under the restated Gate B (§15). It ends with a permanent
+two-way Git bridge, so a cst repository can still be hosted on a Git forge and
+worked on by Git users.
 
 ## 2. Problem statement
 
@@ -111,9 +115,13 @@ AI development increases both concurrency and durable documentation volume:
 
 ## 3. Product thesis
 
-The product will first prove a **causal compatibility layer over Git**:
+The product's end state is a standalone, distributed version control system
+([ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)).
+It first proves a **causal compatibility layer over Git**, whose semantics
+become the native system's data model:
 
-1. Git remains the exact state store and universal escape hatch.
+1. While cst runs over Git, Git remains the exact state store and universal
+   escape hatch.
 2. Stable logical identities survive safe history rewriting, and an operation
    that changes what one contains says so.
 3. Landing and application receipts add causal edges that topology lost.
@@ -125,9 +133,13 @@ The product will first prove a **causal compatibility layer over Git**:
 8. Performance is measured in logical work, process launches, content reads,
    storage bytes, and elapsed time before a native subsystem is proposed.
 
-If these semantics prove useful, a later implementation may introduce a native
-metadata database, long-lived service, protocol gateway, or structured object
-format while retaining the same observable contracts.
+The native system keeps the same observable contracts: the published record
+schemas, error vocabulary, JSON shapes and conformance fixtures. A native
+subsystem answers them identically, or a decision says why not. Its own
+capabilities are those a layer over Git cannot provide well: typed human and
+agent actors, with permissions and locks enforced at acceptance points;
+first-class large files, chunked by content and fetched lazily; and the causal
+layer as native objects of the history rather than notes beside it.
 
 ## 4. Goals
 
@@ -168,18 +180,20 @@ format while retaining the same observable contracts.
 
 ## 5. Non-goals for the current prototype
 
-The v0.x laboratory does not claim to provide:
+Replacing Git is the end state
+([ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)),
+not a non-goal. The v0.x evaluation over Git does not claim to provide:
 
-- a production-ready replacement for Git;
+- a production-ready replacement for Git yet;
 - a hosted forge, code-review product, or authorization service;
 - cryptographic trust for locally generated receipts;
 - synchronization of causal metadata by anything but `cst`'s own remote
   commands: `cst fetch`, `pull`, `push` and `clone` carry the records in
   ADR-0030 park mode (ADR-0040), and a plain `git fetch` or `git push` still
   carries none;
-- a native content-addressed database or wire protocol before Gate B of the
-  native implementation gate (§15);
-- virtual or lazy filesystem materialization before Gate B;
+- a native content-addressed database or wire protocol before the ADR of its
+  native phase is accepted under the restated Gate B (§15);
+- virtual or lazy filesystem materialization before the same;
 - safe AI-authored conflict resolution without explicit review;
 - semantic merge for arbitrary programming languages or binary documents;
 - requirement-level byte merging nested inside a heading section;
@@ -833,8 +847,13 @@ Each links to the issue that carries it; the board is where its status lives.
   entering under Gate A of the native implementation gate. The owner decision
   in #18 accepts ADR-0027's bounded first native read increment against the
   named 110%-of-Git target, subject to dependency review before code.
-- Native content-addressed metadata/store experiments after Gate B is
-  satisfied.
+- The standalone system of
+  [ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md):
+  phases N1–N6, from the native content store to the permanent two-way Git
+  bridge, each through its own ADR under the
+  restated Gate B. Their order, exit criteria and coexistence with the
+  Git-backed parts are decided under the
+  [transition map](https://github.com/jwh3times/causet/issues/281).
 
 ### Native implementation gate
 
@@ -874,8 +893,25 @@ byte-identical parity. Performance is reported at checkpoints, on the wiki's
 [Performance testing](https://github.com/jwh3times/causet/wiki/Performance-testing) page,
 and never gates the program.
 
-**Gate B: semantics-changing native store, protocol, or draft stacks.** Begins
-only when trials demonstrate all of:
+**Gate B: semantics-changing native store, protocol, or draft stacks.**
+Restated by
+[ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
+(decision 10). As first written, it began only when trials demonstrated all
+nine conditions below. Now:
+
+- conditions 1–6 and 9 are **design evidence**: they decide what each native
+  subsystem's semantics are, not whether it may begin. For example, if compact
+  landing is not preferred in practice, the native history does not make it
+  the default;
+- conditions 7 and 8 asked whether a native store is necessary. ADR-0041
+  answers that from product intent, so they are **retired** as entry
+  conditions;
+- each native subsystem enters through **its own ADR**, which names its
+  contract, published before code; its equality test against the Git-backed
+  answer while one exists; and how a Git-hosted cst repository migrates to it,
+  records included.
+
+The conditions as first written:
 
 1. users prefer compact landing and use receipts to recover squash causality;
 2. stable logical IDs materially improve rewrite and cherry-pick workflows;
@@ -902,8 +938,10 @@ excludes the receipt's own publication cost.
 **Evidence table.** Assembled under
 [issue #41](https://github.com/jwh3times/causet/issues/41). Every condition is
 supported by mechanical checks, partial workload observations, or an explicit
-gap; **no condition is fully demonstrated**, so the decision row permitting
-phase 5 does not fire. Git-backed portability and the bounded native read result
+gap; **no condition is fully demonstrated**. Since ADR-0041 the table no longer
+decides whether a native subsystem may begin; rows 1–6 and 9 are the design
+evidence its ADR draws on, and rows 7 and 8 are kept as the record of what was
+measured. Git-backed portability and the bounded native read result
 do not establish a need for a new canonical store. Partial pilot evidence must
 remain visible without treating a suite fixture or a single session as a user
 preference, sustained improvement, or reproduction rate.
@@ -934,8 +972,12 @@ is superseded for the bounded first increment by
 Implementation proceeds through [#83](https://github.com/jwh3times/causet/issues/83),
 starting with dependency review; the broader phase-1
 exit criteria below are not satisfied by that first increment. Phases 2–4 do
-not open automatically, and phases 5 and 6 remain Gate B questions under
-[ADR-0023](adr/0023-locate-the-model-substrate-mismatch-in-facts-not-content.md).
+not open automatically, and phases 5 and 6 enter only under the restated
+Gate B of
+[ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md),
+which supersedes
+[ADR-0023](adr/0023-locate-the-model-substrate-mismatch-in-facts-not-content.md)'s
+decision 2.
 
 | Phase | Gate | Scope | Exit criterion | Reversibility |
 | --- | --- | --- | --- | --- |
@@ -945,8 +987,8 @@ not open automatically, and phases 5 and 6 remain Gate B questions under
 | 2 Native planning and status | Gate A; remains gated on its own scope decision | Merge-plan and rebase-plan construction, receipt reachability, Change-ID extraction, the advisory `git-patch-id-heuristic` proof (a stable patch-id proof, if wanted, gets its own ADR), spec blob-identity checks; the FR-ID-06 audit and the FR-PLAN-08 proof bundle and verifier (both delivered in v0.12.0 over the Git engine; this phase re-implements them behind the seam) | Plan fingerprints byte-identical across engines on the suite plus at least 1,000 generated histories; status semantics preserved at zero processes | Per-operation fallback. |
 | 3 Derived catalog | Gate A, still gated, plus the incremental-catalog row below (an already-batched path over a representative budget, per ADR-0013) | Deletable fact segments with per-record digests, rebuildable indexes, `builtFrom` stamps, reindex command, approval facts, advisory leases in a mutable side file; caches outside synced folders; notes and refs remain canonical | 5,000-fact benchmark under budget with zero processes on both hosts; deleting the catalog yields identical output; torn-tail and stale-catalog recovery pass; writer-lock waits under 10 ms at 16 concurrent agents | Delete the directory. |
 | 4 In-memory forecasts and native mutation | Gate A; remains gated on its own scope decision | Ref transactions and object writes for checkpoints and retained resolutions; virtual three-way merge applying exact-resolution memory and Markdown section merge, with `git merge-tree` as co-oracle | Predicted-tree equality on the suite plus at least 1,000 generated three-way cases; divergence always surfaces as a blocker; FR-REC-06 apply-time check retained | Flag; droppable after 0a evidence. |
-| 5 Canonical fact log, transport, draft stacks | Gate B | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/causet/issues/40) | All nine Gate B conditions with an evidence table ([issue #41](https://github.com/jwh3times/causet/issues/41)); v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
-| 6 Gateway; service only if the row below fires | Gate B | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/causet/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/causet/issues/37)), actor trust ([#38](https://github.com/jwh3times/causet/issues/38)), then landing policy ([#39](https://github.com/jwh3times/causet/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
+| 5 Canonical fact log, transport, draft stacks | Gate B (restated by ADR-0041) | Fact log canonical with notes, refs, and registry regenerated at finalization; notes import; envelope v2 as a strict superset of v1; Git-carried fact transport; private draft stacks via hidden refs (FR-WS-08) — [issue #40](https://github.com/jwh3times/causet/issues/40) | Its own ADR under the restated Gate B, drawing on the evidence table ([issue #41](https://github.com/jwh3times/causet/issues/41)) for its semantics; v1 envelopes import and re-export byte-identically; the ADR partially superseding ADR-0001 accepted | Project, then delete the log. |
+| 6 Gateway; service only if the row below fires | Gate B (restated by ADR-0041) | The remote program in its order: portable verification ([#36](https://github.com/jwh3times/causet/issues/36)), capability negotiation ([#37](https://github.com/jwh3times/causet/issues/37)), actor trust ([#38](https://github.com/jwh3times/causet/issues/38)), then landing policy ([#39](https://github.com/jwh3times/causet/issues/39)) | No local planning, forecasting, or landing depends on the gateway | Optional. |
 | CLI port (a track beside phases 1–6); delivered in v0.21.0 | Gate A discipline, with item 3 and the sunset waived ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md)) | Reimplement the whole CLI in Rust as a byte-identical port, delegating unported commands to the JavaScript CLI until cutover; Git stays a runtime requirement — [#136](https://github.com/jwh3times/causet/issues/136) | Every command native with byte-identical output in all six modes, and an npm-installed `cst` that runs without Node.js ([#152](https://github.com/jwh3times/causet/issues/152)). Performance is reported, not gating | The JavaScript CLI stayed the oracle for two minor releases after cutover and was removed in v0.24.0 ([#243](https://github.com/jwh3times/causet/issues/243)); its answers are frozen as test vectors. |
 
 ### Decision rows: what evidence permits which next step
@@ -959,7 +1001,7 @@ a catalog or a service.
 | A path launches per-entity Git processes | Batch within the invocation. |
 | An already-batched path exceeds a representative budget | Propose an incremental catalog with lifecycle, migration, and equality tests. |
 | Cross-command cost remains material on representative Windows and POSIX repositories after justified catalogs | Propose a resident-service ADR covering ownership, locking, security, crash recovery, upgrade, shutdown, and fallback. |
-| All nine Gate B conditions are demonstrated in an evidence table naming schemas, hosts, and runs | Begin phase 5 (canonical fact log, transport, draft stacks) behind the existing observable contracts, with Git as oracle and escape hatch. |
+| A native subsystem's ADR names its contract, its equality test against the Git-backed answer, and its migration, and is accepted (restated Gate B, ADR-0041) | Begin that subsystem behind the existing observable contracts, with Git as oracle while a Git-backed answer exists. |
 
 The bounded Gate A budget in ADR-0027 is accepted; broader representative
 budgets have not been ratified. Ratifying those budgets remains part of
@@ -1098,10 +1140,11 @@ recorded in an ADR when it changes a durable decision.
     ([#38](https://github.com/jwh3times/causet/issues/38))
 13. Is the end state a standalone, distributed version control system, with
     Git as the evaluation substrate now and a permanent two-way bridge later?
-    That is [ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
-    (Proposed). The owner chose a permanent two-way Git bridge, built last;
-    read permissions in scope for investigation; a Git-style staging index;
-    and its restated Gate B. The native store's hash remains open.
+    Answered: yes. [ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
+    was accepted on 2026-10-17, with a permanent two-way Git bridge built
+    last, read permissions in scope for investigation, a Git-style staging
+    index, and its restated Gate B. The native store's hash is left to N1's
+    ADR.
 
 ## 18. Definition of product success
 

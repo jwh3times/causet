@@ -1,6 +1,6 @@
 # ADR-0023: Locate the model/substrate mismatch in causal facts, not content
 
-- **Status:** Accepted
+- **Status:** Accepted; decision 2 superseded by [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
 - **Date:** 2026-09-01
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, FR-ID-02, FR-ID-06, FR-ID-07,
@@ -190,3 +190,25 @@ The prerequisite is therefore a branch-and-land workflow, here or on another
 repository, not the `vlab init` that was first proposed as a small step. Until
 that exists, the content half of this decision stands unchallenged by evidence
 rather than confirmed by it, which is the honest description of its status.
+
+## Amendment 2026-10-17: decision 2 superseded
+
+[ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) makes cst a standalone, distributed version control system with its own
+content store, merge and working copy, so **decision 2 is superseded** as a
+statement of direction. The analysis stands as written: nothing measured here
+requires replacing Git's content substrate, and ADR-0041 cites no measurement
+as a reason to. It rests on product intent instead: permissions that tell
+humans from agents, large files without pointer files, and freedom from Git's
+implementations.
+
+- **Decision 1** carries over. Its fact-side scope becomes ADR-0041's N2, where
+  the causal layer is the native data model (ADR-0041, decision 4), and a
+  canonical fact log over Git content remains a reasonable first step there.
+- **Decision 3** holds for every repository cst runs over Git, until a native
+  subsystem replaces each part.
+- **Decision 4** stands: moving identity into an object does not make it
+  authentic. ADR-0041 answers trust with verified actor identity (its decision
+  5), not with storage.
+- **The constraint on condition 7** no longer applies: ADR-0041 retires Gate B's
+  conditions 7 and 8 as entry conditions (ADR-0014's amendment of the same
+  date).

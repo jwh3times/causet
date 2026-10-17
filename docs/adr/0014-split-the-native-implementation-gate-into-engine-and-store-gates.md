@@ -1,6 +1,6 @@
 # ADR-0014: Split the native implementation gate into engine and store gates
 
-- **Status:** Accepted
+- **Status:** Accepted; Gate B restated by [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
 - **Date:** 2026-08-28
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-02, GP-09, GP-12, FR-PERF-09, FR-WS-08,
@@ -164,3 +164,24 @@ the diagnostic units (NFR-PERF-03).
   Gate B
 - Engine seam, schema catalog, and Git-best-mode baseline: separate ADRs at
   their phases
+
+## Amendment 2026-10-17: Gate B restated
+
+[ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (decision 10) restates Gate B. Gate A, the evidence plan and the
+efficiency definition are unchanged.
+
+- **Conditions 1–6 and 9 become design evidence.** They no longer decide
+  whether a native subsystem may begin. They decide what its semantics are: if
+  compact landing is not preferred in practice, the native history does not
+  make it the default.
+- **Conditions 7 and 8 are retired as entry conditions.** They asked whether a
+  native store is *necessary*. ADR-0041 answers that from product intent, so
+  neither can hold a native subsystem back.
+- **Each native subsystem enters through its own ADR,** which names its
+  contract, published before code; its equality test against the Git-backed
+  answer while one exists; and how a Git-hosted cst repository migrates to it,
+  records included.
+
+The constraint above that Git remains the canonical store "under both gates"
+now holds for every repository cst runs over Git, and until a native subsystem
+replaces each part. The rationale above is kept as written.

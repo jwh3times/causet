@@ -29,7 +29,7 @@ sequence in §15.
 
 | ADR | Status | Decision |
 | --- | --- | --- |
-| [0001](0001-use-git-as-the-compatibility-and-storage-substrate.md) | Accepted | Use Git as the compatibility and storage substrate during the laboratory phase |
+| [0001](0001-use-git-as-the-compatibility-and-storage-substrate.md) | Accepted; amended by ADR-0041 (Git is the evaluation substrate, not the end state) | Use Git as the compatibility and storage substrate during the laboratory phase |
 | [0002](0002-separate-state-change-application-and-landing-identity.md) | Accepted | Separate state, logical change, application, and landing identity |
 | [0003](0003-prefer-causal-compact-landings-and-receipt-backed-hard-squash.md) | Accepted | Prefer causal compact landings and require receipts for hard squash |
 | [0004](0004-use-an-explicit-coverage-proof-lattice.md) | Accepted | Use an explicit coverage proof lattice and never silently accept heuristics |
@@ -42,8 +42,8 @@ sequence in §15.
 | [0011](0011-model-causal-rebase-as-a-forecasted-application-sequence.md) | Accepted | Model causal rebase as a forecasted application sequence |
 | [0012](0012-treat-workspace-lifecycle-as-reversible-materialization-and-drafts-as-checkpoint-inputs.md) | Accepted | Treat workspace lifecycle as reversible materialization and drafts as checkpoint inputs |
 | [0013](0013-measure-scan-amplification-before-adding-indexes-or-a-service.md) | Accepted | Measure scan amplification before adding indexes or a service |
-| [0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md) | Accepted | Split the native implementation gate into engine and store gates |
-| [0015](0015-adopt-a-phased-native-core-program-with-rust.md) | Accepted; amended by ADR-0037 | Adopt a phased native-core program with Rust as the core language |
+| [0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md) | Accepted; Gate B restated by ADR-0041 | Split the native implementation gate into engine and store gates |
+| [0015](0015-adopt-a-phased-native-core-program-with-rust.md) | Accepted; amended by ADR-0037 and ADR-0041 | Adopt a phased native-core program with Rust as the core language |
 | [0016](0016-simulate-clean-forecast-steps-with-a-merge-tree-session.md) | Accepted | Simulate clean forecast steps with a merge-tree session behind a flag |
 | [0017](0017-commit-a-per-host-benchmark-baseline-with-an-automated-regression-check.md) | Accepted; amended 2026-10-09 (the release gate is the deterministic check on hosted runners; latency no longer gates) | Commit a per-host benchmark baseline with an automated regression check |
 | [0018](0018-disable-git-rerere-inside-vlab-picks-and-landing-merges.md) | Accepted | Disable Git rerere inside vlab's cherry-picks and landing merges |
@@ -51,7 +51,7 @@ sequence in §15.
 | [0020](0020-freeze-per-family-compatibility-and-resource-bounds.md) | Accepted | Freeze per-family compatibility, migration, and resource bounds |
 | [0021](0021-give-failures-a-versioned-machine-readable-envelope.md) | Accepted | Give failures a versioned, machine-readable envelope |
 | [0022](0022-reject-git-read-side-maintenance-caches-on-measured-evidence.md) | Accepted | Reject Git's read-side maintenance caches on measured evidence |
-| [0023](0023-locate-the-model-substrate-mismatch-in-facts-not-content.md) | Accepted | Locate the model/substrate mismatch in causal facts, not content |
+| [0023](0023-locate-the-model-substrate-mismatch-in-facts-not-content.md) | Accepted; decision 2 superseded by ADR-0041 | Locate the model/substrate mismatch in causal facts, not content |
 | [0024](0024-close-the-native-read-engine-program-at-phase-0b.md) | Superseded in part by ADR-0027 | Historical closure proposal; wider phases remain gated |
 | [0025](0025-retain-the-object-closure-of-published-causal-facts.md) | Accepted | Retain published facts' required Git objects under a shared root without granting target coverage |
 | [0026](0026-version-fence-aware-markdown-boundaries.md) | Accepted | Version corrected fenced-code boundaries and preserve verified entity correspondence during migration |
@@ -69,7 +69,7 @@ sequence in §15.
 | [0038](0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md) | Accepted; amended twice 2026-09-28 and once 2026-10-08 (install scripts over GitHub releases become the primary channel, npm the second) | Deliver the Rust CLI as per-platform npm packages; a preinstall copy puts the executable at the bin target so `vlab` runs without Node, with a Node launcher as the fallback |
 | [0039](0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) | Accepted | Move persisted `vcs-lab` identifiers to `causet` through `cst migrate` and a permanent read alias, never rewriting an existing record |
 | [0040](0040-make-cst-the-one-command-carrying-records-over-git-remotes.md) | Accepted | Make `cst` the one command: `cst fetch`, `pull`, `push` and `clone` carry records over ordinary Git remotes in park mode, and every other command passes through to Git |
-| [0041](0041-make-cst-a-standalone-distributed-version-control-system.md) | Proposed | Make cst a standalone distributed version control system: workspaces as the unit of work, the causal layer as the data model, typed human and agent actors with permissions enforced at acceptance, first-class large files, and Git as the evaluation substrate now and a permanent two-way bridge later |
+| [0041](0041-make-cst-a-standalone-distributed-version-control-system.md) | Accepted | Make cst a standalone distributed version control system: workspaces as the unit of work, the causal layer as the data model, typed human and agent actors with permissions enforced at acceptance, first-class large files, and Git as the evaluation substrate now and a permanent two-way bridge later |
 
 ## Creating or changing an ADR
 

@@ -1,8 +1,42 @@
 # causet
 
-causet records causal facts about how changes move between Git histories and
-uses them to plan, forecast, land, and verify that movement. This glossary holds
-the terms accepted decisions have settled; it grows as terms are resolved.
+causet records causal facts about how changes move between histories and uses
+them to plan, forecast, land, and verify that movement. It runs over Git today
+and is to become a standalone, distributed version control system. This
+glossary holds the terms accepted decisions have settled; it grows as terms are
+resolved.
+
+## The native system
+
+**Native repository**:
+A cst repository whose content, history and facts live in cst's own store, with
+no Git repository beneath it. A repository cst runs over Git is not one.
+_Avoid_: standalone repository, cst-native repository
+
+**Branch**:
+A cheap, movable name for a line of history. It is never a directory in the
+tree.
+_Avoid_: line, stream, ref
+
+**Workspace**:
+One branch, one working copy, the actor who owns them, and its checkpoints,
+taken together as the unit of work. A repository may have several.
+_Avoid_: worktree, checkout, sandbox
+
+**Actor**:
+Whoever a recorded action names: a human, or an agent acting for a named human
+or organisation.
+_Avoid_: user, author, committer
+
+**Acceptance point**:
+A remote a repository designates, whose accepted state the other clones treat
+as authoritative, and where policy is enforced against verified actors.
+_Avoid_: server, central repository, origin
+
+**Git bridge**:
+The permanent, two-way, exact conversion between a native repository and a Git
+repository, through which Git users and cst users work on one repository.
+_Avoid_: importer, mirror, gateway, bridge (alone; see lineage bridge)
 
 ## Forecasting and application
 

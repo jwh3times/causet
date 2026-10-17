@@ -1,6 +1,6 @@
 # ADR-0041: Make cst a standalone distributed version control system
 
-- **Status:** Proposed
+- **Status:** Accepted (owner, 2026-10-17; see "Owner decision")
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, product thesis (§3), non-goals (§5),
@@ -148,8 +148,40 @@ The Git bridge comes last (owner, 2026-10-17): the native system is made to stan
 - **The working copy as a commit, as in Jujutsu.** Rejected in decision 3 in favour of Git's index.
 - **A central server, as Subversion has.** Rejected in decision 2. Policy is enforced at acceptance points, which a repository may choose to have, not by requiring a server.
 
-## Open questions for the owner
+## Owner decision
 
-The owner answered five of the six questions on 2026-10-17: a permanent two-way bridge (decision 9); the bridge last (the phase map); read permissions in scope for investigation (decision 6); a Git-style staging index (decision 3); and decision 10 as the restated Gate B. One remains:
+**Accepted by the owner on 2026-10-17**, on
+[#279](https://github.com/jwh3times/causet/issues/279), as it stood after the
+owner's answers were recorded in
+[#280](https://github.com/jwh3times/causet/pull/280):
 
-1. **The native hash.** The hash function and object format of the native store, for example SHA-256 or BLAKE3. Imported Git object IDs are kept as aliases (decision 9), so this is only the native store's own identity. It can be decided by N1's ADR rather than here.
+- **Git in the end state:** a permanent two-way bridge (decision 9).
+- **Phase order:** the bridge last, under the constraint "Bridgeable from the
+  start".
+- **Read permissions:** in scope for investigation; N5's ADR decides
+  (decision 6).
+- **Staging:** a Git-style index (decision 3).
+- **Gate B:** restated as decision 10.
+- **The native hash** (the native store's own hash function and object format,
+  for example SHA-256 or BLAKE3) is not decided here. N1's ADR decides it.
+  Imported Git object IDs are kept as aliases whatever it chooses (decision 9).
+
+Acceptance approves the direction and the restated gate. It approves no native
+subsystem's design: each still enters through its own ADR. The phase map above
+stays a proposal: the order of N1–N6, their exit criteria, and how native and
+Git-backed parts coexist meanwhile are decided separately, under the
+[transition map](https://github.com/jwh3times/causet/issues/281).
+
+On acceptance:
+
+- [ADR-0001](0001-use-git-as-the-compatibility-and-storage-substrate.md),
+  [ADR-0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md),
+  [ADR-0015](0015-adopt-a-phased-native-core-program-with-rust.md) and
+  [ADR-0023](0023-locate-the-model-substrate-mismatch-in-facts-not-content.md)
+  each carry an amendment naming this ADR;
+- [product.md](../product.md) §1, §3, §5 and §15 state the end state and the
+  restated Gate B;
+- [#278](https://github.com/jwh3times/causet/issues/278) no longer tracks
+  gitoxide's coverage. It is recast as testing cst over Git on SHA-256
+  repositories through the Git fallback, as #277 does for reftable, because
+  that coverage keeps its value for users who run cst over Git.
