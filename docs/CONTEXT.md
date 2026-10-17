@@ -10,8 +10,25 @@ resolved.
 
 **Native repository**:
 A cst repository whose content, history and facts live in cst's own store, with
-no Git repository beneath it. A repository cst runs over Git is not one.
+no Git repository beneath it. Every repository is wholly native or wholly
+Git-backed, never a mix.
 _Avoid_: standalone repository, cst-native repository
+
+**Git-backed repository**:
+A cst repository whose content, history and facts live in Git, with cst's
+records as notes and refs.
+_Avoid_: Git-hosted repository, N0 repository
+
+**Import**:
+The deterministic, repeatable conversion of a Git-backed repository's history
+and records into a native repository; importing the same history again yields
+the same native objects.
+_Avoid_: conversion, sync, clone
+
+**Switch-over**:
+The point at which a repository stops being Git-backed and its native copy
+becomes the original.
+_Avoid_: cutover, flip
 
 **Branch**:
 A cheap, movable name for a line of history. It is never a directory in the

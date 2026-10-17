@@ -851,8 +851,11 @@ Each links to the issue that carries it; the board is where its status lives.
   [ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md):
   phases N1–N6, from the native content store to the permanent two-way Git
   bridge, each through its own ADR under the
-  restated Gate B. Their order, exit criteria and coexistence with the
-  Git-backed parts are decided under the
+  restated Gate B. They grow as a shadow of cst over Git, with every
+  repository wholly one kind
+  ([ADR-0042](adr/0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md)),
+  and cst over Git takes only what the transition needs. Their order and exit
+  criteria are decided under the
   [transition map](https://github.com/jwh3times/causet/issues/281).
 
 ### Native implementation gate
