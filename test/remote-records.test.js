@@ -133,6 +133,15 @@ test("diverged clones converge through push and fetch with no forced update", ()
     "the hub's notes advanced by fast-forward");
 
   ok(cst(a, "fetch", "-q"), "a fetches");
+  // A pull has no JSON form: cst refuses before Git runs, in JSON, rather
+  // than handing Git an option it answers with its usage text.
+  const head = target(b, "HEAD");
+  const refused = cst(b, "pull", "--json", "--no-rebase", "origin", "main");
+  assert.equal(refused.status, 1);
+  const error = JSON.parse(refused.stdout);
+  assert.equal(error.code, "usage-unknown-option");
+  assert.match(error.message, /'cst fetch --json'/);
+  assert.equal(target(b, "HEAD"), head, "the refused pull changed nothing");
   ok(cst(b, "pull", "-q", "--no-rebase", "origin", "main"), "b pulls");
   assert.deepEqual(actors(a), ["agent-a", "agent-a", "agent-b", "agent-b"]);
   assert.deepEqual(actors(b), actors(a));
