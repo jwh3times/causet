@@ -48,6 +48,13 @@ unrecoverable, or unworkable when `cst` is absent. A native store, service, or
 wire protocol is justified only after local experiments establish that the
 semantics are correct and valuable.
 
+**End state (proposed).** The owner stated on 2026-10-17 that cst is meant to
+become a standalone, distributed version control system that does not use Git
+and replaces it. Running over Git is the evaluation step.
+[ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
+(Proposed) records that direction, and how it changes the thesis below and
+Gate B (§15). Until it is accepted, this document's laboratory scope stands.
+
 ## 2. Problem statement
 
 ### 2.1 Problems inherited from Git workflows
@@ -1089,6 +1096,12 @@ recorded in an ADR when it changes a durable decision.
     or its host, or does it remain a declared claim like a receipt, defended by
     audit rather than by signature?
     ([#38](https://github.com/jwh3times/causet/issues/38))
+13. Is the end state a standalone, distributed version control system, with
+    Git as the evaluation substrate now and a permanent two-way bridge later?
+    That is [ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
+    (Proposed). The owner chose a permanent two-way Git bridge, built last;
+    read permissions in scope for investigation; a Git-style staging index;
+    and its restated Gate B. The native store's hash remains open.
 
 ## 18. Definition of product success
 

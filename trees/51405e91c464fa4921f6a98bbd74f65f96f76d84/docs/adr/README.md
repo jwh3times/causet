@@ -69,6 +69,7 @@ sequence in §15.
 | [0038](0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md) | Accepted; amended twice 2026-09-28 and once 2026-10-08 (install scripts over GitHub releases become the primary channel, npm the second) | Deliver the Rust CLI as per-platform npm packages; a preinstall copy puts the executable at the bin target so `vlab` runs without Node, with a Node launcher as the fallback |
 | [0039](0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) | Accepted | Move persisted `vcs-lab` identifiers to `causet` through `cst migrate` and a permanent read alias, never rewriting an existing record |
 | [0040](0040-make-cst-the-one-command-carrying-records-over-git-remotes.md) | Accepted | Make `cst` the one command: `cst fetch`, `pull`, `push` and `clone` carry records over ordinary Git remotes in park mode, and every other command passes through to Git |
+| [0041](0041-make-cst-a-standalone-distributed-version-control-system.md) | Proposed | Make cst a standalone distributed version control system: workspaces as the unit of work, the causal layer as the data model, typed human and agent actors with permissions enforced at acceptance, first-class large files, and Git as the evaluation substrate now and a permanent two-way bridge later |
 
 ## Creating or changing an ADR
 
