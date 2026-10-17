@@ -68,6 +68,8 @@ These decisions answered "is Git insufficient for the causal layer?", and on tha
    - mixing branch names into content paths;
    - merge tracking kept as properties (`svn:mergeinfo`);
    - a branch model that assumes a server.
+
+   **Staging is an index, as in Git.** A commit records what was staged, not the whole working copy, so a person or an agent can commit part of what they changed. Jujutsu's working copy as a commit was considered and not adopted (owner, 2026-10-17).
 4. **The causal layer is the data model, not sideband metadata.** These are native objects of the history, not notes attached to commits:
    - logical change identity, applications, landings, provenance and resolutions (ADR-0002, ADR-0023's fact side);
    - stable specification entities (ADR-0008).
@@ -78,6 +80,8 @@ These decisions answered "is Git insufficient for the causal layer?", and on tha
    - **Cooperative, in the client.** cst refuses an action its policy denies the current actor, before anything is written, and says which rule denies it. Agents run cst itself, so this catches nearly every case, and it is cheap.
    - **Authoritative, at acceptance.** An acceptance point verifies each incoming change against the policy and refuses violations, whatever the sending client did. In a distributed system this is the only enforcement that holds, because anyone can write anything in their own clone. It needs verifiable actor identity (decision 5) and a landing coordinator that evaluates policy (FR-LAND-10, FR-TRUST-03, #39).
 
+   **Reading** is in scope for investigation, not yet decided (owner, 2026-10-17). Restricting reads in a distributed system means a clone holds only what its actor may read, which needs partial clones and filtering at the acceptance point; lazy content fetch (decision 7) is the mechanism it would build on. N5's ADR decides whether, and how.
+
    **Locks** are part of the same policy. A repository admin may lock a path against agents. Any actor may take an exclusive lock on a file that cannot be merged, as Subversion's `svn lock` does, and the acceptance point honours the lock.
 7. **Large files are first-class.** The content store:
    - splits files into chunks by their content, so versions that differ in part share storage;
@@ -86,8 +90,11 @@ These decisions answered "is Git insufficient for the causal layer?", and on tha
 
    File locks (decision 6) cover files that cannot be merged.
 8. **Development's documentation is first-class content.** Instructions, specifications and agent-generated documentation are expected to outnumber code changes. Stable section identity and deterministic section merge (FR-SPEC-*) become operations of the native content store. They stop being a manifest derived beside the files. Markdown stays the canonical form a person edits, as ADR-0008 decided.
-9. **Git becomes the evaluation substrate now and an interop boundary later.** Until the native phases replace each part, cst keeps working over Git exactly as today: ADR-0001's constraints stay in force for any repository cst runs over Git. In the end state Git is reached only through an import, and possibly a bridge; question 1 is which.
-10. **Gate B is restated, on acceptance of this ADR.** Its user-value conditions (1–6 and 9) become **design evidence**: they decide what each native subsystem's semantics are. For example, if compact landing is not preferred in practice, the native history does not make it the default. Conditions 7 and 8 asked whether a native store is necessary; this decision answers that, so they are retired as entry conditions. Each native subsystem still enters through its own ADR, which names:
+9. **Git is the evaluation substrate now, and a permanent two-way bridge in the end state.** Until the native phases replace each part, cst keeps working over Git exactly as today: ADR-0001's constraints stay in force for any repository cst runs over Git. In the end state a cst repository can be hosted on a Git forge, and Git users and cst users work on it together through a bridge that converts in both directions, for as long as the repository wants it, not only once at import (owner, 2026-10-17). Three things follow:
+   - **Round trips are exact.** A Git commit imported and exported again has its original object ID. The native store therefore keeps what Git's IDs depend on (author and committer lines, timestamps, signatures, encodings, tree entry modes), and keeps each imported Git object ID as an alias of the native object.
+   - **Native facts cross as cst's records do today.** What Git has no place for (change identity, landings, provenance, typed actors, resolutions) crosses the bridge as the notes and refs cst writes over Git now. The current layer becomes the bridge's format, so its contracts keep their value past the transition.
+   - **Changes from Git arrive without a verified actor.** A commit a Git user pushes names no actor cst can verify, so the acceptance point treats it as an unverified human's, and policy decides whether it may land (decision 6). How large files cross (whole, or as Git LFS objects on the Git side) is the bridge's ADR to decide.
+10. **Gate B is restated, on acceptance of this ADR** (confirmed by the owner, 2026-10-17). Its user-value conditions (1–6 and 9) become **design evidence**: they decide what each native subsystem's semantics are. For example, if compact landing is not preferred in practice, the native history does not make it the default. Conditions 7 and 8 asked whether a native store is necessary; this decision answers that, so they are retired as entry conditions. Each native subsystem still enters through its own ADR, which names:
     - its contract, published before code;
     - its equality test against the Git-backed answer while one exists;
     - how a Git-hosted cst repository migrates to it, records included.
@@ -97,21 +104,22 @@ These decisions answered "is Git insufficient for the causal layer?", and on tha
 - **No repository becomes unreadable in transition.** Until the import and any bridge exist, every repository cst creates stays a valid Git repository, and stock Git stays its escape hatch (ADR-0001).
 - **Contracts outlive the substrate.** The published record schemas, error vocabulary, JSON shapes and conformance fixtures are the product's contracts. A native subsystem answers them identically, or a decision says why not and the corpus re-records by decision, as since #243.
 - **One subsystem at a time, each with its own ADR.** Nothing in this ADR approves a native subsystem's design. It approves the direction, and the restated gate the designs pass through.
+- **Bridgeable from the start.** The bridge is built last (the phase map), but every native subsystem's ADR shows that its objects round-trip through it exactly (decision 9), so no earlier format can make the bridge impossible.
 - **Permissions are never presented as security they do not provide.** Client-side refusal is a guard against accidents. Only acceptance-point enforcement with verified identity is enforcement, and the product says which one applies.
 
 ## Proposed phase map
 
-The order is open (question 2). Each phase is one or more ADRs, and each keeps the equality discipline of Gate A while a Git-backed answer exists to compare against.
+The Git bridge comes last (owner, 2026-10-17): the native system is made to stand on its own first, and N6 then connects it to Git hosting. The bridge still constrains every earlier phase ("Bridgeable from the start"). Each phase is one or more ADRs, and each keeps the equality discipline of Gate A while a Git-backed answer exists to compare against.
 
 | Phase | Scope | Proves |
 | --- | --- | --- |
 | N0 (now) | cst over Git: the evaluation, and the Gate B design evidence (#19, #42, #151) | Which causal semantics earn a native home |
 | N1 | Native content store: chunked blobs, trees, snapshots; import of a Git repository with its cst records; read-only first | The content model, and lossless import |
 | N2 | Native history and fact log: changes, applications, landings, provenance as native objects; names for lines of work | The causal layer as the data model (decision 4) |
-| N3 | Working copy and workspaces: checkout, status, staging, several working copies per repository | Decision 3 |
+| N3 | Working copy and workspaces: checkout, status, a staging index, several working copies per repository | Decision 3 |
 | N4 | Native merge and forecast, including the structured-document merge | ADR-0006 and ADR-0008 natively |
 | N5 | Transport between peers, and acceptance points: typed actors, verified identity, policy, locks | Decisions 2, 5 and 6 |
-| N6 | The Git boundary: export to, or a bridge with, Git hosting | Question 1 |
+| N6 | The Git bridge: permanent and two-way, with Git hosting | Decision 9 |
 
 ## Consequences
 
@@ -124,7 +132,8 @@ The order is open (question 2). Each phase is one or more ADRs, and each keeps t
 ### Negative
 
 - **The scope is that of a version control system.** Git's object store, packfiles, transport, merge and working-copy machinery took years to build; gitoxide, which rebuilds them in Rust, is still pre-1.0. The end state is years of work.
-- **Git's ecosystem has to be reached through an interop boundary:** forges, CI, editors, hosting and every user's habits. Adoption depends on that boundary being very good, whichever form question 1 takes.
+- **Git's ecosystem has to be reached through the bridge:** forges, CI, editors, hosting and every user's habits. Adoption depends on the bridge being very good. With the bridge last, a native release before N6 serves only users willing to leave Git hosting; until then cst over Git (N0) stays the way to use cst with a forge.
+- **Exact round trips cost the data model.** The native store carries Git's commit encoding details for every bridged object, for as long as the repository bridges.
 - **Some recorded decisions lose their footing:** ADR-0023's decision 2, ADR-0001's "Git stays the substrate … indefinitely" amendment, and Gate B's conditions 7 and 8. On acceptance each needs an amendment that names this ADR.
 - Work on the Git layer continues to have value only for the transition. #278 (native engine coverage of reftable and SHA-256 through gitoxide) would be closed or recast. #277 stays useful while users run cst over Git.
 
@@ -134,16 +143,13 @@ The order is open (question 2). Each phase is one or more ADRs, and each keeps t
 - **Native facts over Git content** (ADR-0023's path: phase 5's canonical fact log, Git keeping blobs, trees and commits). It removes the causal distortions but keeps Git's content model, its large-file limits and its executable. It remains a reasonable intermediate step, and phase N2 can begin with it.
 - **Build the native store on gitoxide.** Rejected for the same reason as above: the product's capabilities would be bounded by another project's format coverage, which is what #278 exposed.
 - **Subversion-style branches as paths.** Rejected in decision 3. They make a branch a working copy for free, but mix branch names into content paths and assume a central server.
+- **A one-time importer only.** Rejected: it would make adopting cst a migration every collaborator must make at once.
+- **The Git bridge early.** Rejected: it would tie the first native formats to Git's before the native system stands on its own. The constraint "Bridgeable from the start" keeps the bridge possible instead.
+- **The working copy as a commit, as in Jujutsu.** Rejected in decision 3 in favour of Git's index.
 - **A central server, as Subversion has.** Rejected in decision 2. Policy is enforced at acceptance points, which a repository may choose to have, not by requiring a server.
 
 ## Open questions for the owner
 
-1. **Git in the end state:**
-   - a permanent two-way bridge, so a cst repository can live on GitHub and Git users can collaborate with cst users;
-   - a one-time importer only;
-   - or both, in sequence?
-2. **Phase order.** Does the Git boundary (N6) come early, so the native system can be used with existing forges from its first release? Or late, once the native system stands on its own?
-3. **Read permissions.** Decision 6 covers write, land, lock and administer. Restricting *reading* in a distributed system means a clone holds only what its actor may read, which needs partial clones and server-side filtering. Is it in scope?
-4. **Staging.** Keep a staging area like Git's index, or treat the working copy as a commit, as Jujutsu does? This decides the shape of N3.
-5. **Object identity.** The hash function and object format of the native store, for example SHA-256 or BLAKE3. Also, whether imported Git object IDs are kept as aliases.
-6. **Gate B's restated form.** Is decision 10 the right restatement, or should a native subsystem wait on specific design evidence, such as a receipt-assisted recovery (condition 1), before its ADR is accepted?
+The owner answered five of the six questions on 2026-10-17: a permanent two-way bridge (decision 9); the bridge last (the phase map); read permissions in scope for investigation (decision 6); a Git-style staging index (decision 3); and decision 10 as the restated Gate B. One remains:
+
+1. **The native hash.** The hash function and object format of the native store, for example SHA-256 or BLAKE3. Imported Git object IDs are kept as aliases (decision 9), so this is only the native store's own identity. It can be decided by N1's ADR rather than here.
