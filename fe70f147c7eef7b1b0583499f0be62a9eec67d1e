@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvce6zbe98e6ee668489",
+      "mode": "compact",
+      "sourceRef": "docs/adr-0041-standalone-vcs",
+      "sourceHead": "cc608b168a2cc01e929c30ea6f2f47e03e03f2f8",
+      "sourceSubject": "docs: record the owner's answers to ADR-0041's questions",
+      "targetBefore": "53f59a3369322216d1e0f1965b52125049069d40",
+      "landingCommit": "fe70f147c7eef7b1b0583499f0be62a9eec67d1e",
+      "base": "53f59a3369322216d1e0f1965b52125049069d40",
+      "absorbedCommits": [
+        "61cba55f8faf000ebe7a2b086608ee4c039b225e",
+        "cc608b168a2cc01e929c30ea6f2f47e03e03f2f8"
+      ],
+      "absorbedChanges": [
+        "ch_0mvburavqf1afa5fa8ac2",
+        "ch_0mvbz0hq1e0b41fc7c795"
+      ],
+      "resultTree": "51405e91c464fa4921f6a98bbd74f65f96f76d84",
+      "createdAt": "2026-10-17T12:48:16.974Z"
+    }
+  ]
+}
