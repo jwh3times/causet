@@ -1,6 +1,6 @@
 # ADR-0015: Adopt a phased native-core program with Rust as the core language
 
-- **Status:** Accepted; amended by [ADR-0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) (2026-09-27)
+- **Status:** Accepted; amended by [ADR-0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) (2026-09-27) and [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
 - **Date:** 2026-08-28
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-09, GP-12, FR-GIT-01 through FR-GIT-04,
@@ -211,3 +211,27 @@ semantics-preserving port, run as its own track under Gate A discipline. That su
 this ADR's rejection of "a Rust-first CLI rewrite", for the reasons ADR-0037 records. The
 phase order, gates, and funded costs above are otherwise unchanged. The rationale above is
 kept as written.
+
+## Amendment 2026-10-17
+
+[ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) sets the end state this program was approaching from below: a standalone,
+distributed version control system, reached through its own phases N1–N6
+behind the restated Gate B (ADR-0014's amendment of the same date). This
+program's phases are the evaluation over Git, ADR-0041's N0. Gate A, the Rust
+stack and the Git floor are unchanged for every repository cst runs over Git.
+
+Two things here stop applying:
+
+- **Phases 5 and 6 no longer wait for all nine Gate B conditions.** Any native
+  subsystem they would build enters through its own ADR under the restated
+  gate.
+- **The native engine's dependence on gitoxide is transition-only.** In the end
+  state cst links no Git implementation (ADR-0041, decision 1). Widening the
+  gitoxide profile to reftable and SHA-256 is therefore not product work;
+  [#278](https://github.com/jwh3times/causet/issues/278) now tracks testing
+  those formats through the Git fallback instead.
+
+How the remaining phases relate to N1–N6, and how native and Git-backed parts
+coexist meanwhile, is decided under the
+[transition map](https://github.com/jwh3times/causet/issues/281). The phase
+order and rationale above are otherwise kept as written.

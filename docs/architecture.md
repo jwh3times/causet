@@ -1904,9 +1904,12 @@ since #243 the whole CLI is the Rust executable
 ([ADR-0037](adr/0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md));
 the wider phase-1 exit criteria remain unmet. A canonical fact log with
 Git notes and refs as projections, private draft stacks, and any gateway
-remain behind Gate B, and
-[ADR-0023](adr/0023-locate-the-model-substrate-mismatch-in-facts-not-content.md)
-confines any such replacement to the causal-fact substrate (§1). Git stays
-the exact-state store and escape hatch in
-every phase; a server or resident service still requires ADR-0013's row to
-fire on representative Windows and POSIX hosts.
+remain behind Gate B, as
+[ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
+restates it: each native subsystem enters through its own ADR. ADR-0041 makes
+the end state a standalone system with its own content store, which supersedes
+[ADR-0023](adr/0023-locate-the-model-substrate-mismatch-in-facts-not-content.md)'s
+confinement of any replacement to the causal-fact substrate. Git stays the
+exact-state store and escape hatch for every repository cst runs over Git; a
+server or resident service still requires ADR-0013's row to fire on
+representative Windows and POSIX hosts.

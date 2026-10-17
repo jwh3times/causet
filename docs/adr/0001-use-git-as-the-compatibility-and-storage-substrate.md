@@ -1,6 +1,6 @@
 # ADR-0001: Use Git as the compatibility and storage substrate
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by ADR-0014 (2026-08-28), ADR-0023 (2026-09-02) and [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
 - **Date:** 2026-08-20
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, FR-GIT-01 through FR-GIT-08
@@ -73,6 +73,19 @@ ADR.
 The PRD's native implementation gate is satisfied and measured Git constraints
 cannot be addressed through batching, explicit metadata transport, or a narrow
 gateway.
+
+**Amendment 2026-10-17 (ADR-0041):** this decision now describes the
+evaluation step, not the end state. [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) makes cst a standalone, distributed
+version control system that neither runs Git nor links a Git implementation,
+with a permanent two-way Git bridge. The laboratory phase this decision covers
+is the evaluation ADR-0041 calls N0. Its decision and constraints stay in force
+for every repository cst runs over Git, and until an import and a bridge exist,
+every repository cst creates stays a valid Git repository with stock Git as its
+escape hatch. The amendment of 2026-09-02 below said Git "stays the substrate
+for blobs, trees, commits and ancestry indefinitely"; ADR-0041 supersedes that
+sentence. It rests on product intent, not on new evidence, so the analysis
+behind the sentence still stands. "Build a native VCS immediately" stays
+rejected: each native subsystem enters through its own ADR.
 
 **Amendment 2026-09-02 (ADR-0023):** this decision is refined rather than
 superseded. Going concept by concept through the PRD identity model against the
