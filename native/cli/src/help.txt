@@ -64,7 +64,8 @@ Usage:
   cst doctor [--benchmark] [--samples <n>] [--warmup <n>] [--differential]
   cst version
   cst fetch|pull|push|clone [<git arguments>] [--no-records] [--json]
-                     Git's command, carrying the causal records with it
+                     Git's command, carrying the causal records with it;
+                     --json (not for pull) reports the records moved
   cst git <arguments>                           run Git, whatever the command
 
 Every other command is Git's: cst status, cst log, cst add and the rest run

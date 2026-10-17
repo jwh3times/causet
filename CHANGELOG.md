@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **`cst pull --json` is refused by cst** (#275). `cst pull` has no JSON form,
+  because Git's merge output uses standard output (ADR-0040), but the option
+  went through to Git, which answered with its usage text. It is now refused
+  with `usage-unknown-option` before Git runs, in JSON, naming
+  `cst fetch --json` for a report of the records. `cst --help` says which of
+  the four remote commands take `--json`.
+
 ## 0.25.1
 
 **Two fixes to 0.25.0.** The more serious one: a value option spelled in

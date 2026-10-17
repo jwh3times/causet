@@ -266,8 +266,17 @@ pub fn decide(
   }
   if SYNC_COMMANDS.contains(&command) {
     let own = |item: &&str| matches!(*item, "--json" | "--no-records");
-    let json = args[1..].contains(&"--json") && command != "pull";
+    let json = args[1..].contains(&"--json");
     let records = !args[1..].contains(&"--no-records");
+    // Git's merge output is on standard output, so a pull has no JSON form
+    // (ADR-0040); Git would answer the option with its usage text.
+    if command == "pull" && json {
+      return fail(
+        "Unknown option '--json' for 'cst pull': Git's merge output uses standard output, so a pull has no JSON form. Run 'cst fetch --json' for a report of the records, then 'cst pull'.",
+        "usage-unknown-option",
+        true,
+      );
+    }
     if command != "clone" && unmigrated(&settings) {
       return Outcome::Unmigrated { json };
     }
@@ -275,7 +284,7 @@ pub fn decide(
       command: command.to_string(),
       args: args[1..]
         .iter()
-        .filter(|item| !own(item) || (**item == "--json" && command == "pull"))
+        .filter(|item| !own(item))
         .map(|item| item.to_string())
         .collect(),
       json,
@@ -766,6 +775,22 @@ mod tests {
       &["--no-git-session", "version", "--json"],
     ] {
       assert_eq!(run(args), Outcome::Version, "{args:?}");
+    }
+  }
+
+  #[test]
+  fn a_pull_refuses_json_and_the_other_remote_commands_take_it() {
+    let (message, code, json) = failed(run(&["pull", "origin", "--json"]));
+    assert!(message.starts_with("Unknown option '--json' for 'cst pull'"), "{message}");
+    assert_eq!((code, json), ("usage-unknown-option", true));
+    for command in ["fetch", "push", "clone"] {
+      match run(&[command, "origin", "--json", "--no-records"]) {
+        Outcome::Sync { args, json, records, .. } => {
+          assert_eq!(args, ["origin"], "{command}");
+          assert!(json && !records, "{command}");
+        }
+        other => panic!("expected {command} to sync, got {other:?}"),
+      }
     }
   }
 
