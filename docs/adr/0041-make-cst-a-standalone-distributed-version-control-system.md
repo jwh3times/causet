@@ -1,6 +1,6 @@
 # ADR-0041: Make cst a standalone distributed version control system
 
-- **Status:** Accepted (owner, 2026-10-17; see "Owner decision")
+- **Status:** Accepted (owner, 2026-10-17; see "Owner decision"); coexistence decided by [ADR-0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, product thesis (§3), non-goals (§5),
@@ -170,7 +170,9 @@ Acceptance approves the direction and the restated gate. It approves no native
 subsystem's design: each still enters through its own ADR. The phase map above
 stays a proposal: the order of N1–N6, their exit criteria, and how native and
 Git-backed parts coexist meanwhile are decided separately, under the
-[transition map](https://github.com/jwh3times/causet/issues/281).
+[transition map](https://github.com/jwh3times/causet/issues/281). Coexistence
+is [ADR-0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md): every repository is wholly native or wholly Git-backed, and the native
+system grows as a shadow of the Git-backed one.
 
 On acceptance:
 

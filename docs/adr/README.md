@@ -70,6 +70,7 @@ sequence in §15.
 | [0039](0039-migrate-vcs-lab-identifiers-to-causet-without-rewriting-records.md) | Accepted | Move persisted `vcs-lab` identifiers to `causet` through `cst migrate` and a permanent read alias, never rewriting an existing record |
 | [0040](0040-make-cst-the-one-command-carrying-records-over-git-remotes.md) | Accepted | Make `cst` the one command: `cst fetch`, `pull`, `push` and `clone` carry records over ordinary Git remotes in park mode, and every other command passes through to Git |
 | [0041](0041-make-cst-a-standalone-distributed-version-control-system.md) | Accepted | Make cst a standalone distributed version control system: workspaces as the unit of work, the causal layer as the data model, typed human and agent actors with permissions enforced at acceptance, first-class large files, and Git as the evaluation substrate now and a permanent two-way bridge later |
+| [0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md) | Accepted | Grow the native system as a shadow: every repository wholly native or wholly Git-backed, one executable split by kind at the command level, repeatable Git-to-native import, switch-over from N5, and N0 limited to what the transition needs |
 
 ## Creating or changing an ADR
 
