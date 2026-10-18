@@ -1,6 +1,6 @@
 # ADR-0043: Order the native transition by dependency, starting with N1
 
-- **Status:** Accepted (owner, 2026-10-17)
+- **Status:** Accepted (owner, 2026-10-17); exit criteria in [ADR-0044](0044-define-the-exit-regime-every-native-phase-must-meet.md)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, FR-TRUST-02, FR-SPEC-*
@@ -54,8 +54,7 @@ reads and writes, and how much the owner can review at once.
      predecessor's ADR is accepted. That is when the formats it builds on are
      fixed.
    - **Exit:** a phase may exit only after every predecessor has exited, by the
-     exit criteria every phase ADR cites
-     ([#284](https://github.com/jwh3times/causet/issues/284)).
+     exit regime every phase ADR cites, [ADR-0044](0044-define-the-exit-regime-every-native-phase-must-meet.md).
    - **Reopening:** if a predecessor's format changes during its build, the
      dependent phase reopens to match. With no format promise yet (ADR-0042,
      decision 5), that costs a re-import, not a migration.
