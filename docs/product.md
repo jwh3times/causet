@@ -1156,8 +1156,9 @@ recorded in an ADR when it changes a durable decision.
     Answered: yes. [ADR-0041](adr/0041-make-cst-a-standalone-distributed-version-control-system.md)
     was accepted on 2026-10-17, with a permanent two-way Git bridge built
     last, read permissions in scope for investigation, a Git-style staging
-    index, and its restated Gate B. The native store's hash is left to N1's
-    ADR.
+    index, and its restated Gate B. The native store's hash is SHA-256 over
+    whole content
+    ([ADR-0045](adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)).
 
 ## 18. Definition of product success
 
