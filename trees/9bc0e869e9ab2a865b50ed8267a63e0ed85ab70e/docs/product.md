@@ -855,8 +855,9 @@ Each links to the issue that carries it; the board is where its status lives.
   repository wholly one kind
   ([ADR-0042](adr/0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md)),
   and cst over Git takes only what the transition needs. Their order is
-  [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md); their exit criteria are decided under the
-  [transition map](https://github.com/jwh3times/causet/issues/281).
+  [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md),
+  and every phase exits by the regime of
+  [ADR-0044](adr/0044-define-the-exit-regime-every-native-phase-must-meet.md).
 
 ### Native implementation gate
 
@@ -912,7 +913,10 @@ nine conditions below. Now:
 - each native subsystem enters through **its own ADR**, which names its
   contract, published before code; its equality test against the Git-backed
   answer while one exists; and how a Git-hosted cst repository migrates to it,
-  records included.
+  records included;
+- each native phase exits by one regime,
+  [ADR-0044](adr/0044-define-the-exit-regime-every-native-phase-must-meet.md),
+  which every phase ADR cites.
 
 The conditions as first written:
 

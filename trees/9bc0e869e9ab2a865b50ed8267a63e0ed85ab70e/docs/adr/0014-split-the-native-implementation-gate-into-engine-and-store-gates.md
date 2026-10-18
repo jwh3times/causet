@@ -1,6 +1,6 @@
 # ADR-0014: Split the native implementation gate into engine and store gates
 
-- **Status:** Accepted; Gate B restated by [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
+- **Status:** Accepted; Gate B restated by [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17); native phase exits defined by [ADR-0044](0044-define-the-exit-regime-every-native-phase-must-meet.md)
 - **Date:** 2026-08-28
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-02, GP-09, GP-12, FR-PERF-09, FR-WS-08,
@@ -185,3 +185,8 @@ efficiency definition are unchanged.
 The constraint above that Git remains the canonical store "under both gates"
 now holds for every repository cst runs over Git, and until a native subsystem
 replaces each part. The rationale above is kept as written.
+
+**Amendment 2026-10-17 (ADR-0044):** [ADR-0044](0044-define-the-exit-regime-every-native-phase-must-meet.md) defines what a native phase must show
+before it exits: equality across kinds on four corpora, deterministic
+performance gates, history replay, the reconstruction check, import checks, and
+CI-only platforms. Every phase ADR entering under the restated Gate B cites it.

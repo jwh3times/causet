@@ -42,7 +42,7 @@ sequence in §15.
 | [0011](0011-model-causal-rebase-as-a-forecasted-application-sequence.md) | Accepted | Model causal rebase as a forecasted application sequence |
 | [0012](0012-treat-workspace-lifecycle-as-reversible-materialization-and-drafts-as-checkpoint-inputs.md) | Accepted | Treat workspace lifecycle as reversible materialization and drafts as checkpoint inputs |
 | [0013](0013-measure-scan-amplification-before-adding-indexes-or-a-service.md) | Accepted | Measure scan amplification before adding indexes or a service |
-| [0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md) | Accepted; Gate B restated by ADR-0041 | Split the native implementation gate into engine and store gates |
+| [0014](0014-split-the-native-implementation-gate-into-engine-and-store-gates.md) | Accepted; Gate B restated by ADR-0041, phase exits defined by ADR-0044 | Split the native implementation gate into engine and store gates |
 | [0015](0015-adopt-a-phased-native-core-program-with-rust.md) | Accepted; amended by ADR-0037, ADR-0041 and ADR-0043 (remaining phases stopped or moved) | Adopt a phased native-core program with Rust as the core language |
 | [0016](0016-simulate-clean-forecast-steps-with-a-merge-tree-session.md) | Accepted | Simulate clean forecast steps with a merge-tree session behind a flag |
 | [0017](0017-commit-a-per-host-benchmark-baseline-with-an-automated-regression-check.md) | Accepted; amended 2026-10-09 (the release gate is the deterministic check on hosted runners; latency no longer gates) | Commit a per-host benchmark baseline with an automated regression check |
@@ -72,6 +72,7 @@ sequence in §15.
 | [0041](0041-make-cst-a-standalone-distributed-version-control-system.md) | Accepted | Make cst a standalone distributed version control system: workspaces as the unit of work, the causal layer as the data model, typed human and agent actors with permissions enforced at acceptance, first-class large files, and Git as the evaluation substrate now and a permanent two-way bridge later |
 | [0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md) | Accepted | Grow the native system as a shadow: every repository wholly native or wholly Git-backed, one executable split by kind at the command level, repeatable Git-to-native import, switch-over from N5, and N0 limited to what the transition needs |
 | [0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md) | Accepted | Order the native transition by dependency: N1, then N2, then N3 and N4 beside N5, with switch-over and the Git bridge after; at most two phases in build; typed actors from N2; ADR-0015's remaining phases stopped or moved |
+| [0044](0044-define-the-exit-regime-every-native-phase-must-meet.md) | Accepted | Define the exit regime every native phase meets: equality across kinds on four corpora, zero Git processes and storage gates against Git's packs, history replay, the reconstruction check, import checks, CI-only, permanent, declared by the owner |
 
 ## Creating or changing an ADR
 
