@@ -22,6 +22,9 @@ the versioned record of delivered behavior.
   namespace set, entropy, and cross-repository import rule.
 - [Canonical JSON profile](canonical-json/README.md) — the frozen RFC 8785
   serialization profile, encoder registry, and shared test vectors.
+- [Native store contract](native-store/README.md) — the byte-level format of a
+  native repository's store (ADR-0045), published before its code, with no
+  compatibility promised yet.
 - [Structured-document adapter contract](structured-document-adapters.md) —
   acceptance requirements for formats and the current Markdown worked example.
 - [Semantic-merge conformance](semantic-conformance/README.md) — shared merge
