@@ -1,6 +1,6 @@
 # ADR-0044: Define the exit regime every native phase must meet
 
-- **Status:** Accepted (owner, 2026-10-17)
+- **Status:** Accepted (owner, 2026-10-17); import equality made precise by [ADR-0045](0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, NFR-PERF-03, NFR-PERF-06, NFR-PERF-07,
@@ -142,3 +142,11 @@ following, limited to the commands and objects that phase implements.
   owner decides.
 - **No waivers.** Rejected: a waiver would happen anyway, informally. ADR-0037's
   recorded waiver is the precedent.
+
+## Amendment 2026-10-17: what import equality means
+
+[ADR-0045](0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md) (decision 3) makes item 5 precise. A fresh import of the same history yields
+a byte-identical store: containers, indexes and the alias map. An incremental
+import yields the same native objects (IDs and content), the same alias map and
+the same ref snapshot as a full import of the final history. Container layout
+may differ.

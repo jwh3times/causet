@@ -1,6 +1,6 @@
 # ADR-0041: Make cst a standalone distributed version control system
 
-- **Status:** Accepted (owner, 2026-10-17; see "Owner decision"); coexistence decided by [ADR-0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md), phase order by [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md)
+- **Status:** Accepted (owner, 2026-10-17; see "Owner decision"); coexistence decided by [ADR-0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md), phase order by [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md), the native hash (SHA-256) by [ADR-0045](0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, product thesis (§3), non-goals (§5),
@@ -166,6 +166,8 @@ owner's answers were recorded in
 - **Gate B:** restated as decision 10.
 - **The native hash** (the native store's own hash function and object format,
   for example SHA-256 or BLAKE3) is not decided here. N1's ADR decides it.
+  [ADR-0045](0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)
+  chose SHA-256 over the whole content, with an algorithm tag.
   Imported Git object IDs are kept as aliases whatever it chooses (decision 9).
 
 Acceptance approves the direction and the restated gate. It approves no native
