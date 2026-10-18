@@ -1,6 +1,6 @@
 # ADR-0023: Locate the model/substrate mismatch in causal facts, not content
 
-- **Status:** Accepted; decision 2 superseded by [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
+- **Status:** Accepted; decision 2 superseded by [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17); its fact-log path closed as a starting point by [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md)
 - **Date:** 2026-09-01
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, FR-ID-02, FR-ID-06, FR-ID-07,
@@ -212,3 +212,8 @@ implementations.
 - **The constraint on condition 7** no longer applies: ADR-0041 retires Gate B's
   conditions 7 and 8 as entry conditions (ADR-0014's amendment of the same
   date).
+
+**Amendment 2026-10-17 (ADR-0043):** ADR-0041 kept decision 1's fact-log path
+as a possible first step, beginning N2 over Git content. [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md) closes that
+option, because ADR-0042 makes every repository wholly native or wholly
+Git-backed. The fact log is built natively in N2, after the content store.

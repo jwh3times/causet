@@ -1,6 +1,6 @@
 # ADR-0015: Adopt a phased native-core program with Rust as the core language
 
-- **Status:** Accepted; amended by [ADR-0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) (2026-09-27) and [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17)
+- **Status:** Accepted; amended by [ADR-0037](0037-reimplement-the-cli-in-rust-as-a-semantics-preserving-port.md) (2026-09-27) and [ADR-0041](0041-make-cst-a-standalone-distributed-version-control-system.md) (2026-10-17); remaining phases stopped or moved by [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md)
 - **Date:** 2026-08-28
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-09, GP-12, FR-GIT-01 through FR-GIT-04,
@@ -235,3 +235,9 @@ How the remaining phases relate to N1–N6, and how native and Git-backed parts
 coexist meanwhile, is decided under the
 [transition map](https://github.com/jwh3times/causet/issues/281). The phase
 order and rationale above are otherwise kept as written.
+
+**Amendment 2026-10-17 (ADR-0043):** the remaining phases are settled.
+The wider phase-1 exit and phases 2–4 stop, because ADR-0042 limits cst over
+Git to what the transition needs. Phase 5's scope moves into N2, with its
+transport in N5, and phase 6's remote program moves into N5. The bounded
+native read engine of ADR-0027 stays as shipped. See [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md).
