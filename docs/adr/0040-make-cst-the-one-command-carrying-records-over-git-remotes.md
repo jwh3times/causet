@@ -1,6 +1,6 @@
 # ADR-0040: Make `cst` the one command, carrying records over ordinary Git remotes
 
-- **Status:** Accepted; implementation notes 2026-10-15 (#255)
+- **Status:** Accepted; implementation notes 2026-10-15 (#255); bounded to Git-backed repositories by [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)
 - **Decided:** 2026-10-15
 - **Date:** 2026-10-15
 - **Owners:** Repository maintainers
@@ -244,3 +244,9 @@ text the owner accepted.
    only by URL or path is staged under `refs/causet-remote/url-<digest>`.
    `cst pull` has no `--json`, because Git's merge output already uses
    standard output.
+
+## Amendment 2026-10-17 (ADR-0046)
+
+This decision's passthrough to Git applies to Git-backed repositories only.
+[ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md) gives a native repository Git's everyday verbs and cst's own commands, and
+refuses `cst git …` and every unimplemented word there.

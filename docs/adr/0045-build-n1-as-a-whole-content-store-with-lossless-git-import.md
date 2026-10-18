@@ -1,6 +1,6 @@
 # ADR-0045: Build N1 as a whole-content store with lossless Git import
 
-- **Status:** Accepted (owner, 2026-10-17)
+- **Status:** Accepted (owner, 2026-10-17); command names in [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, NFR-PERF-06, NFR-PERF-07, NFR-PORT-01
@@ -141,9 +141,8 @@ binaries:
     - **Read-only:** in N1 a native repository is written only by import.
     - **Their equality oracle** is Git's own answer on the original:
       `cat-file` and `ls-tree`.
-    - **The real surface** is decided with the native command surface
-      ([#288](https://github.com/jwh3times/causet/issues/288)), and these
-      commands may change or go.
+    - **Their names** are set by [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md): `cst cat-file`, `cst ls-tree`,
+      `cst rev-parse`, `cst for-each-ref`, `cst fsck` and `cst import --verify`.
 12. **Layout and crates.**
     - **The marker:** a native repository is a directory with `.cst/` at its
       root, holding the store. That is the root marker ADR-0042's kind
