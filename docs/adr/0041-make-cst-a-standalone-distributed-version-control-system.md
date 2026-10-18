@@ -1,6 +1,6 @@
 # ADR-0041: Make cst a standalone distributed version control system
 
-- **Status:** Accepted (owner, 2026-10-17; see "Owner decision"); coexistence decided by [ADR-0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md)
+- **Status:** Accepted (owner, 2026-10-17; see "Owner decision"); coexistence decided by [ADR-0042](0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md), phase order by [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-01, GP-12, product thesis (§3), non-goals (§5),
@@ -108,6 +108,8 @@ These decisions answered "is Git insufficient for the causal layer?", and on tha
 - **Permissions are never presented as security they do not provide.** Client-side refusal is a guard against accidents. Only acceptance-point enforcement with verified identity is enforcement, and the product says which one applies.
 
 ## Proposed phase map
+
+The order, entry and exit of these phases are decided by [ADR-0043](0043-order-the-native-transition-by-dependency-starting-with-n1.md): N1 first, then N2; N3 then N4 beside N5; switch-over and N6 after N1–N5. The table's scope column stands.
 
 The Git bridge comes last (owner, 2026-10-17): the native system is made to stand on its own first, and N6 then connects it to Git hosting. The bridge still constrains every earlier phase ("Bridgeable from the start"). Each phase is one or more ADRs, and each keeps the equality discipline of Gate A while a Git-backed answer exists to compare against.
 
