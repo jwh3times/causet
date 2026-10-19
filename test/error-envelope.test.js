@@ -28,7 +28,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 
 const { errorCodes: ERROR_CODES, errorEnvelopeSchema: ERROR_ENVELOPE_SCHEMA } = registry();
 
-const sourceDirs = ["native/cli/src", "native/engine/src", "native/model/src"]
+const sourceDirs = ["native/cli/src", "native/engine/src", "native/model/src", "native/import/src"]
   .map((directory) => path.join(projectRoot, directory));
 
 const created = [];

@@ -1,6 +1,8 @@
 //! `cst`, the Rust command-line interface (ADR-0037). `front` decides each
 //! invocation byte for byte as the JavaScript CLI did, and `native` runs it;
 //! a command `cst` does not define is Git's, and runs `git` (ADR-0040).
+//! `cst import` and every command in a native repository are
+//! `native_repository`'s (ADR-0046).
 #![forbid(unsafe_code)]
 
 mod audit;
@@ -22,6 +24,7 @@ mod lineage;
 mod metadata;
 mod migration;
 mod native;
+mod native_repository;
 mod notes;
 mod notes_write;
 mod parsed;
@@ -51,6 +54,9 @@ const VERSION: &str = include_str!(concat!(env!("OUT_DIR"), "/version.txt"));
 fn main() {
   let raw: Vec<OsString> = env::args_os().skip(1).collect();
   let words: Vec<String> = raw.iter().map(|item| item.to_string_lossy().into_owned()).collect();
+  if let Some(code) = native_repository::intercept(&words, &raw) {
+    process::exit(code);
+  }
   if let Some(skip) = front::passthrough(&words) {
     process::exit(git(&raw[skip..]));
   }

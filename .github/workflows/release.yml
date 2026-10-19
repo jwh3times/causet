@@ -18,6 +18,7 @@ on:
     paths:
       - ".github/workflows/release.yml"
       - "bin/native/**"
+      - "native/Cargo.lock"
       - "scripts/pack-release.mjs"
       - "scripts/build-native.mjs"
       - "scripts/install.sh"
@@ -68,6 +69,9 @@ jobs:
           mkdir -p staged
           cp "native/target/release/${{ matrix.executable }}" staged/
           cp native/target/release/THIRD-PARTY-NOTICES.txt staged/
+          # The executable links zstd's C library (ADR-0045), whose own
+          # license must reach the notices, not only the Rust bindings'.
+          grep -q "For Zstandard software" staged/THIRD-PARTY-NOTICES.txt
           cp LICENSE staged/
           "staged/${{ matrix.executable }}" --version
           test "$("staged/${{ matrix.executable }}" --version)" = "causet $version"

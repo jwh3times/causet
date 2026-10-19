@@ -273,7 +273,8 @@ next one.
   new frame for the records after it. A large tree or chunk list can be that
   size.
 - **A frame under 1 MiB** occurs only as the last frame of its class in a
-  container, or as a delta's stored frame.
+  container, as the frame closed before a record of more than 4 MiB, or as a
+  delta's stored frame.
 - **The reason for 4 MiB.** The content-store research of
   [#287](https://github.com/jwh3times/causet/issues/287) put causet's unique
   8 KiB chunks in zstd-19 frames:

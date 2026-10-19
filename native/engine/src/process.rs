@@ -76,6 +76,10 @@ pub struct RunOptions {
   /// The doctor's deliberate process-cost probes, the one sanctioned read
   /// outside the seam.
   pub raw_probe: bool,
+  /// A read of the Git repository being imported into a native one (ADR-0045
+  /// decision 1). It is not a read of the repository a command works in, so
+  /// the seam does not apply to it.
+  pub import_read: bool,
   pub(crate) engine_read: bool,
 }
 
@@ -90,6 +94,7 @@ impl RunOptions {
       binary: false,
       max_buffer: DEFAULT_MAX_BUFFER,
       raw_probe: false,
+      import_read: false,
       engine_read: false,
     }
   }
@@ -146,7 +151,7 @@ fn errno(error: &std::io::Error) -> &'static str {
 pub fn run_git(args: &[String], options: &RunOptions) -> GitResult<GitOutput> {
   let command = command_name(args);
   let mutating = mutates(args);
-  if !mutating && !options.engine_read && !options.raw_probe {
+  if !mutating && !options.engine_read && !options.raw_probe && !options.import_read {
     // A read that did not come through the engine seam.
     metrics::record_direct_read(&command);
     if crate::engine::read_engine()? == crate::engine::ReadEngine::Native {
