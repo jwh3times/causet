@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Experimental: `cst import` makes a native repository** (#301, N1 of
+  ADR-0045). Behind `CAUSET_EXPERIMENTAL=native`, it copies every blob and tree
+  a Git repository's refs reach into a new directory holding `.cst/`, in the
+  format of the native store contract (`docs/native-store/`): content cut by
+  cst's FastCDC, zstd frames in one container with its index, and an alias
+  file mapping each Git ID to its native ID. In that directory
+  `cst cat-file -p`, `-t` and `-s` answer as `git cat-file` does on the
+  original, with native IDs, and run no Git; every other command is refused
+  with the new code `unavailable-in-native-repository`. A store that breaks
+  its contract is reported as `store-corrupt`. Nothing here is a contract
+  yet. Without the opt-in, `cst import` is refused instead of passing to Git,
+  which has no such command. The release builds now compile zstd's C library,
+  whose license is in the third-party notices.
 - **`cst pull --json` is refused by cst** (#275). `cst pull` has no JSON form,
   because Git's merge output uses standard output (ADR-0040), but the option
   went through to Git, which answered with its usage text. It is now refused

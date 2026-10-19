@@ -12,60 +12,117 @@ const K: [u32; 64] = [
 ];
 
 pub fn digest(data: &[u8]) -> [u8; 32] {
-  let mut state: [u32; 8] = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-  ];
-  let mut message = data.to_vec();
-  let bit_length = (data.len() as u64).wrapping_mul(8);
-  message.push(0x80);
-  while message.len() % 64 != 56 {
-    message.push(0);
+  let mut hasher = Sha256::new();
+  hasher.update(data);
+  hasher.finish()
+}
+
+/// SHA-256 over input given in parts, for data that is not in memory at once.
+#[derive(Clone)]
+pub struct Sha256 {
+  state: [u32; 8],
+  block: [u8; 64],
+  filled: usize,
+  length: u64,
+}
+
+impl Default for Sha256 {
+  fn default() -> Self {
+    Self::new()
   }
-  message.extend_from_slice(&bit_length.to_be_bytes());
-  for block in message.chunks_exact(64) {
-    let mut w = [0u32; 64];
-    for (index, word) in block.chunks_exact(4).enumerate() {
-      w[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
-    }
-    for index in 16..64 {
-      let s0 =
-        w[index - 15].rotate_right(7) ^ w[index - 15].rotate_right(18) ^ (w[index - 15] >> 3);
-      let s1 = w[index - 2].rotate_right(17) ^ w[index - 2].rotate_right(19) ^ (w[index - 2] >> 10);
-      w[index] = w[index - 16]
-        .wrapping_add(s0)
-        .wrapping_add(w[index - 7])
-        .wrapping_add(s1);
-    }
-    let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = state;
-    for index in 0..64 {
-      let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-      let choice = (e & f) ^ (!e & g);
-      let t1 = h
-        .wrapping_add(s1)
-        .wrapping_add(choice)
-        .wrapping_add(K[index])
-        .wrapping_add(w[index]);
-      let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-      let majority = (a & b) ^ (a & c) ^ (b & c);
-      let t2 = s0.wrapping_add(majority);
-      h = g;
-      g = f;
-      f = e;
-      e = d.wrapping_add(t1);
-      d = c;
-      c = b;
-      b = a;
-      a = t1.wrapping_add(t2);
-    }
-    for (slot, value) in state.iter_mut().zip([a, b, c, d, e, f, g, h]) {
-      *slot = slot.wrapping_add(value);
+}
+
+impl Sha256 {
+  pub fn new() -> Self {
+    Self {
+      state: [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+      ],
+      block: [0; 64],
+      filled: 0,
+      length: 0,
     }
   }
-  let mut out = [0u8; 32];
-  for (index, word) in state.iter().enumerate() {
-    out[index * 4..index * 4 + 4].copy_from_slice(&word.to_be_bytes());
+
+  pub fn update(&mut self, mut data: &[u8]) {
+    self.length = self.length.wrapping_add(data.len() as u64);
+    if self.filled > 0 {
+      let take = data.len().min(64 - self.filled);
+      self.block[self.filled..self.filled + take].copy_from_slice(&data[..take]);
+      self.filled += take;
+      data = &data[take..];
+      if self.filled < 64 {
+        return;
+      }
+      let block = self.block;
+      compress(&mut self.state, &block);
+      self.filled = 0;
+    }
+    let mut blocks = data.chunks_exact(64);
+    for block in &mut blocks {
+      compress(&mut self.state, block.try_into().expect("64 bytes"));
+    }
+    let rest = blocks.remainder();
+    self.block[..rest.len()].copy_from_slice(rest);
+    self.filled = rest.len();
   }
-  out
+
+  pub fn finish(mut self) -> [u8; 32] {
+    let bit_length = self.length.wrapping_mul(8);
+    let mut padding = vec![0x80u8];
+    while (self.filled + padding.len()) % 64 != 56 {
+      padding.push(0);
+    }
+    padding.extend_from_slice(&bit_length.to_be_bytes());
+    let length = self.length;
+    self.update(&padding);
+    self.length = length;
+    let mut out = [0u8; 32];
+    for (index, word) in self.state.iter().enumerate() {
+      out[index * 4..index * 4 + 4].copy_from_slice(&word.to_be_bytes());
+    }
+    out
+  }
+}
+
+fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
+  let mut w = [0u32; 64];
+  for (index, word) in block.chunks_exact(4).enumerate() {
+    w[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+  }
+  for index in 16..64 {
+    let s0 = w[index - 15].rotate_right(7) ^ w[index - 15].rotate_right(18) ^ (w[index - 15] >> 3);
+    let s1 = w[index - 2].rotate_right(17) ^ w[index - 2].rotate_right(19) ^ (w[index - 2] >> 10);
+    w[index] = w[index - 16]
+      .wrapping_add(s0)
+      .wrapping_add(w[index - 7])
+      .wrapping_add(s1);
+  }
+  let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *state;
+  for index in 0..64 {
+    let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+    let choice = (e & f) ^ (!e & g);
+    let t1 = h
+      .wrapping_add(s1)
+      .wrapping_add(choice)
+      .wrapping_add(K[index])
+      .wrapping_add(w[index]);
+    let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+    let majority = (a & b) ^ (a & c) ^ (b & c);
+    let t2 = s0.wrapping_add(majority);
+    h = g;
+    g = f;
+    f = e;
+    e = d.wrapping_add(t1);
+    d = c;
+    c = b;
+    b = a;
+    a = t1.wrapping_add(t2);
+  }
+  for (slot, value) in state.iter_mut().zip([a, b, c, d, e, f, g, h]) {
+    *slot = slot.wrapping_add(value);
+  }
 }
 
 /// Lowercase hexadecimal, as `createHash("sha256").digest("hex")` writes it.
@@ -78,7 +135,7 @@ pub fn hex(data: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-  use super::hex;
+  use super::{Sha256, digest, hex};
 
   #[test]
   fn known_answers() {
@@ -99,5 +156,21 @@ mod tests {
       hex(&vec![b'a'; 1_000_000]),
       "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"
     );
+  }
+
+  #[test]
+  fn input_in_parts_hashes_as_input_whole() {
+    let data: Vec<u8> = (0..1000u32).map(|i| (i * 7 + 3) as u8).collect();
+    for split in [0, 1, 55, 56, 63, 64, 65, 128, 999, 1000] {
+      let mut hasher = Sha256::new();
+      hasher.update(&data[..split]);
+      hasher.update(&data[split..]);
+      assert_eq!(hasher.finish(), digest(&data), "split at {split}");
+    }
+    let mut bytewise = Sha256::new();
+    for byte in &data {
+      bytewise.update(std::slice::from_ref(byte));
+    }
+    assert_eq!(bytewise.finish(), digest(&data));
   }
 }

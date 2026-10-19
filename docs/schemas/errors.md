@@ -67,6 +67,7 @@ code is a defect, not a category.
 | `unsafe-input` | An argument contained a character that is not safe to pass to Git. Remove it. |
 | `path-outside-repository` | A path escaped the repository root. Give a path inside the repository. |
 | `integrity-check-failed` | A declared hash did not match the bytes it covers. The artifact was altered or truncated. |
+| `store-corrupt` | A native repository's store does not match its published contract (docs/native-store/). Stop and surface this to a human; import the repository again. |
 
 ### Compatibility: the ADR-0020 contractual refusals
 
@@ -137,6 +138,7 @@ code is a defect, not a category.
 | `unsupported-feature` | The prototype does not implement this case. The message names the supported set. |
 | `unsupported-repository-shape` | The repository's history or object format is outside what this operation supports. |
 | `unsupported-range` | The named commit range is not one this operation can execute. The message says which rule it broke; name a range from an ancestor up to a branch tip. |
+| `unavailable-in-native-repository` | The command is not implemented in a native repository, which has no Git to pass it to. The message names the native command that does the job, when there is one. |
 
 ### Defects
 

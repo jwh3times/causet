@@ -71,6 +71,13 @@ Usage:
 Every other command is Git's: cst status, cst log, cst add and the rest run
 git with the same arguments.
 
+Experimental, and not contracts: they need CAUSET_EXPERIMENTAL=native, and
+their format and output may change without notice (ADR-0042, ADR-0045):
+  cst import <git-repo> <dest>                  copy a Git repository's blobs and
+                                                trees into a new native repository
+  cst cat-file (-p | -t | -s) <object>          in a native repository, print an
+                                                object; cst --help there lists the rest
+
 Plan legend: '=' proven covered/omit, '?' heuristic review, '+' new/replay.
 
 Global diagnostics:

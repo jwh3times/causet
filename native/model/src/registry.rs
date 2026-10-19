@@ -325,6 +325,10 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
     "A declared hash did not match the bytes it covers. The artifact was altered or truncated.",
   ),
   (
+    "store-corrupt",
+    "A native repository's store does not match its published contract (docs/native-store/). Stop and surface this to a human; import the repository again.",
+  ),
+  (
     "unknown-schema-version",
     "A record's schema version is outside what this build reads. Read it with the build that wrote it.",
   ),
@@ -463,6 +467,10 @@ pub const ERROR_CODES: &[(&str, &str)] = &[
   (
     "unsupported-range",
     "The named commit range is not one this operation can execute. The message says which rule it broke; name a range from an ancestor up to a branch tip.",
+  ),
+  (
+    "unavailable-in-native-repository",
+    "The command is not implemented in a native repository, which has no Git to pass it to. The message names the native command that does the job, when there is one.",
   ),
   (
     "internal-invariant",
