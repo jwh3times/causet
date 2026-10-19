@@ -22,6 +22,8 @@ promise starts when a later ADR makes it.
 - [Chunking and containers](storage.md): FastCDC as cst specifies it, the
   stored forms, compressed frames, containers and their index, deltas, and
   what the format costs against the storage gate.
+- [Chunker reference vectors](chunker-vectors.json): inputs with their cut
+  points and chunk IDs, described in [storage.md §2.5](storage.md#25-reference-vectors).
 
 ## Authority
 

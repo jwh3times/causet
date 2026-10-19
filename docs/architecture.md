@@ -150,6 +150,8 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/engine/src/session.rs` | The invocation-scoped object session (ADR-0009): one persistent `git cat-file --batch-command` process per repository, answering `info` and `contents` queries for the life of a `with_object_session` call. | `environment`, `errors`, `metrics`, `text`, causet-model |
 | `native/engine/src/text.rs` | The JavaScript string operations the Git engine applies to Git's output, reproduced exactly: `String.prototype.trim`, `split(/\r?\n/)`, `split(/\s+/)`, `Number(text)`, the default `Array.prototype.sort`, the `Change-Id` trailer expression, and `path.resolve` / `path.join`. | None |
 | `native/engine/src/types.rs` | What the cataloged operations return, and `canonicalValue` of each: the JSON `src/engine.js` digests for the engine differential, with members sorted, `undefined` as `null`, and bytes as `{ bytes, sha256 }`. | `text`, causet-model |
+| `native/store/src/chunker.rs` | FastCDC as `docs/native-store/storage.md` §2 specifies it: 2/8/64 KiB with normalization level 2, and the gear table derived from SHA-256. | None |
+| `native/store/src/lib.rs` | The native content store of N1 (ADR-0045, #297), built to the contract in `docs/native-store/`. | None |
 | `native/cli/src/audit.rs` | `cst audit identity`: the repository-wide identity audit of `src/identity-audit.js` (FR-ID-06) and its rendering in `src/cli.js`. | `notes`, causet-engine, causet-model |
 | `native/cli/src/capabilities.rs` | `cst capabilities` and `cst capabilities --against`, as `src/capabilities.js` and the formatters in `src/cli.js` answer them (ADR-0033). | `envelope`, `lineage`, causet-engine, causet-model |
 | `native/cli/src/cherry_pick.rs` | `cst cherry-pick`: `cherryPick` of `src/operations.js`, with the identity model's origin choice and coverage check. | `audit`, `host`, `metadata`, `notes_write`, `notes`, `provenance`, causet-engine, causet-model |
@@ -208,10 +210,12 @@ Supporting test and maintenance tools:
 | `test/fixtures/oracle/*.json` | The retired JavaScript CLI's answers, frozen in #243, that the Rust model, engine, and CLI suites are still held to (`test-support/oracle-vectors.js`) | Model, engine, and CLI probes |
 | `scripts/*.mjs` | Reproducible user experiments and performance comparisons | Published CLI behavior |
 
-The code is a Cargo workspace of four crates: `native/core` (`causet-core`,
+The code is a Cargo workspace of five crates: `native/core` (`causet-core`,
 bounded read-only object acquisition through gitoxide), `native/model` (the
-record model), `native/engine` (the Git engine), and `native/cli` (the `cst`
-executable, one module per command family). Third-party crates are limited to
+record model), `native/engine` (the Git engine), `native/store` (N1's native
+content store, built to [its contract](native-store/README.md); so far its
+chunker, which no command uses yet), and `native/cli` (the `cst` executable,
+one module per command family). Third-party crates are limited to
 gitoxide and crates it already brings into the workspace (pinned in
 `native/Cargo.lock`). Command modules are synchronous, so a CLI command has a
 linear, auditable control flow; the object and merge-tree sessions keep their
