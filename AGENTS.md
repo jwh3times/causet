@@ -5,7 +5,8 @@
 `native/` is the implementation, a Rust workspace: `core` (bounded read-only
 Git object access), `model` (the record model, the authority for every record
 family, bound and error code), `engine` (the Git engine; every repository read
-is an operation of its seam, `engine/src/engine.rs`), and `cli` (the `cst`
+is an operation of its seam, `engine/src/engine.rs`), `store` (N1's native
+content store, built to `docs/native-store/`), and `cli` (the `cst`
 command, one module per command family, with `front.rs` deciding each
 invocation). `bin/native/` is the npm launcher the main package ships. The
 JavaScript CLI that was the oracle until #243 is gone; its answers are frozen

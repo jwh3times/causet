@@ -13,8 +13,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const defaultRoot = fileURLToPath(new URL("../", import.meta.url));
 
 /** The directories whose files the module table lists, crates in dependency order. */
-export const SOURCE_ROOTS = ["native/core/src", "native/model/src", "native/engine/src", "native/cli/src", "bin/native"];
-const CRATES = { causet_core: "causet-core", causet_model: "causet-model", causet_engine: "causet-engine" };
+export const SOURCE_ROOTS = ["native/core/src", "native/model/src", "native/engine/src", "native/store/src", "native/cli/src", "bin/native"];
+const CRATES = { causet_core: "causet-core", causet_model: "causet-model", causet_engine: "causet-engine", causet_store: "causet-store" };
 
 function sourceFiles(root, directory) {
   const full = path.join(root, directory);

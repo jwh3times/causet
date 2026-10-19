@@ -95,6 +95,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "causet-store"
+version = "0.1.0"
+dependencies = [
+ "causet-model",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

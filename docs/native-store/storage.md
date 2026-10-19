@@ -42,8 +42,12 @@ must produce a byte-identical store (ADR-0045, decision 3).
 cst's chunker is **FastCDC** (Xia et al., USENIX ATC 2016) as specified here,
 with normalization level 2 (ADR-0045, decision 6). This text defines the cut
 points. No library does: the `fastcdc` crate's implementations cut differently
-from each other, so it serves only as a test oracle, as far as #300 finds it
-agrees.
+from each other, and its constructors take their masks from the crate's own
+table. It could reproduce these cut points only through its low-level
+`cut_gear` with cst's tables passed in, which would check that glue rather than
+give an independent reading, so cst does not use it, even as a test oracle
+(#300). The reference vectors (§2.5) were checked instead against a second
+implementation written from this text.
 
 ### 2.1 Parameters
 
@@ -195,9 +199,40 @@ into 30 chunks of these lengths:
 2923 3427 13349 8786 11405 11698 8368 9033 8955 544
 ```
 
-200,000 zero bytes cut into 65,536, 65,536, 65,536 and 3,392. The full
-reference vectors come with the chunker, in
-[#300](https://github.com/jwh3times/causet/issues/300).
+200,000 zero bytes cut into 65,536, 65,536, 65,536 and 3,392.
+
+### 2.5 Reference vectors
+
+[`chunker-vectors.json`](chunker-vectors.json) is part of this contract. Its
+`chunker` and `seed` are the chunk list's fields (objects.md §3.3), `01` and 0.
+Each of its `vectors` gives:
+
+- `name`;
+- `input`, the generator of the input bytes;
+- `length`, the input's length in bytes;
+- `sha256`, the input's SHA-256;
+- `lengths`, the chunk lengths in order;
+- `chunks`, each chunk's ID in text form, which is that of content with the
+  same bytes (objects.md §3).
+
+An `input` has a `kind`:
+
+| `kind` | Bytes |
+| --- | --- |
+| `zeros` | `length` zero bytes |
+| `example` | the SHA-256 digests of `cst fastcdc example` followed by `k` as a `u32`, for `k` from 0 to `count − 1`, concatenated in order; §2.4's input has `count` 8,192 |
+| `periodic` | `length` bytes, byte `i` being `i mod 251` |
+| `insert` | the bytes of `base`, another input, with the bytes `bytes` (hex) inserted before offset `offset` |
+
+The vectors cover:
+- inputs at and just past `MIN` and `MAX`, and empty input, which has no chunks;
+- both masks: a cut in the first loop and one in the second;
+- input that never meets a mask;
+- an insertion of 3 bytes into §2.4's input, after which 29 of its 30 chunks
+  recur.
+
+`native/store` checks every vector, and checks the gear table and the
+parameters against this text.
 
 ## 3. Frames
 
