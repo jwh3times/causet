@@ -1,7 +1,7 @@
 //! A native repository's commands (N1: ADR-0045 decision 11, ADR-0046
 //! decision 9). They are experimental and not contracts, behind the opt-in
 //! `CAUSET_EXPERIMENTAL=native` (ADR-0042 decision 5). `cst import` copies a
-//! Git repository's blobs and trees into a new native repository; in one,
+//! Git repository's objects and refs into a new native repository; in one,
 //! `cst cat-file` prints an object without running Git, and every other
 //! command is refused, because a native repository has no Git to pass it to
 //! (ADR-0046 decision 4).
@@ -10,7 +10,7 @@ use crate::environment;
 use crate::native::report;
 use causet_engine::errors::{GitError, GitResult};
 use causet_import::store_error;
-use causet_store::id::{GitAlgorithm, NativeId, Type, hex};
+use causet_store::id::{GitAlgorithm, NativeId, Type, hex, unhex};
 use causet_store::objects::{GitKind, Kind, Preserved, Target, Tree, parse_git_tree};
 use causet_store::store::Store;
 use std::ffi::OsString;
@@ -29,7 +29,8 @@ output may change without notice (ADR-0042).
 Usage:
   cst cat-file (-p | -t | -s) <object>      print an object, its type or its size;
                                             <object> is a native ID, a unique
-                                            prefix of one, or <tree>:<path>
+                                            prefix of one, or <tree>:<path>,
+                                            where a commit or tag names its tree
   cst import <git-repo> <dest>              make another native repository
   cst version
 
@@ -157,20 +158,23 @@ fn import(args: &[String]) -> GitResult<()> {
   };
   let _ = writeln!(
     out,
-    "Imported {source} into {destination}: {}, {}{preserved}, from a {} repository.",
+    "Imported {source} into {destination}: {}, {}{preserved}, {}, {}, from a {} repository.",
     count(imported.blobs, "blob"),
     count(imported.trees + imported.preserved_trees, "tree"),
+    count(imported.commits, "commit"),
+    count(imported.tags, "tag"),
     imported.algorithm
   );
+  let head = match imported.head {
+    Some(id) => format!("HEAD is at {id}."),
+    None => "HEAD is unborn.".into(),
+  };
   let _ = writeln!(
     out,
-    "Its {} and {} are not imported yet (#302). What each ref reaches:",
-    count(imported.commits, "commit"),
-    count(imported.tags, "tag")
+    "Its ref snapshot records {}, {} symbolic. {head}",
+    count(imported.refs, "ref"),
+    imported.symbolic
   );
-  for (name, kind, id) in &imported.refs {
-    let _ = writeln!(out, "{id} {kind}\t{name}");
-  }
   Ok(())
 }
 
@@ -396,6 +400,7 @@ fn resolve(store: &Store, object: &[u8]) -> GitResult<NativeId> {
   let Some(path) = path else {
     return Ok(root);
   };
+  let root = peeled(store, root)?;
   let missing = || {
     GitError::new(
       "not-found",
@@ -504,11 +509,107 @@ fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitRes
       );
     }
   } else if *kind == Type::Preserved {
-    out.extend_from_slice(&Preserved::decode(&body).map_err(corrupt)?.payload);
+    let preserved = Preserved::decode(&body).map_err(corrupt)?;
+    out.extend_from_slice(&translated(store, &preserved));
   } else {
     out.extend_from_slice(&body);
   }
   Ok(())
+}
+
+/// The header lines of a commit or tag that name the objects it is built on:
+/// a commit's `tree` and `parent`, and a tag's `object`.
+fn naming(kind: GitKind) -> &'static [&'static [u8]] {
+  match kind {
+    GitKind::Commit => &[b"tree ", b"parent "],
+    GitKind::Tag => &[b"object "],
+    GitKind::Tree => &[],
+  }
+}
+
+/// A commit's or tag's payload as `cat-file -p` prints it here: as Git
+/// prints it, with each Git ID of a header line that names an imported
+/// object (`naming`) translated to its native ID. Nothing else changes, not
+/// even an ID in a message or a signature.
+fn translated(store: &Store, preserved: &Preserved) -> Vec<u8> {
+  let payload = &preserved.payload;
+  let mut out = Vec::with_capacity(payload.len() + 256);
+  let mut rest = payload.as_slice();
+  let mut in_header = true;
+  while !rest.is_empty() {
+    let end = rest
+      .iter()
+      .position(|&byte| byte == b'\n')
+      .map_or(rest.len(), |at| at + 1);
+    let (line, after) = rest.split_at(end);
+    rest = after;
+    let text = line.strip_suffix(b"\n").unwrap_or(line);
+    if text.is_empty() {
+      in_header = false;
+    }
+    let native = in_header
+      .then(|| {
+        naming(preserved.kind)
+          .iter()
+          .find_map(|name| text.strip_prefix(*name).map(|id| (name, id)))
+      })
+      .flatten()
+      .and_then(|(name, id)| {
+        let id = std::str::from_utf8(id).ok()?;
+        if id.len() != preserved.algorithm.length() * 2 || id != id.to_ascii_lowercase() {
+          return None;
+        }
+        Some((name, alias(store, preserved.algorithm, &unhex(id)?)?))
+      });
+    match native {
+      Some((name, id)) => {
+        out.extend_from_slice(name);
+        out.extend_from_slice(id.hex().as_bytes());
+        out.extend_from_slice(&line[text.len()..]);
+      }
+      None => out.extend_from_slice(line),
+    }
+  }
+  out
+}
+
+/// What a commit or tag is built on, as `<rev>:<path>` peels it toward a
+/// tree: a commit's tree and a tag's object, through the alias map.
+fn peeled(store: &Store, id: NativeId) -> GitResult<NativeId> {
+  let mut id = id;
+  let mut seen = std::collections::HashSet::new();
+  loop {
+    // Git IDs cannot form a cycle, so only a damaged alias map can.
+    if !seen.insert(id) {
+      return Err(corrupt(format!("{id} names itself through the alias map")));
+    }
+    let read = store.read_known(&id).map_err(store_error)?;
+    if read.kind != Type::Preserved {
+      return Ok(id);
+    }
+    let preserved = Preserved::decode(&read.body).map_err(corrupt)?;
+    let Some(name) = naming(preserved.kind).first() else {
+      return Ok(id);
+    };
+    let header = preserved
+      .payload
+      .split(|&byte| byte == b'\n')
+      .take_while(|line| !line.is_empty())
+      .find_map(|line| line.strip_prefix(*name));
+    let next = header
+      .and_then(|value| std::str::from_utf8(value).ok())
+      .and_then(unhex)
+      .and_then(|digest| alias(store, preserved.algorithm, &digest));
+    id = next.ok_or_else(|| {
+      GitError::new(
+        "not-found",
+        format!(
+          "the {} {id} names no imported object to look a path up in",
+          preserved.kind.name()
+        ),
+      )
+    })?;
+  }
 }
 
 /// Git's `canon_mode`, which `ls-tree` and so `cat-file -p` print, with the
