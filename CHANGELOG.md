@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Experimental: `cst import` copies the whole history** (#302). Commits and
+  tags are now imported as preserved Git objects, byte for byte, signatures,
+  encodings and extra headers included, and every ref the source lists is
+  recorded in the native repository's ref snapshot with its own kind, symbolic
+  refs and `HEAD` included. The source is read with replacement disabled and
+  apart from the caller's Git variables, such as `GIT_DIR`; a linked worktree
+  is imported with its main worktree's refs, and what only another worktree
+  reaches is imported too, though not recorded. A shallow clone, a partial clone
+  or a repository with grafts is refused with `unsupported-repository-shape`
+  before anything is written. `cst cat-file -p` prints a commit or tag with
+  the IDs it is built on in native form, and `<commit>:<path>` looks a path up
+  in its tree. A native repository made by an earlier build has no snapshot
+  and must be imported again.
 - **Experimental: `cst import` makes a native repository** (#301, N1 of
   ADR-0045). Behind `CAUSET_EXPERIMENTAL=native`, it copies every blob and tree
   a Git repository's refs reach into a new directory holding `.cst/`, in the

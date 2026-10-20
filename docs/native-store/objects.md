@@ -506,8 +506,10 @@ permissions need no change to it later.
 
 The **alias map** is two-way: it maps (Git algorithm, Git ID) to native ID,
 and back (decision 5). It covers every imported Git object, which is every
-object reachable from the refs the snapshot records (§6), and no other. An
-unreachable object in the Git repository is not imported. The map has a row
+object reachable from what Git's `--all` starts from, and no other: the refs
+the snapshot records (§6), and other worktrees' `HEAD` and per-worktree refs,
+which it does not record. An unreachable object in the Git repository is not
+imported. The map has a row
 for each object:
 
 - each blob, to its content;

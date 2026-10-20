@@ -68,6 +68,8 @@ pub fn mutates(args: &[String]) -> bool {
 pub struct RunOptions {
   pub cwd: String,
   pub env: Vec<(String, String)>,
+  /// Variables of the inherited environment that Git must not see.
+  pub env_remove: Vec<String>,
   pub input: Option<Vec<u8>>,
   pub allow_failure: bool,
   pub trim: bool,
@@ -88,6 +90,7 @@ impl RunOptions {
     Self {
       cwd: cwd.to_string(),
       env: Vec::new(),
+      env_remove: Vec::new(),
       input: None,
       allow_failure: false,
       trim: true,
@@ -122,6 +125,11 @@ impl RunOptions {
 
   pub fn env(mut self, name: &str, value: &str) -> Self {
     self.env.push((name.to_string(), value.to_string()));
+    self
+  }
+
+  pub fn env_remove(mut self, name: &str) -> Self {
+    self.env_remove.push(name.to_string());
     self
   }
 }
@@ -173,7 +181,11 @@ pub fn run_git(args: &[String], options: &RunOptions) -> GitResult<GitOutput> {
       ("command", string(&command)),
     ],
   );
-  let spawned = Command::new("git")
+  let mut git = Command::new("git");
+  for name in &options.env_remove {
+    git.env_remove(name);
+  }
+  let spawned = git
     .args(args)
     .current_dir(&options.cwd)
     .env("GIT_TERMINAL_PROMPT", "0")

@@ -887,16 +887,18 @@ Git's, so `--json` and `--engine` there mean what Git makes of them.
 **Experimental: native repositories** (N1,
 [ADR-0045](docs/adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)).
 With `CAUSET_EXPERIMENTAL=native` set, `cst import <git-repo> <dest>` copies
-every blob and tree a Git repository's refs reach into a new native
-repository: a directory holding `.cst/`, in the format of
-[the native store contract](docs/native-store/README.md). There,
+every object a Git repository's refs reach into a new native repository, and
+records every ref in a snapshot: a directory holding `.cst/`, in the format of
+[the native store contract](docs/native-store/README.md). Commits and tags
+are kept in Git's encoding, byte for byte. A shallow clone, a partial clone,
+or a repository with grafts is refused, since Git reads its history
+differently from what it stores. In a native repository,
 `cst cat-file (-p | -t | -s) <object>` prints what `git cat-file` prints on
 the original, with native IDs in place of Git's, and runs no Git; every other
 command is refused, because a native repository has no Git to pass it to
 ([ADR-0046](docs/adr/0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)).
 None of this is a contract yet: the format and the output may change, and a
-native repository may have to be imported again. Commits, tags and refs come
-next ([#302](https://github.com/jwh3times/causet/issues/302)).
+native repository may have to be imported again.
 
 A command `cst` defines refuses an option it does not take with
 `usage-unknown-option` rather than ignoring it; for `init`, `commit`,
