@@ -6,7 +6,7 @@ use crate::alias::Aliases;
 use crate::chunker;
 use crate::container::{Container, ContainerWriter, Form, PRESENT, Record};
 use crate::id::{GitAlgorithm, NativeId, Type, unhex};
-use crate::objects::{ChunkList, Preserved, Tree};
+use crate::objects::{ChunkList, Preserved, RefTarget, Snapshot, Tree};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -129,21 +129,39 @@ impl StoreWriter {
     self.aliases.push((git_digest, id));
   }
 
-  /// Writes the container and the alias file, then the marker, and renames
-  /// the store into place: the commit point.
-  pub fn finish(mut self) -> Result<PathBuf, StoreError> {
-    let container = self.container.take().expect("an open container");
-    if container.is_empty() {
-      let temporary = self.staging.join("objects").join("writing.tmp");
-      drop(container);
-      std::fs::remove_file(&temporary).map_err(|error| StoreError::io(&temporary, error))?;
-    } else {
-      container.finish()?;
+  /// Stores the ref snapshot, then writes the container, the alias file, the
+  /// `snapshot` file and the marker, and renames the store into place: the
+  /// commit point. Each direct ref must name a stored object with an alias
+  /// row (objects.md §6).
+  pub fn finish(mut self, snapshot: &Snapshot) -> Result<PathBuf, StoreError> {
+    if snapshot.algorithm != self.algorithm {
+      return Err(StoreError::Codec(format!(
+        "a {} snapshot cannot finish a {} store",
+        snapshot.algorithm.name(),
+        self.algorithm.name()
+      )));
     }
+    let aliased: HashSet<NativeId> = self.aliases.iter().map(|(_, id)| *id).collect();
+    for entry in &snapshot.refs {
+      if let RefTarget::Direct(id) = &entry.target
+        && !(self.present.contains(id) && aliased.contains(id))
+      {
+        return Err(StoreError::Codec(format!(
+          "the snapshot's ref {} names {id}, which is not an imported object",
+          String::from_utf8_lossy(&entry.name)
+        )));
+      }
+    }
+    let id = self.put_metadata(Type::Snapshot, &snapshot.encode())?;
+    self.container.take().expect("an open container").finish()?;
     let aliases = Aliases::new(self.algorithm, std::mem::take(&mut self.aliases))
       .map_err(StoreError::Corrupt)?;
     let file = self.staging.join("aliases").join(self.algorithm.name());
     write(&file, &aliases.encode())?;
+    write(
+      &self.staging.join("snapshot"),
+      format!("{}\n", id.hex()).as_bytes(),
+    )?;
     write(&self.staging.join("format"), FORMAT)?;
     let store = self.root.join(".cst");
     std::fs::rename(&self.staging, &store).map_err(|error| StoreError::io(&store, error))?;
@@ -167,6 +185,8 @@ pub struct Object {
 /// container's index, checked; objects are read and verified on demand.
 pub struct Store {
   pub root: PathBuf,
+  /// The current ref snapshot's ID, which the store holds.
+  pub snapshot: NativeId,
   containers: Vec<Container>,
   aliases: Vec<Aliases>,
   frame: RefCell<Option<((usize, u32), std::rc::Rc<Vec<u8>>)>>,
@@ -215,12 +235,68 @@ impl Store {
       .iter()
       .map(|path| Container::open(path))
       .collect::<Result<Vec<_>, _>>()?;
-    Ok(Store {
+    let file = store.join("snapshot");
+    let named = std::fs::read(&file).map_err(|error| match error.kind() {
+      std::io::ErrorKind::NotFound => StoreError::Corrupt(format!(
+        "{} is missing, so the store names no refs",
+        file.display()
+      )),
+      _ => StoreError::io(&file, error),
+    })?;
+    let snapshot = std::str::from_utf8(&named)
+      .ok()
+      .and_then(|text| text.strip_suffix('\n'))
+      .filter(|hex| hex.len() == 64 && *hex == hex.to_lowercase())
+      .and_then(NativeId::from_hex)
+      .ok_or_else(|| {
+        StoreError::Corrupt(format!(
+          "{} does not hold a native ID as 64 lowercase hex digits and a line feed",
+          file.display()
+        ))
+      })?;
+    let store = Store {
       root: root.to_path_buf(),
+      snapshot,
       containers,
       aliases,
       frame: RefCell::new(None),
-    })
+    };
+    match store.locate(&snapshot) {
+      Some((_, record)) if record.state == PRESENT && record.kind == Type::Snapshot => Ok(store),
+      _ => Err(StoreError::Corrupt(format!(
+        "{} names {snapshot}, which the store does not hold as a ref snapshot",
+        file.display()
+      ))),
+    }
+  }
+
+  /// The current ref snapshot, with each direct ref checked to name a present
+  /// object of the snapshot's Git algorithm (objects.md §6).
+  pub fn refs(&self) -> Result<Snapshot, StoreError> {
+    let read = self.read_known(&self.snapshot)?;
+    let corrupt = |what: String| StoreError::Corrupt(format!("{}: {what}", self.snapshot));
+    let snapshot = Snapshot::decode(&read.body).map_err(corrupt)?;
+    let aliases = self.aliases_for(snapshot.algorithm);
+    for entry in &snapshot.refs {
+      if let RefTarget::Direct(id) = &entry.target {
+        let name = String::from_utf8_lossy(&entry.name);
+        if !self
+          .locate(id)
+          .is_some_and(|(_, record)| record.state == PRESENT)
+        {
+          return Err(corrupt(format!(
+            "its ref {name} names {id}, which the store does not hold"
+          )));
+        }
+        if aliases.and_then(|aliases| aliases.git(id)).is_none() {
+          return Err(corrupt(format!(
+            "its ref {name} names {id}, which has no {} alias row",
+            snapshot.algorithm.name()
+          )));
+        }
+      }
+    }
+    Ok(snapshot)
   }
 
   pub fn aliases(&self) -> &[Aliases] {

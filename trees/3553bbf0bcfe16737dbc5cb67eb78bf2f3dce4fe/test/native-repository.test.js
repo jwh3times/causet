@@ -1,9 +1,11 @@
 /**
- * A native repository (N1, ADR-0045, #301): `cst import` copies a Git
- * repository's blobs and trees into one, and there `cst cat-file` answers as
- * `git cat-file` does on the original, byte for byte once IDs are translated
- * through the alias map, without running Git. Both are experimental and
- * refused without `CAUSET_EXPERIMENTAL=native`.
+ * A native repository (N1, ADR-0045, #301 and #302): `cst import` copies
+ * every object a Git repository's refs reach into one, and its refs into a
+ * snapshot; there `cst cat-file` answers as `git cat-file` does on the
+ * original, byte for byte once IDs are translated through the alias map,
+ * without running Git. A source Git reads differently from its stored
+ * objects (shallow, partial or grafted) is refused. Both commands are
+ * experimental and refused without `CAUSET_EXPERIMENTAL=native`.
  */
 
 import assert from "node:assert/strict";
@@ -13,6 +15,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
+import { pathToFileURL } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
@@ -61,7 +64,11 @@ function varied(length, label) {
  * allows still occur: an executable, a symbolic link, a submodule link, an
  * empty file, names that need quoting, a directory beside a name it
  * prefixes, a file the chunker cuts and a second version sharing its chunks,
- * a tree that is not canonical, and tags on a blob and a tree.
+ * a tree that is not canonical, and tags on a blob and a tree. Its commits
+ * and tags carry what a payload must keep byte for byte: a signature, a
+ * message that is not UTF-8 with its encoding header, an extra header, a
+ * mergetag, a message naming a commit by its full ID, a tag with an inline
+ * signature, and a tag of a tag.
  */
 function makeSource(format) {
   const root = scratch();
@@ -109,10 +116,47 @@ function makeSource(format) {
   ]);
   const odd = git(["hash-object", "-t", "tree", "-w", "--literally", "--stdin"], literal).toString().trim();
   const parent = git(["mktree"], Buffer.from(`040000 tree ${odd}\tweird\n100644 blob ${zz}\tzz\n`)).toString().trim();
-  git(["update-ref", "refs/heads/odd", commit([["100644", zz, "top"]], "three", second)]);
+  const three = commit([["100644", zz, "top"]], "three", second);
+  git(["update-ref", "refs/heads/odd", three]);
   git(["tag", "tree-tag", parent]);
   git(["tag", "-a", "-m", "a blob", "blob-tag", zz]);
-  return { root, repo, git, odd, parent };
+
+  const literally = (kind, bytes) => git(["hash-object", "-t", kind, "-w", "--literally", "--stdin"], bytes).toString().trim();
+  const people = [`author ${IDENTITY.GIT_AUTHOR_NAME} <${IDENTITY.GIT_AUTHOR_EMAIL}> ${IDENTITY.GIT_AUTHOR_DATE}`,
+    `committer ${IDENTITY.GIT_COMMITTER_NAME} <${IDENTITY.GIT_COMMITTER_EMAIL}> ${IDENTITY.GIT_COMMITTER_DATE}`];
+  const tagger = `tagger ${IDENTITY.GIT_COMMITTER_NAME} <${IDENTITY.GIT_COMMITTER_EMAIL}> ${IDENTITY.GIT_COMMITTER_DATE}`;
+  const tree2 = git(["rev-parse", `${second}^{tree}`]).toString().trim();
+  const signed = literally("commit", Buffer.concat([
+    Buffer.from([`tree ${tree2}`, `parent ${second}`, ...people, "encoding ISO-8859-1", "change-id zxyw",
+      "gpgsig -----BEGIN PGP SIGNATURE-----", " ", " iQEzBAABCAAdFiEEexample", " =abcd", " -----END PGP SIGNATURE-----",
+      "", ""].join("\n")),
+    Buffer.from([0x63, 0x61, 0x66, 0xe9]), Buffer.from(` reverts ${first}\n`),
+  ]));
+  const merge = literally("commit", Buffer.from([`tree ${tree2}`, `parent ${signed}`, `parent ${three}`, ...people,
+    `mergetag object ${three}`, " type commit", " tag v-three", ` ${tagger}`, " ", " the third", "", "merge, no newline"].join("\n")));
+  git(["update-ref", "refs/heads/signed", merge]);
+  const signedTag = literally("tag", Buffer.from([`object ${signed}`, "type commit", "tag signed-tag", tagger, "",
+    "a signed tag", "-----BEGIN PGP SIGNATURE-----", "", "iQEzexample", "-----END PGP SIGNATURE-----", ""].join("\n")));
+  git(["update-ref", "refs/tags/signed-tag", signedTag]);
+  const chain = literally("tag", Buffer.from([`object ${signedTag}`, "type tag", "tag chain", tagger, "", "on a tag", ""].join("\n")));
+  git(["update-ref", "refs/tags/chain", chain]);
+  return { root, repo, git, odd, parent, first, second, signed, merge, chain };
+}
+
+/**
+ * `cat-file -p` of a commit or tag as a native repository prints it: Git's
+ * payload with the IDs of the header lines that name what it is built on
+ * (a commit's tree and parents, a tag's object) translated.
+ */
+function translateHeaders(kind, text, rows) {
+  const names = kind === "commit" ? ["tree", "parent"] : ["object"];
+  const lines = text.split("\n");
+  const end = lines.indexOf("");
+  return lines.map((line, index) => {
+    const [name, id] = line.split(" ");
+    return (end === -1 || index < end) && names.includes(name) && line === `${name} ${id}` && rows.has(id)
+      ? `${name} ${rows.get(id)}` : line;
+  }).join("\n");
 }
 
 /** The alias file's rows, Git ID → native ID, both as hex. */
@@ -137,35 +181,40 @@ function imported(format) {
 }
 
 for (const format of ["sha1", "sha256"]) {
-  test(`every imported blob and tree prints as git cat-file prints it (${format})`, () => {
+  test(`every object the refs reach is imported and prints as git cat-file prints it (${format})`, () => {
     const { git, destination, aliases: rows } = imported(format);
     const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]).toString().trim().split("\n");
     const kinds = new Map(objects.map((id) => [id, git(["cat-file", "-t", id]).toString().trim()]));
-    const contentAndTrees = objects.filter((id) => ["blob", "tree"].includes(kinds.get(id)));
-    assert.equal(rows.size, contentAndTrees.length, "one alias row per imported blob and tree");
+    assert.deepEqual(new Set(kinds.values()), new Set(["blob", "tree", "commit", "tag"]));
+    assert.equal(rows.size, objects.length, "one alias row per object rev-list --objects --all reports, and no others");
     const translate = (text) => text.replace(new RegExp(`\\b[0-9a-f]{${format === "sha1" ? 40 : 64}}\\b`, "g"),
       (id) => rows.get(id) ?? id);
-    for (const id of contentAndTrees) {
+    for (const id of objects) {
       const native = rows.get(id);
       assert.ok(native, `${id} has an alias row`);
+      const kind = kinds.get(id);
       for (const flag of ["-p", "-t", "-s"]) {
         const expected = git(["cat-file", flag, id]);
         const answered = cst(destination, ["cat-file", flag, native]);
         assert.equal(answered.status, 0, answered.stderr.toString());
-        const wanted = kinds.get(id) === "tree" && flag === "-p"
-          ? Buffer.from(translate(expected.toString("latin1")), "latin1")
-          : expected;
-        assert.deepEqual(answered.stdout, wanted, `cat-file ${flag} ${id} (${kinds.get(id)})`);
+        let wanted = expected;
+        if (flag === "-p" && kind === "tree") {
+          wanted = Buffer.from(translate(expected.toString("latin1")), "latin1");
+        } else if (flag === "-p" && kind !== "blob") {
+          wanted = Buffer.from(translateHeaders(kind, expected.toString("latin1"), rows), "latin1");
+        }
+        assert.deepEqual(answered.stdout, wanted, `cat-file ${flag} ${id} (${kind})`);
       }
     }
   });
 }
 
-test("a path through trees, and an unambiguous prefix, name the object Git names", () => {
-  const { git, destination, aliases: rows, parent } = imported("sha1");
+test("a path through trees, commits and tags, and an unambiguous prefix, name the object Git names", () => {
+  const { git, destination, aliases: rows, parent, second, chain } = imported("sha1");
   const root = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());
   for (const [native, revision] of [[`${root}:a/f`, "main:a/f"], [`${root.slice(0, 10)}:big.bin`, "main:big.bin"],
-    [`${rows.get(parent)}:weird/zz`, `${parent}:weird/zz`]]) {
+    [`${rows.get(parent)}:weird/zz`, `${parent}:weird/zz`], [`${rows.get(second)}:a/f`, `${second}:a/f`],
+    [`${rows.get(chain)}:hello.txt`, `${chain}:hello.txt`]]) {
     const answered = cst(destination, ["cat-file", "-p", native]);
     assert.equal(answered.status, 0, answered.stderr.toString());
     assert.deepEqual(answered.stdout, git(["cat-file", "-p", revision]));
@@ -175,14 +224,14 @@ test("a path through trees, and an unambiguous prefix, name the object Git names
   assert.match(missing.stderr.toString(), /path 'no\/such\/path' does not exist/);
 });
 
-test("import reports each ref and keeps a tree that is not canonical in Git's encoding", () => {
-  const { stdout, aliases: rows, odd, git } = imported("sha1");
-  assert.match(stdout, /1 kept in Git's encoding/);
-  assert.match(stdout, /not imported yet \(#302\)/);
-  const tree = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());
-  assert.match(stdout, new RegExp(`^${tree} tree\\trefs/heads/main$`, "m"));
-  assert.match(stdout, new RegExp(`^${rows.get(git(["rev-parse", "blob-tag^{}"]).toString().trim())} blob\\trefs/tags/blob-tag$`, "m"));
+test("import reports what it wrote and keeps a tree that is not canonical in Git's encoding", () => {
+  const { stdout, aliases: rows, odd, second, destination } = imported("sha1");
+  assert.match(stdout, /^Imported source into native: \d+ blobs, \d+ trees, 1 kept in Git's encoding, 5 commits, 3 tags, from a sha1 repository\.$/m);
+  assert.match(stdout, new RegExp(`^Its ref snapshot records 8 refs, 1 symbolic\\. HEAD is at ${rows.get(second)}\\.$`, "m"));
   assert.ok(rows.get(odd));
+  const snapshot = fs.readFileSync(path.join(destination, ".cst", "snapshot"), "latin1");
+  assert.match(snapshot, /^[0-9a-f]{64}\n$/);
+  assert.equal(cst(destination, ["cat-file", "-t", snapshot.trim()]).stdout.toString(), "snapshot\n");
 });
 
 test("reading a native repository runs no Git", () => {
@@ -314,4 +363,90 @@ test("a path resolves, or fails, wherever Git's does", () => {
       }
     }
   }
+});
+
+test("a replacement ref is recorded, and the object it replaces imports as stored", () => {
+  const root = scratch();
+  const repo = path.join(root, "source");
+  fs.mkdirSync(repo);
+  const git = gitIn(repo);
+  git(["init", "-q", "-b", "main"]);
+  const tree = git(["write-tree"]).toString().trim();
+  const stored = git(["commit-tree", tree, "-m", "as stored"]).toString().trim();
+  const replacement = git(["commit-tree", tree, "-m", "the replacement"]).toString().trim();
+  git(["update-ref", "refs/heads/main", stored]);
+  git(["replace", stored, replacement]);
+  assert.match(git(["cat-file", "-p", stored]).toString(), /the replacement/, "Git itself reads the replacement");
+  const result = cst(root, ["import", "source", "native"]);
+  assert.equal(result.status, 0, result.stderr.toString());
+  assert.match(result.stdout.toString(), /records 3 refs, 1 symbolic/);
+  const destination = path.join(root, "native");
+  const rows = aliases(destination, "sha1");
+  const printed = cst(destination, ["cat-file", "-p", rows.get(stored)]).stdout.toString();
+  assert.equal(printed, translateHeaders("commit", git(["--no-replace-objects", "cat-file", "-p", stored]).toString(), rows));
+  assert.match(printed, /as stored/);
+  assert.ok(rows.get(replacement), "the replacement, which its ref reaches, is imported too");
+});
+
+test("shallow, partial and grafted sources are refused before anything is written, each naming why", () => {
+  const { root, repo, git, first } = makeSource("sha1");
+  git(["config", "uploadpack.allowFilter", "true"]);
+  const url = pathToFileURL(repo).href;
+  const clone = (name, args) => {
+    execFileSync("git", ["clone", "-q", "--no-checkout", ...args, url, name], { cwd: root, env: testEnv(IDENTITY) });
+    return name;
+  };
+  const grafted = clone("grafted", []);
+  // A promisor remote whose name holds a space, and one whose value is true
+  // in a spelling Git accepts, each the only sign of a partial clone (older
+  // Git also writes extensions.partialClone, which goes).
+  const spaced = clone("spaced", ["--filter=blob:none"]);
+  execFileSync("git", ["config", "--rename-section", "remote.origin", "remote.a b"], { cwd: path.join(root, spaced), env: testEnv() });
+  spawnSync("git", ["config", "--unset", "extensions.partialClone"], { cwd: path.join(root, spaced), env: testEnv() });
+  const spelled = clone("spelled", ["--filter=blob:none"]);
+  execFileSync("git", ["config", "remote.origin.promisor", "1k"], { cwd: path.join(root, spelled), env: testEnv() });
+  spawnSync("git", ["config", "--unset", "extensions.partialClone"], { cwd: path.join(root, spelled), env: testEnv() });
+  fs.writeFileSync(path.join(root, grafted, ".git", "info", "grafts"), `# a comment\n${first}\n`);
+  for (const [source, reason] of [
+    [clone("shallow", ["--depth", "1"]), /is a shallow clone/],
+    [clone("partial", ["--filter=blob:none"]), /is a partial clone \(\S+\)/],
+    [grafted, /has grafts/],
+    [spaced, /is a partial clone \(remote\.a b\.promisor\)/],
+    [spelled, /is a partial clone \(remote\.origin\.promisor\)/],
+  ]) {
+    const refused = cst(root, ["import", source, `${source}-native`]);
+    assert.equal(refused.status, 1, source);
+    assert.match(refused.stderr.toString(), reason, source);
+    assert.match(refused.stderr.toString(), /cannot be imported exactly/, source);
+    assert.equal(fs.existsSync(path.join(root, `${source}-native`)), false, `${source}: nothing is written`);
+  }
+  fs.writeFileSync(path.join(root, grafted, ".git", "info", "grafts"), "# only a comment\n\n");
+  const commented = cst(root, ["import", grafted, "commented-native"]);
+  assert.equal(commented.status, 0, commented.stderr.toString());
+});
+
+test("import reads the repository it names: a linked worktree's main refs, whatever Git variables the caller set", () => {
+  const { root, repo, git, first, second } = makeSource("sha1");
+  git(["worktree", "add", "-q", "--no-checkout", "-b", "elsewhere", path.join(root, "linked"), first]);
+  // A commit only a detached worktree's HEAD reaches: imported, not recorded.
+  git(["worktree", "add", "-q", "--no-checkout", "--detach", path.join(root, "detached"), first]);
+  const alone = gitIn(path.join(root, "detached"));
+  const blob = alone(["hash-object", "-w", "--stdin"], "only in a worktree\n").toString().trim();
+  const tree = alone(["mktree"], `100644 blob ${blob}\tlone\n`).toString().trim();
+  alone(["update-ref", "--no-deref", "HEAD", alone(["commit-tree", tree, "-m", "lone"]).toString().trim()]);
+  const other = path.join(root, "other");
+  fs.mkdirSync(other);
+  gitIn(other)(["init", "-q"]);
+  const grafts = path.join(root, "grafts");
+  fs.writeFileSync(grafts, `${second}\n`);
+  const result = cst(root, ["import", "linked", "native"], {
+    ...OPT_IN, GIT_DIR: path.join(other, ".git"), GIT_NAMESPACE: "hidden", GIT_GRAFT_FILE: grafts,
+  });
+  assert.equal(result.status, 0, result.stderr.toString());
+  const rows = aliases(path.join(root, "native"), "sha1");
+  assert.match(result.stdout.toString(), new RegExp(`HEAD is at ${rows.get(second)}\\.`), "the main worktree's HEAD");
+  assert.match(result.stdout.toString(), /records 9 refs/, "the main worktree's refs, and the new branch");
+  const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]).toString().trim().split("\n");
+  assert.equal(rows.size, objects.length, "the grafted-away history, and what only a worktree reaches, are imported too");
+  assert.ok(rows.get(blob));
 });

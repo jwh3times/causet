@@ -1,6 +1,6 @@
 //! The bodies of the N1 object types (objects.md §3–§5): chunk lists, native
-//! trees and their Git encoding, and preserved Git objects, each with the
-//! rules a reader checks.
+//! trees and their Git encoding, preserved Git objects, and ref snapshots
+//! (§6), each with the rules a reader checks.
 
 use crate::encoding::{Reader, put_bytes, put_varint};
 use crate::id::{GitAlgorithm, GitId, NativeId};
@@ -325,6 +325,123 @@ impl Preserved {
   }
 }
 
+/// What a ref in a snapshot points to (objects.md §6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefTarget {
+  Direct(NativeId),
+  Symbolic(Vec<u8>),
+}
+
+/// One ref of a snapshot.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ref {
+  pub name: Vec<u8>,
+  pub target: RefTarget,
+}
+
+/// A repository's refs at one import, verbatim (objects.md §6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot {
+  pub algorithm: GitAlgorithm,
+  pub refs: Vec<Ref>,
+}
+
+fn ref_name(name: &[u8]) -> bool {
+  !name.is_empty() && !name.contains(&0)
+}
+
+impl Snapshot {
+  /// A snapshot of these refs in byte order of their names; two refs of one
+  /// name, or a name the contract does not allow, are refused.
+  pub fn new(algorithm: GitAlgorithm, mut refs: Vec<Ref>) -> Result<Snapshot, String> {
+    refs.sort_by(|a, b| a.name.cmp(&b.name));
+    let snapshot = Snapshot { algorithm, refs };
+    snapshot.check()?;
+    Ok(snapshot)
+  }
+
+  /// The rules a snapshot's own bytes must keep. Whether each direct target
+  /// is present and has an alias row is the store's to check.
+  fn check(&self) -> Result<(), String> {
+    for (index, entry) in self.refs.iter().enumerate() {
+      let shown = String::from_utf8_lossy(&entry.name);
+      if !ref_name(&entry.name) {
+        return Err(format!(
+          "a snapshot has the ref name {shown:?}, which is empty or holds a NUL"
+        ));
+      }
+      if let RefTarget::Symbolic(target) = &entry.target
+        && !ref_name(target)
+      {
+        return Err(format!(
+          "a snapshot's ref {shown} is symbolic to a name that is empty or holds a NUL"
+        ));
+      }
+      if index > 0 && self.refs[index - 1].name >= entry.name {
+        return Err(format!(
+          "a snapshot's refs are not in byte order of their names, with none equal, at {shown}"
+        ));
+      }
+    }
+    Ok(())
+  }
+
+  pub fn encode(&self) -> Vec<u8> {
+    let mut out = vec![self.algorithm.code()];
+    put_varint(&mut out, self.refs.len() as u64);
+    for entry in &self.refs {
+      put_bytes(&mut out, &entry.name);
+      match &entry.target {
+        RefTarget::Direct(id) => {
+          out.push(1);
+          id.put(&mut out);
+        }
+        RefTarget::Symbolic(target) => {
+          out.push(2);
+          put_bytes(&mut out, target);
+        }
+      }
+    }
+    out
+  }
+
+  pub fn decode(body: &[u8]) -> Result<Snapshot, String> {
+    let mut reader = Reader::new(body);
+    let code = reader.u8()?;
+    let algorithm = GitAlgorithm::from_code(code)
+      .ok_or_else(|| format!("a snapshot has the Git algorithm {code:02x}, which is reserved"))?;
+    let count = reader.varint()?;
+    // Each ref takes at least 3 bytes, so a count past the body is refused
+    // before anything is allocated for it.
+    if count > body.len() as u64 / 3 {
+      return Err(format!(
+        "a snapshot says it has {count} refs, more than its bytes hold"
+      ));
+    }
+    let mut refs = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+      let name = reader.bytes()?.to_vec();
+      let target = match reader.u8()? {
+        1 => RefTarget::Direct(NativeId::read(&mut reader)?),
+        2 => RefTarget::Symbolic(reader.bytes()?.to_vec()),
+        kind => {
+          return Err(format!(
+            "a snapshot's ref {} has the kind {kind:02x}, which is reserved",
+            String::from_utf8_lossy(&name)
+          ));
+        }
+      };
+      refs.push(Ref { name, target });
+    }
+    if !reader.is_empty() {
+      return Err("a snapshot has bytes after its last ref".into());
+    }
+    let snapshot = Snapshot { algorithm, refs };
+    snapshot.check()?;
+    Ok(snapshot)
+  }
+}
+
 /// One record of a Git tree, as Git wrote it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GitEntry {
@@ -509,5 +626,65 @@ committer C O Mitter <committer@example.com> 1112911993 -0700\n\nAdd hello\n";
       (b"040000".as_slice(), b"sub".as_slice())
     );
     assert_eq!(Kind::from_git_mode(&entries[0].mode), None);
+  }
+
+  #[test]
+  fn snapshots_are_the_contracts_example_and_keep_their_rules() {
+    let commit =
+      NativeId::from_hex("1ba8e668bdf6a1eb2a9393f5f658625f1f3ca733b6dc6648df2d62977c32ef96")
+        .unwrap();
+    let snapshot = Snapshot::new(
+      GitAlgorithm::Sha1,
+      vec![
+        Ref {
+          name: b"refs/heads/main".to_vec(),
+          target: RefTarget::Direct(commit),
+        },
+        Ref {
+          name: b"HEAD".to_vec(),
+          target: RefTarget::Symbolic(b"refs/heads/main".to_vec()),
+        },
+      ],
+    )
+    .unwrap();
+    let body = snapshot.encode();
+    assert_eq!(body.len(), 74);
+    assert_eq!(
+      hex(&body),
+      concat!(
+        "0102",
+        "0448454144",
+        "02",
+        "0f726566732f68656164732f6d61696e",
+        "0f726566732f68656164732f6d61696e",
+        "01",
+        "011ba8e668bdf6a1eb2a9393f5f658625f1f3ca733b6dc6648df2d62977c32ef96"
+      )
+    );
+    assert_eq!(
+      NativeId::of(Type::Snapshot, &body).hex(),
+      "78c68444e6ea2ca3d6da20db3e36bdf71ff3da61a55a3c47c5200fbdada776b5"
+    );
+    assert_eq!(Snapshot::decode(&body).unwrap(), snapshot);
+
+    let direct = |name: &[u8]| Ref {
+      name: name.to_vec(),
+      target: RefTarget::Direct(commit),
+    };
+    assert!(Snapshot::new(GitAlgorithm::Sha1, vec![direct(b"a"), direct(b"a")]).is_err());
+    assert!(Snapshot::new(GitAlgorithm::Sha1, vec![direct(b"")]).is_err());
+    assert!(Snapshot::new(GitAlgorithm::Sha1, vec![direct(b"a\0b")]).is_err());
+    let unordered = Snapshot {
+      algorithm: GitAlgorithm::Sha1,
+      refs: vec![direct(b"b"), direct(b"a")],
+    };
+    assert!(Snapshot::decode(&unordered.encode()).is_err());
+    let mut trailing = body.clone();
+    trailing.push(0);
+    assert!(Snapshot::decode(&trailing).is_err());
+    let mut kind = body.clone();
+    kind[7] = 3;
+    assert!(Snapshot::decode(&kind).is_err());
+    assert!(Snapshot::decode(&[0x01, 0xff, 0xff, 0xff, 0x0f]).is_err());
   }
 }

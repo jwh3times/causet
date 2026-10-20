@@ -1,19 +1,22 @@
-//! Import of a Git repository into a native one (ADR-0045, #301): every blob
-//! and tree reachable from the source's refs becomes native content or a
-//! native tree, or for a tree that is not canonical a preserved Git object
-//! (objects.md §4.3), with an alias row for each. Reachable means what the
-//! objects themselves name, followed by import: `rev-list` is asked only for
-//! commit ancestry, so a tree Git would not walk, such as one named by a file
-//! entry, is still read and imported whole. Commits, tags and the ref
-//! snapshot come with #302.
+//! Import of a Git repository into a native one (ADR-0045 decisions 1 and 2):
+//! every object reachable from the source's refs is imported with an alias
+//! row. A blob becomes native content and a tree a native tree, or for a tree
+//! that is not canonical a preserved Git object (objects.md §4.3); commits and
+//! tags are preserved Git objects. Every ref is recorded verbatim in the ref
+//! snapshot. Reachable means what the objects themselves name, followed by
+//! import: `rev-list` is asked only for commit ancestry, so a tree Git would
+//! not walk, such as one named by a file entry, is still read and imported
+//! whole.
 #![forbid(unsafe_code)]
 
 mod git;
 
 use causet_engine::errors::{GitError, GitResult};
 use causet_store::StoreError;
-use causet_store::id::{GitAlgorithm, GitId, NativeId, hex, unhex};
-use causet_store::objects::{Entry, GitKind, Kind, Preserved, Target, Tree, parse_git_tree};
+use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
+use causet_store::objects::{
+  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, parse_git_tree,
+};
 use causet_store::store::StoreWriter;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -40,22 +43,25 @@ pub struct Imported {
   pub trees: usize,
   /// Trees kept in Git's encoding because they are not canonical.
   pub preserved_trees: usize,
-  /// Commits and tags reached but not yet imported (#302).
   pub commits: usize,
   pub tags: usize,
-  /// Each ref with the native object it reaches once commits and tags are
-  /// peeled: (name, type, ID).
-  pub refs: Vec<(String, &'static str, NativeId)>,
+  /// The refs the snapshot records, `HEAD` included, and how many of them
+  /// are symbolic.
+  pub refs: usize,
+  pub symbolic: usize,
+  pub snapshot: Option<NativeId>,
+  /// The object `HEAD` resolves to through the snapshot, unless it is unborn.
+  pub head: Option<NativeId>,
 }
 
 struct Importer<'a> {
-  source: &'a str,
+  source: &'a git::Source,
   algorithm: GitAlgorithm,
   store: &'a mut StoreWriter,
   /// Every object reached, in the order it was first named.
   order: Vec<String>,
   types: HashMap<String, String>,
-  /// The bytes of every tree, commit and tag; blobs go straight to the store.
+  /// The bytes of every tree; other objects go straight to the store.
   raw: HashMap<String, Vec<u8>>,
   native: HashMap<String, NativeId>,
   git: HashMap<NativeId, Vec<u8>>,
@@ -63,19 +69,26 @@ struct Importer<'a> {
 }
 
 /// Imports `source` into a new native repository at `destination`, which
-/// must not exist or be empty. On failure nothing is left that it created.
+/// must not exist or be empty. A source that cannot be imported exactly is
+/// refused before anything is written; on any later failure nothing is left
+/// that import created.
 pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
-  let format = git::object_format(source)?;
-  let algorithm = GitAlgorithm::from_name(&format).ok_or_else(|| {
+  let source = git::Source::open(source)?;
+  let algorithm = GitAlgorithm::from_name(&source.format).ok_or_else(|| {
     GitError::new(
       "unsupported-repository-shape",
-      format!("{source} uses the object format {format}, which this build does not import"),
+      format!(
+        "{} uses the object format {}, which this build does not import",
+        source.path, source.format
+      ),
     )
   })?;
   let existed = destination.exists();
   let mut store = StoreWriter::create(destination, algorithm).map_err(store_error)?;
-  let result = write(source, algorithm, &mut store).and_then(|imported| {
-    store.finish().map_err(store_error)?;
+  let result = write(&source, algorithm, &mut store);
+  let result = result.and_then(|(mut imported, snapshot)| {
+    store.finish(&snapshot).map_err(store_error)?;
+    imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
     Ok(imported)
   });
   if result.is_err() {
@@ -88,8 +101,12 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   result
 }
 
-fn write(source: &str, algorithm: GitAlgorithm, store: &mut StoreWriter) -> GitResult<Imported> {
-  let refs = git::refs(source)?;
+fn write(
+  source: &git::Source,
+  algorithm: GitAlgorithm,
+  store: &mut StoreWriter,
+) -> GitResult<(Imported, Snapshot)> {
+  let refs = source.refs()?;
   let mut importer = Importer {
     source,
     algorithm,
@@ -104,7 +121,10 @@ fn write(source: &str, algorithm: GitAlgorithm, store: &mut StoreWriter) -> GitR
       ..Imported::default()
     },
   };
-  let mut tips: Vec<String> = refs.iter().map(|(_, id)| id.clone()).collect();
+  // What only other worktrees reach is imported too, though the snapshot
+  // does not record their refs (objects.md §6, §9).
+  let mut tips: Vec<String> = refs.iter().filter_map(|listed| listed.id.clone()).collect();
+  tips.extend(source.all_tips()?);
   tips.sort();
   tips.dedup();
   importer.reach(tips)?;
@@ -113,11 +133,52 @@ fn write(source: &str, algorithm: GitAlgorithm, store: &mut StoreWriter) -> GitR
       importer.tree(&id)?;
     }
   }
-  for (name, id) in &refs {
-    let (kind, native) = importer.peel(id)?;
-    importer.imported.refs.push((name.clone(), kind, native));
+  let mut recorded = Vec::with_capacity(refs.len());
+  for listed in refs {
+    let target = match (listed.symbolic, &listed.id) {
+      (Some(name), _) => {
+        importer.imported.symbolic += 1;
+        RefTarget::Symbolic(name)
+      }
+      (None, Some(id)) => RefTarget::Direct(importer.native[id]),
+      (None, None) => {
+        return Err(GitError::new(
+          "git-response-malformed",
+          format!(
+            "git listed the ref {} as neither symbolic nor naming an object",
+            String::from_utf8_lossy(&listed.name)
+          ),
+        ));
+      }
+    };
+    recorded.push(Ref {
+      name: listed.name,
+      target,
+    });
   }
-  Ok(importer.imported)
+  let snapshot = Snapshot::new(algorithm, recorded).map_err(|what| {
+    GitError::new(
+      "git-response-malformed",
+      format!("git listed refs that make no snapshot: {what}"),
+    )
+  })?;
+  importer.imported.refs = snapshot.refs.len();
+  importer.imported.head = head(&snapshot);
+  Ok((importer.imported, snapshot))
+}
+
+/// The object `HEAD` resolves to, following symbolic refs within the
+/// snapshot; `None` when it is unborn.
+fn head(snapshot: &Snapshot) -> Option<NativeId> {
+  let mut name: &[u8] = b"HEAD";
+  for _ in 0..=snapshot.refs.len() {
+    let found = snapshot.refs.iter().find(|entry| entry.name == name)?;
+    match &found.target {
+      RefTarget::Direct(id) => return Some(*id),
+      RefTarget::Symbolic(target) => name = target,
+    }
+  }
+  None
 }
 
 fn digest(id: &str) -> GitResult<Vec<u8>> {
@@ -163,7 +224,7 @@ impl Importer<'_> {
       .filter(|id| seen.insert(id.clone()))
       .collect();
     while !pending.is_empty() {
-      let types = git::types(self.source, &pending)?;
+      let types = self.source.types(&pending)?;
       let commits: Vec<String> = pending
         .iter()
         .zip(&types)
@@ -175,11 +236,13 @@ impl Importer<'_> {
         .zip(types)
         .map(|(id, (kind, size))| (id, kind, size))
         .collect();
-      let ancestors: Vec<String> = git::commits(self.source, &commits)?
+      let ancestors: Vec<String> = self
+        .source
+        .commits(&commits)?
         .into_iter()
         .filter(|id| seen.insert(id.clone()))
         .collect();
-      for (id, (kind, size)) in ancestors.iter().zip(git::types(self.source, &ancestors)?) {
+      for (id, (kind, size)) in ancestors.iter().zip(self.source.types(&ancestors)?) {
         round.push((id.clone(), kind, size));
       }
       let ids: Vec<String> = round.iter().map(|(id, _, _)| id.clone()).collect();
@@ -189,7 +252,7 @@ impl Importer<'_> {
         self.types.insert(id.clone(), kind.clone());
       }
       let mut named = Vec::new();
-      git::contents(self.source, &ids, &sizes, &mut |id, kind, body| {
+      self.source.contents(&ids, &sizes, &mut |id, kind, body| {
         match kind {
           "tree" => {
             for entry in parse_git_tree(&body, self.algorithm).unwrap_or_default() {
@@ -219,13 +282,24 @@ impl Importer<'_> {
         self.record(id, native)?;
         self.imported.blobs += 1;
       }
-      "tree" | "commit" | "tag" => {
-        if kind == "commit" {
-          self.imported.commits += 1;
-        } else if kind == "tag" {
-          self.imported.tags += 1;
-        }
+      "tree" => {
         self.raw.insert(id.to_string(), body);
+      }
+      "commit" | "tag" => {
+        let kind = if kind == "commit" {
+          self.imported.commits += 1;
+          GitKind::Commit
+        } else {
+          self.imported.tags += 1;
+          GitKind::Tag
+        };
+        let preserved = Preserved {
+          algorithm: self.algorithm,
+          kind,
+          payload: body,
+        };
+        let native = self.store.put_preserved(&preserved).map_err(store_error)?;
+        self.record(id, native)?;
       }
       _ => {
         return Err(GitError::new(
@@ -333,28 +407,5 @@ impl Importer<'_> {
       .as_deref()
       == Some(payload))
     .then_some(tree)
-  }
-
-  /// What a ref reaches with commits and tags peeled: a tree or content.
-  fn peel(&self, id: &str) -> GitResult<(&'static str, NativeId)> {
-    let mut id = id.to_string();
-    // A tag chain cannot be longer than the objects reached.
-    for _ in 0..=self.types.len() {
-      let name = match self.types.get(&id).map(String::as_str) {
-        Some("commit") => "tree",
-        Some("tag") => "object",
-        Some("tree") => return Ok(("tree", self.native[&id])),
-        Some("blob") => return Ok(("blob", self.native[&id])),
-        _ => break,
-      };
-      let Some(target) = header(&self.raw[&id], name) else {
-        break;
-      };
-      id = target.to_string();
-    }
-    Err(GitError::new(
-      "git-response-malformed",
-      format!("the object {id} does not peel to a tree or a blob"),
-    ))
   }
 }
