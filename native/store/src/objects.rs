@@ -3,7 +3,7 @@
 //! (§6), each with the rules a reader checks.
 
 use crate::encoding::{Reader, put_bytes, put_varint};
-use crate::id::{GitAlgorithm, GitId, NativeId};
+use crate::id::{GitAlgorithm, GitId, NativeId, unhex};
 use std::cmp::Ordering;
 
 /// The chunker code of cst's FastCDC (storage.md §2).
@@ -284,6 +284,16 @@ impl GitKind {
       GitKind::Tree => "tree",
     }
   }
+
+  /// The header lines that name the objects one is built on: a commit's
+  /// `tree` and `parent`, and a tag's `object`, the first line's name first.
+  pub fn naming(self) -> &'static [&'static [u8]] {
+    match self {
+      GitKind::Commit => &[b"tree ", b"parent "],
+      GitKind::Tag => &[b"object "],
+      GitKind::Tree => &[],
+    }
+  }
 }
 
 /// A Git object kept in Git's encoding, for the bridge.
@@ -322,6 +332,48 @@ impl Preserved {
       kind,
       payload: reader.rest().to_vec(),
     })
+  }
+
+  /// The Git digests it names that Git follows, in order. For a commit or
+  /// tag, they are where Git's parser reads them: the first header line
+  /// (`tree`, `object`), then a commit's `parent` lines straight after it
+  /// (`GitKind::naming`); a later line of either name is not followed. For a
+  /// tree, they are its entries but its submodule links. A value that is not
+  /// a Git ID of its algorithm in lowercase hex is not one; the payload's
+  /// validity is Git's to judge (§5).
+  pub fn named(&self) -> Vec<Vec<u8>> {
+    if self.kind == GitKind::Tree {
+      return parse_git_tree(&self.payload, self.algorithm)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|entry| followed(&entry.mode))
+        .map(|entry| entry.digest)
+        .collect();
+    }
+    let digest = |value: &[u8]| {
+      let value = std::str::from_utf8(value).ok()?;
+      if value.len() != self.algorithm.length() * 2 || value != value.to_ascii_lowercase() {
+        return None;
+      }
+      unhex(value)
+    };
+    let naming = self.kind.naming();
+    let mut lines = self
+      .payload
+      .split(|&byte| byte == b'\n')
+      .take_while(|line| !line.is_empty());
+    let Some(first) = lines.next().and_then(|line| line.strip_prefix(naming[0])) else {
+      return Vec::new();
+    };
+    let mut named: Vec<Vec<u8>> = digest(first).into_iter().collect();
+    if let Some(then) = naming.get(1) {
+      named.extend(
+        lines
+          .map_while(|line| line.strip_prefix(*then))
+          .filter_map(digest),
+      );
+    }
+    named
   }
 }
 
@@ -440,6 +492,20 @@ impl Snapshot {
     snapshot.check()?;
     Ok(snapshot)
   }
+}
+
+/// Whether Git follows a tree entry of this mode: every mode but a submodule
+/// link's, after Git's own `canon_mode`. A mode that is not octal is followed
+/// by neither.
+pub fn followed(mode: &[u8]) -> bool {
+  let Some(mode) = std::str::from_utf8(mode)
+    .ok()
+    .filter(|mode| !mode.is_empty())
+    .and_then(|mode| u32::from_str_radix(mode, 8).ok())
+  else {
+    return false;
+  };
+  matches!(mode & 0o170000, 0o100000 | 0o120000 | 0o040000)
 }
 
 /// One record of a Git tree, as Git wrote it.

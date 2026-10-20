@@ -24,3 +24,9 @@ zstd = { version = "=0.14.3", default-features = false }
 # 1.5.7. Named here only to pin it, since frames are byte-identical only within
 # one libzstd.
 zstd-sys = { version = "=2.1.2", default-features = false }
+# SHA-1 with Git's collision detection, for the reconstruction check
+# (objects.md §9.2): Git computes SHA-1 IDs with it, so an object made by a
+# known collision attack is refused, as Git refuses it, rather than verified.
+# Already in the workspace through gix, at this version and with these
+# features.
+sha1-checked = { version = "=0.10.0", default-features = false }

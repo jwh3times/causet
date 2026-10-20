@@ -588,7 +588,25 @@ For every row of every alias file, the check:
 3. compares the result with the row's Git ID.
 
 Every row must match, and every object the import read from Git must have a
-row. The check only verifies: it never writes a Git repository.
+row. The check shows the second from the store alone:
+
+- every object the store holds from Git has a row: each tree and preserved
+  object, and all content but the chunks of other content (§3.3);
+- so does each object a native tree names, and each direct ref of the
+  snapshot (§6);
+- so does each object a preserved object names where Git's parser follows it:
+  a commit's first line, `tree`, and the `parent` lines straight after it; a
+  tag's first line, `object`; and a preserved tree's entries other than
+  submodule links. A later line of those names is not followed, by Git or by
+  import.
+
+SHA-1 is computed as Git computes it, with collision detection: an encoding
+that shows a known collision attack fails the check, as Git refuses such an
+object. The check reads each object as a reader does, from one present copy;
+that every present copy verifies (storage.md §4.2) is the store
+verification's ([#304](https://github.com/jwh3times/causet/issues/304)). The
+check only verifies: it never writes a Git repository. `cst import --verify`
+runs it (ADR-0046, decision 9).
 
 ## 10. The `.cst/` directory
 

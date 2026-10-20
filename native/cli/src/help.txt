@@ -75,6 +75,8 @@ Experimental, and not contracts: they need CAUSET_EXPERIMENTAL=native, and
 their format and output may change without notice (ADR-0042, ADR-0045):
   cst import <git-repo> <dest>                  copy a Git repository's objects and
                                                 refs into a new native repository
+  cst import --verify [<native-repo>]           check that every imported object
+                                                rebuilds to its Git ID
   cst cat-file (-p | -t | -s) <object>          in a native repository, print an
                                                 object; cst --help there lists the rest
 

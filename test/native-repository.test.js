@@ -172,6 +172,43 @@ function aliases(store, format) {
   return rows;
 }
 
+/** `cst` with no Git on `PATH`, so any Git process it started would fail. */
+function cstWithoutGit(cwd, args) {
+  const noGit = fs.mkdtempSync(path.join(scratch(), "no-git-"));
+  const env = Object.fromEntries(Object.entries(testEnv(OPT_IN)).filter(([name]) => name.toUpperCase() !== "PATH"));
+  env.PATH = noGit;
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, env, encoding: "buffer" });
+}
+
+function count(number, noun) {
+  return `${number} ${noun}${number === 1 ? "" : "s"}`;
+}
+
+/** What `cst import --verify` prints for a store of these Git objects. */
+function verifiedAs(kinds) {
+  return `: ${count(kinds.blob ?? 0, "blob")}, ${count(kinds.tree ?? 0, "tree")}, ${count(kinds.commit ?? 0, "commit")} and ${count(kinds.tag ?? 0, "tag")}, each rebuilt to its Git ID.\n`;
+}
+
+/**
+ * Flips a byte in the middle of each content frame (storage.md §4.1) of the
+ * store's one container. Its index still checks; the objects in those frames
+ * no longer read.
+ */
+function damageContent(store) {
+  const objects = path.join(store, ".cst", "objects");
+  const [name] = fs.readdirSync(objects).filter((entry) => entry.endsWith(".cstc"));
+  const file = path.join(objects, name);
+  const bytes = fs.readFileSync(file);
+  const index = Number(bytes.readBigUInt64BE(bytes.length - 72));
+  for (let frame = 0; frame < bytes.readUInt32BE(index + 8); frame++) {
+    const at = index + 24 + 24 * frame;
+    if (bytes[at + 21] === 1) {
+      bytes[Number(bytes.readBigUInt64BE(at)) + Math.floor(Number(bytes.readBigUInt64BE(at + 8)) / 2)] ^= 0x01;
+    }
+  }
+  fs.writeFileSync(file, bytes);
+}
+
 function imported(format) {
   const source = makeSource(format);
   const destination = path.join(source.root, "native");
@@ -209,6 +246,69 @@ for (const format of ["sha1", "sha256"]) {
   });
 }
 
+for (const format of ["sha1", "sha256"]) {
+  test(`every imported object rebuilds to its Git ID, and the check runs no Git (${format})`, () => {
+    const { git, destination } = imported(format);
+    const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]);
+    const kinds = {};
+    for (const kind of git(["cat-file", "--batch-check=%(objecttype)"], objects).toString().trim().split("\n")) {
+      kinds[kind] = (kinds[kind] ?? 0) + 1;
+    }
+    assert.deepEqual(Object.keys(kinds).sort(), ["blob", "commit", "tag", "tree"]);
+    const verified = cstWithoutGit(destination, ["import", "--verify"]);
+    assert.equal(verified.status, 0, verified.stderr.toString());
+    assert.ok(verified.stdout.toString().startsWith("Verified "), verified.stdout.toString());
+    assert.ok(verified.stdout.toString().endsWith(verifiedAs(kinds)), verified.stdout.toString());
+  });
+}
+
+test("a damaged native object fails the check, which names it and checks the rest", () => {
+  const root = scratch();
+  const repo = path.join(root, "source");
+  fs.mkdirSync(repo);
+  const git = gitIn(repo);
+  git(["init", "-q", "-b", "main"]);
+  fs.writeFileSync(path.join(repo, "only.txt"), "the only file\n");
+  git(["add", "only.txt"]);
+  git(["commit", "-q", "-m", "one"]);
+  const result = cst(root, ["import", "source", "native"]);
+  assert.equal(result.status, 0, result.stderr.toString());
+  const destination = path.join(root, "native");
+  const blob = git(["rev-parse", "HEAD:only.txt"]).toString().trim();
+  const rows = aliases(destination, "sha1");
+  damageContent(destination);
+  const refused = cst(destination, ["import", "--verify"]);
+  assert.equal(refused.status, 1);
+  const lines = refused.stderr.toString().trim().split("\n");
+  assert.equal(lines[0], "cst: the native store is corrupt: 1 object fails the reconstruction check (objects.md §9.2):");
+  assert.equal(lines.length, 2, refused.stderr.toString());
+  assert.ok(lines[1].startsWith(`  sha1 ${blob} (native ${rows.get(blob)}): `), lines[1]);
+});
+
+test("the check needs a native repository, at most one, and the opt-in", () => {
+  const { root, repo, destination } = imported("sha1");
+  const outside = cst(repo, ["import", "--verify"]);
+  assert.equal(outside.status, 1);
+  assert.match(outside.stderr.toString(), /is not in a native repository, so there is nothing to verify/);
+  const two = cst(root, ["import", "--verify", "native", "source"]);
+  assert.equal(two.status, 1);
+  assert.match(two.stderr.toString(), /takes at most one native repository/);
+  // A named repository is named by its root, so a mistyped path within one
+  // cannot verify it.
+  for (const named of ["native/.cst", "native/no/such/path", "source", ""]) {
+    const refused = cst(root, ["import", "--verify", named]);
+    assert.equal(refused.status, 1, named);
+    assert.match(refused.stderr.toString(), /is not a native repository: it has no \.cst\/format/, named);
+  }
+  for (const [cwd, args] of [[root, ["import", "--verify", "native"]], [path.join(destination, ".cst"), ["import", "--verify"]]]) {
+    const verified = cst(cwd, args);
+    assert.equal(verified.status, 0, verified.stderr.toString());
+  }
+  const refused = cst(destination, ["import", "--verify"], {});
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr.toString(), /CAUSET_EXPERIMENTAL=native/);
+});
+
 test("a path through trees, commits and tags, and an unambiguous prefix, name the object Git names", () => {
   const { git, destination, aliases: rows, parent, second, chain } = imported("sha1");
   const root = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());
@@ -236,13 +336,8 @@ test("import reports what it wrote and keeps a tree that is not canonical in Git
 
 test("reading a native repository runs no Git", () => {
   const { destination, aliases: rows, git } = imported("sha1");
-  const noGit = fs.mkdtempSync(path.join(scratch(), "no-git-"));
-  const env = Object.fromEntries(Object.entries(testEnv(OPT_IN)).filter(([name]) => name.toUpperCase() !== "PATH"));
-  env.PATH = noGit;
   const tree = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());
-  const answered = spawnSync(cstCommand, [...cstPrefix(), "cat-file", "-p", `${tree}:hello.txt`], {
-    cwd: destination, env, encoding: "buffer",
-  });
+  const answered = cstWithoutGit(destination, ["cat-file", "-p", `${tree}:hello.txt`]);
   assert.equal(answered.status, 0, answered.stderr.toString());
   assert.equal(answered.stdout.toString(), "hello\n");
 });
@@ -270,6 +365,7 @@ test("a native repository refuses what it does not implement, and has no Git to 
   assert.equal(help.status, 0);
   assert.match(help.stdout.toString(), /experimental, not a contract/);
   assert.match(help.stdout.toString(), /cst cat-file \(-p \| -t \| -s\) <object>/);
+  assert.match(help.stdout.toString(), /cst import --verify \[<native-repo>\]/);
 });
 
 test("the help of a Git-backed repository lists the experimental commands as such", () => {
@@ -277,6 +373,7 @@ test("the help of a Git-backed repository lists the experimental commands as suc
   const help = cst(repo, ["--help"]).stdout.toString();
   assert.match(help, /Experimental, and not contracts: they need CAUSET_EXPERIMENTAL=native/);
   assert.match(help, /cst import <git-repo> <dest>/);
+  assert.match(help, /cst import --verify \[<native-repo>\]/);
 });
 
 test("import into a directory that is not empty is refused and leaves it as it was", () => {
@@ -343,6 +440,9 @@ test("a tree Git would not walk is imported whole, in its one native form", () =
   }
   const through = cst(destination, ["cat-file", "-p", `${rows.get(source.asDirectory)}:g`]);
   assert.deepEqual(through.stdout, source.git(["cat-file", "-p", `${source.asDirectory}:g`]));
+  const verified = cst(destination, ["import", "--verify"]);
+  assert.equal(verified.status, 0, verified.stderr.toString());
+  assert.ok(verified.stdout.toString().endsWith(verifiedAs({ blob: 2, tree: 3, commit: 2 })), verified.stdout.toString());
 });
 
 test("a path resolves, or fails, wherever Git's does", () => {

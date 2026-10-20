@@ -894,8 +894,11 @@ are kept in Git's encoding, byte for byte. A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history
 differently from what it stores. In a native repository,
 `cst cat-file (-p | -t | -s) <object>` prints what `git cat-file` prints on
-the original, with native IDs in place of Git's, and runs no Git; every other
-command is refused, because a native repository has no Git to pass it to
+the original, with native IDs in place of Git's, and runs no Git.
+`cst import --verify [<native-repo>]` rebuilds every imported object in Git's
+encoding from the store alone and checks that it hashes to its original Git
+ID, also without Git. Every other command in a native repository is refused,
+because it has no Git to pass it to
 ([ADR-0046](docs/adr/0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)).
 None of this is a contract yet: the format and the output may change, and a
 native repository may have to be imported again.

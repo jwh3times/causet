@@ -1,7 +1,8 @@
 //! A native repository's commands (N1: ADR-0045 decision 11, ADR-0046
 //! decision 9). They are experimental and not contracts, behind the opt-in
 //! `CAUSET_EXPERIMENTAL=native` (ADR-0042 decision 5). `cst import` copies a
-//! Git repository's objects and refs into a new native repository; in one,
+//! Git repository's objects and refs into a new native repository, and
+//! `cst import --verify` checks that each rebuilds to its Git ID; in one,
 //! `cst cat-file` prints an object without running Git, and every other
 //! command is refused, because a native repository has no Git to pass it to
 //! (ADR-0046 decision 4).
@@ -12,6 +13,7 @@ use causet_engine::errors::{GitError, GitResult};
 use causet_import::store_error;
 use causet_store::id::{GitAlgorithm, NativeId, Type, hex, unhex};
 use causet_store::objects::{GitKind, Kind, Preserved, Target, Tree, parse_git_tree};
+use causet_store::reconstruct;
 use causet_store::store::Store;
 use std::ffi::OsString;
 use std::io::Write as _;
@@ -19,6 +21,9 @@ use std::path::{Path, PathBuf};
 
 /// The opt-in, as a user sets it.
 pub const OPT_IN: &str = "CAUSET_EXPERIMENTAL=native";
+
+const IMPORT_USAGE: &str =
+  "Usage: cst import <git-repo> <dest>, or cst import --verify [<native-repo>]";
 
 const HELP: &str = "causet — a native repository (experimental, not a contract)
 
@@ -31,6 +36,8 @@ Usage:
                                             <object> is a native ID, a unique
                                             prefix of one, or <tree>:<path>,
                                             where a commit or tag names its tree
+  cst import --verify [<native-repo>]       check that every imported object
+                                            rebuilds to its Git ID, without Git
   cst import <git-repo> <dest>              make another native repository
   cst version
 
@@ -56,6 +63,16 @@ fn kind_of(directory: &Path) -> RepositoryKind {
     }
   }
   RepositoryKind::Other
+}
+
+fn ambiguous(root: &Path) -> GitError {
+  GitError::new(
+    "unsupported-repository-shape",
+    format!(
+      "{} holds both .cst and .git, so it is neither kind of repository: every repository is one kind (ADR-0042, decision 1).",
+      root.display()
+    ),
+  )
 }
 
 fn enabled() -> bool {
@@ -94,16 +111,7 @@ pub fn intercept(words: &[String], raw: &[OsString]) -> Option<i32> {
   match kind_of(&directory) {
     RepositoryKind::Other => None,
     RepositoryKind::Ambiguous(_) if help || version => None,
-    RepositoryKind::Ambiguous(root) => Some(report(
-      &GitError::new(
-        "unsupported-repository-shape",
-        format!(
-          "{} holds both .cst and .git, so it is neither kind of repository: every repository is one kind (ADR-0042, decision 1).",
-          root.display()
-        ),
-      ),
-      false,
-    )),
+    RepositoryKind::Ambiguous(root) => Some(report(&ambiguous(&root), false)),
     RepositoryKind::Native(_) if version => None,
     RepositoryKind::Native(_) if help => {
       let _ = writeln!(std::io::stdout().lock(), "{HELP}");
@@ -136,17 +144,24 @@ fn import(args: &[String]) -> GitResult<()> {
   if !enabled() {
     return Err(opt_in_required("import"));
   }
+  let verifying = args.iter().any(|arg| arg == "--verify");
   let positionals: Vec<&String> = args.iter().filter(|arg| !arg.starts_with('-')).collect();
-  if let Some(option) = args.iter().find(|arg| arg.starts_with('-')) {
+  if let Some(option) = args
+    .iter()
+    .find(|arg| arg.starts_with('-') && *arg != "--verify")
+  {
     return Err(GitError::new(
       "usage-unknown-option",
-      format!("Unknown option '{option}' for 'cst import'. Usage: cst import <git-repo> <dest>"),
+      format!("Unknown option '{option}' for 'cst import'. {IMPORT_USAGE}"),
     ));
+  }
+  if verifying {
+    return verify(&positionals);
   }
   let [source, destination] = positionals.as_slice() else {
     return Err(GitError::new(
       "usage-missing-argument",
-      "cst import takes a Git repository and a destination. Usage: cst import <git-repo> <dest>",
+      format!("cst import takes a Git repository and a destination. {IMPORT_USAGE}"),
     ));
   };
   let imported = causet_import::import(source, Path::new(destination))?;
@@ -174,6 +189,93 @@ fn import(args: &[String]) -> GitResult<()> {
     "Its ref snapshot records {}, {} symbolic. {head}",
     count(imported.refs, "ref"),
     imported.symbolic
+  );
+  Ok(())
+}
+
+/// The reconstruction check (objects.md §9.2) on the native repository
+/// `named`, or the one the current directory is in. It reads only the store.
+fn verify(named: &[&String]) -> GitResult<()> {
+  let root = match named {
+    // The repository the current directory is in, as for its other commands.
+    [] => {
+      let start = std::env::current_dir().map_err(|error| {
+        GitError::new(
+          "not-found",
+          format!("cst cannot read the current directory: {error}"),
+        )
+      })?;
+      match kind_of(&start) {
+        RepositoryKind::Native(root) => root,
+        RepositoryKind::Ambiguous(root) => return Err(ambiguous(&root)),
+        RepositoryKind::Other => {
+          return Err(GitError::new(
+            "not-found",
+            format!(
+              "{} is not in a native repository, so there is nothing to verify. {IMPORT_USAGE}",
+              start.display()
+            ),
+          ));
+        }
+      }
+    }
+    // A named repository is named by its root, so a mistyped path cannot
+    // verify the repository around it.
+    [path] => {
+      let root = PathBuf::from(path.as_str());
+      if path.is_empty() || !root.join(".cst").join("format").is_file() {
+        return Err(GitError::new(
+          "not-found",
+          format!("'{path}' is not a native repository: it has no .cst/format. {IMPORT_USAGE}"),
+        ));
+      }
+      if root.join(".git").exists() {
+        return Err(ambiguous(&root));
+      }
+      root
+    }
+    _ => {
+      return Err(GitError::new(
+        "usage-unknown-option",
+        format!("cst import --verify takes at most one native repository. {IMPORT_USAGE}"),
+      ));
+    }
+  };
+  let store = Store::open(&root).map_err(store_error)?;
+  let found = reconstruct::check(&store).map_err(store_error)?;
+  if !found.failures.is_empty() {
+    const SHOWN: usize = 20;
+    let mut details: Vec<String> = found
+      .failures
+      .iter()
+      .take(SHOWN)
+      .map(|failure| format!("  {failure}"))
+      .collect();
+    if found.failures.len() > SHOWN {
+      details.push(format!("  and {} more", found.failures.len() - SHOWN));
+    }
+    return Err(
+      corrupt(format!(
+        "{} {} the reconstruction check (objects.md §9.2):",
+        count(found.failures.len(), "object"),
+        if found.failures.len() == 1 {
+          "fails"
+        } else {
+          "fail"
+        }
+      ))
+      .details(details.join("\n")),
+    );
+  }
+  let rebuilt = &found.rebuilt;
+  let _ = writeln!(
+    std::io::stdout().lock(),
+    "Verified {}: {}, {}, {} and {}, each rebuilt to its Git ID.",
+    root.display(),
+    count(rebuilt.blobs, "blob"),
+    count(rebuilt.trees, "tree"),
+    count(rebuilt.commits, "commit"),
+    count(rebuilt.tags, "tag")
   );
   Ok(())
 }
@@ -517,20 +619,10 @@ fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitRes
   Ok(())
 }
 
-/// The header lines of a commit or tag that name the objects it is built on:
-/// a commit's `tree` and `parent`, and a tag's `object`.
-fn naming(kind: GitKind) -> &'static [&'static [u8]] {
-  match kind {
-    GitKind::Commit => &[b"tree ", b"parent "],
-    GitKind::Tag => &[b"object "],
-    GitKind::Tree => &[],
-  }
-}
-
 /// A commit's or tag's payload as `cat-file -p` prints it here: as Git
 /// prints it, with each Git ID of a header line that names an imported
-/// object (`naming`) translated to its native ID. Nothing else changes, not
-/// even an ID in a message or a signature.
+/// object (`GitKind::naming`) translated to its native ID. Nothing else
+/// changes, not even an ID in a message or a signature.
 fn translated(store: &Store, preserved: &Preserved) -> Vec<u8> {
   let payload = &preserved.payload;
   let mut out = Vec::with_capacity(payload.len() + 256);
@@ -549,7 +641,9 @@ fn translated(store: &Store, preserved: &Preserved) -> Vec<u8> {
     }
     let native = in_header
       .then(|| {
-        naming(preserved.kind)
+        preserved
+          .kind
+          .naming()
           .iter()
           .find_map(|name| text.strip_prefix(*name).map(|id| (name, id)))
       })
@@ -588,7 +682,7 @@ fn peeled(store: &Store, id: NativeId) -> GitResult<NativeId> {
       return Ok(id);
     }
     let preserved = Preserved::decode(&read.body).map_err(corrupt)?;
-    let Some(name) = naming(preserved.kind).first() else {
+    let Some(name) = preserved.kind.naming().first() else {
       return Ok(id);
     };
     let header = preserved

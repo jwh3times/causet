@@ -15,7 +15,7 @@ use causet_engine::errors::{GitError, GitResult};
 use causet_store::StoreError;
 use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
 use causet_store::objects::{
-  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, parse_git_tree,
+  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, followed, parse_git_tree,
 };
 use causet_store::store::StoreWriter;
 use std::collections::{HashMap, HashSet};
@@ -188,20 +188,6 @@ fn digest(id: &str) -> GitResult<Vec<u8>> {
       format!("git printed the object ID {id}, which is not hex"),
     )
   })
-}
-
-/// Whether Git follows a tree entry of this mode: every mode but a submodule
-/// link's, after Git's own `canon_mode`. A mode that is not octal is followed
-/// by neither.
-fn followed(mode: &[u8]) -> bool {
-  let Some(mode) = std::str::from_utf8(mode)
-    .ok()
-    .filter(|mode| !mode.is_empty())
-    .and_then(|mode| u32::from_str_radix(mode, 8).ok())
-  else {
-    return false;
-  };
-  matches!(mode & 0o170000, 0o100000 | 0o120000 | 0o040000)
 }
 
 /// The value of a header line of a commit or tag, such as `tree` or `object`.
