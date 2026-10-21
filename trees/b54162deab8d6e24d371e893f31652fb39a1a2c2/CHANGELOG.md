@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Experimental: `cst ls-tree`, `cst rev-parse`, `cst for-each-ref` and
+  `cst fsck` in a native repository** (#304). The first three answer byte for
+  byte as Git does on the original, with native IDs in place of Git's, and
+  run no Git:
+  - `ls-tree` takes `-d`, `-r`, `-t`, `-z`, `-l`, `--name-only`,
+    `--name-status`, `--object-only`, `--format` and path specs;
+  - `rev-parse` takes refs by Git's rules for short names, short IDs chosen
+    by the type the context expects, `git describe` names, `~<n>`, `^<n>`,
+    `^{<type>}`, `:<path>`, ranges with `..`, `^@`, `^!` and `^-`, and
+    `--verify`, `--symbolic-full-name`, `--abbrev-ref` and `--all`;
+  - `for-each-ref` takes `--format` with the ref and object fields,
+    `--sort=[-]refname`, `--count` and patterns.
+
+  Anything else Git's commands take is refused by name. `cst cat-file` takes
+  the same names as `rev-parse`, so `cst cat-file -p main:README.md` reads a
+  file at a snapshot. `cst fsck` reads every container whole and checks every
+  copy of every object, so a damaged copy is found even when another container
+  holds a good one. Every ID the store knows must have an index entry. Content
+  absent by promise or by policy is listed by its state, not reported as
+  corruption, and an annotation of an unknown type is checked only for what
+  every type shares. A ref may now name content absent by promise or by policy
+  (objects.md §6).
 - **Experimental: `cst import --verify` checks a native repository against
   Git's IDs** (#303). It rebuilds every imported object in Git's encoding, from
   the store and its alias map alone, and requires each to hash to the Git ID

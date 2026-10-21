@@ -99,7 +99,7 @@ fn every_object_written_reads_back_verified() {
   let aliases = store.aliases_for(GitAlgorithm::Sha1).unwrap();
   assert_eq!(aliases.native(&[0xce; 20]), Some(small));
   assert_eq!(aliases.git(&tree_id), Some([0x11; 20].as_slice()));
-  assert_eq!(store.matching(&small.hex()[..12]), [small]);
+  assert_eq!(store.matching(&small.hex()[..12], |_| true), [small]);
   assert_eq!(store.refs().unwrap(), snapshot);
   assert_eq!(store.read(&store.snapshot).unwrap().kind, Type::Snapshot);
   assert!(matches!(

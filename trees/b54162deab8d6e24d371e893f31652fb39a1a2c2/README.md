@@ -893,8 +893,13 @@ records every ref in a snapshot: a directory holding `.cst/`, in the format of
 are kept in Git's encoding, byte for byte. A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history
 differently from what it stores. In a native repository,
-`cst cat-file (-p | -t | -s) <object>` prints what `git cat-file` prints on
-the original, with native IDs in place of Git's, and runs no Git.
+`cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
+`cst for-each-ref --format` print what Git prints on the original, with
+native IDs in place of Git's, and run no Git. Each takes the part of Git's
+command that N1 implements, listed by `cst --help` there, and refuses the rest
+by name. `cst fsck` verifies the store: every copy of every object in every
+container, and content absent by promise or by policy, which it reports by
+state rather than as corruption.
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
 ID, also without Git. Every other command in a native repository is refused,

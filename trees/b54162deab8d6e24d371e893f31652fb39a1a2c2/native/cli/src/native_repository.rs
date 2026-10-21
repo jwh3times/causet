@@ -3,16 +3,20 @@
 //! `CAUSET_EXPERIMENTAL=native` (ADR-0042 decision 5). `cst import` copies a
 //! Git repository's objects and refs into a new native repository, and
 //! `cst import --verify` checks that each rebuilds to its Git ID; in one,
-//! `cst cat-file` prints an object without running Git, and every other
+//! `cst cat-file` prints an object without running Git, the inspection
+//! commands of `native_inspection` list and verify it, and every other
 //! command is refused, because a native repository has no Git to pass it to
 //! (ADR-0046 decision 4).
 
 use crate::environment;
 use crate::native::report;
+use crate::native_inspection;
+use crate::native_revision::Repository;
 use causet_engine::errors::{GitError, GitResult};
 use causet_import::store_error;
 use causet_store::id::{GitAlgorithm, NativeId, Type, hex};
 use causet_store::objects::{GitKind, Kind, Preserved, Target, Tree, parse_git_tree};
+use causet_store::StoreError;
 use causet_store::reconstruct;
 use causet_store::store::Store;
 use std::ffi::OsString;
@@ -32,14 +36,24 @@ experimental: they need CAUSET_EXPERIMENTAL=native, and their format and
 output may change without notice (ADR-0042).
 
 Usage:
-  cst cat-file (-p | -t | -s) <object>      print an object, its type or its size;
-                                            <object> is a native ID, a unique
-                                            prefix of one, or <tree>:<path>,
-                                            where a commit or tag names its tree
+  cst cat-file (-p | -t | -s) <object>      print an object, its type or its size
+  cst ls-tree [-d] [-r] [-t] [-z] [-l | --name-only | --object-only
+              | --format=<format>] <tree-ish> [<path>...]
+                                            list a tree, as git ls-tree does
+  cst rev-parse [--verify [-q]] [--symbolic-full-name | --abbrev-ref]
+                [--all | --branches | --tags | --remotes] [<rev>...]
+                                            name objects, as git rev-parse does
+  cst for-each-ref [--format=<format>] [--sort=[-]refname] [--count=<n>]
+                   [<pattern>...]           list the refs of the snapshot
+  cst fsck                                  verify the store: every copy of
+                                            every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
                                             rebuilds to its Git ID, without Git
   cst import <git-repo> <dest>              make another native repository
   cst version
+
+An <object>, <tree-ish> or <rev> is a ref, HEAD, a native ID or a unique
+prefix of one, with Git's ~<n>, ^<n>, ^{<type>} and :<path>.
 
 A native repository runs no Git, so every other command is refused here.";
 
@@ -88,9 +102,9 @@ fn opt_in_required(command: &str) -> GitError {
   )
 }
 
-fn answer(result: GitResult<()>) -> i32 {
+fn answer(result: GitResult<i32>) -> i32 {
   match result {
-    Ok(()) => 0,
+    Ok(status) => status,
     Err(error) => report(&error, false),
   }
 }
@@ -100,7 +114,7 @@ fn answer(result: GitResult<()>) -> i32 {
 pub fn intercept(words: &[String], raw: &[OsString]) -> Option<i32> {
   let first = words.first()?.as_str();
   if first == "import" {
-    return Some(answer(import(&words[1..])));
+    return Some(answer(import(&words[1..]).map(|()| 0)));
   }
   if std::env::var_os("GIT_DIR").is_some() {
     return None;
@@ -121,12 +135,16 @@ pub fn intercept(words: &[String], raw: &[OsString]) -> Option<i32> {
   }
 }
 
-fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<()> {
+fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i32> {
   if !enabled() {
     return Err(opt_in_required(command));
   }
   match command {
-    "cat-file" => cat_file(args, root),
+    "cat-file" => cat_file(args, root).map(|()| 0),
+    "ls-tree" => native_inspection::ls_tree(args, root),
+    "rev-parse" => native_inspection::rev_parse(args, root),
+    "for-each-ref" => native_inspection::for_each_ref(args, root),
+    "fsck" => native_inspection::fsck(args, root),
     "git" => Err(GitError::new(
       "unavailable-in-native-repository",
       "A native repository has no Git to run, so cst git is refused here (ADR-0046, decision 4).",
@@ -134,7 +152,7 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<()
     _ => Err(GitError::new(
       "unavailable-in-native-repository",
       format!(
-        "cst {command} is not implemented in a native repository yet, and a native repository has no Git to pass it to. Here cst cat-file reads an object; run cst --help for the rest."
+        "cst {command} is not implemented in a native repository yet, and a native repository has no Git to pass it to. Run cst --help for the commands it has."
       ),
     )),
   }
@@ -285,13 +303,13 @@ fn count(number: usize, noun: &str) -> String {
 }
 
 #[cfg(unix)]
-fn bytes_of(arg: &OsString) -> Vec<u8> {
+pub(crate) fn bytes_of(arg: &OsString) -> Vec<u8> {
   use std::os::unix::ffi::OsStrExt;
   arg.as_bytes().to_vec()
 }
 
 #[cfg(not(unix))]
-fn bytes_of(arg: &OsString) -> Vec<u8> {
+pub(crate) fn bytes_of(arg: &OsString) -> Vec<u8> {
   arg.to_string_lossy().into_owned().into_bytes()
 }
 
@@ -340,20 +358,28 @@ fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
       format!("cst cat-file needs -p, -t or -s and an object. {usage}"),
     ));
   };
-  let store = Store::open(root).map_err(store_error)?;
-  let id = resolve(&store, &object)?;
-  let read = store.read_known(&id).map_err(store_error)?;
+  let repository = Repository::open(root)?;
+  let store = &repository.store;
+  let id = repository.resolve(&object)?;
+  // A whole native ID names itself, held or not.
+  let read = store.read(&id).map_err(|error| match error {
+    StoreError::NotFound(_) => GitError::new(
+      "not-found",
+      format!("Not a valid object name {}", String::from_utf8_lossy(&object)),
+    ),
+    other => store_error(other),
+  })?;
   let mut out = Vec::new();
   match mode.as_str() {
     "-t" => writeln!(out, "{}", type_name(&read.kind, &read.body)?).expect("in memory"),
-    "-s" => writeln!(out, "{}", size(&store, &read.kind, &read.body)?).expect("in memory"),
-    _ => print(&store, &read.kind, read.body, &mut out)?,
+    "-s" => writeln!(out, "{}", size(store, &read.kind, &read.body)?).expect("in memory"),
+    _ => print(store, &read.kind, read.body, &mut out)?,
   }
   let _ = std::io::stdout().lock().write_all(&out);
   Ok(())
 }
 
-fn corrupt(what: impl std::fmt::Display) -> GitError {
+pub(crate) fn corrupt(what: impl std::fmt::Display) -> GitError {
   GitError::new(
     "store-corrupt",
     format!("the native store is corrupt: {what}"),
@@ -362,19 +388,19 @@ fn corrupt(what: impl std::fmt::Display) -> GitError {
 
 /// One entry of a tree as Git lists it: in Git's order for a native tree, and
 /// as written for one kept in Git's encoding.
-struct Listed {
+pub(crate) struct Listed {
   /// The mode after Git's `canon_mode`.
-  mode: u32,
-  kind: &'static str,
-  name: Vec<u8>,
+  pub mode: u32,
+  pub kind: &'static str,
+  pub name: Vec<u8>,
   /// The native object it names, when the store holds one.
-  target: Option<NativeId>,
+  pub target: Option<NativeId>,
   /// The ID it prints: the native ID, or a Git ID that has no alias row.
-  shown: String,
+  pub shown: String,
 }
 
 /// A Git ID's native object, when the store imported it.
-fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> Option<NativeId> {
+pub(crate) fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> Option<NativeId> {
   store
     .aliases_for(algorithm)
     .and_then(|aliases| aliases.native(digest))
@@ -382,7 +408,7 @@ fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> Option<Native
 
 /// The entries of a tree or of a tree kept in Git's encoding; `None` for any
 /// other object.
-fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Option<Vec<Listed>>> {
+pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Option<Vec<Listed>>> {
   match kind {
     Type::Tree => {
       let tree = Tree::decode(body).map_err(corrupt)?;
@@ -473,101 +499,7 @@ fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Option<Vec<List
   }
 }
 
-/// The object a name means: a native ID or a unique prefix of one (at least 4
-/// hex digits), optionally followed by `:<path>`, looked up through trees as
-/// Git's `get_tree_entry` does.
-fn resolve(store: &Store, object: &[u8]) -> GitResult<NativeId> {
-  let shown = String::from_utf8_lossy(object).into_owned();
-  let (name, path) = match object.iter().position(|&byte| byte == b':') {
-    Some(colon) => (&object[..colon], Some(&object[colon + 1..])),
-    None => (object, None),
-  };
-  let not_valid = || GitError::new("not-found", format!("Not a valid object name {shown}"));
-  let prefix = std::str::from_utf8(name)
-    .map_err(|_| not_valid())?
-    .to_ascii_lowercase();
-  if prefix.len() < 4 || prefix.len() > 64 || !prefix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-    return Err(not_valid());
-  }
-  let root = match store.matching(&prefix).as_slice() {
-    [] => return Err(not_valid()),
-    [id] => *id,
-    _ => {
-      return Err(GitError::new(
-        "ambiguous-match",
-        format!("{prefix} is a prefix of more than one object; give more of it"),
-      ));
-    }
-  };
-  let Some(path) = path else {
-    return Ok(root);
-  };
-  let root = peeled(store, root)?;
-  let missing = || {
-    GitError::new(
-      "not-found",
-      format!(
-        "path '{}' does not exist in '{}'",
-        String::from_utf8_lossy(path),
-        String::from_utf8_lossy(name)
-      ),
-    )
-  };
-  let (mut tree, mut rest) = (root, path);
-  loop {
-    if rest.is_empty() {
-      return Ok(tree);
-    }
-    let read = store.read_known(&tree).map_err(store_error)?;
-    let entries = listing(store, &read.kind, &read.body)?.ok_or_else(missing)?;
-    // Git's `find_tree_entry`: entries are taken to be in Git's order, so the
-    // search ends at the first name past the one sought.
-    let mut next = None;
-    for entry in &entries {
-      let length = entry.name.len();
-      if length > rest.len() {
-        continue;
-      }
-      match rest[..length].cmp(&entry.name) {
-        std::cmp::Ordering::Greater => continue,
-        std::cmp::Ordering::Less => break,
-        std::cmp::Ordering::Equal => {}
-      }
-      if length == rest.len() {
-        return found(entry);
-      }
-      if rest[length] != b'/' {
-        continue;
-      }
-      if entry.mode & 0o170000 != 0o040000 {
-        break;
-      }
-      if length + 1 == rest.len() {
-        return found(entry);
-      }
-      next = Some((entry.target, &rest[length + 1..]));
-      break;
-    }
-    let (target, remaining) = next.ok_or_else(missing)?;
-    tree = target.ok_or_else(missing)?;
-    rest = remaining;
-  }
-}
-
-fn found(entry: &Listed) -> GitResult<NativeId> {
-  entry.target.ok_or_else(|| {
-    GitError::new(
-      "not-found",
-      format!(
-        "{} is a submodule link to the commit {}, which is in another repository",
-        String::from_utf8_lossy(&entry.name),
-        entry.shown
-      ),
-    )
-  })
-}
-
-fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
+pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
   Ok(match kind {
     Type::Content => "blob",
     Type::Tree => "tree",
@@ -589,7 +521,7 @@ fn algorithm(store: &Store) -> GitResult<GitAlgorithm> {
 }
 
 /// The size Git reports: a tree's is its Git encoding's.
-fn size(store: &Store, kind: &Type, body: &[u8]) -> GitResult<usize> {
+pub(crate) fn size(store: &Store, kind: &Type, body: &[u8]) -> GitResult<usize> {
   Ok(match kind {
     Type::Tree => Tree::decode(body)
       .map_err(corrupt)?
@@ -640,46 +572,9 @@ fn translated(store: &Store, preserved: &Preserved) -> Vec<u8> {
   out
 }
 
-/// What a commit or tag is built on, as `<rev>:<path>` peels it toward a
-/// tree: its first line's ID (`Preserved::header_ids`), a commit's tree or a
-/// tag's object, through the alias map.
-fn peeled(store: &Store, id: NativeId) -> GitResult<NativeId> {
-  let mut id = id;
-  let mut seen = std::collections::HashSet::new();
-  loop {
-    // Git IDs cannot form a cycle, so only a damaged alias map can.
-    if !seen.insert(id) {
-      return Err(corrupt(format!("{id} names itself through the alias map")));
-    }
-    let read = store.read_known(&id).map_err(store_error)?;
-    if read.kind != Type::Preserved {
-      return Ok(id);
-    }
-    let preserved = Preserved::decode(&read.body).map_err(corrupt)?;
-    if preserved.kind == GitKind::Tree {
-      return Ok(id);
-    }
-    // Only the first line's ID, as Git's parser reads it.
-    let next = preserved
-      .header_ids()
-      .into_iter()
-      .find(|header| header.first)
-      .and_then(|header| alias(store, preserved.algorithm, &header.digest));
-    id = next.ok_or_else(|| {
-      GitError::new(
-        "not-found",
-        format!(
-          "the {} {id} names no imported object to look a path up in",
-          preserved.kind.name()
-        ),
-      )
-    })?;
-  }
-}
-
 /// Git's `canon_mode`, which `ls-tree` and so `cat-file -p` print, with the
 /// type the mode implies.
-fn canonical_mode(mode: u32) -> (u32, &'static str) {
+pub(crate) fn canonical_mode(mode: u32) -> (u32, &'static str) {
   match mode & 0o170000 {
     0o100000 => (
       0o100000 | if mode & 0o100 != 0 { 0o755 } else { 0o644 },
@@ -700,7 +595,7 @@ fn line(out: &mut Vec<u8>, mode: &str, kind: &str, id: &str, name: &[u8]) {
 /// A name as Git's `ls-tree` writes it with `core.quotePath` at its default:
 /// unchanged when it needs no quoting, otherwise C-quoted in double quotes,
 /// with every byte from 0x80 up in octal.
-fn quoted(name: &[u8]) -> Vec<u8> {
+pub(crate) fn quoted(name: &[u8]) -> Vec<u8> {
   let escape = |byte: u8| -> Option<Vec<u8>> {
     Some(match byte {
       0x07 => b"\\a".to_vec(),

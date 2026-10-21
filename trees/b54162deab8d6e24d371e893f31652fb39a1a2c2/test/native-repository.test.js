@@ -18,6 +18,7 @@ import test, { after } from "node:test";
 import { pathToFileURL } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+import { aliases } from "../test-support/native-store.js";
 
 const created = [];
 
@@ -158,19 +159,6 @@ function translateHeaders(kind, text, rows) {
     followed &&= name !== null && line.startsWith(`${name} `);
     return followed && rows.has(id) ? `${name} ${rows.get(id)}` : line;
   }).join("\n");
-}
-
-/** The alias file's rows, Git ID → native ID, both as hex. */
-function aliases(store, format) {
-  const file = fs.readFileSync(path.join(store, ".cst", "aliases", format));
-  const width = format === "sha1" ? 20 : 32;
-  const count = file.readUInt32BE(12);
-  const rows = new Map();
-  for (let row = 0; row < count; row++) {
-    const at = 16 + 1024 + row * (width + 32);
-    rows.set(file.subarray(at, at + width).toString("hex"), file.subarray(at + width, at + width + 32).toString("hex"));
-  }
-  return rows;
 }
 
 /** `cst` with no Git on `PATH`, so any Git process it started would fail. */

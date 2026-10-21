@@ -403,8 +403,9 @@ count × (
 
 - Entries are in byte order of their names, with no two names equal.
 - A name, and a symbolic target, is not empty and contains no `00`.
-- A direct target is present in the store, and is a Git-imported object of the
-  snapshot's Git algorithm: it has a row in that algorithm's alias file.
+- A direct target is held by the store, and is a Git-imported object of the
+  snapshot's Git algorithm: it has a row in that algorithm's alias file. It is
+  present, unless it is content absent by promise or by policy (§8).
 
 The snapshot of the example history (74 bytes):
 
@@ -498,8 +499,9 @@ half defines where they sit.
 - a chunk list whose lengths do not add up, or whose chunks do not hash to the
   content's ID.
 
-In N1 nothing is ever absent: import writes every object, and no transport
-exists. The states are in the format now so that lazy fetch and read
+`cst fsck` reports each absent object by its state, and each case of
+corruption by the object and the container it is in. In N1 nothing is ever
+absent: import writes every object, and no transport exists. The states are in the format now so that lazy fetch and read
 permissions need no change to it later.
 
 ## 9. The alias map
@@ -606,7 +608,7 @@ SHA-1 is computed as Git computes it, with collision detection: an encoding
 that shows a known collision attack fails the check, as Git refuses such an
 object. The check reads each object as a reader does, from one present copy;
 that every present copy verifies (storage.md §4.2) is the store
-verification's ([#304](https://github.com/jwh3times/causet/issues/304)). The
+verification's, `cst fsck`. The
 check only verifies: it never writes a Git repository. `cst import --verify`
 runs it (ADR-0046, decision 9).
 
