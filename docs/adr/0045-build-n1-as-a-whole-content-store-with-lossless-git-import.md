@@ -143,6 +143,10 @@ binaries:
       `cat-file` and `ls-tree`.
     - **Their names** are set by [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md): `cst cat-file`, `cst ls-tree`,
       `cst rev-parse`, `cst for-each-ref`, `cst fsck` and `cst import --verify`.
+    - **What they take:** each takes the part of its Git command that its
+      native help lists, and refuses the rest by name with
+      `unsupported-feature`. `cst fsck` has cst's own report and, while it is
+      experimental, no `--json` form.
 12. **Layout and crates.**
     - **The marker:** a native repository is a directory with `.cst/` at its
       root, holding the store. That is the root marker ADR-0042's kind
