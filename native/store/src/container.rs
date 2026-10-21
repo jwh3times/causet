@@ -44,7 +44,8 @@ impl Form {
 
 /// The object states of objects.md §8, by code.
 pub const PRESENT: u8 = 0;
-const ABSENT_BY_POLICY: u8 = 2;
+pub const ABSENT_BY_PROMISE: u8 = 1;
+pub const ABSENT_BY_POLICY: u8 = 2;
 
 const METADATA: u8 = 0;
 const CONTENT: u8 = 1;
@@ -94,6 +95,8 @@ pub struct ContainerWriter {
   written: u64,
   frames: Vec<Frame>,
   records: BTreeMap<[u8; 32], Record>,
+  /// Each annotation's subject digest and its own (§4.1's table).
+  annotations: Vec<([u8; 32], [u8; 32])>,
   open: [OpenFrame; 2],
 }
 
@@ -113,6 +116,7 @@ impl ContainerWriter {
       written: 0,
       frames: Vec::new(),
       records: BTreeMap::new(),
+      annotations: Vec::new(),
       open: [OpenFrame::default(), OpenFrame::default()],
     };
     let mut header = CONTAINER_MAGIC.to_vec();
@@ -149,6 +153,12 @@ impl ContainerWriter {
         record.len()
       )));
     }
+    if kind == Type::Annotation {
+      let subject = crate::objects::Annotation::decode(record)
+        .map_err(|what| StoreError::Codec(format!("{id}: {what}")))?
+        .subject;
+      self.annotations.push((subject.0, id.0));
+    }
     let class = class_of(kind) as usize;
     if self.open[class].bytes.len() + record.len() > FRAME_LIMIT {
       self.close(class)?;
@@ -166,6 +176,23 @@ impl ContainerWriter {
       self.close(class)?;
     }
     Ok(())
+  }
+
+  /// Records an object as absent by promise or by policy (objects.md §8):
+  /// an index entry with its state and no location. Only content may be
+  /// absent; a reader refuses any other.
+  pub fn add_absent(&mut self, id: &NativeId, kind: Type, state: u8) {
+    self.records.insert(
+      id.0,
+      Record {
+        kind,
+        form: Form::Body,
+        state,
+        frame: NO_FRAME,
+        offset: 0,
+        length: 0,
+      },
+    );
   }
 
   fn close(&mut self, class: usize) -> Result<(), StoreError> {
@@ -234,7 +261,13 @@ impl ContainerWriter {
 
   fn index(&self) -> Vec<u8> {
     let mut out = INDEX_MAGIC.to_vec();
-    for count in [self.frames.len() as u32, self.records.len() as u32, 0, 0] {
+    let counts = [
+      self.frames.len() as u32,
+      self.records.len() as u32,
+      self.annotations.len() as u32,
+      0,
+    ];
+    for count in counts {
       out.extend_from_slice(&count.to_be_bytes());
     }
     for frame in &self.frames {
@@ -254,6 +287,21 @@ impl ContainerWriter {
       for value in [record.frame, record.offset, record.length] {
         out.extend_from_slice(&value.to_be_bytes());
       }
+    }
+    let names: Vec<&[u8; 32]> = self.records.keys().collect();
+    let mut table: Vec<([u8; 32], u32)> = self
+      .annotations
+      .iter()
+      .map(|(subject, id)| {
+        let position = names.binary_search(&id).expect("an annotation's own record") as u32;
+        (*subject, position)
+      })
+      .collect();
+    table.sort();
+    table.dedup();
+    for (subject, position) in table {
+      out.extend_from_slice(&subject);
+      out.extend_from_slice(&position.to_be_bytes());
     }
     out
   }
@@ -292,6 +340,9 @@ pub struct Container {
   pub frames: Vec<Frame>,
   pub names: Vec<[u8; 32]>,
   pub records: Vec<Record>,
+  /// The annotation table: each annotation's subject digest and its position
+  /// in the names, in order.
+  pub annotations: Vec<([u8; 32], u32)>,
 }
 
 impl Container {
@@ -508,6 +559,7 @@ fn parse_index(path: &Path, index: &[u8], index_offset: u64) -> Result<Container
   }
   let mut previous: Option<([u8; 32], u32)> = None;
   let mut listed = std::collections::HashSet::new();
+  let mut table = Vec::with_capacity(annotations);
   for _ in 0..annotations {
     let subject = <[u8; 32]>::try_from(reader.take(32)?).expect("32 bytes");
     let position = reader.u32()?;
@@ -524,6 +576,7 @@ fn parse_index(path: &Path, index: &[u8], index_offset: u64) -> Result<Container
       return Err("its annotation table lists an annotation twice".into());
     }
     previous = Some((subject, position));
+    table.push((subject, position));
   }
   if records
     .iter()
@@ -538,5 +591,6 @@ fn parse_index(path: &Path, index: &[u8], index_offset: u64) -> Result<Container
     frames,
     names,
     records,
+    annotations: table,
   })
 }

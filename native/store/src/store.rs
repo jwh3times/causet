@@ -270,8 +270,9 @@ impl Store {
     }
   }
 
-  /// The current ref snapshot, with each direct ref checked to name a present
-  /// object of the snapshot's Git algorithm (objects.md §6).
+  /// The current ref snapshot, with each direct ref checked to name an object
+  /// the store holds, of the snapshot's Git algorithm (objects.md §6).
+  /// Content may be held absent (§8).
   pub fn refs(&self) -> Result<Snapshot, StoreError> {
     let read = self.read_known(&self.snapshot)?;
     let corrupt = |what: String| StoreError::Corrupt(format!("{}: {what}", self.snapshot));
@@ -280,10 +281,7 @@ impl Store {
     for entry in &snapshot.refs {
       if let RefTarget::Direct(id) = &entry.target {
         let name = String::from_utf8_lossy(&entry.name);
-        if !self
-          .locate(id)
-          .is_some_and(|(_, record)| record.state == PRESENT)
-        {
+        if self.locate(id).is_none() {
           return Err(corrupt(format!(
             "its ref {name} names {id}, which the store does not hold"
           )));
@@ -346,8 +344,13 @@ impl Store {
     }
   }
 
+  /// The containers, in name order.
+  pub(crate) fn containers(&self) -> &[Container] {
+    &self.containers
+  }
+
   /// Where an object is: a present copy if any container has one.
-  fn locate(&self, id: &NativeId) -> Option<(usize, Record)> {
+  pub(crate) fn locate(&self, id: &NativeId) -> Option<(usize, Record)> {
     let mut found = None;
     for (number, container) in self.containers.iter().enumerate() {
       if let Some(record) = container.find(id) {
@@ -360,17 +363,15 @@ impl Store {
     found
   }
 
-  /// The objects whose text form begins with `prefix`, at most two.
-  pub fn matching(&self, prefix: &str) -> Vec<NativeId> {
+  /// The objects whose text form begins with `prefix` and whose type
+  /// `accept` takes, each once.
+  pub fn matching(&self, prefix: &str, accept: impl Fn(Type) -> bool) -> Vec<NativeId> {
     let mut found: Vec<NativeId> = Vec::new();
     for container in &self.containers {
-      for name in &container.names {
+      for (name, record) in container.names.iter().zip(&container.records) {
         let id = NativeId(*name);
-        if id.hex().starts_with(prefix) && !found.contains(&id) {
+        if accept(record.kind) && id.hex().starts_with(prefix) && !found.contains(&id) {
           found.push(id);
-          if found.len() == 2 {
-            return found;
-          }
         }
       }
     }
@@ -439,6 +440,24 @@ impl Store {
     })
   }
 
+  /// An object's type, from the index alone, when any container lists it.
+  pub fn held(&self, id: &NativeId) -> Option<Type> {
+    self.locate(id).map(|(_, record)| record.kind)
+  }
+
+  /// A content object's length, from its record alone: its bytes, or the
+  /// size its chunk list gives.
+  pub fn content_size(&self, id: &NativeId) -> Result<u64, StoreError> {
+    match self.record(id)? {
+      (Type::Content, Form::Body, record) => Ok(record.len() as u64),
+      (Type::Content, Form::ChunkList, record) => ChunkList::decode(&record)
+        .map(|list| list.size)
+        .map_err(|what| StoreError::Corrupt(format!("{id}: {what}"))),
+      (Type::Content, Form::Delta, _) => Err(delta(id)),
+      _ => Err(StoreError::NotFound(format!("{id} is not content"))),
+    }
+  }
+
   /// The type of a known object, from the index alone.
   pub fn known_kind(&self, id: &NativeId) -> Result<Type, StoreError> {
     self
@@ -451,7 +470,7 @@ impl Store {
   /// content of exactly its listed length, so a nested list is strictly
   /// shorter than the one naming it and resolution ends (objects.md §3.3);
   /// each nested list is verified by its ID as well.
-  fn resolve(&self, id: &NativeId, record: &[u8]) -> Result<Vec<u8>, StoreError> {
+  pub(crate) fn resolve(&self, id: &NativeId, record: &[u8]) -> Result<Vec<u8>, StoreError> {
     enum Step {
       Chunk(NativeId, u64),
       Verify(NativeId, usize),

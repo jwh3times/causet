@@ -1,6 +1,6 @@
-//! The bodies of the N1 object types (objects.md §3–§5): chunk lists, native
-//! trees and their Git encoding, preserved Git objects, and ref snapshots
-//! (§6), each with the rules a reader checks.
+//! The bodies of the N1 object types (objects.md §3–§7): chunk lists, native
+//! trees and their Git encoding, preserved Git objects, ref snapshots (§6)
+//! and annotations (§7), each with the rules a reader checks.
 
 use crate::encoding::{Reader, put_bytes, put_varint};
 use crate::id::{GitAlgorithm, GitId, NativeId, unhex};
@@ -576,6 +576,53 @@ pub fn parse_git_tree(payload: &[u8], algorithm: GitAlgorithm) -> Option<Vec<Git
   Some(entries)
 }
 
+/// An annotation (objects.md §7): derived data attached to a subject without
+/// changing the subject's ID.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Annotation {
+  pub subject: NativeId,
+  /// The annotation type's name.
+  pub kind: Vec<u8>,
+  /// Interpreted by the type; a reader that does not know the type leaves it
+  /// undecoded.
+  pub payload: Vec<u8>,
+}
+
+impl Annotation {
+  pub fn encode(&self) -> Vec<u8> {
+    let mut out = Vec::new();
+    self.subject.put(&mut out);
+    put_bytes(&mut out, &self.kind);
+    out.extend_from_slice(&self.payload);
+    out
+  }
+
+  /// An annotation's body, checked for what every type shares: a subject of
+  /// a known tag, and a well-formed type name.
+  pub fn decode(body: &[u8]) -> Result<Annotation, String> {
+    let mut reader = Reader::new(body);
+    let subject = NativeId::read(&mut reader)?;
+    let kind = reader.bytes()?.to_vec();
+    let well_formed = !kind.is_empty()
+      && kind.len() <= 64
+      && kind[0].is_ascii_alphanumeric()
+      && kind
+        .iter()
+        .all(|&byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'.' || byte == b'-');
+    if !well_formed {
+      return Err(format!(
+        "an annotation's type {:?} is not a type name",
+        String::from_utf8_lossy(&kind)
+      ));
+    }
+    Ok(Annotation {
+      subject,
+      kind,
+      payload: reader.rest().to_vec(),
+    })
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -783,6 +830,32 @@ committer C O Mitter <committer@example.com> 1112911993 -0700\n\nAdd hello\n";
 
     let kept = preserved(GitKind::Tree, String::new());
     assert!(kept.header_ids().is_empty());
+  }
+
+  #[test]
+  fn annotations_are_the_contracts_example_and_keep_their_rules() {
+    let annotation = Annotation {
+      subject: content(b"hello\n"),
+      kind: b"example".to_vec(),
+      payload: b"x".to_vec(),
+    };
+    let body = annotation.encode();
+    assert_eq!(body.len(), 42);
+    assert_eq!(
+      NativeId::of(Type::Annotation, &body).hex(),
+      "dc1e9fcb5149da8887cbc87733281a38cfee0a1cb79a288ecd9b45635f403bea"
+    );
+    assert_eq!(Annotation::decode(&body).unwrap(), annotation);
+    for kind in [&b""[..], b"Upper", b"-lead", b"sp ace", &[b'a'; 65]] {
+      let bad = Annotation {
+        kind: kind.to_vec(),
+        ..annotation.clone()
+      };
+      assert!(Annotation::decode(&bad.encode()).is_err(), "{kind:?}");
+    }
+    let mut tag = body.clone();
+    tag[0] = 0x02;
+    assert!(Annotation::decode(&tag).is_err());
   }
 
   #[test]
