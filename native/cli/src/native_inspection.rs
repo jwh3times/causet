@@ -301,44 +301,76 @@ impl Listing<'_> {
       })
   }
 
-  /// Git's `read_tree_at` with `ls-tree`'s `show_tree_*`.
-  fn walk(&self, tree: NativeId, base: &mut Vec<u8>, depth: usize, out: &mut Vec<u8>) -> GitResult<()> {
-    if depth > MAX_TREE_DEPTH {
-      return Err(GitError::new(
-        "resource-bound-exceeded",
-        "exceeded maximum allowed tree depth",
-      ));
+  /// Git's `read_tree_at` with `ls-tree`'s `show_tree_*`, walked with a
+  /// stack of its own rather than the thread's, so a tree as deep as Git
+  /// allows lists on every platform.
+  fn walk(&self, tree: NativeId, out: &mut Vec<u8>) -> GitResult<()> {
+    /// A tree being listed: its entries, the next one, whether every entry
+    /// from here on is of interest, and the base to return to once done.
+    struct Level {
+      entries: Vec<Listed>,
+      next: usize,
+      all: bool,
+      restore: usize,
     }
-    let store = &self.repository.store;
     let not_a_tree = |id: &str| GitError::new("not-found", format!("Object {id} not a tree"));
-    let read = store.read_known(&tree).map_err(store_error)?;
-    let entries = listing(store, &read.kind, &read.body)?.ok_or_else(|| not_a_tree(&tree.hex()))?;
-    let mut all = self.specs.is_empty();
-    for entry in &entries {
-      if !all {
-        match interest(&self.specs, base, entry) {
-          Interest::AllNot => break,
+    let entries = |tree: &NativeId| -> GitResult<Vec<Listed>> {
+      let store = &self.repository.store;
+      let read = store.read_known(tree).map_err(store_error)?;
+      listing(store, &read.kind, &read.body)?.ok_or_else(|| not_a_tree(&tree.hex()))
+    };
+    let mut base: Vec<u8> = Vec::new();
+    let mut stack = vec![Level {
+      entries: entries(&tree)?,
+      next: 0,
+      all: self.specs.is_empty(),
+      restore: 0,
+    }];
+    while let Some(level) = stack.last_mut() {
+      let Some(entry) = level.entries.get(level.next) else {
+        base.truncate(level.restore);
+        stack.pop();
+        continue;
+      };
+      level.next += 1;
+      if !level.all {
+        match interest(&self.specs, &base, entry) {
+          Interest::AllNot => {
+            level.next = level.entries.len();
+            continue;
+          }
           Interest::Not => continue,
           Interest::Yes => {}
-          Interest::All => all = true,
+          Interest::All => level.all = true,
         }
       }
-      let into = entry.kind == "tree" && self.into(base, &entry.name);
+      let into = entry.kind == "tree" && self.into(&base, &entry.name);
       let show = match entry.kind {
         "blob" => !self.trees_only,
         "tree" if into => self.show_trees,
         _ => true,
       };
       if show {
-        self.print(base, entry, out)?;
+        self.print(&base, entry, out)?;
       }
       if into {
         let target = entry.target.ok_or_else(|| not_a_tree(&entry.shown))?;
-        let length = base.len();
+        let restore = base.len();
         base.extend_from_slice(&entry.name);
         base.push(b'/');
-        self.walk(target, base, depth + 1, out)?;
-        base.truncate(length);
+        // The tree it goes into is at the depth of the trees listed so far.
+        if stack.len() > MAX_TREE_DEPTH {
+          return Err(GitError::new(
+            "resource-bound-exceeded",
+            "exceeded maximum allowed tree depth",
+          ));
+        }
+        stack.push(Level {
+          entries: entries(&target)?,
+          next: 0,
+          all: self.specs.is_empty(),
+          restore,
+        });
       }
     }
     Ok(())
@@ -515,7 +547,7 @@ pub fn ls_tree(args: &[OsString], root: &Path) -> GitResult<i32> {
     specs,
   };
   let mut out = Vec::new();
-  let result = listing.walk(tree, &mut Vec::new(), 0, &mut out).map(|()| 0);
+  let result = listing.walk(tree, &mut out).map(|()| 0);
   finish(out, result)
 }
 
@@ -1480,6 +1512,56 @@ mod tests {
     assert_eq!(right_strip(name, 1), b"refs/heads/topic");
     assert_eq!(right_strip(name, -1), b"refs");
     assert_eq!(right_strip(name, 9), b"");
+  }
+
+  #[test]
+  fn a_tree_deeper_than_gits_limit_fails_to_list_without_exhausting_the_stack() {
+    use causet_store::id::GitAlgorithm;
+    use causet_store::objects::{Entry, Kind, Ref, RefTarget, Snapshot, Target, Tree};
+    use causet_store::store::StoreWriter;
+    let list = |levels: usize| -> GitResult<Vec<u8>> {
+      let root = std::env::temp_dir().join(format!("causet-deep-{}-{levels}", std::process::id()));
+      let _ = std::fs::remove_dir_all(&root);
+      let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+      let mut target = Target::Native(writer.put_content(b"deep\n").unwrap());
+      let mut kind = Kind::File;
+      for _ in 0..levels {
+        let tree = Tree { entries: vec![Entry { name: b"d".to_vec(), kind, target }] };
+        target = Target::Native(writer.put_tree(&tree).unwrap());
+        kind = Kind::Tree;
+      }
+      let Target::Native(top) = target else { unreachable!() };
+      writer.alias(vec![7; 20], top);
+      let snapshot = Snapshot::new(
+        GitAlgorithm::Sha1,
+        vec![Ref { name: b"refs/heads/main".to_vec(), target: RefTarget::Direct(top) }],
+      )
+      .unwrap();
+      writer.finish(&snapshot).unwrap();
+      let repository = Repository::open(&root).unwrap();
+      let listing = Listing {
+        repository: &repository,
+        recursive: true,
+        show_trees: false,
+        trees_only: false,
+        terminator: b'\n',
+        shown: Shown::NameOnly,
+        format: None,
+        specs: Vec::new(),
+      };
+      let mut out = Vec::new();
+      let result = listing.walk(top, &mut out).map(|()| out);
+      std::fs::remove_dir_all(&root).unwrap();
+      result
+    };
+    // Git lists a path of 2048 trees and refuses one more.
+    let listed = list(MAX_TREE_DEPTH + 1).unwrap();
+    // `d/` for each of 2048 trees below the top, then `d` and a line feed.
+    assert_eq!(listed.len(), (MAX_TREE_DEPTH + 1) * 2);
+    let refused = list(MAX_TREE_DEPTH + 2).unwrap_err();
+    assert_eq!(refused.message, "exceeded maximum allowed tree depth");
+    // Far past any stack.
+    assert!(list(50_000).is_err());
   }
 
   #[test]

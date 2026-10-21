@@ -312,19 +312,3 @@ test("an annotation of an unknown type changes no content ID and no command's an
   const own = nativeId(TYPES.annotation, body).toString("hex");
   assert.equal(cst(history.native, ["cat-file", "-t", own]).stdout.toString(), "annotation\n");
 });
-
-test("a tree deeper than Git's limit fails to list, as Git's does, without exhausting the stack", () => {
-  const root = scratch();
-  const repo = path.join(root, "source");
-  fs.mkdirSync(repo);
-  execFileSync("git", ["init", "-q", "-b", "main", repo], { env: testEnv() });
-  const deep = `${Array(2050).fill("d").join("/")}/file`;
-  const stream = ["commit refs/heads/main", "committer C <c@e> 1 +0000", "data 4", "deep", `M 100644 inline ${deep}`, "data 2", "x", "", ""].join("\n");
-  execFileSync("git", ["fast-import", "--quiet"], { cwd: repo, env: testEnv(), input: stream });
-  execFileSync(cstCommand, [...cstPrefix(), "import", "source", "native"], { cwd: root, env: testEnv(OPT_IN) });
-  const native = path.join(root, "native");
-  const listed = cst(native, ["ls-tree", "-r", "HEAD"]);
-  assert.notEqual(listed.status, 0);
-  assert.match(listed.stderr.toString(), /exceeded maximum allowed tree depth/);
-  assert.equal(cst(native, ["ls-tree", "HEAD"]).stdout.toString().split("\t")[1], "d\n");
-});
