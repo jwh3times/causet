@@ -15,7 +15,8 @@ use causet_engine::errors::{GitError, GitResult};
 use causet_store::StoreError;
 use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
 use causet_store::objects::{
-  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, followed, parse_git_tree,
+  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, followed, header_ids,
+  parse_git_tree,
 };
 use causet_store::store::StoreWriter;
 use std::collections::{HashMap, HashSet};
@@ -190,13 +191,14 @@ fn digest(id: &str) -> GitResult<Vec<u8>> {
   })
 }
 
-/// The value of a header line of a commit or tag, such as `tree` or `object`.
-fn header<'a>(raw: &'a [u8], name: &str) -> Option<&'a str> {
-  raw
-    .split(|&byte| byte == b'\n')
-    .take_while(|line| !line.is_empty())
-    .find_map(|line| line.strip_prefix(name.as_bytes())?.strip_prefix(b" "))
-    .and_then(|value| std::str::from_utf8(value).ok())
+/// What a commit or tag is built on, as Git's parser reads it: its first
+/// line's ID (`header_ids`), a commit's tree or a tag's object. A commit's
+/// parents come from its ancestry instead.
+fn built_on(algorithm: GitAlgorithm, kind: GitKind, raw: &[u8]) -> Option<String> {
+  header_ids(algorithm, kind, raw)
+    .into_iter()
+    .find(|id| id.first)
+    .map(|id| hex(&id.digest))
 }
 
 impl Importer<'_> {
@@ -247,8 +249,8 @@ impl Importer<'_> {
               }
             }
           }
-          "commit" => named.extend(header(&body, "tree").map(str::to_string)),
-          "tag" => named.extend(header(&body, "object").map(str::to_string)),
+          "commit" => named.extend(built_on(self.algorithm, GitKind::Commit, &body)),
+          "tag" => named.extend(built_on(self.algorithm, GitKind::Tag, &body)),
           _ => {}
         }
         self.object(id, kind, body)

@@ -145,17 +145,18 @@ function makeSource(format) {
 
 /**
  * `cat-file -p` of a commit or tag as a native repository prints it: Git's
- * payload with the IDs of the header lines that name what it is built on
- * (a commit's tree and parents, a tag's object) translated.
+ * payload with the IDs of the header lines Git's parser follows translated:
+ * the first line (a commit's tree, a tag's object) and a commit's parent
+ * lines straight after it.
  */
 function translateHeaders(kind, text, rows) {
-  const names = kind === "commit" ? ["tree", "parent"] : ["object"];
   const lines = text.split("\n");
-  const end = lines.indexOf("");
+  let followed = true;
   return lines.map((line, index) => {
-    const [name, id] = line.split(" ");
-    return (end === -1 || index < end) && names.includes(name) && line === `${name} ${id}` && rows.has(id)
-      ? `${name} ${rows.get(id)}` : line;
+    const name = index === 0 ? (kind === "commit" ? "tree" : "object") : kind === "commit" ? "parent" : null;
+    const id = line.slice(`${name} `.length);
+    followed &&= name !== null && line.startsWith(`${name} `);
+    return followed && rows.has(id) ? `${name} ${rows.get(id)}` : line;
   }).join("\n");
 }
 
@@ -486,6 +487,45 @@ test("a replacement ref is recorded, and the object it replaces imports as store
   assert.equal(printed, translateHeaders("commit", git(["--no-replace-objects", "cat-file", "-p", stored]).toString(), rows));
   assert.match(printed, /as stored/);
   assert.ok(rows.get(replacement), "the replacement, which its ref reaches, is imported too");
+});
+
+test("only the header lines Git's parser follows are translated, and a path is looked up through the first", () => {
+  const root = scratch();
+  const repo = path.join(root, "source");
+  fs.mkdirSync(repo);
+  const git = gitIn(repo);
+  git(["init", "-q", "-b", "main"]);
+  const tree = (name) => git(["mktree"], Buffer.from(`100644 blob ${git(["hash-object", "-w", "--stdin"], `${name}\n`).toString().trim()}\t${name}\n`)).toString().trim();
+  const [here, there] = [tree("here"), tree("there")];
+  const base = git(["commit-tree", here, "-m", "base"]).toString().trim();
+  const other = git(["commit-tree", there, "-m", "other"]).toString().trim();
+  const literally = (kind, text) => git(["hash-object", "-t", kind, "-w", "--literally", "--stdin"], Buffer.from(text)).toString().trim();
+  // A later `parent`, `tree` or `object` line is one Git's parser does not
+  // follow, though each names an object the refs reach.
+  const late = literally("commit", [`tree ${here}`, `parent ${base}`, "author A <a@e> 1 +0000", `parent ${other}`,
+    "committer C <c@e> 1 +0000", `tree ${there}`, "", "late lines", ""].join("\n"));
+  const tag = literally("tag", [`object ${late}`, "type commit", "tag late", "tagger T <t@e> 1 +0000", `object ${other}`,
+    "", "a late object line", ""].join("\n"));
+  git(["update-ref", "refs/heads/main", late]);
+  git(["update-ref", "refs/heads/other", other]);
+  git(["update-ref", "refs/tags/late", tag]);
+  assert.equal(cst(root, ["import", "source", "native"]).status, 0);
+  const destination = path.join(root, "native");
+  const rows = aliases(destination, "sha1");
+
+  for (const [id, kind] of [[late, "commit"], [tag, "tag"]]) {
+    const printed = cst(destination, ["cat-file", "-p", rows.get(id)]).stdout.toString();
+    assert.equal(printed, translateHeaders(kind, git(["cat-file", "-p", id]).toString(), rows));
+    assert.match(printed, new RegExp(`^(parent|object) ${other}$`, "m"), "the late line prints as stored");
+  }
+  for (const [id, name] of [[late, "here"], [late, "there"], [tag, "here"], [tag, "there"]]) {
+    const expected = spawnSync("git", ["cat-file", "-p", `${id}:${name}`], { cwd: repo, env: testEnv() });
+    const answered = cst(destination, ["cat-file", "-p", `${rows.get(id)}:${name}`]);
+    assert.equal(answered.status === 0, expected.status === 0, `${id}:${name}: ${answered.stderr}`);
+    assert.equal(answered.stdout.toString(), expected.stdout.toString(), `${id}:${name}`);
+  }
+  const verified = cst(destination, ["import", "--verify"]);
+  assert.equal(verified.status, 0, verified.stderr.toString());
 });
 
 test("shallow, partial and grafted sources are refused before anything is written, each naming why", () => {
