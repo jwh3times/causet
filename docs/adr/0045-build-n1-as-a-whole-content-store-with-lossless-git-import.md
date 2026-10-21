@@ -73,7 +73,10 @@ binaries:
      containers, indexes and the alias map. Packing order is deterministic.
    - **An incremental import yields the same native objects** (IDs and
      content), the same alias map and the same ref snapshot as a full import of
-     the final history. Container layout may differ.
+     the final history. Container layout may differ. An import removes
+     nothing the store held: what only a deleted or moved ref reached stays,
+     with its alias rows. The store then holds the full import's objects and
+     rows, and its own earlier ones.
 
 ### Identity
 

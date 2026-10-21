@@ -509,8 +509,10 @@ permissions need no change to it later.
 The **alias map** is two-way: it maps (Git algorithm, Git ID) to native ID,
 and back (decision 5). It covers every imported Git object, which is every
 object reachable from what Git's `--all` starts from, and no other: the refs
-the snapshot records (§6), and other worktrees' `HEAD` and per-worktree refs,
-which it does not record. An object the alias map holds is present and valid
+the snapshot records (§6), and other worktrees' `HEAD`, which it does not
+record. What only another worktree's own refs reach, such as its
+`refs/worktree/*`, is not imported: `--all` does not start from them, and
+`git fsck` counts it unreachable. An object the alias map holds is present and valid
 whether or not the snapshot reaches it; verification must not report it as
 corrupt. An unreachable object in the Git repository is not imported. The map has a row
 for each object:
@@ -636,6 +638,24 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
 - **The commit point.** Import writes its objects and alias files first and
   replaces `snapshot` last. A reader therefore sees one import whole or not at
   all. A `snapshot` naming an object the store does not hold is corrupt.
+  - **A new store** is written in `.cst-import/` beside it, which is renamed to
+    `.cst/` once whole.
+  - **An import into an existing store** writes its container under a name
+    readers ignore, then names it by its trailer (storage.md §4). It then
+    replaces the alias file, and last `snapshot`, each by writing and syncing
+    `<name>.tmp` and renaming it over the file. The alias file it writes keeps
+    every row the store had (storage.md §4.2), so it is right for the
+    snapshot before as well as after. A file it would write unchanged is left
+    as it is.
+  - **A reader reads `snapshot` first,** then the alias files, then the list
+    of containers. Whatever an import has replaced by then, the reader has
+    every row and container its snapshot needs.
+  - **An import that fails** before replacing `snapshot` takes back what it
+    put in place: the earlier alias file, then its container.
+  - **`import.lock`** is created exclusively before an import reads the store
+    it adds to, and removed when it ends, so only one import adds at a time.
+    It holds the importing process's ID. One left by an import that was
+    killed is removed by hand. A reader ignores it.
 - **Other names under `.cst/` are reserved** for later parts of the contract
   and later phases. A version 0 reader ignores the names it does not know.
 - **`.cst/` holds only the store.** There is no working copy in N1: a native
