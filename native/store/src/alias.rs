@@ -67,6 +67,14 @@ impl Aliases {
     self.rows.is_empty()
   }
 
+  /// Every row, as (Git digest, native ID), in byte order of Git digest.
+  pub fn rows(&self) -> impl Iterator<Item = (&[u8], &NativeId)> {
+    self
+      .rows
+      .iter()
+      .map(|(digest, native)| (digest.as_slice(), native))
+  }
+
   pub fn native(&self, git_digest: &[u8]) -> Option<NativeId> {
     self
       .rows

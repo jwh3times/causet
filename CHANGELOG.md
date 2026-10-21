@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Experimental: `cst import --verify` checks a native repository against
+  Git's IDs** (#303). It rebuilds every imported object in Git's encoding, from
+  the store and its alias map alone, and requires each to hash to the Git ID
+  it was imported under, computing SHA-1 with Git's collision detection. It
+  also requires an alias row for every object the store holds from Git, and
+  for every object a tree, commit or tag is built on. It runs no Git and
+  writes nothing. An object that fails is reported by its Git and native IDs,
+  as `store-corrupt`. Import, the check, `cst cat-file -p`'s translation and
+  `<commit>:<path>` all follow a commit's or tag's header as Git's parser
+  does: its first line, then a commit's `parent` lines straight after it. A
+  later `tree`, `parent` or `object` line prints as stored.
 - **Experimental: `cst import` copies the whole history** (#302). Commits and
   tags are now imported as preserved Git objects, byte for byte, signatures,
   encodings and extra headers included, and every ref the source lists is

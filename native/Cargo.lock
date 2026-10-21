@@ -109,6 +109,7 @@ name = "causet-store"
 version = "0.1.0"
 dependencies = [
  "causet-model",
+ "sha1-checked",
  "zstd",
  "zstd-sys",
 ]

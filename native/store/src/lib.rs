@@ -1,6 +1,7 @@
 //! The native content store of N1 (ADR-0045, #297), built to the contract in
 //! `docs/native-store/`: IDs, the object types, the chunker, frames and
-//! containers, the alias map, and the store that writes and reads them.
+//! containers, the alias map, the store that writes and reads them, and the
+//! reconstruction check.
 #![forbid(unsafe_code)]
 
 pub mod alias;
@@ -9,6 +10,7 @@ pub mod container;
 pub mod encoding;
 pub mod id;
 pub mod objects;
+pub mod reconstruct;
 pub mod store;
 
 use std::fmt;

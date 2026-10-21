@@ -311,6 +311,41 @@ impl Store {
       .find(|aliases| aliases.algorithm == algorithm)
   }
 
+  /// Every object the store holds present, once, with its type and stored
+  /// form, in storage order (container, frame, offset): the copy a read uses.
+  pub fn present(&self) -> Vec<(NativeId, Type, Form)> {
+    let mut seen = HashSet::new();
+    let mut found = Vec::new();
+    for (number, container) in self.containers.iter().enumerate() {
+      for (name, record) in container.names.iter().zip(&container.records) {
+        if record.state == PRESENT && seen.insert(*name) {
+          found.push((
+            (number, record.frame, record.offset),
+            NativeId(*name),
+            record,
+          ));
+        }
+      }
+    }
+    found.sort_by_key(|(at, _, _)| *at);
+    found
+      .into_iter()
+      .map(|(_, id, record)| (id, record.kind, record.form))
+      .collect()
+  }
+
+  /// A content object's chunk list, as stored: what it names, unresolved.
+  pub fn chunk_list(&self, id: &NativeId) -> Result<ChunkList, StoreError> {
+    match self.record(id)? {
+      (Type::Content, Form::ChunkList, record) => {
+        ChunkList::decode(&record).map_err(|what| StoreError::Corrupt(format!("{id}: {what}")))
+      }
+      _ => Err(StoreError::NotFound(format!(
+        "{id} is not stored as a chunk list"
+      ))),
+    }
+  }
+
   /// Where an object is: a present copy if any container has one.
   fn locate(&self, id: &NativeId) -> Option<(usize, Record)> {
     let mut found = None;

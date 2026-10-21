@@ -3,8 +3,9 @@
 //! (§6), each with the rules a reader checks.
 
 use crate::encoding::{Reader, put_bytes, put_varint};
-use crate::id::{GitAlgorithm, GitId, NativeId};
+use crate::id::{GitAlgorithm, GitId, NativeId, unhex};
 use std::cmp::Ordering;
+use std::ops::Range;
 
 /// The chunker code of cst's FastCDC (storage.md §2).
 pub const CHUNKER_FASTCDC: u8 = 0x01;
@@ -284,6 +285,16 @@ impl GitKind {
       GitKind::Tree => "tree",
     }
   }
+
+  /// The header lines that name the objects one is built on: a commit's
+  /// `tree` and `parent`, and a tag's `object`, the first line's name first.
+  pub fn naming(self) -> &'static [&'static [u8]] {
+    match self {
+      GitKind::Commit => &[b"tree ", b"parent "],
+      GitKind::Tag => &[b"object "],
+      GitKind::Tree => &[],
+    }
+  }
 }
 
 /// A Git object kept in Git's encoding, for the bridge.
@@ -323,6 +334,85 @@ impl Preserved {
       payload: reader.rest().to_vec(),
     })
   }
+
+  /// The Git digests it names that Git follows, in order: for a commit or
+  /// tag, its header IDs (`Preserved::header_ids`); for a tree, its entries
+  /// but its submodule links.
+  pub fn named(&self) -> Vec<Vec<u8>> {
+    if self.kind == GitKind::Tree {
+      return parse_git_tree(&self.payload, self.algorithm)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|entry| followed(&entry.mode))
+        .map(|entry| entry.digest)
+        .collect();
+    }
+    self
+      .header_ids()
+      .into_iter()
+      .map(|id| id.digest)
+      .collect()
+  }
+
+  /// The Git IDs of its header that Git's parser follows (`header_ids`).
+  pub fn header_ids(&self) -> Vec<HeaderId> {
+    header_ids(self.algorithm, self.kind, &self.payload)
+  }
+}
+
+/// The Git IDs of a commit's or tag's header that Git's parser follows, in
+/// order: the first line's (`tree`, `object`), then a commit's `parent` lines
+/// straight after it (`GitKind::naming`). A later line of either name is not
+/// followed. A value that is not a Git ID of its algorithm in lowercase hex
+/// is not one; the payload's validity is Git's to judge (§5). A tree has
+/// none.
+pub fn header_ids(algorithm: GitAlgorithm, kind: GitKind, payload: &[u8]) -> Vec<HeaderId> {
+  let naming = kind.naming();
+  let Some(&first) = naming.first() else {
+    return Vec::new();
+  };
+  let digest = |value: &[u8]| {
+    let value = std::str::from_utf8(value).ok()?;
+    if value.len() != algorithm.length() * 2 || value != value.to_ascii_lowercase() {
+      return None;
+    }
+    unhex(value)
+  };
+  let mut ids = Vec::new();
+  let mut start = 0;
+  for (index, line) in payload.split(|&byte| byte == b'\n').enumerate() {
+    let name = match index {
+      0 => first,
+      _ => match naming.get(1) {
+        Some(&then) => then,
+        None => break,
+      },
+    };
+    if !line.starts_with(name) {
+      break;
+    }
+    let at = start + name.len()..start + line.len();
+    if let Some(digest) = digest(&payload[at.clone()]) {
+      ids.push(HeaderId {
+        first: index == 0,
+        at,
+        digest,
+      });
+    }
+    start += line.len() + 1;
+  }
+  ids
+}
+
+/// A Git ID a commit's or tag's header names where Git's parser follows it
+/// (`header_ids`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HeaderId {
+  /// Whether it is the first line's: a commit's tree, a tag's object.
+  pub first: bool,
+  /// Where its hex is in the payload.
+  pub at: Range<usize>,
+  pub digest: Vec<u8>,
 }
 
 /// What a ref in a snapshot points to (objects.md §6).
@@ -440,6 +530,20 @@ impl Snapshot {
     snapshot.check()?;
     Ok(snapshot)
   }
+}
+
+/// Whether Git follows a tree entry of this mode: every mode but a submodule
+/// link's, after Git's own `canon_mode`. A mode that is not octal is followed
+/// by neither.
+pub fn followed(mode: &[u8]) -> bool {
+  let Some(mode) = std::str::from_utf8(mode)
+    .ok()
+    .filter(|mode| !mode.is_empty())
+    .and_then(|mode| u32::from_str_radix(mode, 8).ok())
+  else {
+    return false;
+  };
+  matches!(mode & 0o170000, 0o100000 | 0o120000 | 0o040000)
 }
 
 /// One record of a Git tree, as Git wrote it.
@@ -626,6 +730,59 @@ committer C O Mitter <committer@example.com> 1112911993 -0700\n\nAdd hello\n";
       (b"040000".as_slice(), b"sub".as_slice())
     );
     assert_eq!(Kind::from_git_mode(&entries[0].mode), None);
+  }
+
+  #[test]
+  fn only_the_header_ids_git_reads_are_followed() {
+    let tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+    let one = "1111111111111111111111111111111111111111";
+    let two = "2222222222222222222222222222222222222222";
+    let preserved = |kind, payload: String| Preserved {
+      algorithm: GitAlgorithm::Sha1,
+      kind,
+      payload: payload.into_bytes(),
+    };
+    let shown = |preserved: &Preserved| -> Vec<(bool, String)> {
+      preserved
+        .header_ids()
+        .into_iter()
+        .map(|id| {
+          let text = String::from_utf8(preserved.payload[id.at.clone()].to_vec()).unwrap();
+          assert_eq!(hex(&id.digest), text);
+          (id.first, text)
+        })
+        .collect()
+    };
+
+    // The first line, the parents straight after it, and nothing later: not
+    // a parent after another line, a second tree, or anything past the
+    // header. A value that is no lowercase Git ID is skipped.
+    let commit = preserved(
+      GitKind::Commit,
+      format!(
+        "tree {tree}\nparent {one}\nparent {}\nparent {two}\nauthor A <a@e> 1 +0000\n\
+         parent {one}\ntree {two}\n\nparent {two}\n",
+        "AB".repeat(20)
+      ),
+    );
+    assert_eq!(
+      shown(&commit),
+      [(true, tree.into()), (false, one.into()), (false, two.into())]
+    );
+    assert_eq!(commit.named().len(), 3);
+
+    // A commit whose first line is not its tree is built on nothing Git reads.
+    let late = preserved(GitKind::Commit, format!("author A <a@e> 1 +0000\ntree {tree}\n\nx\n"));
+    assert!(late.header_ids().is_empty());
+
+    let tag = preserved(
+      GitKind::Tag,
+      format!("object {one}\ntype commit\nobject {two}\ntag v\n\nobject {two}\n"),
+    );
+    assert_eq!(shown(&tag), [(true, one.into())]);
+
+    let kept = preserved(GitKind::Tree, String::new());
+    assert!(kept.header_ids().is_empty());
   }
 
   #[test]
