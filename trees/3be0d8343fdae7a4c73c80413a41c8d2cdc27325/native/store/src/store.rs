@@ -9,6 +9,7 @@ use crate::id::{GitAlgorithm, NativeId, Type, unhex};
 use crate::objects::{ChunkList, Preserved, RefTarget, Snapshot, Tree};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 /// The root marker's exact content.
@@ -16,16 +17,37 @@ pub const FORMAT: &[u8] = b"causet-native-store 0\n";
 /// Content no longer than this is stored as its bytes (storage.md §1).
 const SMALL: usize = 2048;
 const STAGING: &str = ".cst-import";
+/// Held under `.cst/` while an import adds to the store (objects.md §10).
+pub const LOCK: &str = "import.lock";
 
-/// Writes a new store into an empty destination. Nothing is visible as a
-/// native repository until `finish` renames the finished `.cst/` into place.
+/// Writes a store: a new one into an empty destination, or what an import
+/// adds to an existing one. A new store is not a native repository until
+/// `finish` renames the finished `.cst/` into place. An import into an
+/// existing store adds one container, then replaces the alias file and, last,
+/// `snapshot` (objects.md §10); until then a reader sees the store as it was.
 pub struct StoreWriter {
   root: PathBuf,
+  /// The directory the store's files are written in: `.cst-import/` for a
+  /// new store, `.cst/` for an existing one.
   staging: PathBuf,
   algorithm: GitAlgorithm,
   container: Option<ContainerWriter>,
   present: HashSet<NativeId>,
   aliases: Vec<(Vec<u8>, NativeId)>,
+  /// The store an import adds to, as it was when the import began.
+  existing: Option<Store>,
+  /// What an import into an existing store has put in place so far, so a
+  /// failure can take it back.
+  placed: Placed,
+}
+
+/// What an import into an existing store has put in place: the container it
+/// named, and the alias file it replaced, with that file's earlier bytes.
+#[derive(Default)]
+struct Placed {
+  container: Option<PathBuf>,
+  aliases: Option<Option<Vec<u8>>>,
+  snapshot: bool,
 }
 
 impl StoreWriter {
@@ -57,7 +79,79 @@ impl StoreWriter {
       algorithm,
       present: HashSet::new(),
       aliases: Vec::new(),
+      existing: None,
+      placed: Placed::default(),
     })
+  }
+
+  /// Adds to the store of the native repository at `root`, whose history must
+  /// be of `algorithm`. Every object it holds present is held already, and
+  /// every alias row it has is kept. One import at a time adds to a store:
+  /// `.cst/import.lock` is taken before the store is read, and held until the
+  /// import ends.
+  pub fn open(root: &Path, algorithm: GitAlgorithm) -> Result<StoreWriter, StoreError> {
+    let staging = root.join(".cst");
+    let lock = staging.join(LOCK);
+    let mut held = std::fs::OpenOptions::new()
+      .write(true)
+      .create_new(true)
+      .open(&lock)
+      .map_err(|error| match error.kind() {
+        std::io::ErrorKind::AlreadyExists => StoreError::Exists(format!(
+          "{} exists, so another import is adding to {}. If none is, remove it",
+          lock.display(),
+          root.display()
+        )),
+        _ => StoreError::io(&lock, error),
+      })?;
+    let _ = writeln!(held, "{}", std::process::id());
+    drop(held);
+    let mut writer = StoreWriter {
+      root: root.to_path_buf(),
+      container: None,
+      staging,
+      algorithm,
+      present: HashSet::new(),
+      aliases: Vec::new(),
+      existing: None,
+      placed: Placed::default(),
+    };
+    // From here the writer releases the lock, whatever fails.
+    let store = match Store::open(root) {
+      Ok(store) => store,
+      Err(error) => {
+        let _ = std::fs::remove_file(&lock);
+        return Err(error);
+      }
+    };
+    writer.existing = Some(store);
+    let store = writer.existing.as_ref().expect("the store just opened");
+    let history = store.refs()?.algorithm;
+    if history != algorithm {
+      return Err(StoreError::Unsupported(format!(
+        "{} holds a {} history, so it cannot take a {} one",
+        root.display(),
+        history.name(),
+        algorithm.name()
+      )));
+    }
+    writer.present = store.present().into_iter().map(|(id, _, _)| id).collect();
+    writer.aliases = store
+      .aliases_for(algorithm)
+      .map(|aliases| {
+        aliases
+          .rows()
+          .map(|(digest, id)| (digest.to_vec(), *id))
+          .collect()
+      })
+      .unwrap_or_default();
+    writer.container = Some(ContainerWriter::create(&writer.staging.join("objects"))?);
+    Ok(writer)
+  }
+
+  /// The store an import adds to, as it was before this import.
+  pub fn existing(&self) -> Option<&Store> {
+    self.existing.as_ref()
   }
 
   fn add(
@@ -130,9 +224,10 @@ impl StoreWriter {
   }
 
   /// Stores the ref snapshot, then writes the container, the alias file, the
-  /// `snapshot` file and the marker, and renames the store into place: the
-  /// commit point. Each direct ref must name a stored object with an alias
-  /// row (objects.md §6).
+  /// `snapshot` file and, for a new store, the marker, and puts the store in
+  /// place: the commit point is renaming the new store into place, or
+  /// replacing an existing one's `snapshot`. Each direct ref must name a
+  /// stored object with an alias row (objects.md §6).
   pub fn finish(mut self, snapshot: &Snapshot) -> Result<PathBuf, StoreError> {
     if snapshot.algorithm != self.algorithm {
       return Err(StoreError::Codec(format!(
@@ -153,20 +248,108 @@ impl StoreWriter {
       }
     }
     let id = self.put_metadata(Type::Snapshot, &snapshot.encode())?;
-    self.container.take().expect("an open container").finish()?;
-    let aliases = Aliases::new(self.algorithm, std::mem::take(&mut self.aliases))
-      .map_err(StoreError::Corrupt)?;
+    let container = self.container.take().expect("an open container");
+    let mut rows = std::mem::take(&mut self.aliases);
+    rows.sort();
+    rows.dedup();
+    let aliases = Aliases::new(self.algorithm, rows).map_err(StoreError::Corrupt)?.encode();
     let file = self.staging.join("aliases").join(self.algorithm.name());
-    write(&file, &aliases.encode())?;
-    write(
-      &self.staging.join("snapshot"),
-      format!("{}\n", id.hex()).as_bytes(),
-    )?;
-    write(&self.staging.join("format"), FORMAT)?;
-    let store = self.root.join(".cst");
-    std::fs::rename(&self.staging, &store).map_err(|error| StoreError::io(&store, error))?;
-    Ok(store)
+    let named = self.staging.join("snapshot");
+    let snapshot_file = format!("{}\n", id.hex());
+    if self.existing.is_none() {
+      container.finish()?;
+      write(&file, &aliases)?;
+      write(&named, snapshot_file.as_bytes())?;
+      write(&self.staging.join("format"), FORMAT)?;
+      let store = self.root.join(".cst");
+      std::fs::rename(&self.staging, &store).map_err(|error| StoreError::io(&store, error))?;
+      return Ok(store);
+    }
+    // An import that finds nothing new adds no container, and a file it would
+    // write unchanged is left as it is.
+    if container.is_empty() {
+      container.abandon();
+    } else {
+      self.placed.container = Some(container.finish()?);
+      sync_directory(&self.staging.join("objects"));
+    }
+    let before = match std::fs::read(&file) {
+      Ok(bytes) => Some(bytes),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+      Err(error) => return Err(StoreError::io(&file, error)),
+    };
+    if before.as_deref() != Some(aliases.as_slice()) {
+      self.placed.aliases = Some(before);
+      replace(&file, &aliases)?;
+    }
+    if self.existing.as_ref().map(|store| store.snapshot) != Some(id) {
+      replace(&named, snapshot_file.as_bytes())?;
+    }
+    self.placed.snapshot = true;
+    Ok(self.staging.clone())
   }
+}
+
+/// An import into an existing store that does not finish takes back what it
+/// put in place, so the store is as it was, and releases the store.
+impl Drop for StoreWriter {
+  fn drop(&mut self) {
+    if self.existing.is_none() {
+      return;
+    }
+    if let Some(container) = self.container.take() {
+      container.abandon();
+    }
+    let file = self.staging.join("aliases").join(self.algorithm.name());
+    let _ = std::fs::remove_file(temporary(&file));
+    let _ = std::fs::remove_file(temporary(&self.staging.join("snapshot")));
+    if !self.placed.snapshot {
+      // The earlier alias file goes back before the container its new rows
+      // name is removed, so no row is left naming what the store lacks.
+      let restored = match self.placed.aliases.take() {
+        Some(Some(bytes)) => replace(&file, &bytes).is_ok(),
+        Some(None) => std::fs::remove_file(&file).is_ok(),
+        None => true,
+      };
+      if restored && let Some(container) = self.placed.container.take() {
+        let _ = std::fs::remove_file(container);
+      }
+    }
+    let _ = std::fs::remove_file(self.staging.join(LOCK));
+  }
+}
+
+/// Where a file is written before it replaces the one at `path`.
+fn temporary(path: &Path) -> PathBuf {
+  let mut name = path.file_name().unwrap_or_default().to_os_string();
+  name.push(".tmp");
+  path.with_file_name(name)
+}
+
+/// Replaces a file a reader may be reading: its bytes are written under a
+/// temporary name and synced, then renamed over it, so a reader sees one or
+/// the other, and a crash leaves one or the other.
+fn replace(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
+  let written = temporary(path);
+  let mut file = std::fs::File::create(&written).map_err(|error| StoreError::io(&written, error))?;
+  file
+    .write_all(bytes)
+    .and_then(|()| file.sync_all())
+    .map_err(|error| StoreError::io(&written, error))?;
+  drop(file);
+  std::fs::rename(&written, path).map_err(|error| StoreError::io(path, error))?;
+  sync_directory(path.parent().unwrap_or(path));
+  Ok(())
+}
+
+/// Makes a rename in this directory durable, where the platform allows it.
+fn sync_directory(directory: &Path) {
+  #[cfg(unix)]
+  if let Ok(handle) = std::fs::File::open(directory) {
+    let _ = handle.sync_all();
+  }
+  #[cfg(not(unix))]
+  let _ = directory;
 }
 
 fn write(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
@@ -205,6 +388,28 @@ impl Store {
         String::from_utf8_lossy(&FORMAT[..FORMAT.len() - 1])
       )));
     }
+    // `snapshot` is read first: an import replaces it last, so every alias
+    // row and container it needs is in place before a reader can see it
+    // (objects.md §10).
+    let file = store.join("snapshot");
+    let named = std::fs::read(&file).map_err(|error| match error.kind() {
+      std::io::ErrorKind::NotFound => StoreError::Corrupt(format!(
+        "{} is missing, so the store names no refs",
+        file.display()
+      )),
+      _ => StoreError::io(&file, error),
+    })?;
+    let snapshot = std::str::from_utf8(&named)
+      .ok()
+      .and_then(|text| text.strip_suffix('\n'))
+      .filter(|hex| hex.len() == 64 && *hex == hex.to_lowercase())
+      .and_then(NativeId::from_hex)
+      .ok_or_else(|| {
+        StoreError::Corrupt(format!(
+          "{} does not hold a native ID as 64 lowercase hex digits and a line feed",
+          file.display()
+        ))
+      })?;
     let mut aliases = Vec::new();
     for algorithm in [GitAlgorithm::Sha1, GitAlgorithm::Sha256] {
       let file = store.join("aliases").join(algorithm.name());
@@ -235,25 +440,6 @@ impl Store {
       .iter()
       .map(|path| Container::open(path))
       .collect::<Result<Vec<_>, _>>()?;
-    let file = store.join("snapshot");
-    let named = std::fs::read(&file).map_err(|error| match error.kind() {
-      std::io::ErrorKind::NotFound => StoreError::Corrupt(format!(
-        "{} is missing, so the store names no refs",
-        file.display()
-      )),
-      _ => StoreError::io(&file, error),
-    })?;
-    let snapshot = std::str::from_utf8(&named)
-      .ok()
-      .and_then(|text| text.strip_suffix('\n'))
-      .filter(|hex| hex.len() == 64 && *hex == hex.to_lowercase())
-      .and_then(NativeId::from_hex)
-      .ok_or_else(|| {
-        StoreError::Corrupt(format!(
-          "{} does not hold a native ID as 64 lowercase hex digits and a line feed",
-          file.display()
-        ))
-      })?;
     let store = Store {
       root: root.to_path_buf(),
       snapshot,

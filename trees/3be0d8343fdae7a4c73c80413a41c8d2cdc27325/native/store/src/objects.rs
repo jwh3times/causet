@@ -363,9 +363,9 @@ impl Preserved {
 /// The Git IDs of a commit's or tag's header that Git's parser follows, in
 /// order: the first line's (`tree`, `object`), then a commit's `parent` lines
 /// straight after it (`GitKind::naming`). A later line of either name is not
-/// followed. A value that is not a Git ID of its algorithm in lowercase hex
-/// is not one; the payload's validity is Git's to judge (§5). A tree has
-/// none.
+/// followed. A value is read in either case of hex, as Git's parser reads
+/// it; one that is not a Git ID of its algorithm is not one, and the
+/// payload's validity is Git's to judge (§5). A tree has none.
 pub fn header_ids(algorithm: GitAlgorithm, kind: GitKind, payload: &[u8]) -> Vec<HeaderId> {
   let naming = kind.naming();
   let Some(&first) = naming.first() else {
@@ -373,7 +373,7 @@ pub fn header_ids(algorithm: GitAlgorithm, kind: GitKind, payload: &[u8]) -> Vec
   };
   let digest = |value: &[u8]| {
     let value = std::str::from_utf8(value).ok()?;
-    if value.len() != algorithm.length() * 2 || value != value.to_ascii_lowercase() {
+    if value.len() != algorithm.length() * 2 {
       return None;
     }
     unhex(value)
@@ -795,7 +795,7 @@ committer C O Mitter <committer@example.com> 1112911993 -0700\n\nAdd hello\n";
         .into_iter()
         .map(|id| {
           let text = String::from_utf8(preserved.payload[id.at.clone()].to_vec()).unwrap();
-          assert_eq!(hex(&id.digest), text);
+          assert_eq!(hex(&id.digest), text.to_ascii_lowercase());
           (id.first, text)
         })
         .collect()
@@ -803,20 +803,28 @@ committer C O Mitter <committer@example.com> 1112911993 -0700\n\nAdd hello\n";
 
     // The first line, the parents straight after it, and nothing later: not
     // a parent after another line, a second tree, or anything past the
-    // header. A value that is no lowercase Git ID is skipped.
+    // header. Hex in either case is read, as Git reads it; a value that is
+    // no Git ID is skipped.
+    let upper = "AB".repeat(20);
     let commit = preserved(
       GitKind::Commit,
       format!(
-        "tree {tree}\nparent {one}\nparent {}\nparent {two}\nauthor A <a@e> 1 +0000\n\
-         parent {one}\ntree {two}\n\nparent {two}\n",
-        "AB".repeat(20)
+        "tree {tree}\nparent {one}\nparent {upper}\nparent {}\nparent {}\nparent {two}\n\
+         author A <a@e> 1 +0000\nparent {one}\ntree {two}\n\nparent {two}\n",
+        "zz".repeat(20),
+        "ab".repeat(19)
       ),
     );
     assert_eq!(
       shown(&commit),
-      [(true, tree.into()), (false, one.into()), (false, two.into())]
+      [
+        (true, tree.into()),
+        (false, one.into()),
+        (false, upper.clone()),
+        (false, two.into())
+      ]
     );
-    assert_eq!(commit.named().len(), 3);
+    assert_eq!(commit.named().len(), 4);
 
     // A commit whose first line is not its tree is built on nothing Git reads.
     let late = preserved(GitKind::Commit, format!("author A <a@e> 1 +0000\ntree {tree}\n\nx\n"));

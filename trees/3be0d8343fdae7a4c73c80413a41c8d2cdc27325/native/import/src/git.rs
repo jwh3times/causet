@@ -315,15 +315,25 @@ impl Source {
     )
   }
 
-  /// The commits reachable from these, themselves included, in `rev-list`
-  /// order. Only commits: their trees are followed by import itself.
-  pub fn commits(&self, starts: &[String]) -> GitResult<Vec<String>> {
+  /// The commits reachable from these and not from `except`, themselves
+  /// included, in `rev-list` order, each with its parents as Git parses them.
+  /// Only commits: their trees are followed by import itself.
+  pub fn commits(
+    &self,
+    starts: &[String],
+    except: &[String],
+  ) -> GitResult<Vec<(String, Vec<String>)>> {
     if starts.is_empty() {
       return Ok(Vec::new());
     }
-    let input = starts.join("\n") + "\n";
+    let mut input = starts.join("\n") + "\n";
+    for id in except {
+      input.push('^');
+      input.push_str(id);
+      input.push('\n');
+    }
     let listed = run_git(
-      &args(&["rev-list", "--stdin"]),
+      &args(&["rev-list", "--parents", "--stdin"]),
       &self.options().input(input),
     )?
     .stdout;
@@ -331,7 +341,32 @@ impl Source {
       listed
         .lines()
         .filter(|line| !line.is_empty())
-        .map(str::to_string)
+        .map(|line| {
+          let mut ids = line.split(' ').map(str::to_string);
+          let commit = ids.next().unwrap_or_default();
+          (commit, ids.collect())
+        })
+        .collect(),
+    )
+  }
+
+  /// Those of these objects the source holds, in the order given.
+  pub fn holding(&self, ids: &[String]) -> GitResult<Vec<String>> {
+    if ids.is_empty() {
+      return Ok(Vec::new());
+    }
+    let input = ids.join("\n") + "\n";
+    let listed = run_git(
+      &args(&["cat-file", "--batch-check=%(objectname)"]),
+      &self.options().input(input),
+    )?
+    .stdout;
+    Ok(
+      listed
+        .lines()
+        .zip(ids)
+        .filter(|(line, id)| line == id)
+        .map(|(_, id)| id.clone())
         .collect(),
     )
   }
