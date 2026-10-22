@@ -13,7 +13,10 @@
   with the same snapshot. It also keeps everything it held before, so what
   only a deleted or moved ref reached stays (ADR-0045 decision 3). One import
   at a time adds to a store, under `.cst/import.lock`. A history of the other
-  hash algorithm is refused.
+  hash algorithm is refused. Import, `cst import --verify`, `cst cat-file -p`
+  and `cst rev-parse` now read a commit's `tree` and `parent` lines and a
+  tag's `object` line in either case of hex, as Git does. Before this, import
+  skipped a tree or tagged object named in uppercase hex.
 
 - **Experimental: `cst ls-tree`, `cst rev-parse`, `cst for-each-ref` and
   `cst fsck` in a native repository** (#304). The first three answer byte for

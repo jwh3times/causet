@@ -603,7 +603,8 @@ from the store alone:
 - so does each object a preserved object names where Git's parser follows it:
   a commit's first line, `tree`, and the `parent` lines straight after it; a
   tag's first line, `object`; and a preserved tree's entries other than
-  submodule links. A later line of those names is not followed, by Git, by
+  submodule links. Each such ID is read in either case of hex, as Git's
+  parser reads it. A later line of those names is not followed, by Git, by
   import, or by `cst cat-file`, which prints it as stored.
 
 SHA-1 is computed as Git computes it, with collision detection: an encoding

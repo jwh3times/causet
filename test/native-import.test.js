@@ -324,19 +324,44 @@ test("a failure after the container is in place takes it back, and the alias fil
   assert.equal(verified.status, 0, verified.stderr.toString());
 });
 
-test("every commit Git reaches is imported, though its parent line is in uppercase hex", () => {
+test("every object Git reaches is imported and read, though its header names it in uppercase hex", () => {
   const root = scratch();
   const { git, commit } = makeRepository(root);
   const parent = commit([["a.txt", "parent\n"]], "parent");
   const tree = git(["rev-parse", `${commit([["a.txt", "child\n"]], "tree only")}^{tree}`]).toString().trim();
-  const child = git(["hash-object", "-t", "commit", "-w", "--literally", "--stdin"], Buffer.from([
-    `tree ${tree}`, `parent ${parent.toUpperCase()}`,
+  const write = (type, lines) => git(["hash-object", "-t", type, "-w", "--literally", "--stdin"],
+    Buffer.from(lines.join("\n"))).toString().trim();
+  const child = write("commit", [
+    `tree ${tree.toUpperCase()}`, `parent ${parent.toUpperCase()}`,
     `author ${IDENTITY.GIT_AUTHOR_NAME} <${IDENTITY.GIT_AUTHOR_EMAIL}> ${IDENTITY.GIT_AUTHOR_DATE}`,
     `committer ${IDENTITY.GIT_COMMITTER_NAME} <${IDENTITY.GIT_COMMITTER_EMAIL}> ${IDENTITY.GIT_COMMITTER_DATE}`,
-    "", "child", ""].join("\n"))).toString().trim();
+    "", "child", ""]);
+  const tag = write("tag", [
+    `object ${child.toUpperCase()}`, "type commit", "tag upper",
+    `tagger ${IDENTITY.GIT_COMMITTER_NAME} <${IDENTITY.GIT_COMMITTER_EMAIL}> ${IDENTITY.GIT_COMMITTER_DATE}`,
+    "", "upper", ""]);
   git(["update-ref", "refs/heads/main", child]);
+  git(["update-ref", "refs/tags/upper", tag]);
+  assert.equal(git(["rev-parse", "upper^{tree}"]).toString().trim(), tree, "Git follows both lines");
   assert.match(git(["rev-list", "main"]).toString(), new RegExp(parent));
+
   const stdout = imports(root, "source", "native");
-  assert.match(stdout, /: 2 blobs, 2 trees, 2 commits, 0 tags,/);
-  assert.ok(aliases(path.join(root, "native"), "sha1").has(parent));
+  assert.match(stdout, /: 2 blobs, 2 trees, 2 commits, 1 tag,/);
+  const native = path.join(root, "native");
+  const rows = aliases(native, "sha1");
+  for (const id of [parent, tree, child, tag]) assert.ok(rows.has(id), id);
+  for (const check of [["fsck"], ["import", "--verify"]]) {
+    const result = cst(native, check);
+    assert.equal(result.status, 0, result.stderr.toString());
+  }
+  const read = (args) => {
+    const result = cst(native, args);
+    assert.equal(result.status, 0, result.stderr.toString());
+    return result.stdout.toString();
+  };
+  assert.match(read(["cat-file", "-p", rows.get(child)]),
+    new RegExp(`^tree ${rows.get(tree)}\nparent ${rows.get(parent)}\n`), "the header lines name native IDs");
+  assert.match(read(["cat-file", "-p", rows.get(tag)]), new RegExp(`^object ${rows.get(child)}\n`));
+  assert.equal(read(["rev-parse", "upper^{tree}"]).trim(), rows.get(tree));
+  assert.equal(read(["rev-parse", "main^"]).trim(), rows.get(parent));
 });
