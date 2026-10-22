@@ -257,9 +257,7 @@ A **frame** is a run of records, compressed together.
   decompresses one frame without the rest, from its start.
 - **Record order.** Content records go in **version order:** the versions of
   one path, oldest first, are adjacent, so zstd finds what successive versions
-  share. The traversal that fixes this order exactly belongs to deterministic
-  import ([#305](https://github.com/jwh3times/causet/issues/305)).
-  Metadata records go in the same traversal's order.
+  share. Metadata records go in the order of the same walk, import's (§3.2).
 
 ### 3.1 Frame bounds
 
@@ -288,6 +286,43 @@ next one.
 - **The cost is a single read's:** it decompresses its frame, which is 4 MiB
   at most unless it holds one larger record. That is about 3 ms at zstd's
   published 1.5 GB/s.
+
+### 3.2 Import's walk
+
+Import orders the records it writes by one walk of the history it imports. The
+order therefore depends on the history alone, not on how Git stores it, packed
+or loose.
+
+- **The tips** are the objects the direct refs name, in byte order of ref
+  name, each once. A symbolic ref adds none: what it names is the target ref's.
+  Then come the objects only other worktrees' `HEAD` names, which the snapshot
+  does not record (objects.md §6), in byte order of Git ID.
+- **The walk** is depth first, from each tip in turn. It leaves each object
+  after everything the object names, and reaches each object once:
+  - a commit names its parents, in order, as Git parses them, then its tree;
+  - a tag names its object;
+  - a tree names its entries in their stored order, except those whose mode
+    Git does not follow: submodule links, and modes of no file, symbolic
+    link or tree.
+
+  An object the store holds already is not entered (§4.2).
+- **An object's path** is where the walk first reaches it. A tip, a commit's
+  tree and a tag's object are at the root, the empty path. A tree's entry is at
+  the tree's path, then `/` (unless that is the root) and the entry's name.
+- **Metadata records** go in the order the walk leaves their objects, so each
+  tree comes after every tree it names. The ref snapshot goes last.
+- **Content records** are grouped by their blob's path. The groups go in the
+  order the walk leaves the first blob at each path. Within a group, blobs go
+  in the order the walk leaves them, so a path's versions are oldest first.
+  A content object's new chunks go just before its chunk list, in the order of
+  the content.
+- **The commit that introduces a version** (§5.1) is the one through whose
+  tree the walk first reaches its blob. The path it introduces it at is the
+  blob's path. A blob the walk first reaches from a tag of it, or of a tree,
+  has no introducing commit.
+
+For example, a history of three commits, each changing `a.txt` and `b.txt`,
+stores `a.txt`'s three versions, oldest first, then `b.txt`'s.
 
 ## 4. Containers
 
@@ -358,15 +393,17 @@ A reader treats any of these as corruption:
 
 The writer's rules of §1, §3.1 and §5.1 are not checked by readers. A store
 that breaks one, say a chunk list for a 1 KiB file, still reads correctly; only
-a fresh import compared byte for byte (#305) shows it.
+a fresh import compared byte for byte (§7) shows it.
 
 ### 4.2 Several containers
 
 A store is every container in `.cst/objects/`. A container never changes once
 written.
 
-- **An incremental import** adds containers, holding only objects the store
-  does not hold present already.
+- **An incremental import**, into a store that exists, adds one container,
+  holding only objects the store does not hold present already. An import
+  that finds nothing new adds none. It keeps every object and alias row the
+  store had, so an object only a deleted or moved ref reached stays.
 - **An object may be in more than one container.** Every present copy must
   verify, and its type must agree in every container. A present copy is
   preferred to an absent one, and among present copies any one will do.
@@ -421,7 +458,7 @@ A version 0 writer writes a delta when all of these hold:
 | --- | --- | --- |
 | the content's size | at least **1 MiB** (1,048,576 bytes) | Below it, version-ordered frames already find what versions share (§3). The deltas were measured on large binaries, where chunks share less: on the `node` executables, a delta kept 9.6% of the new version and chunking about 16% (ADR-0045, Context). |
 | the base and content sizes | together at most **2 GiB** (2^31 bytes) | zstd's largest window, window log 31, must cover both. |
-| the base | the content the same path held in the **first parent** of the commit that introduced this version | It is the previous version, and the first parent makes it one choice. A version with no such path, or whose base is the same content, gets no delta. Which commit introduces a version that first appears at several paths or commits is fixed by the traversal of [#305](https://github.com/jwh3times/causet/issues/305). |
+| the base | the content the same path held in the **first parent** of the commit that introduced this version | It is the previous version, and the first parent makes it one choice. A version with no such path, or whose base is the same content, gets no delta. Which commit introduces a version that first appears at several paths or commits is fixed by import's walk (§3.2). |
 | the chain | the base's depth is at most **7**, so the delta's is at most **8** | §5.2 |
 | the saving | the delta's record is **strictly smaller** than the chunk list's record plus one zstd frame (§3's parameters) of the chunks the store does not hold yet, each once, in the order of the content | "Whenever that is smaller" (ADR-0045, decision 7), measured the same way on every host. A tie stores the chunks. |
 
@@ -486,9 +523,10 @@ imports causet and git/git in CI, and its numbers, not these, decide the gate.
 ## 7. Determinism
 
 A fresh import of the same history must write a byte-identical store
-(ADR-0045, decision 3). The rules of §1, §3, §4 and §5 fix every choice but
-two, which belong to import (#305): the traversal that orders records, and
-which commit introduces a version. One more thing must be fixed:
+(ADR-0045, decision 3). The rules of §1, §3, §4 and §5 fix every choice,
+import's walk (§3.2) included, from the history alone. A fresh import of the
+same history therefore writes the same bytes, whatever Git repository holds
+it. One more thing must be fixed:
 
 - **zstd's output** at a given level is not part of RFC 8878 and changes
   between zstd releases. The store is byte-identical for one build, whose

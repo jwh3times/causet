@@ -22,6 +22,8 @@ pub const CONTAINER_LIMIT: u64 = 1 << 30;
 /// zstd's level for every frame (§3).
 const LEVEL: i32 = 19;
 const NO_FRAME: u32 = 0xffff_ffff;
+/// The name a container is written under until it is named by its trailer.
+pub(crate) const TEMPORARY: &str = "writing.tmp";
 
 /// A record's stored form (§1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,7 +108,7 @@ fn io(path: &Path, error: std::io::Error) -> StoreError {
 
 impl ContainerWriter {
   pub fn create(directory: &Path) -> Result<ContainerWriter, StoreError> {
-    let temporary = directory.join("writing.tmp");
+    let temporary = directory.join(TEMPORARY);
     let file = File::create(&temporary).map_err(|error| io(&temporary, error))?;
     let mut writer = ContainerWriter {
       directory: directory.to_path_buf(),
@@ -229,6 +231,13 @@ impl ContainerWriter {
       );
     }
     Ok(())
+  }
+
+  /// Removes the container being written, which no reader sees (§4).
+  pub fn abandon(self) {
+    let temporary = self.temporary.clone();
+    drop(self);
+    let _ = std::fs::remove_file(temporary);
   }
 
   /// Closes the open frames, writes the index and footer, and names the

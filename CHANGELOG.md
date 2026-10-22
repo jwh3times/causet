@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Experimental: deterministic and incremental `cst import`** (#305). A fresh
+  import of the same history writes a byte-identical store, whether Git holds
+  it packed or loose and in whatever repository. Import orders its records by
+  one walk of the history (storage.md §3.2): each object after what it names,
+  and a path's versions together, oldest first. `cst import <git-repo> <dest>`
+  into an existing native repository reads and writes only what its store does
+  not hold, as one new container, then replaces the alias file and, last, the
+  ref snapshot. It then holds what a full import of the final history holds,
+  with the same snapshot. It also keeps everything it held before, so what
+  only a deleted or moved ref reached stays (ADR-0045 decision 3). One import
+  at a time adds to a store, under `.cst/import.lock`. A history of the other
+  hash algorithm is refused. Import, `cst import --verify`, `cst cat-file -p`
+  and `cst rev-parse` now read a commit's `tree` and `parent` lines and a
+  tag's `object` line in either case of hex, as Git does. Before this, import
+  skipped a tree or tagged object named in uppercase hex.
+
 - **Experimental: `cst ls-tree`, `cst rev-parse`, `cst for-each-ref` and
   `cst fsck` in a native repository** (#304). The first three answer byte for
   byte as Git does on the original, with native IDs in place of Git's, and

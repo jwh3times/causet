@@ -1,7 +1,8 @@
 //! A native repository's commands (N1: ADR-0045 decision 11, ADR-0046
 //! decision 9). They are experimental and not contracts, behind the opt-in
 //! `CAUSET_EXPERIMENTAL=native` (ADR-0042 decision 5). `cst import` copies a
-//! Git repository's objects and refs into a new native repository, and
+//! Git repository's objects and refs into a new native repository, or adds
+//! what is new to an existing one, and
 //! `cst import --verify` checks that each rebuilds to its Git ID; in one,
 //! `cst cat-file` prints an object without running Git, the inspection
 //! commands of `native_inspection` list and verify it, and every other
@@ -49,7 +50,9 @@ Usage:
                                             every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
                                             rebuilds to its Git ID, without Git
-  cst import <git-repo> <dest>              make another native repository
+  cst import <git-repo> <dest>              make another native repository, or
+                                            add a Git repository's new history
+                                            to the native repository <dest>
   cst version
 
 An <object>, <tree-ish> or <rev> is a ref, HEAD, a native ID or a unique
@@ -182,22 +185,37 @@ fn import(args: &[String]) -> GitResult<()> {
       format!("cst import takes a Git repository and a destination. {IMPORT_USAGE}"),
     ));
   };
-  let imported = causet_import::import(source, Path::new(destination))?;
+  let root = Path::new(destination.as_str());
+  if root.join(".cst").join("format").is_file() && root.join(".git").exists() {
+    return Err(ambiguous(root));
+  }
+  let imported = causet_import::import(source, root)?;
   let mut out = std::io::stdout().lock();
   let preserved = if imported.preserved_trees > 0 {
     format!(", {} kept in Git's encoding", imported.preserved_trees)
   } else {
     String::new()
   };
-  let _ = writeln!(
-    out,
-    "Imported {source} into {destination}: {}, {}{preserved}, {}, {}, from a {} repository.",
+  let counts = format!(
+    "{}, {}{preserved}, {}, {}",
     count(imported.blobs, "blob"),
     count(imported.trees + imported.preserved_trees, "tree"),
     count(imported.commits, "commit"),
     count(imported.tags, "tag"),
-    imported.algorithm
   );
+  let _ = if imported.added {
+    writeln!(
+      out,
+      "Imported {source} into {destination}, adding {counts} to what it held, from a {} repository.",
+      imported.algorithm
+    )
+  } else {
+    writeln!(
+      out,
+      "Imported {source} into {destination}: {counts}, from a {} repository.",
+      imported.algorithm
+    )
+  };
   let head = match imported.head {
     Some(id) => format!("HEAD is at {id}."),
     None => "HEAD is unborn.".into(),
