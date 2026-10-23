@@ -4,11 +4,12 @@
 use crate::StoreError;
 use crate::alias::Aliases;
 use crate::chunker;
-use crate::container::{Container, ContainerWriter, Form, PRESENT, Record};
+use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
+use crate::delta::{self, DEPTH_LIMIT, Delta};
 use crate::id::{GitAlgorithm, NativeId, Type, unhex};
 use crate::objects::{ChunkList, Preserved, RefTarget, Snapshot, Tree};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -33,12 +34,21 @@ pub struct StoreWriter {
   algorithm: GitAlgorithm,
   container: Option<ContainerWriter>,
   present: HashSet<NativeId>,
+  /// The depth of each delta this writer stored (storage.md §5.2).
+  depths: HashMap<NativeId, usize>,
   aliases: Vec<(Vec<u8>, NativeId)>,
   /// The store an import adds to, as it was when the import began.
   existing: Option<Store>,
   /// What an import into an existing store has put in place so far, so a
   /// failure can take it back.
   placed: Placed,
+}
+
+/// The previous version of a file, which a new version may be stored against
+/// (storage.md §5.1): content the store holds present, and its bytes.
+pub struct Base<'a> {
+  pub id: NativeId,
+  pub bytes: &'a [u8],
 }
 
 /// What an import into an existing store has put in place: the container it
@@ -78,6 +88,7 @@ impl StoreWriter {
       staging,
       algorithm,
       present: HashSet::new(),
+      depths: HashMap::new(),
       aliases: Vec::new(),
       existing: None,
       placed: Placed::default(),
@@ -112,6 +123,7 @@ impl StoreWriter {
       staging,
       algorithm,
       present: HashSet::new(),
+      depths: HashMap::new(),
       aliases: Vec::new(),
       existing: None,
       placed: Placed::default(),
@@ -171,9 +183,15 @@ impl StoreWriter {
   }
 
   /// Stores content in the form storage.md §1 chooses: its bytes when it is
-  /// small or one chunk, otherwise a chunk list and each new chunk. Deltas
-  /// come with #306.
+  /// small or one chunk, otherwise a chunk list and each new chunk.
   pub fn put_content(&mut self, bytes: &[u8]) -> Result<NativeId, StoreError> {
+    self.put_version(bytes, None)
+  }
+
+  /// Stores a version of a file whose previous version is `base`
+  /// (storage.md §5.1): as a delta against it when §5.1 allows one and it is
+  /// smaller than the chunks, and otherwise as `put_content` stores it.
+  pub fn put_version(&mut self, bytes: &[u8], base: Option<Base>) -> Result<NativeId, StoreError> {
     let id = NativeId::of(Type::Content, bytes);
     if self.present.contains(&id) {
       return Ok(id);
@@ -187,19 +205,108 @@ impl StoreWriter {
       self.add(&id, Type::Content, Form::Body, bytes)?;
       return Ok(id);
     }
-    let mut list = ChunkList {
+    let list = ChunkList {
       size: bytes.len() as u64,
-      chunks: Vec::with_capacity(chunks.len()),
+      chunks: chunks
+        .iter()
+        .map(|chunk| (NativeId::of(Type::Content, chunk), chunk.len() as u64))
+        .collect(),
     };
-    for chunk in chunks {
-      let chunk_id = NativeId::of(Type::Content, chunk);
-      if !self.present.contains(&chunk_id) {
-        self.add(&chunk_id, Type::Content, Form::Body, chunk)?;
-      }
-      list.chunks.push((chunk_id, chunk.len() as u64));
+    let record = list.encode();
+    if let Some(base) = base
+      && let Some((delta, depth)) = self.delta(&id, bytes, &base, &list, &chunks, record.len())?
+    {
+      // The content's new chunks are not stored (§5.1).
+      self
+        .container
+        .as_mut()
+        .expect("an open container")
+        .add_stored(&id, Type::Content, Form::Delta, &delta)?;
+      self.present.insert(id);
+      self.depths.insert(id, depth);
+      return Ok(id);
     }
-    self.add(&id, Type::Content, Form::ChunkList, &list.encode())?;
+    for (chunk, (chunk_id, _)) in chunks.iter().zip(&list.chunks) {
+      if !self.present.contains(chunk_id) {
+        self.add(chunk_id, Type::Content, Form::Body, chunk)?;
+      }
+    }
+    self.add(&id, Type::Content, Form::ChunkList, &record)?;
     Ok(id)
+  }
+
+  /// The delta record storage.md §5.1 writes for a version, with its depth,
+  /// or `None` when the version is stored as chunks instead: it is under
+  /// 1 MiB, it and its base pass 2 GiB together, its base is itself or not
+  /// held present, the base is 8 deep already, or the delta is not strictly
+  /// smaller than the chunk list's record plus one zstd frame of the chunks
+  /// the store does not hold yet.
+  fn delta(
+    &self,
+    id: &NativeId,
+    bytes: &[u8],
+    base: &Base,
+    list: &ChunkList,
+    chunks: &[&[u8]],
+    list_length: usize,
+  ) -> Result<Option<(Vec<u8>, usize)>, StoreError> {
+    if bytes.len() < delta::SMALLEST
+      || base.bytes.len() + bytes.len() > delta::TOGETHER
+      || base.id == *id
+      || !self.present.contains(&base.id)
+    {
+      return Ok(None);
+    }
+    if NativeId::of(Type::Content, base.bytes) != base.id {
+      return Err(StoreError::Codec(format!(
+        "the base given for {id} does not hash to {}",
+        base.id
+      )));
+    }
+    let depth = self.depth(&base.id)?;
+    if depth >= DEPTH_LIMIT {
+      return Ok(None);
+    }
+    let record = Delta {
+      base: base.id,
+      size: bytes.len() as u64,
+      data: delta::compress(base.bytes, bytes)?,
+    }
+    .encode();
+    // The chunks cost their list at least, so a delta smaller than the list
+    // is smaller than the chunks without their frame being measured.
+    if record.len() >= list_length {
+      let mut seen = HashSet::new();
+      let mut new = Vec::new();
+      for (chunk, (chunk_id, _)) in chunks.iter().zip(&list.chunks) {
+        if !self.present.contains(chunk_id) && seen.insert(*chunk_id) {
+          new.extend_from_slice(chunk);
+        }
+      }
+      let frame = if new.is_empty() {
+        0
+      } else {
+        container::compress(&new)?.len()
+      };
+      if record.len() >= list_length + frame {
+        return Ok(None);
+      }
+    }
+    Ok(Some((record, depth + 1)))
+  }
+
+  /// The depth of content the store holds present (§5.2): a delta's this
+  /// writer stored, or the existing store's.
+  fn depth(&self, id: &NativeId) -> Result<usize, StoreError> {
+    if let Some(depth) = self.depths.get(id) {
+      return Ok(*depth);
+    }
+    match &self.existing {
+      Some(store) if store.locate(id).is_some_and(|(_, record)| record.state == PRESENT) => {
+        store.depth(id)
+      }
+      _ => Ok(0),
+    }
   }
 
   pub fn put_tree(&mut self, tree: &Tree) -> Result<NativeId, StoreError> {
@@ -605,7 +712,8 @@ impl Store {
     let body = match form {
       Form::Body => record,
       Form::ChunkList => self.resolve(id, &record)?,
-      Form::Delta => return Err(delta(id)),
+      // Each version a delta produces is verified as it is produced.
+      Form::Delta => return Ok(Object { kind, body: self.undelta(id, &record)? }),
     };
     if NativeId::of(kind, &body) != *id {
       return Err(StoreError::Corrupt(format!(
@@ -639,7 +747,9 @@ impl Store {
       (Type::Content, Form::ChunkList, record) => ChunkList::decode(&record)
         .map(|list| list.size)
         .map_err(|what| StoreError::Corrupt(format!("{id}: {what}"))),
-      (Type::Content, Form::Delta, _) => Err(delta(id)),
+      (Type::Content, Form::Delta, record) => Delta::decode(&record)
+        .map(|delta| delta.size)
+        .map_err(|what| StoreError::Corrupt(format!("{id}: {what}"))),
       _ => Err(StoreError::NotFound(format!("{id} is not content"))),
     }
   }
@@ -650,6 +760,82 @@ impl Store {
       .locate(id)
       .map(|(_, record)| record.kind)
       .ok_or_else(|| StoreError::Corrupt(format!("{id} is named in the store but not held by it")))
+  }
+
+  /// A delta's content (storage.md §5): its chain followed to the first base
+  /// that is not a delta, at most 8 deltas deep, that base read and verified,
+  /// then each delta applied in turn, and each version it produces verified
+  /// by its ID. A delta whose base the store does not hold present is
+  /// corrupt (§5.2).
+  pub(crate) fn undelta(&self, id: &NativeId, record: &[u8]) -> Result<Vec<u8>, StoreError> {
+    let corrupt = |at: &NativeId, what: String| StoreError::Corrupt(format!("{at}: {what}"));
+    let decode = |at: &NativeId, record: &[u8]| Delta::decode(record).map_err(|what| corrupt(at, what));
+    // Only each delta's ID is kept while the chain is followed: its record
+    // is read again when it is applied, so one delta is in memory at a time.
+    let mut chain = vec![*id];
+    let mut base = decode(id, record)?.base;
+    let mut bytes = loop {
+      let at = *chain.last().expect("a delta");
+      let (kind, form, base_record) = self.record(&base).map_err(|error| match error {
+        StoreError::NotFound(_) => corrupt(&at, format!("its base {base} is not in this store")),
+        StoreError::Absent(why) => corrupt(&at, format!("its base is absent: {why}")),
+        other => other,
+      })?;
+      if kind != Type::Content {
+        return Err(corrupt(&at, format!("its base {base} is not content")));
+      }
+      let content = match form {
+        Form::Body => base_record,
+        Form::ChunkList => self.resolve(&base, &base_record)?,
+        Form::Delta => {
+          if chain.len() == DEPTH_LIMIT {
+            return Err(corrupt(id, "its chain of deltas is deeper than 8".into()));
+          }
+          let next = decode(&base, &base_record)?.base;
+          chain.push(base);
+          base = next;
+          continue;
+        }
+      };
+      if NativeId::of(Type::Content, &content) != base {
+        return Err(corrupt(&base, "its bytes do not hash to its ID".into()));
+      }
+      break content;
+    };
+    while let Some(at) = chain.pop() {
+      let delta = if at == *id {
+        decode(id, record)?
+      } else {
+        decode(&at, &self.record(&at)?.2)?
+      };
+      bytes = delta::decompress(&bytes, &delta.data, delta.size).map_err(|error| match error {
+        StoreError::Corrupt(what) => corrupt(&at, what),
+        other => other,
+      })?;
+      if NativeId::of(Type::Content, &bytes) != at {
+        return Err(corrupt(&at, "its delta does not produce its content".into()));
+      }
+    }
+    Ok(bytes)
+  }
+
+  /// A content object's depth (storage.md §5.2), from its records alone: 0
+  /// for bytes and for a chunk list, one more than its base's for a delta.
+  pub fn depth(&self, id: &NativeId) -> Result<usize, StoreError> {
+    let mut depth = 0;
+    let mut at = *id;
+    while let (_, Form::Delta, record) = self.record(&at)? {
+      if depth == DEPTH_LIMIT {
+        return Err(StoreError::Corrupt(format!(
+          "{id}: its chain of deltas is deeper than 8"
+        )));
+      }
+      depth += 1;
+      at = Delta::decode(&record)
+        .map_err(|what| StoreError::Corrupt(format!("{at}: {what}")))?
+        .base;
+    }
+    Ok(depth)
   }
 
   /// A chunk list's content, resolved without recursion. Each element must be
@@ -718,17 +904,19 @@ impl Store {
                   .map(|(inner, length)| Step::Chunk(*inner, *length)),
               );
             }
-            Form::Delta => return Err(delta(&chunk)),
+            // A chunk is at most 64 KiB, and a delta at least 1 MiB, so a
+            // chunk is never stored as one (objects.md §3.3), and a chunk
+            // list never resolves through a delta back to itself.
+            Form::Delta => {
+              return Err(corrupt(
+                id,
+                &format!("its chunk list names {chunk}, which is stored as a delta"),
+              ));
+            }
           }
         }
       }
     }
     Ok(out)
   }
-}
-
-fn delta(id: &NativeId) -> StoreError {
-  StoreError::Unsupported(format!(
-    "{id} is stored as a delta, which this build does not read yet (#306)"
-  ))
 }

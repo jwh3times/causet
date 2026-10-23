@@ -459,10 +459,17 @@ A version 0 writer writes a delta when all of these hold:
 | the content's size | at least **1 MiB** (1,048,576 bytes) | Below it, version-ordered frames already find what versions share (§3). The deltas were measured on large binaries, where chunks share less: on the `node` executables, a delta kept 9.6% of the new version and chunking about 16% (ADR-0045, Context). |
 | the base and content sizes | together at most **2 GiB** (2^31 bytes) | zstd's largest window, window log 31, must cover both. |
 | the base | the content the same path held in the **first parent** of the commit that introduced this version | It is the previous version, and the first parent makes it one choice. A version with no such path, or whose base is the same content, gets no delta. Which commit introduces a version that first appears at several paths or commits is fixed by import's walk (§3.2). |
+| the base's place | the store holds the base **present** when this version is written, however it holds it: written before it by the same import or held already, as a file's content or as a chunk of other content | A base is written before its delta (§5.2). Import's walk can store a base after a version it is the base of, when the base was first reached at another path; that version then gets no delta. |
 | the chain | the base's depth is at most **7**, so the delta's is at most **8** | §5.2 |
-| the saving | the delta's record is **strictly smaller** than the chunk list's record plus one zstd frame (§3's parameters) of the chunks the store does not hold yet, each once, in the order of the content | "Whenever that is smaller" (ADR-0045, decision 7), measured the same way on every host. A tie stores the chunks. |
+| the saving | the delta's record is **strictly smaller** than the chunk list's record plus one zstd frame (§3's parameters) of the chunks the store does not hold yet, each once, in the order of the content | "Whenever that is smaller" (ADR-0045, decision 7), measured the same way on every host. A tie stores the chunks. When the store holds every chunk already, there is no frame, and it counts 0 bytes. |
 
 When a delta is written, the content's new chunks are not stored.
+
+**The path is looked up** in the first parent's tree by its parts, split at
+`/`. Each part names an entry of the tree before it: the first entry of that
+name in the tree's stored order. Every part but the last must name a tree, and
+the last a blob with a file or symbolic link mode. Anything else, such as a
+submodule or a tree there, is no such path.
 
 ### 5.2 Depth
 
@@ -477,7 +484,13 @@ its base's for a delta. **The depth limit is 8.**
 - **Chains end.** A base is written before the delta that names it, and its
   depth is smaller, so a chain never loops.
 - **A base must be present** whenever the delta is present. A delta whose base
-  is absent, or that is deeper than 8, is corrupt.
+  is absent, or that is deeper than 8, is corrupt. A base that is present but
+  stored as a chunk list naming absent content leaves the delta unverified, not
+  corrupt, as such a chunk list is (objects.md §8).
+- **A chunk is never a delta.** A chunk is at most 64 KiB, and a delta's content
+  at least 1 MiB. A chunk list that names content stored as a delta is corrupt
+  (objects.md §3.3), so resolving a delta's base never leads back through the
+  delta.
 
 ## 6. Costs and the storage gate
 

@@ -1,12 +1,13 @@
 //! The native content store of N1 (ADR-0045, #297), built to the contract in
 //! `docs/native-store/`: IDs, the object types, the chunker, frames and
-//! containers, the alias map, the store that writes and reads them, the
+//! containers, deltas, the alias map, the store that writes and reads them, the
 //! reconstruction check, and the store's verification.
 #![forbid(unsafe_code)]
 
 pub mod alias;
 pub mod chunker;
 pub mod container;
+pub mod delta;
 pub mod encoding;
 pub mod id;
 pub mod objects;
