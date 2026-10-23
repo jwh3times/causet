@@ -1,5 +1,6 @@
 //! Frames and containers (storage.md §3–§4): records grouped into zstd frames
-//! of at most 4 MiB, one class per frame, written back to back into a
+//! of at most 4 MiB, one class per frame, and each delta in a stored frame of
+//! its own, written back to back into a
 //! container that ends with its index and footer, and read back with every
 //! check the contract lists for a reader that reads the index.
 
@@ -197,13 +198,50 @@ impl ContainerWriter {
     );
   }
 
+  /// Adds a delta (storage.md §5) as a stored frame of its own, written at
+  /// once. The open frame of its class stays open, so content records after
+  /// the delta can join it.
+  pub fn add_stored(&mut self, id: &NativeId, kind: Type, form: Form, record: &[u8]) -> Result<(), StoreError> {
+    let length = u32::try_from(record.len()).map_err(|_| {
+      StoreError::TooLarge(format!(
+        "{id} would be a record of {} bytes, and a record is at most 4 GiB",
+        record.len()
+      ))
+    })?;
+    self.put_frame(
+      record,
+      length,
+      STORED,
+      class_of(kind),
+      vec![(id.0, kind, form, 0, length)],
+    )
+  }
+
   fn close(&mut self, class: usize) -> Result<(), StoreError> {
     let open = std::mem::take(&mut self.open[class]);
     if open.records.is_empty() {
       return Ok(());
     }
     let compressed = compress(&open.bytes)?;
-    if self.written - HEADER + compressed.len() as u64 > CONTAINER_LIMIT {
+    self.put_frame(
+      &compressed,
+      open.bytes.len() as u32,
+      ZSTD,
+      class as u8,
+      open.records,
+    )
+  }
+
+  /// Writes a frame's bytes and enters its records in the index.
+  fn put_frame(
+    &mut self,
+    bytes: &[u8],
+    uncompressed: u32,
+    codec: u8,
+    class: u8,
+    records: Vec<([u8; 32], Type, Form, u32, u32)>,
+  ) -> Result<(), StoreError> {
+    if self.written - HEADER + bytes.len() as u64 > CONTAINER_LIMIT {
       return Err(StoreError::TooLarge(
         "the store would pass one container of 1 GiB, and this build writes one container".into(),
       ));
@@ -211,13 +249,13 @@ impl ContainerWriter {
     let frame = self.frames.len() as u32;
     self.frames.push(Frame {
       offset: self.written,
-      compressed: compressed.len() as u64,
-      uncompressed: open.bytes.len() as u32,
-      codec: ZSTD,
-      class: class as u8,
+      compressed: bytes.len() as u64,
+      uncompressed,
+      codec,
+      class,
     });
-    self.write(&compressed)?;
-    for (digest, kind, form, offset, length) in open.records {
+    self.write(bytes)?;
+    for (digest, kind, form, offset, length) in records {
       self.records.insert(
         digest,
         Record {
@@ -329,7 +367,8 @@ fn fanout<'a>(names: impl Iterator<Item = &'a [u8; 32]>) -> [u32; 256] {
   counts
 }
 
-fn compress(bytes: &[u8]) -> Result<Vec<u8>, StoreError> {
+/// One zstd frame of `bytes`, with §3's parameters.
+pub(crate) fn compress(bytes: &[u8]) -> Result<Vec<u8>, StoreError> {
   use zstd::zstd_safe::CParameter;
   let failed =
     |error: std::io::Error| StoreError::Codec(format!("zstd could not compress a frame: {error}"));
