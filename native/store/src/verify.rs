@@ -7,6 +7,7 @@
 
 use crate::StoreError;
 use crate::container::{ABSENT_BY_POLICY, ABSENT_BY_PROMISE, Container, Form, PRESENT};
+use crate::delta::Delta;
 use crate::id::{NativeId, Type, hex};
 use crate::objects::{Annotation, ChunkList, GitKind, Kind, Preserved, RefTarget, Snapshot, Target, Tree};
 use crate::store::Store;
@@ -220,8 +221,8 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
   Ok(found)
 }
 
-/// One present copy checked: its bytes, or for a chunk list the content it
-/// resolves to, hash to its ID, and its body keeps its type's rules. `Err`
+/// One present copy checked: its bytes, or for a chunk list or a delta the
+/// content it resolves to, hash to its ID, and its body keeps its type's rules. `Err`
 /// is the copy's corruption; a store error is one this build cannot judge.
 fn check_copy(
   store: &Store,
@@ -259,9 +260,25 @@ fn check_copy(
       });
     }
     Form::Delta => {
-      return Err(StoreError::Unsupported(format!(
-        "{id} is stored as a delta, which this build does not read yet (#306)"
-      )));
+      let delta = match Delta::decode(bytes) {
+        Ok(delta) => delta,
+        Err(why) => return Ok(Err(why)),
+      };
+      match store.held(&delta.base) {
+        None => return Ok(Err(format!("its base {} has no index entry", delta.base))),
+        Some(Type::Content) => {}
+        Some(_) => return Ok(Err(format!("its base {} is not content", delta.base))),
+      }
+      // Unlike a chunk list's, a delta's base must be present (storage.md
+      // §5.2): one that is absent is corruption. A present base resolved
+      // through absent content leaves the delta unverified, as a chunk list
+      // with an absent chunk is (objects.md §8).
+      return Ok(match store.undelta(id, bytes) {
+        Ok(_) => Ok(Names::Nothing),
+        Err(StoreError::Absent(_)) => Ok(Names::Nothing),
+        Err(StoreError::Corrupt(why)) => Err(why),
+        Err(other) => return Err(other),
+      });
     }
   }
   if NativeId::of(kind, bytes) != *id {

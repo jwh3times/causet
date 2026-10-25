@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Experimental: large files are stored as deltas in a native repository**
+  (#306). `cst import` stores a new version of a file of 1 MiB or more as a
+  zstd delta against the file's previous version, when the delta is smaller
+  than its chunks (storage.md §5). The previous version is the content the
+  same path held in the first parent of the commit that introduced the new
+  one. An import into a native repository stores a version against the one
+  the repository holds. No chain of deltas is more than 8 deep, so reading a
+  version decompresses 8 deltas at most. Content IDs do not change, and every
+  command that reads a native repository reads a delta: `cst cat-file`,
+  `cst fsck` and `cst import --verify` among them. `cst fsck` reports a
+  delta whose base is absent or missing, a chain deeper than 8, and a chunk
+  list that names content stored as a delta, as corruption.
+
 - **Experimental: deterministic and incremental `cst import`** (#305). A fresh
   import of the same history writes a byte-identical store, whether Git holds
   it packed or loose and in whatever repository. Import orders its records by

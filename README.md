@@ -890,7 +890,9 @@ With `CAUSET_EXPERIMENTAL=native` set, `cst import <git-repo> <dest>` copies
 every object a Git repository's refs reach into a new native repository, and
 records every ref in a snapshot: a directory holding `.cst/`, in the format of
 [the native store contract](docs/native-store/README.md). Commits and tags
-are kept in Git's encoding, byte for byte. Importing the same history again
+are kept in Git's encoding, byte for byte. A new version of a file of 1 MiB
+or more may be stored as a zstd delta against the file's previous version,
+when that is smaller than its chunks. Importing the same history again
 writes the same bytes. Importing into an existing native repository adds only
 what it does not hold, then replaces its snapshot. A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history

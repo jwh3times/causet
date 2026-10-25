@@ -149,7 +149,9 @@ count × (
 - **When content is stored as a chunk list** is decided by the
   [stored forms](storage.md#1-stored-forms), along with the chunker and the
   delta form. Under version 0's chunker, a chunk is never itself stored as a
-  chunk list, but a reader must not assume so.
+  chunk list, but a reader must not assume so. A chunk is never stored as a
+  delta either, and that a reader checks: a chunk list naming content stored
+  as a delta is corrupt (storage.md §5.2).
 
 Worked example, for illustration only (the real chunker never cuts a file this
 small): `hello\n` stored as `hel` and `lo\n`.
@@ -467,8 +469,8 @@ Every clone holds all metadata, and content may be absent (decision 8).
   (types `02`–`05`).
 - **Content** is type `01`, chunk lists included.
 
-An ID is **known** to a store when a present object or a stored chunk list
-names it, the current ref snapshot names it, or an alias file lists it. A Git
+An ID is **known** to a store when a present object, a stored chunk list or a
+stored delta (as its base) names it, the current ref snapshot names it, or an alias file lists it. A Git
 ID in a submodule link is not a native ID, and is never known. A known ID is in exactly one
 state:
 

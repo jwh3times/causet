@@ -7,7 +7,9 @@
 //! import: `rev-list` is asked only for commit ancestry, so a tree Git would
 //! not walk, such as one named by a file entry, is still read and imported
 //! whole. Records are written in the order of import's walk (storage.md §3.2),
-//! so a fresh import of the same history writes the same bytes. An import
+//! so a fresh import of the same history writes the same bytes. A version of
+//! a large file may be stored as a delta against the content its path held in
+//! the first parent of the commit that introduced it (§5.1). An import
 //! into an existing native repository reads and writes only what its store
 //! does not hold already.
 #![forbid(unsafe_code)]
@@ -16,13 +18,15 @@ mod git;
 
 use causet_engine::errors::{GitError, GitResult};
 use causet_store::StoreError;
+use causet_store::delta;
 use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
 use causet_store::objects::{
   Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, followed, header_ids,
   parse_git_tree,
 };
 use causet_store::store::Store;
-use causet_store::store::StoreWriter;
+use causet_store::store::{Base, StoreWriter};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -85,6 +89,9 @@ struct Importer<'a> {
 struct Walk {
   metadata: Vec<String>,
   content: Vec<String>,
+  /// Each blob of at least 1 MiB that a commit introduces: the commit, and
+  /// the blob's path (§3.2), which find its base (§5.1).
+  introduced: HashMap<String, (String, Vec<u8>)>,
 }
 
 /// Imports `source` into a new native repository at `destination`, which
@@ -182,6 +189,7 @@ fn write(
   };
   importer.reach(&tips, &except)?;
   let walk = importer.walk(&tips);
+  let bases = importer.bases(&walk);
   if walk.metadata.len() + walk.content.len() != importer.types.len() {
     return Err(GitError::new(
       "internal-invariant",
@@ -192,7 +200,7 @@ fn write(
       ),
     ));
   }
-  importer.content(&walk.content)?;
+  importer.content(&walk.content, &bases)?;
   for id in &walk.metadata {
     importer.metadata(id)?;
   }
@@ -413,36 +421,35 @@ impl Importer<'_> {
   }
 
   /// What an object names, in the order the walk follows it, each with the
-  /// path it is reached at: a commit's parents, as Git parses them, then its
-  /// tree; a tag's object; a tree's entries Git follows, as stored. Only what
-  /// this import reads.
-  fn names(&self, id: &str, path: &[u8]) -> Vec<(String, Vec<u8>)> {
+  /// path it is reached at and the commit whose tree it is reached through: a
+  /// commit's parents, as Git parses them, then its tree; a tag's object; a
+  /// tree's entries Git follows, as stored. Only what this import reads.
+  fn names(&self, id: &str, path: &[u8], commit: Option<&str>) -> Vec<(String, Vec<u8>, Option<String>)> {
     let raw = self.raw.get(id).map(Vec::as_slice).unwrap_or_default();
-    let named: Vec<(String, Vec<u8>)> = match self.types[id].as_str() {
+    let named: Vec<(String, Vec<u8>, Option<String>)> = match self.types[id].as_str() {
       "commit" => self
         .parents
         .get(id)
         .into_iter()
         .flatten()
-        .cloned()
-        .chain(built_on(self.algorithm, GitKind::Commit, raw))
-        .map(|named| (named, Vec::new()))
+        .map(|parent| (parent.clone(), Vec::new(), None))
+        .chain(built_on(self.algorithm, GitKind::Commit, raw).map(|tree| (tree, Vec::new(), Some(id.to_string()))))
         .collect(),
       "tag" => built_on(self.algorithm, GitKind::Tag, raw)
-        .map(|target| (target, Vec::new()))
+        .map(|target| (target, Vec::new(), None))
         .into_iter()
         .collect(),
       "tree" => parse_git_tree(raw, self.algorithm)
         .unwrap_or_default()
         .into_iter()
         .filter(|entry| followed(&entry.mode))
-        .map(|entry| (hex(&entry.digest), below(path, &entry.name)))
+        .map(|entry| (hex(&entry.digest), below(path, &entry.name), commit.map(str::to_string)))
         .collect(),
       _ => Vec::new(),
     };
     named
       .into_iter()
-      .filter(|(named, _)| self.types.contains_key(named))
+      .filter(|(named, _, _)| self.types.contains_key(named))
       .collect()
   }
 
@@ -454,35 +461,41 @@ impl Importer<'_> {
   /// oldest first.
   fn walk(&self, tips: &[String]) -> Walk {
     enum Step {
-      Enter(String, Vec<u8>),
-      Leave(String, Vec<u8>),
+      Enter(String, Vec<u8>, Option<String>),
+      Leave(String, Vec<u8>, Option<String>),
     }
     let mut visited: HashSet<String> = HashSet::new();
     let mut paths: HashMap<Vec<u8>, usize> = HashMap::new();
     let mut content: Vec<(usize, usize, String)> = Vec::new();
     let mut metadata = Vec::new();
+    let mut introduced = HashMap::new();
     let mut steps: Vec<Step> = tips
       .iter()
       .rev()
-      .map(|id| Step::Enter(id.clone(), Vec::new()))
+      .map(|id| Step::Enter(id.clone(), Vec::new(), None))
       .collect();
     while let Some(step) = steps.pop() {
       match step {
-        Step::Enter(id, path) => {
+        Step::Enter(id, path, commit) => {
           if !self.types.contains_key(&id) || !visited.insert(id.clone()) {
             continue;
           }
-          let named = self.names(&id, &path);
-          steps.push(Step::Leave(id, path));
+          let named = self.names(&id, &path, commit.as_deref());
+          steps.push(Step::Leave(id, path, commit));
           steps.extend(
             named
               .into_iter()
               .rev()
-              .map(|(named, path)| Step::Enter(named, path)),
+              .map(|(named, path, commit)| Step::Enter(named, path, commit)),
           );
         }
-        Step::Leave(id, path) => {
+        Step::Leave(id, path, commit) => {
           if self.types[&id] == "blob" {
+            if let Some(commit) = commit
+              && self.sizes[&id] >= delta::SMALLEST as u64
+            {
+              introduced.insert(id.clone(), (commit, path.clone()));
+            }
             let next = paths.len();
             let rank = *paths.entry(path).or_insert(next);
             content.push((rank, content.len(), id));
@@ -496,13 +509,116 @@ impl Importer<'_> {
     Walk {
       metadata,
       content: content.into_iter().map(|(_, _, id)| id).collect(),
+      introduced,
     }
   }
 
-  /// Reads the blobs in the walk's order and stores each as content.
-  fn content(&mut self, ids: &[String]) -> GitResult<()> {
+  /// Each large blob's base (storage.md §5.1): the blob its path held in the
+  /// first parent of the commit that introduced it, when that is a blob
+  /// other than itself.
+  fn bases(&self, walk: &Walk) -> HashMap<String, String> {
+    let mut bases = HashMap::new();
+    for (id, (commit, path)) in &walk.introduced {
+      let Some(parent) = self.parents.get(commit).and_then(|parents| parents.first()) else {
+        continue;
+      };
+      if let Some(base) = self.blob_at(parent, path)
+        && base != *id
+      {
+        bases.insert(id.clone(), base);
+      }
+    }
+    bases
+  }
+
+  /// The blob a commit's tree holds at `path` (storage.md §5.1): each part
+  /// of the path the first entry of its name, every part but the last a
+  /// tree, the last a file or symbolic link. From what this import read or
+  /// what the store held already.
+  fn blob_at(&self, commit: &str, path: &[u8]) -> Option<String> {
+    let mut tree = self.built_on_of(commit, GitKind::Commit)?;
+    let mut names = path.split(|&byte| byte == b'/').peekable();
+    while let Some(name) = names.next() {
+      let (mode, id) = self
+        .entries(&tree)?
+        .into_iter()
+        .find(|(entry, _, _)| entry == name)
+        .map(|(_, mode, id)| (mode, id))?;
+      let class = mode? & 0o170000;
+      if names.peek().is_some() {
+        if class != 0o040000 {
+          return None;
+        }
+        tree = id;
+      } else {
+        return (matches!(class, 0o100000 | 0o120000) && self.git_type(&id) == Some("blob")).then_some(id);
+      }
+    }
+    None
+  }
+
+  /// What a commit or tag this import read, or the store held, is built on.
+  fn built_on_of(&self, id: &str, kind: GitKind) -> Option<String> {
+    if let Some(raw) = self.raw.get(id) {
+      return built_on(self.algorithm, kind, raw);
+    }
+    let store = self.store.existing()?;
+    let preserved = Preserved::decode(&store.read(&self.held(id)?).ok()?.body).ok()?;
+    (preserved.kind == kind).then(|| built_on(self.algorithm, kind, &preserved.payload))?
+  }
+
+  /// A tree's entries, each with its name, its mode as a number and its Git
+  /// ID, from what this import read or what the store held already. A mode
+  /// that is not octal digits is `None`, so the entry still has its place.
+  fn entries(&self, id: &str) -> Option<Vec<(Vec<u8>, Option<u32>, String)>> {
+    let mode = |mode: &[u8]| {
+      std::str::from_utf8(mode)
+        .ok()
+        .filter(|mode| !mode.is_empty() && mode.bytes().all(|digit| (b'0'..=b'7').contains(&digit)))
+        .and_then(|mode| u32::from_str_radix(mode, 8).ok())
+    };
+    let git = |raw: &[u8]| {
+      parse_git_tree(raw, self.algorithm).map(|records| {
+        records
+          .into_iter()
+          .map(|record| (record.name, mode(&record.mode), hex(&record.digest)))
+          .collect()
+      })
+    };
+    if let Some(raw) = self.raw.get(id) {
+      return git(raw);
+    }
+    let store = self.store.existing()?;
+    let native = self.held(id)?;
+    let body = store.read(&native).ok()?.body;
+    match store.held(&native)? {
+      Type::Tree => {
+        let aliases = store.aliases_for(self.algorithm)?;
+        Tree::decode(&body).ok()?.entries.into_iter().map(|entry| {
+          let target = match &entry.target {
+            Target::Native(target) => hex(aliases.git(target)?),
+            Target::Git(target) => target.hex(),
+          };
+          Some((entry.name, mode(entry.kind.git_mode()), target))
+        }).collect()
+      }
+      Type::Preserved => {
+        let preserved = Preserved::decode(&body).ok()?;
+        (preserved.kind == GitKind::Tree).then(|| git(&preserved.payload))?
+      }
+      _ => None,
+    }
+  }
+
+  /// Reads the blobs in the walk's order and stores each as content, a large
+  /// one against its base when the store holds the base present by then
+  /// (§5.1). Only the blob stored last is kept in memory, since a version's
+  /// base is most often the version before it; any other base is read again.
+  fn content(&mut self, ids: &[String], bases: &HashMap<String, String>) -> GitResult<()> {
     let source = self.source;
     let sizes: Vec<u64> = ids.iter().map(|id| self.sizes[id]).collect();
+    let wanted: HashSet<&str> = bases.values().map(String::as_str).collect();
+    let mut last: Option<(String, Vec<u8>)> = None;
     source.contents(ids, &sizes, &mut |id, kind, body| {
       if kind != "blob" {
         return Err(GitError::new(
@@ -510,11 +626,53 @@ impl Importer<'_> {
           format!("git printed {id} as an object of type {kind}"),
         ));
       }
-      let native = self.store.put_content(&body).map_err(store_error)?;
+      let base = match bases.get(id) {
+        Some(base) => self.base(base, last.as_ref())?,
+        None => None,
+      };
+      let native = self
+        .store
+        .put_version(&body, base.as_ref().map(|(id, bytes)| Base { id: *id, bytes }))
+        .map_err(store_error)?;
+      drop(base);
       self.record(id, native)?;
       self.imported.blobs += 1;
+      if wanted.contains(id) {
+        last = Some((id.to_string(), body));
+      }
       Ok(())
     })
+  }
+
+  /// A base's native ID and bytes: the blob stored last, a blob of this
+  /// import read again from Git, or content the store held already. Whether
+  /// the store holds it present yet is the store's to decide (§5.1).
+  fn base<'k>(
+    &self,
+    base: &str,
+    last: Option<&'k (String, Vec<u8>)>,
+  ) -> GitResult<Option<(NativeId, Cow<'k, [u8]>)>> {
+    if let Some((id, bytes)) = last.filter(|(id, _)| id == base) {
+      return Ok(self.native.get(id).map(|native| (*native, Cow::Borrowed(bytes.as_slice()))));
+    }
+    if let Some(size) = self.sizes.get(base) {
+      let mut read = None;
+      self.source.contents(&[base.to_string()], &[*size], &mut |_, kind, body| {
+        if kind == "blob" {
+          read = Some(body);
+        }
+        Ok(())
+      })?;
+      return Ok(read.map(|bytes| (NativeId::of(Type::Content, &bytes), Cow::Owned(bytes))));
+    }
+    let (Some(store), Some(id)) = (self.store.existing(), self.held(base)) else {
+      return Ok(None);
+    };
+    match store.read(&id) {
+      Ok(read) => Ok(Some((id, Cow::Owned(read.body)))),
+      Err(StoreError::Absent(_)) => Ok(None),
+      Err(error) => Err(store_error(error)),
+    }
   }
 
   /// Stores a commit, tag or tree. Everything a tree names is stored
