@@ -13,7 +13,9 @@ pub const SMALLEST: usize = 1 << 20;
 pub const TOGETHER: usize = 1 << 31;
 /// The deepest a delta may be (§5.2).
 pub const DEPTH_LIMIT: usize = 8;
-const LEVEL: i32 = 19;
+/// Level 15, not the frames' 19: from level 16 zstd's match finders reach only
+/// about 2^chainLog bytes back, so a delta past about 30 MB loses its base.
+const LEVEL: i32 = 15;
 const LARGEST_WINDOW_LOG: u32 = 31;
 
 /// A delta record: the content it is against, the length of the content it
@@ -55,7 +57,7 @@ pub fn window_log(total: usize) -> u32 {
   log
 }
 
-/// `content` compressed with `base` as its prefix (§5): level 19,
+/// `content` compressed with `base` as its prefix (§5): level 15,
 /// single-threaded, long-distance matching, the content size recorded, no
 /// checksum and no dictionary ID. The caller keeps the two within `TOGETHER`.
 pub fn compress(base: &[u8], content: &[u8]) -> Result<Vec<u8>, StoreError> {
@@ -184,6 +186,25 @@ mod tests {
       decompress(&base, &trailing, content.len() as u64),
       Err(StoreError::Corrupt(_))
     ));
+  }
+
+  #[test]
+  fn a_delta_finds_its_base_past_30_mb() {
+    // Level 19 stores this 64-byte edit as about 6 MB; level 15 as a few KB.
+    let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+    let base: Vec<u8> = (0..40_000_000 / 8)
+      .flat_map(|_| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state.to_le_bytes()
+      })
+      .collect();
+    let mut content = base.clone();
+    content[20_000_000..20_000_064].fill(0);
+    let data = compress(&base, &content).unwrap();
+    assert!(data.len() < 64 * 1024, "{} bytes", data.len());
+    assert_eq!(decompress(&base, &data, content.len() as u64).unwrap(), content);
   }
 
   #[test]
