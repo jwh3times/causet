@@ -439,10 +439,16 @@ data            one zstd frame, compressed with the base's bytes as its prefix
 
 - **`data`** is zstd compression of the content with the base's bytes as a
   raw-content prefix, written:
-  - at level 19, single-threaded, with long-distance matching;
+  - at level 15, single-threaded, with long-distance matching;
   - with the content size recorded, no checksum and no dictionary ID;
   - with window log `w`, the smallest value from 20 to 31 for which 2^`w` is at
     least the base's size plus the content's size.
+
+  Level 15, not the 19 of §3's frames: from level 16 zstd's match finders
+  reach only about 2^chainLog bytes back, about 30 MB at level 19, so a large
+  file's delta loses the base it is for. A 64-byte edit of a 70 MB file
+  measured 29.9 MB at level 19 and 7.5 KB at levels 13 to 15 (zstd 1.5.7,
+  random data); below 30 MB, level 19's deltas were about 20% smaller.
 - **Reading a delta** resolves the base's bytes in full, decompresses `data`
   with them as the prefix, allowing a window log up to 31, and checks that the
   result has `size` bytes and hashes to the content's ID.
