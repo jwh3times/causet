@@ -102,11 +102,18 @@ export function installNativeKind({ beforeEach, afterEach, after, env }) {
   if (major < 20 || (major === 20 && minor < 5)) {
     throw new Error(`CAUSET_KIND=native needs Node 20.5 or later, not ${process.versions.node}`);
   }
-  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "causet-kind-")));
-  const suite = path.join(root, "suite");
-  const copies = path.join(root, "copies");
-  fs.mkdirSync(suite);
-  fs.mkdirSync(copies);
+  // Every directory the mode makes sits directly in the host's temporary
+  // directory under a short name: Windows refuses paths over 259 characters,
+  // and some suites already come within a dozen of that.
+  const base = os.tmpdir();
+  const made = [];
+  const directory = () => {
+    const at = fs.realpathSync.native(fs.mkdtempSync(path.join(base, "ck")));
+    made.push(at);
+    return at;
+  };
+  const suite = directory();
+  const copies = directory();
   const saved = Object.fromEntries(TEMPORARY.map((name) => [name, process.env[name]]));
   point(suite);
   process.on("exit", () => {
@@ -114,19 +121,21 @@ export function installNativeKind({ beforeEach, afterEach, after, env }) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
-    fs.rmSync(root, { recursive: true, force: true });
+    for (const each of made) {
+      fs.rmSync(each, { recursive: true, force: true });
+    }
   });
 
   // Each repository's refs and HEAD when it was last compared, by its common
   // directory: a repository is compared again whenever they have changed.
   const compared = new Map();
-  let tests = 0;
+  const testDirectories = [];
   let copiesMade = 0;
   const file = path.basename(process.argv[1] ?? "");
 
-  const check = async (directory, testName) => {
+  const check = async (directories, testName) => {
     const problems = [];
-    for (const repository of repositories(directory, env)) {
+    for (const repository of directories.flatMap((each) => repositories(each, env))) {
       const state = fingerprint(repository, env);
       if (compared.get(repository.common) === state) continue;
       compared.set(repository.common, state);
@@ -144,19 +153,19 @@ export function installNativeKind({ beforeEach, afterEach, after, env }) {
   // directory and the one it replaced are kept on a stack.
   const running = [];
   beforeEach(() => {
-    const own = path.join(suite, `test-${++tests}`);
-    fs.mkdirSync(own);
+    const own = directory();
+    testDirectories.push(own);
     running.push({ own, outer: process.env.TMPDIR });
     point(own);
   });
   afterEach(async (t) => {
     const { own, outer } = running.pop();
     point(outer);
-    await check(own, t.fullName);
+    await check([own], t.fullName);
   });
   // Last, everything the file made, inside a test or not, so a fixture one
   // test made and later tests changed is compared as they left it.
-  after(() => check(suite, "(outside any test)"));
+  after(() => check([suite, ...testDirectories], "(outside any test)"));
 }
 
 /** A repository's refs and HEAD, which are all an import of it reads from. */

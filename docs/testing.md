@@ -200,7 +200,11 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
 `test-support/git-environment.js` installs in every suite file:
 - **Finding a test's repositories.** Each test gets its own temporary
   directory: `TMPDIR`, `TEMP` and `TMP` name it while the test runs, so
-  `os.tmpdir()` and every process the test starts write there. After the test,
+  `os.tmpdir()` and every process the test starts write there. It sits
+  directly in the host's temporary directory as `ck` and six characters,
+  because some suites already come within a dozen characters of Windows'
+  259-character path limit; the run removes them as it exits, and an
+  interrupted one leaves them behind. After the test,
   every Git repository under it is found: a working tree's, a linked
   worktree's or a bare one, by its common directory. After the file's last
   test, everything the file made, in a test or outside one, is looked at
@@ -208,7 +212,9 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   it was last compared, so a fixture one test makes and later tests change is
   compared as they leave it. A repository a test removes before it ends is not
   seen. The mode needs Node 20.5 or later, where `afterEach` runs before a
-  test's own `t.after` cleanup.
+  test's own `t.after` cleanup. By then `os.tmpdir()` names the directory
+  outside the test again, so a cleanup that checks a fixture's path reads
+  the temporary directory when it makes the fixture, not when it removes it.
 - **What is compared,** once Git's IDs are translated through the alias map:
   - `cst import --verify` first, so a store problem fails as such rather than
     as a mismatch in some command's output;
