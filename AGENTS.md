@@ -57,6 +57,11 @@ no npm dependencies.
   shared runner can measure fairly (equality, exit status, Git process counts,
   and comparisons within one run). Timings never fail it; the absolute
   reference stays the local procedure on the wiki's Performance testing page.
+- `.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
+  today the generated-history corpus (`test/generated-histories.test.js` with
+  `CAUSET_GENERATED_HISTORIES=1000`), on hosted Windows and Ubuntu runners:
+  weekly on `main`, on manual dispatch, as release gate 11 from
+  `release-gates.yml`, and for PRs touching the corpus.
 - `.github/workflows/release.yml` builds the `cst` executable per platform,
   packs the ADR-0038 package set with `scripts/pack-release.mjs`, and installs
   it on each runner, by npm and by `scripts/install.sh` or

@@ -149,4 +149,6 @@ following, limited to the commands and objects that phase implements.
 a byte-identical store: containers, indexes and the alias map. An incremental
 import yields the same native objects (IDs and content), the same alias map and
 the same ref snapshot as a full import of the final history. Container layout
-may differ.
+may differ. ADR-0045's amendment of 2026-10-26 narrows "the same native
+objects" to every object but a chunk: a large version's stored form, and so the
+chunks, may differ (storage.md §5.1).

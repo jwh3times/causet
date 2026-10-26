@@ -227,7 +227,9 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   commit's message and a tree entry's name stay Git's. A commit or tag
   translates only the header lines Git's parser follows. Git answers as import
   reads, with replacement refs off, and for the common directory, so `HEAD` is
-  the main worktree's.
+  the main worktree's. A `cst` or Git process the comparison starts is stopped
+  after 5 minutes (`test-support/bounded-process.js`), which fails it: a
+  `cst` that never ends fails its test rather than holding the run.
 - **Refusals.** A repository that import refuses fails its test, unless
   `REFUSALS` in `test-support/native-kind.js` lists it with the suite file, the
   test, a part of the refusal and the reason. The list holds the suites'
@@ -246,6 +248,105 @@ in N1 they take part only through the repositories their suites make, which
 this mode imports like any other. `test/native-kind.test.js` checks the mode
 itself: a copy that answers otherwise, and a refusal it does not list, each
 fail the test that left the repository.
+
+**The generated-history corpus** (ADR-0044 item 1, ADR-0045 decision 13,
+#308) is Git repositories generated from a seed, each run through every N1
+check. `test/generated-histories.test.js` runs it: one history per case by
+default, as part of `npm test`, and 1,000 in `.github/workflows/corpora.yml`:
+
+```bash
+CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
+```
+
+- **What a history holds.** `test-support/generated-histories.js` writes each
+  one as a bare repository of loose objects and ref files, without Git, so a
+  seed gives the same objects and refs whatever Git version is installed. Git
+  runs only to pack a history or prune it. Its `CASES` are ADR-0045's list:
+  - merges and octopus merges;
+  - renames, mode changes, symbolic links and submodule links;
+  - empty trees, as a subtree and as a commit's root, and empty files;
+  - signed commits and tags, commits in ISO-8859-1 with an `encoding` header,
+    and extra headers: `mergetag`, and headers no Git writes, one of them
+    spanning lines;
+  - one case for each kind of malformed object (`MALFORMED`): bytes no Git
+    writes and every Git reads. `git fsck` reports all but the overlong and
+    group-writable modes, the uppercase IDs and the two message kinds:
+    - an unsorted tree;
+    - a tree repeating a name: an entry listed twice, and a blob and a tree
+      of one name;
+    - zero-padded, overlong and group-writable modes;
+    - entries named `.`, `..` and `.git`;
+    - uppercase IDs in a commit;
+    - a commit with no message, and one with no final line feed;
+    - identities without a name, without the email's `<`, without a date, or
+      (an author's only, and always in the history that must hold a bad
+      identity) with a date that overflows: a committer's would make the
+      commit-graph `git gc` writes compute generation numbers forever;
+    - a tag without a tagger;
+  - versions of a binary of at least the 1 MiB delta threshold, which import
+    stores as deltas.
+
+  Signatures are random bytes in the shape of PGP and SSH signatures: Git
+  parses them as signatures, and none verifies.
+
+  History *n* always holds case *n* of the list, counting round it, so any
+  corpus of at least one history per case holds every case. The rest is
+  chosen from the seed: tags of commits, trees, blobs and tags, notes,
+  replacement and remote-tracking refs, a symbolic ref, a detached or unborn
+  `HEAD`, packed objects and refs, file names in Latin-1, and SHA-256 for
+  about a quarter. Each history has two stages. The second adds commits and
+  rewrites a branch from an earlier commit, so what its old tip reached may be
+  reached no more; it may also delete a ref, add a tag, and prune what no ref
+  reaches.
+- **What is checked** (`test-support/generated-history-check.js`), for each
+  history:
+  - Git reads it whole: `git rev-list --objects --all`;
+  - fresh imports of the first stage, one from the history and one from a
+    copy of it with packed objects and refs, write byte-identical stores;
+  - `cst fsck` on the first stage's import;
+  - the native-kind mode's comparison (`compareCopy`), `cst import --verify`
+    and every N1 command against Git: on the first stage's import, and on a
+    full import of the final history;
+  - after the second stage, an import into the first stage's copy holds what
+    a full import of the final history holds: the same ref snapshot, its own
+    and the full import's alias rows, and its own and the full import's
+    objects, each stored once; then `cst fsck` and `cst import --verify` pass
+    on it.
+
+  The objects compared are those the history names: everything but content
+  that no alias row names. That content is a chunk of a large file, and which
+  chunks a store holds depends on the forms import chose. Each form depends
+  on what the store held when the version was written (storage.md §5.1): a
+  delta needs its base present, and a chunk list wins when the store holds
+  more of its chunks. An incremental import's store held other things than a
+  full import's at each version, so a large version may be a delta in one and
+  a chunk list in the other, in either direction, and its chunks with it. The
+  check holds every other form equal, and each object the first stage wrote
+  to its first form. Unless a version new in the second stage is a chunk list
+  in the incremental import and a delta in the full one, every chunk the
+  incremental import holds must also be one its earlier store or the full
+  import holds. This is ADR-0045's decision 3 as amended on 2026-10-26.
+
+  The suite also generates the first 24 histories of `causet-n1` and compares
+  a digest of their refs, `HEAD` and objects after each stage with one pinned
+  in the test. Each runner thus shows that it generates the corpus every
+  other runner does, and a change to the generator that changes the corpus
+  updates the digest deliberately.
+- **Shards.** One Node process starts only about a thousand processes a
+  second, so the suite checks the histories in shards, one Node process per
+  core, each running `generated-history-check.js` as a script on every
+  history whose index is its own modulo the shard count.
+- **Reproducing a failure.** Each history is a subtest named with its index,
+  format and cases. `CAUSET_GENERATED_ONLY=<index>` checks that one, and
+  `CAUSET_GENERATED_SEED` chooses the seed (by default `causet-n1`, the one
+  CI runs). Any Git or `cst` process the generator or a check starts, the
+  comparison's included, is stopped after 5 minutes
+  (`test-support/bounded-process.js`), which fails its history rather than
+  holding the corpus. The suite removes every repository it makes before its test ends, so the
+  native-kind mode has none of them to import again.
+- **Cost.** On a 16-core Linux host, 1,000 histories took 4 to 6 minutes, and
+  the default 24 about 10 seconds. On GitHub's hosted runners, 1,000 took 22
+  minutes on Ubuntu and 44 on Windows (#333).
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of
@@ -921,7 +1022,7 @@ them:
 | Workflow | Dispatch | Gates |
 | --- | --- | --- |
 | `ci.yml` | `gh workflow run ci.yml --ref <branch>` | 1, 2, 3, 6, 7, 8 |
-| `release-gates.yml` | `gh workflow run release-gates.yml --ref <branch>` | 4, 5, 10 |
+| `release-gates.yml` | `gh workflow run release-gates.yml --ref <branch>` | 4, 5, 10, and 11 through `corpora.yml` |
 | `release.yml` | `gh workflow run release.yml --ref <branch>` | 9, and 8 again on the tag |
 
 A release candidate is eligible only when:
@@ -942,12 +1043,14 @@ A release candidate is eligible only when:
 8. version constants, package metadata, changelog, and release tag agree;
 9. both ways of installing work outside the source checkout: the package set
    of ADR-0038 and the install scripts each install on a Windows and a Linux
-   runner, and the installed `cst` runs with Node absent from `PATH`; and
+   runner, and the installed `cst` runs with Node absent from `PATH`;
 10. the deterministic benchmark check passes on both runners:
     `npm run test:benchmark`, with no host named, against the committed
     `github-<runner>` baseline entry. It compares process, record and
     materialization counts, which are properties of the code, and the
-    forecast engines' semantic equality.
+    forecast engines' semantic equality; and
+11. the generated-history corpus passes every N1 check on both runners: 1,000
+    histories of the seed `causet-n1` (ADR-0044 item 7, #308).
 
 **Latency is evidence, not a gate.** Absolute timings cannot travel between
 machines and a shared runner cannot measure them, so no gate depends on them.
@@ -1107,7 +1210,12 @@ comparison commit or empty diff conservatively runs the routine suites. The
 native-kind mode runs for anything under `native/`, and under `test/` and
 `test-support/`, because the suites and their harness decide which
 repositories it imports; an unknown change set counts too.
-There is no automatic full-matrix schedule. Superseded runs cancel within
+`.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
+today the generated-history corpus, on Ubuntu and Windows: weekly on `main`,
+on manual dispatch, from `release-gates.yml` when a release is qualified, and
+for a pull request that changes the corpus or the workflow. Its jobs have a
+90-minute timeout, about twice the slowest run measured.
+`ci.yml` has no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
 
