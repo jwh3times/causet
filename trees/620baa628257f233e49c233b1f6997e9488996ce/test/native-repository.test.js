@@ -516,6 +516,44 @@ test("only the header lines Git's parser follows are translated, and a path is l
   assert.equal(verified.status, 0, verified.stderr.toString());
 });
 
+test("a tree mode reads as Git reads it: in 32 bits that wrap, and never with a sign", () => {
+  const root = scratch();
+  const repo = path.join(root, "source");
+  fs.mkdirSync(repo);
+  const git = gitIn(repo);
+  git(["init", "-q", "-b", "main"]);
+  const blob = (text) => git(["hash-object", "-w", "--stdin"], text).toString().trim();
+  const [wrapped, signed] = [blob("wrapped\n"), blob("signed\n")];
+  // Git reads the first mode as a file's 100644, so it follows the entry to
+  // its blob; the second it cannot read at all.
+  const entry = (mode, name, id) => Buffer.concat([Buffer.from(`${mode} ${name}\0`), Buffer.from(id, "hex")]);
+  const odd = git(["hash-object", "-t", "tree", "-w", "--literally", "--stdin"], Buffer.concat([
+    entry("10000000000000000000000000100644", "wrapped", wrapped),
+  ])).toString().trim();
+  const unread = git(["hash-object", "-t", "tree", "-w", "--literally", "--stdin"], entry("+100644", "signed", signed)).toString().trim();
+  const commit = git(["commit-tree", odd, "-m", "odd modes"]).toString().trim();
+  git(["update-ref", "refs/heads/main", commit]);
+  git(["update-ref", "refs/tags/unread", unread]);
+  assert.equal(cst(root, ["import", "source", "native"]).status, 0);
+  const destination = path.join(root, "native");
+  const rows = aliases(destination, "sha1");
+  // Git's rev-list stops at the tree it cannot read, so it walks only main.
+  const reached = git(["rev-list", "--objects", "--no-object-names", "main"]).toString().trim().split("\n");
+  assert.ok(reached.includes(wrapped));
+  assert.deepEqual([...rows.keys()].sort(), [...reached, unread].sort(),
+    "the wrapped entry's blob is imported, as Git reaches it, and the unread entry's is not");
+  const translate = (text) => text.replace(/\b[0-9a-f]{40}\b/g, (id) => rows.get(id) ?? id);
+  for (const args of [["cat-file", "-p", odd], ["ls-tree", "-l", odd], ["cat-file", "-p", `${commit}:wrapped`],
+    ["cat-file", "-p", unread], ["ls-tree", unread]]) {
+    const expected = spawnSync("git", args, { cwd: repo, env: testEnv() });
+    const answered = cst(destination, args.map((arg) => arg.replace(/^[0-9a-f]{40}/, (id) => rows.get(id))));
+    assert.equal(answered.status === 0, expected.status === 0, `${args.join(" ")}: ${answered.stderr}`);
+    assert.equal(answered.stdout.toString(), translate(expected.stdout.toString()), args.join(" "));
+  }
+  const verified = cst(destination, ["import", "--verify"]);
+  assert.equal(verified.status, 0, verified.stderr.toString());
+});
+
 test("shallow, partial and grafted sources are refused before anything is written, each naming why", () => {
   const { root, repo, git, first } = makeSource("sha1");
   git(["config", "uploadpack.allowFilter", "true"]);

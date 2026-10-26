@@ -16,7 +16,7 @@ use crate::native_revision::Repository;
 use causet_engine::errors::{GitError, GitResult};
 use causet_import::store_error;
 use causet_store::id::{GitAlgorithm, NativeId, Type, hex};
-use causet_store::objects::{GitKind, Kind, Preserved, Target, Tree, parse_git_tree};
+use causet_store::objects::{GitKind, Kind, Preserved, Target, Tree, git_mode, parse_git_tree};
 use causet_store::StoreError;
 use causet_store::reconstruct;
 use causet_store::store::Store;
@@ -496,11 +496,7 @@ pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Opti
         parse_git_tree(&preserved.payload, preserved.algorithm).ok_or_else(malformed)?;
       let mut listed = Vec::with_capacity(entries.len());
       for entry in entries {
-        let mode = std::str::from_utf8(&entry.mode)
-          .ok()
-          .filter(|mode| !mode.is_empty())
-          .and_then(|mode| u32::from_str_radix(mode, 8).ok())
-          .ok_or_else(malformed)?;
+        let mode = git_mode(&entry.mode).ok_or_else(malformed)?;
         let (mode, kind) = canonical_mode(mode);
         let target = alias(store, preserved.algorithm, &entry.digest);
         listed.push(Listed {

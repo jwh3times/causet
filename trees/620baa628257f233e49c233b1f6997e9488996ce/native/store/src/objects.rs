@@ -532,18 +532,22 @@ impl Snapshot {
   }
 }
 
+/// A tree entry's mode as Git reads it (`get_mode` in Git's `tree-walk.c`):
+/// one or more octal digits, in an unsigned 32-bit number that wraps as Git's
+/// does, so `10000000000000000000000000100644` is `100644`. `None` when Git
+/// cannot read the mode, a sign or an empty mode included.
+pub fn git_mode(mode: &[u8]) -> Option<u32> {
+  if mode.is_empty() || !mode.iter().all(|digit| (b'0'..=b'7').contains(digit)) {
+    return None;
+  }
+  Some(mode.iter().fold(0u32, |value, digit| (value << 3).wrapping_add(u32::from(digit - b'0'))))
+}
+
 /// Whether Git follows a tree entry of this mode: every mode but a submodule
-/// link's, after Git's own `canon_mode`. A mode that is not octal is followed
+/// link's, after Git's own `canon_mode`. A mode Git cannot read is followed
 /// by neither.
 pub fn followed(mode: &[u8]) -> bool {
-  let Some(mode) = std::str::from_utf8(mode)
-    .ok()
-    .filter(|mode| !mode.is_empty())
-    .and_then(|mode| u32::from_str_radix(mode, 8).ok())
-  else {
-    return false;
-  };
-  matches!(mode & 0o170000, 0o100000 | 0o120000 | 0o040000)
+  git_mode(mode).is_some_and(|mode| matches!(mode & 0o170000, 0o100000 | 0o120000 | 0o040000))
 }
 
 /// One record of a Git tree, as Git wrote it.
@@ -630,6 +634,20 @@ mod tests {
 
   fn content(bytes: &[u8]) -> NativeId {
     NativeId::of(Type::Content, bytes)
+  }
+
+  #[test]
+  fn a_mode_reads_as_git_reads_it() {
+    assert_eq!(git_mode(b"100644"), Some(0o100644));
+    assert_eq!(git_mode(b"40000"), Some(0o40000));
+    // Git's unsigned int wraps: the digits past 32 bits fall away.
+    assert_eq!(git_mode(b"10000000000000000000000000100644"), Some(0o100644));
+    assert_eq!(git_mode(b"77777777777"), Some(u32::MAX));
+    for unread in [&b""[..], b"+100644", b"-1", b"100648", b"10 644"] {
+      assert_eq!(git_mode(unread), None, "{}", String::from_utf8_lossy(unread));
+    }
+    assert!(followed(b"10000000000000000000000000100644"));
+    assert!(!followed(b"+100644"));
   }
 
   #[test]

@@ -23,9 +23,12 @@ function vlab(cwd, ...args) {
   return JSON.parse(result.stdout);
 }
 function fixture(t, format = "sha1") {
-  const parent = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vlab-retain-")));
+  // The temporary directory is read once: a suite mode may point it
+  // elsewhere by the time cleanup runs (test-support/native-kind.js).
+  const temporary = fs.realpathSync.native(os.tmpdir());
+  const parent = fs.realpathSync.native(fs.mkdtempSync(path.join(temporary, "vlab-retain-")));
   t.after(() => {
-    assert.ok(parent.startsWith(fs.realpathSync.native(os.tmpdir()) + path.sep));
+    assert.ok(parent.startsWith(temporary + path.sep));
     fs.rmSync(parent, { recursive: true, force: true });
   });
   const repo = path.join(parent, "repo");

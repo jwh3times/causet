@@ -21,8 +21,8 @@ use causet_store::StoreError;
 use causet_store::delta;
 use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
 use causet_store::objects::{
-  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, followed, header_ids,
-  parse_git_tree,
+  Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree, followed, git_mode,
+  header_ids, parse_git_tree,
 };
 use causet_store::store::Store;
 use causet_store::store::{Base, StoreWriter};
@@ -567,21 +567,15 @@ impl Importer<'_> {
     (preserved.kind == kind).then(|| built_on(self.algorithm, kind, &preserved.payload))?
   }
 
-  /// A tree's entries, each with its name, its mode as a number and its Git
-  /// ID, from what this import read or what the store held already. A mode
-  /// that is not octal digits is `None`, so the entry still has its place.
+  /// A tree's entries, each with its name, its mode as Git reads it and its
+  /// Git ID, from what this import read or what the store held already. A
+  /// mode Git cannot read is `None`, so the entry still has its place.
   fn entries(&self, id: &str) -> Option<Vec<(Vec<u8>, Option<u32>, String)>> {
-    let mode = |mode: &[u8]| {
-      std::str::from_utf8(mode)
-        .ok()
-        .filter(|mode| !mode.is_empty() && mode.bytes().all(|digit| (b'0'..=b'7').contains(&digit)))
-        .and_then(|mode| u32::from_str_radix(mode, 8).ok())
-    };
     let git = |raw: &[u8]| {
       parse_git_tree(raw, self.algorithm).map(|records| {
         records
           .into_iter()
-          .map(|record| (record.name, mode(&record.mode), hex(&record.digest)))
+          .map(|record| (record.name, git_mode(&record.mode), hex(&record.digest)))
           .collect()
       })
     };
@@ -599,7 +593,7 @@ impl Importer<'_> {
             Target::Native(target) => hex(aliases.git(target)?),
             Target::Git(target) => target.hex(),
           };
-          Some((entry.name, mode(entry.kind.git_mode()), target))
+          Some((entry.name, git_mode(entry.kind.git_mode()), target))
         }).collect()
       }
       Type::Preserved => {

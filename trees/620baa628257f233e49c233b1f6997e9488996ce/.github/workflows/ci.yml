@@ -93,6 +93,7 @@ jobs:
             forecast-worktree) echo "CAUSET_FORECAST_ENGINE=worktree" >> "$GITHUB_ENV" ;;
             forecast-merge-tree) echo "CAUSET_FORECAST_ENGINE=merge-tree" >> "$GITHUB_ENV" ;;
             engine-native) echo "CAUSET_ENGINE=native" >> "$GITHUB_ENV" ;;
+            kind-native) echo "CAUSET_KIND=native" >> "$GITHUB_ENV" ;;
             *) echo "unknown mode ${{ matrix.mode }}" >&2; exit 1 ;;
           esac
       - name: Suite

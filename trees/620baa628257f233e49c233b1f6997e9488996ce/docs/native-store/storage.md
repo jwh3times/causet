@@ -305,6 +305,10 @@ or loose.
     Git does not follow: submodule links, and modes of no file, symbolic
     link or tree.
 
+  A mode is read as Git reads it: one or more octal digits, in an unsigned
+  32-bit number that wraps, so `10000000000000000000000000100644` is a file's
+  `100644`. A mode Git cannot read, with a sign or no digits, is not followed.
+
   An object the store holds already is not entered (§4.2).
 - **An object's path** is where the walk first reaches it. A tip, a commit's
   tree and a tag's object are at the root, the empty path. A tree's entry is at
@@ -474,8 +478,8 @@ When a delta is written, the content's new chunks are not stored.
 **The path is looked up** in the first parent's tree by its parts, split at
 `/`. Each part names an entry of the tree before it: the first entry of that
 name in the tree's stored order. Every part but the last must name a tree, and
-the last a blob with a file or symbolic link mode. Anything else, such as a
-submodule or a tree there, is no such path.
+the last a blob with a file or symbolic link mode, each mode read as §3.2
+reads it. Anything else, such as a submodule or a tree there, is no such path.
 
 ### 5.2 Depth
 
