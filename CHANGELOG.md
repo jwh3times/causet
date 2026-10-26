@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Fix: a native repository reads a tree mode as Git does** (#307). Git reads
+  a mode's octal digits into 32 bits that wrap, so it follows an entry whose
+  mode is `10000000000000000000000000100644` as a file. `cst import` now
+  imports that entry's blob, and `cst cat-file` and `cst ls-tree` print the
+  tree as Git does instead of refusing it as unreadable. A mode with a sign,
+  which Git cannot read, is no longer taken as a number. A native repository an
+  earlier build imported from a history with such a tree lacks that blob, so
+  `cst import --verify` now fails on it: import it again.
+
+- **The native-kind suite mode** (#307, ADR-0044 item 1). `CAUSET_KIND=native
+  npm test` imports every Git repository each test leaves and holds N1's
+  commands on the native copy to Git's answers on the original: `cst import
+  --verify`, then `cat-file` for every object, `ls-tree`, `rev-parse` and
+  `for-each-ref`. A refusal fails the test unless the mode lists it with its
+  reason. CI runs it on Ubuntu and Windows for every pull request that touches
+  native code, a suite or its harness. See "The native-kind mode" in
+  `docs/testing.md`.
+
 - **Experimental: large files are stored as deltas in a native repository**
   (#306). `cst import` stores a new version of a file of 1 MiB or more as a
   zstd delta against the file's previous version, when the delta is smaller

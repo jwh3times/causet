@@ -182,6 +182,71 @@ supported profile, parser fuzz target, optional packaging, and ADR-0027's separa
 latency gate. Git transport tests explicitly select Git; native oracle tests
 assert executed operations and zero Git processes for supported inputs.
 
+**The native-kind mode** (ADR-0044 item 1, #307) runs every suite as usual,
+then imports each Git repository a test leaves into a native repository and
+holds N1's commands on the copy to Git's answers on the original:
+
+```bash
+CAUSET_KIND=native npm test
+```
+
+```powershell
+$env:CAUSET_KIND = "native"
+npm test
+Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
+```
+
+`test-support/native-kind.js` does it, through hooks that
+`test-support/git-environment.js` installs in every suite file:
+- **Finding a test's repositories.** Each test gets its own temporary
+  directory: `TMPDIR`, `TEMP` and `TMP` name it while the test runs, so
+  `os.tmpdir()` and every process the test starts write there. It sits
+  directly in the host's temporary directory as `ck` and six characters,
+  because some suites already come within a dozen characters of Windows'
+  259-character path limit; the run removes them as it exits, and an
+  interrupted one leaves them behind. After the test,
+  every Git repository under it is found: a working tree's, a linked
+  worktree's or a bare one, by its common directory. After the file's last
+  test, everything the file made, in a test or outside one, is looked at
+  again. A repository is compared whenever its refs or `HEAD` differ from when
+  it was last compared, so a fixture one test makes and later tests change is
+  compared as they leave it. A repository a test removes before it ends is not
+  seen. The mode needs Node 20.5 or later, where `afterEach` runs before a
+  test's own `t.after` cleanup. By then `os.tmpdir()` names the directory
+  outside the test again, so a cleanup that checks a fixture's path reads
+  the temporary directory when it makes the fixture, not when it removes it.
+- **What is compared,** once Git's IDs are translated through the alias map:
+  - `cst import --verify` first, so a store problem fails as such rather than
+    as a mismatch in some command's output;
+  - `cst for-each-ref`, `cst rev-parse HEAD`, `--symbolic-full-name HEAD` and
+    `--all`;
+  - `cst cat-file -t`, `-s` and `-p` for every imported object;
+  - `cst ls-tree -r -t -l` for everything a ref names.
+
+  Only the IDs an answer names objects by are translated: a blob's bytes, a
+  commit's message and a tree entry's name stay Git's. A commit or tag
+  translates only the header lines Git's parser follows. Git answers as import
+  reads, with replacement refs off, and for the common directory, so `HEAD` is
+  the main worktree's.
+- **Refusals.** A repository that import refuses fails its test, unless
+  `REFUSALS` in `test-support/native-kind.js` lists it with the suite file, the
+  test, a part of the refusal and the reason. The list holds the suites'
+  shallow and partial clones, sources that name objects they do not hold, and
+  the shallow clone of this checkout that CI's one-commit fetch makes.
+- **Cost.** Each `cst` invocation opens the store again, so the comparisons
+  run as many at a time as the host has cores. On a 16-core Linux host the
+  whole suite took 150 to 240 s in this mode against 45 s without it, most of
+  it for `test/rust-engine.test.js`'s clone of this checkout, about 7,000
+  objects.
+  CI's one-commit checkout makes that clone shallow, so there import refuses
+  it, as listed.
+
+The conformance fixtures and the frozen oracle corpora name no N1 command, so
+in N1 they take part only through the repositories their suites make, which
+this mode imports like any other. `test/native-kind.test.js` checks the mode
+itself: a copy that answers otherwise, and a refusal it does not list, each
+fail the test that left the repository.
+
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of
 `scripts/measure-real-repository.mjs` goes through `test-support/cst-command.js`.
@@ -1028,17 +1093,20 @@ start after those checks pass.
 
 | Trigger | Suite jobs after static checks | Purpose |
 | --- | --- | --- |
-| Code pull request | Default mode on Ubuntu and Windows, Node 24 | Routine behavior and both platform defaults |
-| Code push to `main` | Default mode on Ubuntu, Node 24 | Integration check without repeating the Windows matrix |
+| Code pull request | Default mode on Ubuntu and Windows, Node 24, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
+| Code push to `main` | Default mode on Ubuntu, Node 24, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
 | Known documentation-only PR or main push | None | Static checks still run |
-| Manual `workflow_dispatch` | All six modes on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
+| Manual `workflow_dispatch` | All seven modes on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.
 Only root guides, Markdown under `docs/`, and Markdown agent skills qualify as
 documentation-only. Schemas, conformance fixtures, scripts, tests, workflows,
 and unknown paths still run suites. Renames consider both paths; a missing
-comparison commit or empty diff conservatively runs the routine suites.
+comparison commit or empty diff conservatively runs the routine suites. The
+native-kind mode runs for anything under `native/`, and under `test/` and
+`test-support/`, because the suites and their harness decide which
+repositories it imports; an unknown change set counts too.
 There is no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
@@ -1053,7 +1121,8 @@ gh workflow run ci.yml --ref <candidate-branch-or-tag>
 ```
 
 Record the tested SHA and results in the PR or release evidence. Local six-mode
-validation remains required for cross-cutting changes. Routine defaults cover
+validation remains required for cross-cutting changes, and the native-kind
+mode for changes to native code. Routine defaults cover
 the normal POSIX session-off and Windows session-on paths, but alternate modes
 and Node 20 can otherwise regress until explicit qualification. Code changes
 should go through a PR; an exceptional direct main push requires equivalent

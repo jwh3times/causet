@@ -111,6 +111,9 @@ changes, run `npm test`, `CAUSET_GIT_SESSION=1 npm test`, `CAUSET_GIT_SESSION=0 
 `CAUSET_FORECAST_ENGINE=worktree npm test`, `CAUSET_FORECAST_ENGINE=merge-tree npm test`
 (the default forecast engine differs by platform), and `CAUSET_ENGINE=native npm test`
 (every read must pass through the engine seam, `native/engine/src/engine.rs`).
+For changes to native code, also run `CAUSET_KIND=native npm test`, which
+imports every test's repositories and holds N1's commands on the copies to
+Git's answers (`test-support/native-kind.js`, ADR-0044).
 Every CLI launch in the suites goes through `test-support/cst-command.js`,
 which runs the Rust build; never spawn a CLI directly, so that
 `CAUSET_CLI=<executable> npm test` can run the same suites against another
