@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **The generated-history corpus** (#308, ADR-0045 decision 13). Git
+  histories generated from a seed, each holding at least one case of N1's
+  list: merges and octopus merges, renames, mode changes, symbolic and
+  submodule links, empty trees and files, signed commits and tags, non-UTF-8
+  encodings, extra headers, eleven kinds of malformed object Git reads, and
+  versioned large binaries. Each is checked by every N1 check: `cst import
+  --verify` and every N1 command against Git, fresh imports of the history
+  and of a packed copy byte for byte, and an incremental import against a
+  full one. `npm test` checks one history
+  per case; `.github/workflows/corpora.yml` checks 1,000 on Ubuntu and
+  Windows, weekly and as release gate 11. See "The generated-history corpus"
+  in `docs/testing.md`. The corpus and the native-kind mode stop any `cst` or
+  Git process after 5 minutes, which fails its test rather than holding the
+  run.
+
 - **Fix: a native repository reads a tree mode as Git does** (#307). Git reads
   a mode's octal digits into 32 bits that wrap, so it follows an entry whose
   mode is `10000000000000000000000000100644` as a file. `cst import` now

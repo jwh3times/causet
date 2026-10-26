@@ -16,7 +16,9 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-import { TYPES, aliases, containers, nativeId, readContainer } from "../test-support/native-store.js";
+import {
+  TYPES, aliases, containers, nativeId, readContainer, storeFiles as files, storeObjects as objects,
+} from "../test-support/native-store.js";
 
 const created = [];
 
@@ -107,29 +109,6 @@ function makeHistory(format = "sha1") {
   git(["tag", "-a", "-m", "a blob", "blob-tag", `${one}:a.txt`]);
   git(["symbolic-ref", "refs/heads/current", "refs/heads/main"]);
   return { root, ...source, one, two, side, merged, lone };
-}
-
-/** Every file under a store's `.cst/`, by its path there, with its bytes. */
-function files(store) {
-  const found = new Map();
-  const visit = (directory, prefix) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const at = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(at, `${prefix}${entry.name}/`);
-      else found.set(`${prefix}${entry.name}`, fs.readFileSync(at));
-    }
-  };
-  visit(path.join(store, ".cst"), "");
-  return found;
-}
-
-/** Every object the store's containers list, as hex. */
-function objects(store) {
-  const found = new Set();
-  for (const file of containers(store)) {
-    for (const object of readContainer(file).objects) found.add(object.name.toString("hex"));
-  }
-  return found;
 }
 
 const sorted = (items) => [...items].sort();

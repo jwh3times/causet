@@ -27,6 +27,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { aliases } from "./native-store.js";
+import { PROCESS_LIMIT, bounded } from "./bounded-process.js";
 import { cstCommand, cstPrefix } from "./cst-command.js";
 
 /** Whether this run is the native-kind mode. */
@@ -214,17 +215,23 @@ function repositories(directory, env) {
   return found;
 }
 
-/** A process's exit status and output, as `spawnSync` gives them. */
+/**
+ * A process's exit status and output, as `spawnSync` gives them. One that
+ * runs past `PROCESS_LIMIT` is stopped, which fails its comparison.
+ */
 function run(command, args, { cwd, env, input }) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env });
+    const child = spawn(command, args, { cwd, env, timeout: PROCESS_LIMIT });
+    const ending = bounded(child);
     const [stdout, stderr] = [[], []];
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
     // A process that cannot start is an answer that fails, not an exception
     // that would stop the other comparisons.
     child.on("error", (error) => resolve({ status: null, stdout: Buffer.alloc(0), stderr: Buffer.from(String(error)) }));
-    child.on("close", (status) => resolve({ status, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) }));
+    child.on("close", (status, signal) => resolve({
+      status, stdout: Buffer.concat(stdout), stderr: Buffer.concat([...stderr, Buffer.from(ending(signal))]),
+    }));
     child.stdin.on("error", () => {});
     child.stdin.end(input);
   });
@@ -265,6 +272,15 @@ async function compare(repository, destination, { env, file, testName }) {
       && reason.includes(refusal.refusal));
     return listed ? [] : [`${where}: import refused, and REFUSALS does not list it: ${reason}`];
   }
+  return compareCopy(repository, destination, { env, where });
+}
+
+/**
+ * N1's answers on `destination`, an import of `repository` (`{ path,
+ * common }`), against Git's on it: the problems found, each starting with
+ * `where`. `width` is how many processes run at a time.
+ */
+export async function compareCopy(repository, destination, { env, where, width = os.availableParallelism() }) {
   const verified = await cst(destination, ["import", "--verify"], env);
   if (verified.status !== 0) {
     return [`${where}: import --verify failed: ${verified.stderr}`];
@@ -344,7 +360,7 @@ async function compare(repository, destination, { env, file, testName }) {
       known(["cat-file", "-p", gitId], ["cat-file", "-p", native], Buffer.from(headers(type, bytes.toString("latin1"), rows), "latin1"));
     }
   }
-  await pool(jobs, os.availableParallelism());
+  await pool(jobs, width);
   return problems;
 }
 

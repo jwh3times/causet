@@ -42,6 +42,29 @@ export function containers(store) {
   return fs.readdirSync(objects).filter((name) => name.endsWith(".cstc")).sort().map((name) => path.join(objects, name));
 }
 
+/** Every file under a store's `.cst/`, by its path there, with its bytes. */
+export function storeFiles(store) {
+  const found = new Map();
+  const visit = (directory, prefix) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const at = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(at, `${prefix}${entry.name}/`);
+      else found.set(`${prefix}${entry.name}`, fs.readFileSync(at));
+    }
+  };
+  visit(path.join(store, ".cst"), "");
+  return found;
+}
+
+/** Every object the store's containers list, as hex. */
+export function storeObjects(store) {
+  const found = new Set();
+  for (const file of containers(store)) {
+    for (const object of readContainer(file).objects) found.add(object.name.toString("hex"));
+  }
+  return found;
+}
+
 /** A container's frames, as their stored bytes, and its index. */
 export function readContainer(file) {
   const bytes = fs.readFileSync(file);

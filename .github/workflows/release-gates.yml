@@ -7,6 +7,7 @@ name: release gates
 #   gate 4   every maintained demo completes
 #   gate 5   metadata validation of this repository reports no errors
 #   gate 10  the deterministic benchmark check passes
+#   gate 11  the generated-history corpus passes every N1 check (corpora.yml)
 #
 # Dispatch it on the release commit. It also runs for a pull request that
 # touches the benchmark, its baseline, or this file.
@@ -103,3 +104,8 @@ jobs:
         run: |
           echo "This runner recorded a baseline entry instead of checking against one." >&2
           exit 1
+
+  corpora:
+    # Gate 11: corpora.yml's heavy corpora, on the same commit.
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/corpora.yml
