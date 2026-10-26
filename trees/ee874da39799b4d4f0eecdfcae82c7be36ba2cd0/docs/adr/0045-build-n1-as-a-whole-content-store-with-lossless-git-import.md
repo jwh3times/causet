@@ -1,6 +1,6 @@
 # ADR-0045: Build N1 as a whole-content store with lossless Git import
 
-- **Status:** Accepted (owner, 2026-10-17); command names in [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)
+- **Status:** Accepted (owner, 2026-10-17); command names in [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md); decision 3 amended 2026-10-26 (see below)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, NFR-PERF-06, NFR-PERF-07, NFR-PORT-01
@@ -73,7 +73,9 @@ binaries:
      containers, indexes and the alias map. Packing order is deterministic.
    - **An incremental import yields the same native objects** (IDs and
      content), the same alias map and the same ref snapshot as a full import of
-     the final history. Container layout may differ. An import removes
+     the final history. Container layout may differ. (Amended 2026-10-26: the
+     objects are those the history names; a large version's stored form and
+     the chunks follow storage.md §5.1. See below.) An import removes
      nothing the store held: what only a deleted or moved ref reached stays,
      with its alias rows. The store then holds the full import's objects and
      rows, and its own earlier ones.
@@ -238,3 +240,32 @@ binaries:
   full repack on every import.
 - **The `fastcdc` crate as the definition of cut points.** Rejected: its
   implementations cut differently between versions.
+
+## Amendment 2026-10-26: what an incremental import holds the same
+
+Decided on [#333](https://github.com/jwh3times/causet/pull/333), from what the
+generated-history corpus (#308) found.
+
+Decision 3's incremental check is made precise. An incremental import yields,
+as a full import of the final history does:
+
+- **the same named objects:** every object but a chunk of larger content, that
+  is, every object the history names under its native ID and every other
+  object import writes, by ID and content, each stored once;
+- **the same alias map and the same ref snapshot.**
+
+What it may hold otherwise is **how a large version is stored**, and with it
+which chunks the store holds. A version's form depends on what the store held
+when the version was written ([storage.md §5.1](../native-store/storage.md#51-when-a-delta-is-written)):
+a delta needs its base present, and a chunk list wins when the store holds
+more of its chunks. An incremental import's store held other things than a
+full import's at each version, so one version may be a delta in one store and
+a chunk list in the other, in either direction. In 1,000 generated histories,
+18 differed so, in 27 objects, every one a chunk list against a delta.
+Decision 4 already makes chunks a storage detail, and making forms independent
+of the store would give up compression for no reader's benefit.
+
+The check (`test-support/generated-history-check.js`) holds every other form
+equal, each object the earlier import wrote to its first form, and every chunk
+to one the earlier store or the full import holds, unless a version new to the
+incremental import is a chunk list there and a delta in the full one.

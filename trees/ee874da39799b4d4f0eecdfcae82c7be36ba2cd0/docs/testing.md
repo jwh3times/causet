@@ -325,7 +325,7 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   to its first form. Unless a version new in the second stage is a chunk list
   in the incremental import and a delta in the full one, every chunk the
   incremental import holds must also be one its earlier store or the full
-  import holds.
+  import holds. This is ADR-0045's decision 3 as amended on 2026-10-26.
 
   The suite also generates the first 24 histories of `causet-n1` and compares
   a digest of their refs, `HEAD` and objects after each stage with one pinned
@@ -345,7 +345,8 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   holding the corpus. The suite removes every repository it makes before its test ends, so the
   native-kind mode has none of them to import again.
 - **Cost.** On a 16-core Linux host, 1,000 histories took 4 to 6 minutes, and
-  the default 24 about 10 seconds.
+  the default 24 about 10 seconds. On GitHub's hosted runners, 1,000 took 22
+  minutes on Ubuntu and 44 on Windows (#333).
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of
@@ -1213,7 +1214,7 @@ repositories it imports; an unknown change set counts too.
 today the generated-history corpus, on Ubuntu and Windows: weekly on `main`,
 on manual dispatch, from `release-gates.yml` when a release is qualified, and
 for a pull request that changes the corpus or the workflow. Its jobs have a
-150-minute timeout.
+90-minute timeout, about twice the slowest run measured.
 `ci.yml` has no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.

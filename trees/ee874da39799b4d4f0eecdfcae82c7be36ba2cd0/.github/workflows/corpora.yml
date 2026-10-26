@@ -45,7 +45,9 @@ jobs:
   generated:
     name: generated histories / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 150
+    # About twice the slowest run measured (Windows, 44 minutes for 1,000
+    # histories on #333); a process that hangs is stopped after 5 minutes.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
