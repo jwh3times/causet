@@ -475,6 +475,12 @@ A version 0 writer writes a delta when all of these hold:
 
 When a delta is written, the content's new chunks are not stored.
 
+**A form depends on what the store holds,** through the base's place and the
+saving. An incremental import may therefore store a version as a delta where a
+full import of the same history stores a chunk list, or the reverse, and hold
+other chunks; every other object is the same in both ([ADR-0045](../adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md),
+amendment of 2026-10-26).
+
 **The path is looked up** in the first parent's tree by its parts, split at
 `/`. Each part names an entry of the tree before it: the first entry of that
 name in the tree's stored order. Every part but the last must name a tree, and
