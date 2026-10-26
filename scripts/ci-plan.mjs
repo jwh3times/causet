@@ -4,8 +4,14 @@ import { pathToFileURL } from "node:url";
 
 const MODES = [
   "default", "session-on", "session-off", "forecast-worktree",
-  "forecast-merge-tree", "engine-native",
+  "forecast-merge-tree", "engine-native", "kind-native",
 ];
+
+// The native-kind mode runs on every change to native code (ADR-0044 item 7),
+// and to the suites and harness, which decide the repositories it imports.
+function nativeCode(file) {
+  return ["native/", "test-support/", "test/"].some((prefix) => file.startsWith(prefix));
+}
 
 function documentationOnly(file) {
   return ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md"].includes(file)
@@ -34,12 +40,14 @@ export function planCi(eventName, changedFiles) {
   if (changedFiles?.length && changedFiles.every(documentationOnly)) {
     return { reason: "Documentation-only change", include: [] };
   }
+  // An unknown change set conservatively counts as native code too.
+  const modes = !changedFiles?.length || changedFiles.some(nativeCode) ? ["default", "kind-native"] : ["default"];
   return {
     reason: eventName === "pull_request" ? "Routine pull request" : "Main integration",
     include: (eventName === "pull_request"
       ? ["ubuntu-latest", "windows-latest"]
       : ["ubuntu-latest"]
-    ).map((os) => ({ os, node: 24, mode: "default" })),
+    ).flatMap((os) => modes.map((mode) => ({ os, node: 24, mode }))),
   };
 }
 

@@ -11,13 +11,29 @@ import { testEnv } from "../test-support/git-environment.js";
 const planner = fileURLToPath(new URL("../scripts/ci-plan.mjs", import.meta.url));
 
 test("routine code changes use two PR suites and one main suite", () => {
-  assert.deepEqual(planCi("pull_request", ["native/engine/src/git.rs"]).include, [
+  assert.deepEqual(planCi("pull_request", ["bin/native/cst.js"]).include, [
     { os: "ubuntu-latest", node: 24, mode: "default" },
     { os: "windows-latest", node: 24, mode: "default" },
   ]);
-  assert.deepEqual(planCi("push", ["native/engine/src/git.rs"]).include, [
+  assert.deepEqual(planCi("push", ["scripts/ci-plan.mjs"]).include, [
     { os: "ubuntu-latest", node: 24, mode: "default" },
   ]);
+});
+
+test("a change to native code, a suite or the harness adds the native-kind mode beside each default suite", () => {
+  for (const files of [["native/engine/src/git.rs"], ["README.md", "native/store/src/delta.rs"],
+    ["test-support/native-kind.js"], ["test-support/git-environment.js"], ["test/integration.test.js"], null, []]) {
+    assert.deepEqual(planCi("pull_request", files).include, [
+      { os: "ubuntu-latest", node: 24, mode: "default" },
+      { os: "ubuntu-latest", node: 24, mode: "kind-native" },
+      { os: "windows-latest", node: 24, mode: "default" },
+      { os: "windows-latest", node: 24, mode: "kind-native" },
+    ], JSON.stringify(files));
+    assert.deepEqual(planCi("push", files).include, [
+      { os: "ubuntu-latest", node: 24, mode: "default" },
+      { os: "ubuntu-latest", node: 24, mode: "kind-native" },
+    ], JSON.stringify(files));
+  }
 });
 
 test("only known documentation paths omit automatic suites", () => {
@@ -35,11 +51,12 @@ test("only known documentation paths omit automatic suites", () => {
 
 test("manual qualification always retains all platform modes and the Node floor", () => {
   const jobs = planCi("workflow_dispatch", ["README.md"]).include;
-  assert.equal(jobs.length, 14);
-  assert.equal(new Set(jobs.map((job) => JSON.stringify(job))).size, 14);
+  assert.equal(jobs.length, 16);
+  assert.equal(new Set(jobs.map((job) => JSON.stringify(job))).size, 16);
   for (const os of ["ubuntu-latest", "windows-latest"]) {
     assert.deepEqual(jobs.filter((job) => job.os === os && job.node === 24).map((job) => job.mode),
-      ["default", "session-on", "session-off", "forecast-worktree", "forecast-merge-tree", "engine-native"]);
+      ["default", "session-on", "session-off", "forecast-worktree", "forecast-merge-tree", "engine-native",
+        "kind-native"]);
   }
   assert.deepEqual(jobs.filter((job) => job.node === 20), [
     { os: "ubuntu-latest", node: 20, mode: "default" },
@@ -82,7 +99,7 @@ test("missing or invalid comparison commits conservatively retain routine suites
   for (const before of [undefined, "0".repeat(40), "a".repeat(40), "--output=README.md", 123]) {
     const files = changedPaths("push", { before }, cwd);
     assert.equal(files, null);
-    assert.equal(planCi("push", files).include.length, 1);
+    assert.deepEqual(planCi("push", files).include.map((job) => job.mode), ["default", "kind-native"]);
   }
 });
 
@@ -97,7 +114,7 @@ test("the CLI writes usable Actions outputs for documentation, code and manual r
   git("commit", "-m", "docs");
   for (const [eventName, event, count] of [["push", { before }, 0],
     ["pull_request", { pull_request: { base: { sha: before } } }, 0],
-    ["pull_request", {}, 2], ["workflow_dispatch", {}, 14]]) {
+    ["pull_request", {}, 4], ["workflow_dispatch", {}, 16]]) {
     const eventPath = path.join(cwd, "event.json");
     const outputPath = path.join(cwd, "output.txt");
     const summaryPath = path.join(cwd, "summary.md");

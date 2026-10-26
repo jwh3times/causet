@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { after, afterEach } from "node:test";
+import { after, afterEach, beforeEach } from "node:test";
 import { cliInvocations, resetCliInvocations, selectedCli } from "./cst-command.js";
+import { installNativeKind, nativeKind } from "./native-kind.js";
 
 /**
  * The environment for every Git and CLI process a suite spawns. Besides
@@ -63,4 +64,13 @@ if (selectedCli) {
     }
     resetCliInvocations();
   });
+}
+
+/**
+ * `CAUSET_KIND=native` imports every repository each test leaves and
+ * compares N1's commands on the native copy with Git's on the original
+ * (`native-kind.js`, ADR-0044 item 1).
+ */
+if (nativeKind) {
+  installNativeKind({ beforeEach, afterEach, after, env: testEnv });
 }
