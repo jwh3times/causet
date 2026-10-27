@@ -1191,7 +1191,7 @@ through trusted publishing when the repository variable `NPM_PUBLISH` is
 `.github/workflows/ci.yml` keeps automatic runs bounded. The repository is
 public, so its standard GitHub-hosted runner execution is free; the reduced
 routine matrix still applies. Every run performs syntax, documentation-link,
-agent-mirror, whitespace, CI-policy, and benchmark-analysis checks first. Suite jobs only
+agent-mirror, agent tool-neutrality, whitespace, CI-policy, and benchmark-analysis checks first. Suite jobs only
 start after those checks pass.
 
 | Trigger | Suite jobs after static checks | Purpose |

@@ -83,10 +83,11 @@ no npm dependencies.
 - `npm run sync:agents` regenerates `.claude/skills/` from `.agents/skills/`;
   it also generates `.codex/agents/*.toml` from `.claude/agents/*.md`.
   `npm run sync:agents:check` reports drift without writing. The generator,
-  `scripts/sync-agents.mjs`, and its test are shared byte-for-byte with other
-  repositories; a change to either must be copied to every copy.
-  Before adding or updating agent definitions, read
+  `scripts/sync-agents.mjs`, and its test are copies of the canonical ones (see
+  "Shared skills" below). Before adding or updating agent definitions, read
   [the mirror conventions](docs/agents/mirrors.md).
+- `npm run lint:agents` checks that the authored agent and skill sources read
+  correctly from both the source and the mirrored tree.
 - `npm run demo` runs the primary workflow demonstration; the other `demo:*`
   scripts exercise conflicts, resolutions, forecasts, specs, and Git sessions.
   Each deliberately leaves its repository in the OS temporary directory for
@@ -103,7 +104,8 @@ the existing source. Prefer `camelCase` for functions and variables,
 `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants, and descriptive
 kebab-case module names. Keep synchronous Git orchestration explicit and avoid
 adding dependencies without a demonstrated need. There is no configured
-formatter or linter; run `git diff --check` and `node --check <file>`.
+formatter or code linter (`npm run lint:agents` covers only agent and skill
+sources); run `git diff --check` and `node --check <file>`.
 
 ## Testing Guidelines
 
@@ -187,9 +189,10 @@ on the private project board, and linked step-by-step instructions in the public
 wiki's `human-todo` page or a procedure linked from it. Sensitive vulnerability
 actions use a draft repository security advisory with detailed instructions and
 access-appropriate private board tracking; do not expose those details publicly.
-Apply [the human follow-up policy](docs/human-followups.md) before reporting a
-task or session complete; it defines prerequisites, commands/UI steps, expected
-results, verification, recovery, ownership, and completion evidence.
+Apply [the human follow-up settings](docs/agents/human-follow-up.md) before
+reporting a task or session complete; with the procedure the shared skills carry,
+they define prerequisites, commands/UI steps, expected results, verification,
+recovery, ownership, and completion evidence.
 
 Reuse existing follow-ups. Public issues/wiki plus the private board are the
 established destinations; no separate private repository is required. If access
@@ -221,6 +224,24 @@ read [the issue tracker configuration](docs/agents/issue-tracker.md).
 
 Use the five default triage labels. Before triaging,
 read [the label mapping](docs/agents/triage-labels.md).
+
+### Shared skills
+
+`end-session`, `handoff`, `lets-go`, `ship` and `docs-updater` install from
+`jwh3times/skills`; never edit them here, since reinstalling overwrites local
+edits. What they need to know about this repository is in the settings files
+under `docs/agents/` (`workspace.md`, `issue-tracker.md`, `human-follow-up.md`,
+`docs.md`, `releases.md`, `ship.md`, `handoffs.md`), which each skill proposes on
+first run. Install and update with the same command, then regenerate the mirror;
+never run `npx skills update`:
+
+```bash
+npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s docs-updater -a codex --copy -y
+npm run sync:agents
+```
+
+`scripts/sync-agents.mjs` and `scripts/lint-agent-neutrality.mjs` (and their
+tests) are canonical in `jwh3times/skills`: fix them there, then copy them here.
 
 ### Domain docs
 

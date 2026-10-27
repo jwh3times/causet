@@ -29,8 +29,9 @@ Code is anything the build, the suites, CI or the package reads:
 Everything else is docs or agent config: `README.md`, `CHANGELOG.md`, the rest
 of `docs/` (including the ADRs, `product.md`, `architecture.md` and
 `testing.md`), `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`,
-`docs/agents/` and `skills-lock.json`. `scripts/sync-agents.mjs` is code even
-though it serves the agent config.
+`docs/agents/` and `skills-lock.json`. `scripts/sync-agents.mjs` and
+`scripts/lint-agent-neutrality.mjs` are code even though they serve the agent
+config.
 
 ## Routing without a ready issue
 

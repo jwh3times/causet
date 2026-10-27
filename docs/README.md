@@ -37,7 +37,7 @@ the versioned record of delivered behavior.
   labels, recording, skipped latency, and qualification requirements; the
   [wiki walkthrough](https://github.com/jwh3times/causet/wiki/Benchmark-host-baselines)
   provides a quick operational guide.
-- [Required human follow-ups](human-followups.md) — agent completion policy for
+- [Required human follow-ups](agents/human-follow-up.md) — agent completion settings for
   public follow-up issues/wiki, private board tracking, and restricted security advisories.
 - [Domain glossary](CONTEXT.md) — the terms accepted decisions have settled, and
   the wordings to avoid for each. It grows as terms are resolved rather than
@@ -67,6 +67,12 @@ Engineering skills use the [issue tracker configuration](agents/issue-tracker.md
 [domain documentation rules](agents/domain.md). The
 [development flow](agents/dev-flow.md) makes their flow the binding process:
 the ready-issue gate, routing, exemptions, and issue linking.
+The shared skills that install from `jwh3times/skills` read this repository's
+facts from settings files beside them: [workspace](agents/workspace.md),
+[documents](agents/docs.md), [releases](agents/releases.md),
+[shipping](agents/ship.md), [handoffs](agents/handoffs.md) and
+[human follow-ups](agents/human-follow-up.md), plus the issue tracker
+configuration; "Shared skills" in [AGENTS.md](../AGENTS.md) installs them.
 Edit these files directly when repository conventions change.
 See [agent and skill mirrors](agents/mirrors.md) for authored sources,
 generated outputs, and regeneration rules.
@@ -107,7 +113,7 @@ consumes it; otherwise retain the result with the relevant issue, pull request,
 or CI run.
 
 Required human actions left by agent-completed work follow
-[the handoff policy](human-followups.md): a labeled public issue, membership on
+[the human follow-up settings](agents/human-follow-up.md): a labeled public issue, membership on
 the private project board, and a linked public wiki procedure with step-by-step
 execution and verification. The wiki's `human-todo` page indexes those issues and
 instructions; it is not an in-tree backlog or a replacement for issue status.
