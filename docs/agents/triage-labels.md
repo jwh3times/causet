@@ -11,5 +11,5 @@ Use these labels when a skill refers to a canonical triage role.
 | wontfix | wontfix | Will not be actioned |
 
 For required human follow-ups, apply
-[the human follow-up policy](../human-followups.md), including its
+[the human follow-up settings](human-follow-up.md), including its
 `human-action-required` label and tracking requirements.

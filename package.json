@@ -42,6 +42,7 @@
     "benchmark:record": "node ./scripts/benchmark-regression.mjs --record",
     "sync:agents": "node scripts/sync-agents.mjs",
     "sync:agents:check": "node scripts/sync-agents.mjs --check",
+    "lint:agents": "node scripts/lint-agent-neutrality.mjs",
     "sync:architecture": "node ./scripts/sync-architecture.mjs"
   },
   "engines": {

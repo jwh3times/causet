@@ -50,5 +50,33 @@ to the map's Decisions-so-far.
 
 ## Human follow-ups
 
-Apply [the human follow-up policy](../human-followups.md) when completed
+Apply [the human follow-up settings](human-follow-up.md) when completed
 work leaves required human actions.
+
+## Public repository
+
+jwh3times/causet
+
+## Private issue repository
+
+none
+
+## Board
+
+jwh3times 7
+
+## Board fields
+
+- `Status`: `Todo` / `In Progress` / `Blocked` / `Parked` / `Done`.
+- `Gate`: what must clear before the item can start — `Nothing — ready to work`,
+  `Contract needed`, `Evidence needed`, `Depends on another item`, `Owner decision`,
+  `Upstream Git`, `Gate A (native engine)`, `Gate B (native store/protocol)`.
+- `Area`: `Rebase and workspaces`, `Structured documents`, `Identity and provenance`,
+  `Proof and verification`, `Trust and protocol`, `Native core and performance`,
+  `Docs and process`, `Defect`.
+
+## Security findings
+
+A draft repository security advisory in jwh3times/causet, with access-appropriate tracking on the
+private board. Never a public issue or wiki page; publishing the advisory needs separate disclosure
+authorization.

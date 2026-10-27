@@ -187,9 +187,10 @@ on the private project board, and linked step-by-step instructions in the public
 wiki's `human-todo` page or a procedure linked from it. Sensitive vulnerability
 actions use a draft repository security advisory with detailed instructions and
 access-appropriate private board tracking; do not expose those details publicly.
-Apply [the human follow-up policy](docs/human-followups.md) before reporting a
-task or session complete; it defines prerequisites, commands/UI steps, expected
-results, verification, recovery, ownership, and completion evidence.
+Apply [the human follow-up settings](docs/agents/human-follow-up.md) before
+reporting a task or session complete; with the procedure the shared skills carry,
+they define prerequisites, commands/UI steps, expected results, verification,
+recovery, ownership, and completion evidence.
 
 Reuse existing follow-ups. Public issues/wiki plus the private board are the
 established destinations; no separate private repository is required. If access
@@ -221,6 +222,24 @@ read [the issue tracker configuration](docs/agents/issue-tracker.md).
 
 Use the five default triage labels. Before triaging,
 read [the label mapping](docs/agents/triage-labels.md).
+
+### Shared skills
+
+`end-session`, `handoff`, `lets-go`, `ship` and `docs-updater` install from
+`jwh3times/skills`; never edit them here, since reinstalling overwrites local
+edits. What they need to know about this repository is in the settings files
+under `docs/agents/` (`workspace.md`, `issue-tracker.md`, `human-follow-up.md`,
+`docs.md`, `releases.md`, `ship.md`, `handoffs.md`), which each skill proposes on
+first run. Install and update with the same command, then regenerate the mirror;
+never run `npx skills update`:
+
+```bash
+npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s docs-updater -a codex --copy -y
+npm run sync:agents
+```
+
+`scripts/sync-agents.mjs` and `scripts/lint-agent-neutrality.mjs` (and their
+tests) are canonical in `jwh3times/skills`: fix them there, then copy them here.
 
 ### Domain docs
 

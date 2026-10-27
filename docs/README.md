@@ -37,7 +37,7 @@ the versioned record of delivered behavior.
   labels, recording, skipped latency, and qualification requirements; the
   [wiki walkthrough](https://github.com/jwh3times/causet/wiki/Benchmark-host-baselines)
   provides a quick operational guide.
-- [Required human follow-ups](human-followups.md) — agent completion policy for
+- [Required human follow-ups](agents/human-follow-up.md) — agent completion settings for
   public follow-up issues/wiki, private board tracking, and restricted security advisories.
 - [Domain glossary](CONTEXT.md) — the terms accepted decisions have settled, and
   the wordings to avoid for each. It grows as terms are resolved rather than
@@ -107,7 +107,7 @@ consumes it; otherwise retain the result with the relevant issue, pull request,
 or CI run.
 
 Required human actions left by agent-completed work follow
-[the handoff policy](human-followups.md): a labeled public issue, membership on
+[the human follow-up settings](agents/human-follow-up.md): a labeled public issue, membership on
 the private project board, and a linked public wiki procedure with step-by-step
 execution and verification. The wiki's `human-todo` page indexes those issues and
 instructions; it is not an in-tree backlog or a replacement for issue status.
