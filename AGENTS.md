@@ -83,10 +83,11 @@ no npm dependencies.
 - `npm run sync:agents` regenerates `.claude/skills/` from `.agents/skills/`;
   it also generates `.codex/agents/*.toml` from `.claude/agents/*.md`.
   `npm run sync:agents:check` reports drift without writing. The generator,
-  `scripts/sync-agents.mjs`, and its test are shared byte-for-byte with other
-  repositories; a change to either must be copied to every copy.
-  Before adding or updating agent definitions, read
+  `scripts/sync-agents.mjs`, and its test are copies of the canonical ones (see
+  "Shared skills" below). Before adding or updating agent definitions, read
   [the mirror conventions](docs/agents/mirrors.md).
+- `npm run lint:agents` checks that the authored agent and skill sources read
+  correctly from both the source and the mirrored tree.
 - `npm run demo` runs the primary workflow demonstration; the other `demo:*`
   scripts exercise conflicts, resolutions, forecasts, specs, and Git sessions.
   Each deliberately leaves its repository in the OS temporary directory for
@@ -103,7 +104,8 @@ the existing source. Prefer `camelCase` for functions and variables,
 `PascalCase` for classes, `UPPER_SNAKE_CASE` for constants, and descriptive
 kebab-case module names. Keep synchronous Git orchestration explicit and avoid
 adding dependencies without a demonstrated need. There is no configured
-formatter or linter; run `git diff --check` and `node --check <file>`.
+formatter or code linter (`npm run lint:agents` covers only agent and skill
+sources); run `git diff --check` and `node --check <file>`.
 
 ## Testing Guidelines
 

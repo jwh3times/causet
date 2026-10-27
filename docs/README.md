@@ -67,6 +67,12 @@ Engineering skills use the [issue tracker configuration](agents/issue-tracker.md
 [domain documentation rules](agents/domain.md). The
 [development flow](agents/dev-flow.md) makes their flow the binding process:
 the ready-issue gate, routing, exemptions, and issue linking.
+The shared skills that install from `jwh3times/skills` read this repository's
+facts from settings files beside them: [workspace](agents/workspace.md),
+[documents](agents/docs.md), [releases](agents/releases.md),
+[shipping](agents/ship.md), [handoffs](agents/handoffs.md) and
+[human follow-ups](agents/human-follow-up.md), plus the issue tracker
+configuration; "Shared skills" in [AGENTS.md](../AGENTS.md) installs them.
 Edit these files directly when repository conventions change.
 See [agent and skill mirrors](agents/mirrors.md) for authored sources,
 generated outputs, and regeneration rules.

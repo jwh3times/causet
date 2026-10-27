@@ -14,7 +14,17 @@ The public destinations are intentional: ordinary follow-ups need no private rep
 private board does not make the issues or wiki pages it links private. Do not change visibility to
 perform a handoff. A sensitive vulnerability follows `Security findings` in `issue-tracker.md`: the
 detailed instructions live in the draft advisory, and only an access-appropriate draft item goes on
-the board.
+the board. Creating a draft advisory does not authorize publishing it or requesting a CVE.
+
+Beyond the shared procedure:
+
+- Name the responsible role; never guess an assignee.
+- For a decision, record the options and the consequences of each.
+- State the acceptance criteria and where the completion evidence is kept.
+- A local wiki commit without a successful push is not publication.
+- A merged implementation does not close its follow-up; only evidence the human action was done
+  does.
+- Keep the board private; check it before adding an item.
 
 ## Follow-up destination
 

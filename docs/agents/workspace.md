@@ -53,7 +53,7 @@ none
    wrong directory only after a yes; anything the user created stays.
 2. Check for lingering processes, which the release gate forbids:
    `ps -eo pid,etimes,args | grep -E 'bin/vlab\.js|git-session-worker|cat-file --batch' | grep -v grep`.
-3. Run the static checks: `git diff --check`, `npm run test:docs`, and
-   `node --check` on `bin/native/*.js`, `scripts/*.mjs`, `test/*.js` and `test-support/*.js`.
+3. Run the `Fast checks` in `docs/agents/ship.md`: they are the required `static checks` job's
+   steps, kept in one list.
 4. When source changed and was not qualified, remind the user of the qualification commands in
    `docs/testing.md` (`npm test` under each engine and session mode).

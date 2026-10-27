@@ -33,13 +33,18 @@
   the development flow counts as code. `owner-only`: report drift; a change goes through an issue.
 - `docs/agents/*.md` — conventions and settings the installed skills read. **When:** a convention or
   setting changes.
+- `docs/agents/mirrors.md` — how agent and skill sources are mirrored and linted. **When:**
+  `scripts/sync-agents.mjs` or `scripts/lint-agent-neutrality.mjs` changes.
+- `docs/agents/dev-flow.md` — the development flow, the code / docs-and-agent-config split and issue
+  linking. **When:** a path's classification, an exemption or the linking rule changes.
 - The public wiki's usage pages (`https://github.com/jwh3times/causet.wiki.git`) — operational
   walkthroughs such as benchmark host baselines and the landing procedure. **When:** the command or
   procedure they walk through changes. Dated audit findings there stay historical; link them to the
   current instructions.
-- `.agents/skills/*/**` — skills, mirrored to `.claude/skills/`. `end-session`, `handoff`,
-  `lets-go`, `ship` and `docs-updater` install from `jwh3times/skills`: `frozen` here, fixed
-  upstream.
+- `.agents/skills/*/**` — skills, mirrored to `.claude/skills/`. Every skill `skills-lock.json`
+  lists is installed (`end-session`, `handoff`, `lets-go`, `ship` and `docs-updater` from
+  `jwh3times/skills`, the rest from `mattpocock/skills`): `frozen` here, since a reinstall overwrites
+  local edits; fix them upstream.
 
 **Never in public docs:** sensitive vulnerability details (they stay in the draft advisory), secret
 values, and run-specific evidence or session handoffs (they belong in issues, PRs or CI artifacts).

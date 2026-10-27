@@ -16,14 +16,26 @@ orphaned files and the empty directories they leave in both generated trees;
 keep authored files in the source trees. Missing source directories are
 treated as empty. A symlink in an authored tree (or an authored tree that is
 itself a symlink) is an error; use real files and directories. A symlink in a
-generated tree is reported as orphaned and removed without being followed.
+generated tree is reported as orphaned and removed without being followed;
+regeneration removes such links before writing anything, so a
+`.claude/skills/<name>` that `npx skills update` linked to its source is
+replaced by a copy rather than written through.
 `node scripts/sync-agents.mjs --hook` is the Claude Code PostToolUse form: it
 reads the hook payload on stdin and regenerates only when the edited file is
 under an authored tree.
 
-The generator and its test, `scripts/sync-agents.test.mjs`, are shared
-byte-for-byte with other repositories. Do not adapt them locally; a change to
-either must be copied to every copy.
+`npm run lint:agents` (`scripts/lint-agent-neutrality.mjs`, also a step of
+CI's `static checks` job) checks that the authored sources read correctly from
+both trees: no artifacts of a blind `claude`-to-`Codex` substitution (`.Codex/`
+paths), no relative link that resolves from the source directory but not from
+the mirrored one, and no bare positional parameter (`$` followed by a digit) in
+a skill body, which Claude Code replaces with the invocation's argument words;
+write a named or braced variable instead.
+
+The generator, the lint and their tests (`scripts/sync-agents.test.mjs`,
+`scripts/lint-agent-neutrality.test.mjs`) are copies of the canonical ones in
+`jwh3times/skills`. Do not adapt them locally; fix them there, then copy them
+here.
 
 ## Agent definitions
 

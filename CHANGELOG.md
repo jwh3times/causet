@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Contributor workflow: the agent skills install from a shared
+  repository.** `end-session`, `handoff`, `lets-go` and `docs-updater` now
+  come from `jwh3times/skills` instead of being maintained here, and `ship`
+  joins them to take a finished branch to an open pull request, writing its
+  `Unreleased` entry. What the skills need to know about this repository
+  lives in settings files under `docs/agents/`; the human follow-up policy
+  moves from `docs/human-followups.md` to `docs/agents/human-follow-up.md`.
+  `/handoff` and `/lets-go` read how the Handoffs folder reaches each machine
+  from that machine's `~/.config/handoffs/config`, and `scripts/handoff-map.mjs`
+  is gone. The `static checks` job now also runs `npm run lint:agents`, which
+  rejects agent and skill sources that would read wrongly from their mirrored
+  copies.
+
 - **Fix: `cst migrate` no longer refuses a former ref the new one already
   holds** (#340). A rerun of `cst migrate` refused with "Both
   'refs/notes/vcs-lab' and 'refs/notes/causet' moved since the migration"
