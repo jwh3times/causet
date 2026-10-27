@@ -130,9 +130,11 @@ defined; preserve the behavioral and failure-safety guarantees in
 
 Recent history uses concise imperative subjects with conventional prefixes:
 `feat:`, `fix:`, `docs:`, and `chore:`. Keep each commit scoped to one coherent
-change. Pull requests should explain intent and compatibility impact, link the
-relevant issue or ADR, list validation commands and results, and update the
-README, changelog, or durable docs when contracts change. Screenshots are
+change. Pull requests should explain intent and compatibility impact, link
+their issue as
+[the development flow](docs/agents/dev-flow.md#linking-work-to-its-issue)
+requires and any relevant ADR, list validation commands and results, and
+update the README, changelog, or durable docs when contracts change. Screenshots are
 normally unnecessary for this CLI; include focused terminal output when it
 clarifies behavior.
 
@@ -155,6 +157,27 @@ gates (`docs/product.md`), decisions (`docs/adr/`), the implemented system
 (`docs/architecture.md`), the published contracts (`docs/schemas/`,
 `docs/conformance/`, `docs/identity/`, `docs/canonical-json/`), and how to
 validate (`docs/testing.md`).
+
+## Development flow
+
+The engineering skills' flow is the binding development process. Read
+[the development flow](docs/agents/dev-flow.md) for the routing, which paths
+count as code, the exemptions, and the branch and pull request linking rules.
+
+- **Gate.** Every code change starts from a ready issue: a `ready-for-agent`
+  issue carrying a `/to-spec` spec, a `/to-tickets` ticket or a `/triage`
+  brief, or a `bug` issue worked through `/diagnosing-bugs`. With none, stop
+  before the first edit and route the user to the command that produces one.
+  Reading code, running tests and answering questions need no issue.
+- **The human starts every phase.** `/wayfinder`, `/grill-with-docs`,
+  `/to-spec`, `/to-tickets`, `/implement` and `/triage` stay user-invoked. At
+  a phase boundary, name the next command, say in one line why, and wait.
+  Inside a phase, use `/tdd`, `/code-review`, `/diagnosing-bugs`,
+  `/domain-modeling`, `/codebase-design`, `/prototype` and `/research`
+  whenever they fit.
+- **Exempt:** dependency bumps, changes touching only docs and agent config,
+  release preparation, and an explicit user waiver recorded in the pull
+  request body as `Flow waived by the user: <reason>`.
 
 ## Required Human Follow-ups
 
