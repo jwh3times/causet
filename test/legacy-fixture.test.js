@@ -300,6 +300,52 @@ test("a former ref that advances after migration is reported, then fast-forwarde
   assert.equal(git(repo, "rev-parse", "refs/notes/causet"), ours);
 });
 
+test("a new ref that moved on after migration does not make a rerun refuse (#340)", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  assert.equal(cst(repo, ["migrate"]).status, 0);
+  git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
+  // This build writes a note: the new ref moves on, and the former one stays where it was.
+  const migrated = git(repo, "rev-parse", "refs/notes/causet");
+  const moved = git(repo, "commit-tree", `${migrated}^{tree}`, "-p", migrated, "-m", "Notes added by this build");
+  git(repo, "update-ref", "refs/notes/causet", moved, migrated);
+  assert.equal(JSON.parse(cst(repo, ["doctor"]).stdout).migration, "migrated");
+
+  const rerun = cst(repo, ["migrate", "--json"]);
+  assert.equal(rerun.status, 0, rerun.stdout);
+  assert.deepEqual(JSON.parse(rerun.stdout).refs.filter((entry) => entry.action !== "present"), []);
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), moved);
+});
+
+test("a former ref the new ref already contains is neither reported nor refused, with no marker (#340)", () => {
+  const root = restore();
+  const repo = path.join(root, "repo");
+  assert.equal(cst(repo, ["migrate"]).status, 0);
+  git(repo, "commit", "-q", "-m", "Move specification manifests to .causet/specs");
+  // The new refs arrived some other way than cst migrate, so nothing recorded
+  // the former ones or repointed the notes configuration, and the new notes
+  // ref has moved on since.
+  const marker = path.join(repo, ".git", "causet", "migration.json");
+  fs.rmSync(marker);
+  git(repo, "config", "notes.displayRef", "refs/notes/vcs-lab");
+  git(repo, "config", "notes.rewriteRef", "refs/notes/vcs-lab");
+  const tip = git(repo, "rev-parse", "refs/notes/causet");
+  const moved = git(repo, "commit-tree", `${tip}^{tree}`, "-p", tip, "-m", "Notes fetched from a peer");
+  git(repo, "update-ref", "refs/notes/causet", moved, tip);
+
+  const status = JSON.parse(cst(repo, ["metadata", "status", "--json"]).stdout);
+  assert.deepEqual(status.diagnostics.filter((entry) => entry.code === "legacy-ref-advanced"), []);
+  assert.equal(JSON.parse(cst(repo, ["doctor"]).stdout).migration, "migrated");
+
+  const rerun = cst(repo, ["migrate", "--json"]);
+  assert.equal(rerun.status, 0, rerun.stdout);
+  assert.deepEqual(JSON.parse(rerun.stdout).refs.filter((entry) => entry.action !== "present"), []);
+  assert.equal(git(repo, "rev-parse", "refs/notes/causet"), moved);
+  assert.equal(JSON.parse(fs.readFileSync(marker, "utf8")).refs["refs/notes/vcs-lab"], tip);
+  assert.equal(git(repo, "config", "notes.displayRef"), "refs/notes/causet");
+  assert.equal(git(repo, "config", "notes.rewriteRef"), "refs/notes/causet");
+});
+
 test("cst migrate refuses while an operation is in progress", () => {
   const root = restore();
   const repo = path.join(root, "repo");
