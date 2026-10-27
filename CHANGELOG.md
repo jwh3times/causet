@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Fix: `cst migrate` no longer refuses a former ref the new one already
+  holds** (#340). A rerun of `cst migrate` refused with "Both
+  'refs/notes/vcs-lab' and 'refs/notes/causet' moved since the migration"
+  as soon as this build had written a note, though the former ref had not
+  moved. A repository whose `refs/causet/*` refs came some other way than
+  `cst migrate` (fetched by hand, with no migration marker) was refused the
+  same way, and `cst metadata status` and `validate` warned
+  `legacy-ref-advanced` for every former ref. A former ref that equals its
+  new ref, or that the new ref descends from, has nothing left to bring
+  across. `cst migrate` now reports it as `present`, and the warning,
+  `doctor`'s `mixed` state and the refusal are kept for a former ref with
+  commits the new one lacks.
+
 - **The generated-history corpus** (#308, ADR-0045 decision 13). Git
   histories generated from a seed, each holding at least one case of N1's
   list: merges and octopus merges, renames, mode changes, symbolic and

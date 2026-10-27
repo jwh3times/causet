@@ -1,6 +1,6 @@
 # ADR-0039: Migrate `vcs-lab` identifiers to `causet` without rewriting any record
 
-- **Status:** Accepted
+- **Status:** Accepted; §3's mixed state amended 2026-10-26 (see below)
 - **Decided:** 2026-09-28
 - **Date:** 2026-09-28
 - **Owners:** Repository maintainers
@@ -360,3 +360,22 @@ finished or aborted only with a build that still reads the former names (0.21 or
 
 **Not done here:** deleting this repository's frozen refs on origin, `refs/notes/vcs-lab` and
 `refs/vcs-lab/retention`. That is an explicit step under §6's retention check, recorded on #170.
+
+## Amendment 2026-10-26: an old ref the new ref contains has not advanced
+
+Decided on [#340](https://github.com/jwh3times/causet/issues/340), from a
+checkout whose `refs/causet/*` refs were fetched by hand, so `cst migrate` had
+never recorded the former ones.
+
+§3's mixed state is an old ref that has advanced since migration. An old ref
+the new ref already contains, being the same object or a commit the new ref
+descends from, has not advanced, whatever the marker recorded: everything it
+holds is already under the new name. `cst migrate` reports it as `present`,
+and neither `legacy-ref-advanced` nor `doctor`'s `mixed` state names it.
+
+Before this, both treated any old ref the marker had not recorded as advanced.
+A rerun of `cst migrate` refused as soon as the new notes ref moved on, which
+any note this build writes does, and a repository with no marker was warned
+about every former ref. The rest of §3 is unchanged: an old ref with commits
+the new ref lacks is still a fast-forward when only it moved, and a refusal
+when both did.

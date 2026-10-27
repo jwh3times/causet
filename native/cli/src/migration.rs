@@ -39,18 +39,30 @@ fn read_marker(context: &RepoContext) -> GitResult<Option<Value>> {
   Ok(Some(marker))
 }
 
-/// `legacyRefs(context)`.
-fn legacy_refs(context: &RepoContext) -> GitResult<Vec<RefEntry>> {
-  let mut refs = engine::list_refs(LEGACY_NAMES.notes_ref, &context.root)?;
-  refs.extend(engine::list_refs(
-    &format!("{}/", LEGACY_NAMES.refs_root),
-    &context.root,
-  )?);
+/// `legacyRefs(context)`, for either set of names: the notes ref, then every
+/// ref under the root.
+fn refs_under(names: &Names, context: &RepoContext) -> GitResult<Vec<RefEntry>> {
+  let mut refs = engine::list_refs(names.notes_ref, &context.root)?;
+  refs.extend(engine::list_refs(&format!("{}/", names.refs_root), &context.root)?);
   Ok(refs)
 }
 
+/// The object the current name of a former ref holds, if any.
+fn current_oid(current: &[RefEntry], legacy_name: &str) -> Option<String> {
+  let to = current_name(legacy_name);
+  // A later listing of the same name replaces an earlier one, as in a `Map`.
+  current.iter().rev().find(|held| held.name == to).map(|held| held.oid.clone())
+}
+
+/// Whether the new ref already holds everything the former one does: the same
+/// object, or a commit the new ref descends from. Such a former ref has not
+/// advanced in ADR-0039 §3's sense, whatever the marker recorded (#340).
+fn new_ref_contains(existing: &str, entry: &RefEntry, context: &RepoContext) -> GitResult<bool> {
+  Ok(existing == entry.oid || engine::is_ancestor(&entry.oid, existing, &context.root)?)
+}
+
 /// `advancedLegacyRefs(cwd)`: former refs that moved since `cst migrate`
-/// recorded them.
+/// recorded them, and that the new refs do not already contain.
 pub fn advanced_legacy_refs(cwd: &str) -> GitResult<Vec<RefEntry>> {
   let names = repository_names(cwd)?;
   if names.state == "unmigrated" || !names.evidence.legacy {
@@ -65,15 +77,28 @@ pub fn advanced_legacy_refs(cwd: &str) -> GitResult<Vec<RefEntry>> {
     },
     _ => None,
   };
-  Ok(
-    legacy_refs(&context)?
-      .into_iter()
-      .filter(|entry| {
-        let recorded_oid = recorded.as_ref().and_then(|refs| refs.get(&entry.name));
-        !matches!(recorded_oid, Some(Value::String(units)) if lossy(units) == entry.oid)
-      })
-      .collect(),
-  )
+  let unrecorded: Vec<RefEntry> = refs_under(&LEGACY_NAMES, &context)?
+    .into_iter()
+    .filter(|entry| {
+      let recorded_oid = recorded.as_ref().and_then(|refs| refs.get(&entry.name));
+      !matches!(recorded_oid, Some(Value::String(units)) if lossy(units) == entry.oid)
+    })
+    .collect();
+  if unrecorded.is_empty() {
+    return Ok(unrecorded);
+  }
+  let current = refs_under(&CURRENT_NAMES, &context)?;
+  let mut advanced = Vec::new();
+  for entry in unrecorded {
+    let contained = match current_oid(&current, &entry.name) {
+      Some(existing) => new_ref_contains(&existing, &entry, &context)?,
+      None => false,
+    };
+    if !contained {
+      advanced.push(entry);
+    }
+  }
+  Ok(advanced)
 }
 
 /// `migrationState(cwd)`: `unmigrated`, `migrated`, or `mixed`.
@@ -192,7 +217,7 @@ fn migration_plan(cwd: &str) -> GitResult<Plan> {
       }
     }
   }
-  let legacy = legacy_refs(&context)?;
+  let legacy = refs_under(&LEGACY_NAMES, &context)?;
   for entry in &legacy {
     let family = entry
       .name
@@ -217,8 +242,7 @@ fn migration_plan(cwd: &str) -> GitResult<Plan> {
     }
   }
 
-  let mut current = engine::list_refs(CURRENT_NAMES.notes_ref, &context.root)?;
-  current.extend(engine::list_refs(&format!("{}/", CURRENT_NAMES.refs_root), &context.root)?);
+  let current = refs_under(&CURRENT_NAMES, &context)?;
   let recorded = |name: &str| match get(get(marker.as_ref(), "refs"), name) {
     value if nullish(value) => None,
     Some(Value::String(units)) => Some(lossy(units)),
@@ -227,11 +251,12 @@ fn migration_plan(cwd: &str) -> GitResult<Plan> {
   let mut refs = Vec::new();
   for entry in &legacy {
     let to = current_name(&entry.name);
-    // A later listing of the same name replaces an earlier one, as in a `Map`.
-    let existing = current.iter().rev().find(|held| held.name == to).map(|held| held.oid.clone());
+    let existing = current_oid(&current, &entry.name);
     let action = match &existing {
       None => "create",
-      Some(existing) if *existing == entry.oid => "present",
+      // The same object, or one the new ref descends from: nothing is left
+      // to bring across, whatever the marker recorded (#340).
+      Some(existing) if new_ref_contains(existing, entry, &context)? => "present",
       // The former ref moved after an earlier migration. Only a fast-forward
       // of a new ref that did not move itself is taken; anything else is a
       // real disagreement, which the envelope import resolves under ADR-0030.
