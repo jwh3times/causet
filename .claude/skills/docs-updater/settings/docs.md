@@ -29,7 +29,8 @@ they are checked against the code. Each setting below is a `##` heading in that 
   the docs index (`docs/README.md`, `private/README.md`), the docs map in `AGENTS.md`, and existing
   `end-session` routing tables. A script that parses the docs-updater file for this list (a docs
   check) must be pointed at this file instead: name it when proposing. Search scripts and test
-  fixtures for document paths beside a hash (`sha256`, `Sha256`) to find `pinned` documents.
+  fixtures for document paths beside a hash (`sha256`, `Sha256`) to find `pinned` documents. Every
+  skill `skills-lock.json` lists is installed, so propose its folder as `frozen`.
 
 ## Drift probes
 

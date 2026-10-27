@@ -13,7 +13,7 @@
 //     same place from both locations pass, so a working link never false-positives.
 //  3. Bare positional parameters in a skill body — Claude Code replaces `$0`-`$9` in a loaded
 //     SKILL.md with the invocation's argument words, so a shell snippet's `"$3"` silently becomes
-//     an argument (issue #451). Braced `${1:-x}` survives, as do files a skill only references.
+//     an argument (apexracers#451). Braced `${1:-x}` survives, as do files a skill only references.
 //
 // The same checks cover `skills/`, where jwh3times/skills publishes skills that install as
 // .agents/skills/<name>/ elsewhere. A relative link there must stay inside its own skill folder.
