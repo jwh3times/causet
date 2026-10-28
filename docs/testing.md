@@ -230,11 +230,13 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   the main worktree's. Every `cst` the comparison starts runs with a `PATH`
   that holds no Git, so a native read that started a Git process would fail
   (ADR-0044 item 2). Git's side of the objects is read a group at a time, at
-  most 64 MiB of them, and the comparison takes an optional selection of the
-  objects it compares one by one (the real repositories use it for git/git).
-  A `cst` or Git process the comparison starts is stopped
-  after 5 minutes (`test-support/bounded-process.js`), which fails it: a
-  `cst` that never ends fails its test rather than holding the run.
+  most 64 MiB of them unless one object alone is larger, and the comparison
+  takes an optional selection of the objects it compares one by one (the real
+  repositories use it for git/git). A `cst` or Git process the comparison
+  starts is stopped after 5 minutes (`test-support/bounded-process.js`), which
+  fails it: a `cst` that never ends fails its test rather than holding the
+  run. A caller may give the reconstruction check a longer limit, as the real
+  repositories do.
 - **Refusals.** A repository that import refuses fails its test, unless
   `REFUSALS` in `test-support/native-kind.js` lists it with the suite file, the
   test, a part of the refusal and the reason. The list holds the suites'
@@ -406,8 +408,9 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
 
   Each job's summary reports both byte counts with their parts, the number
   of Git objects, and each import's time. Times are reported, never checked.
-  A process here may run for 3 hours, not the 5 minutes the generated corpus
-  allows.
+  An import, `cst fsck` or the reconstruction check here may run for 3
+  hours, not the 5 minutes the generated corpus allows; the comparison's
+  other processes keep the 5 minutes.
 - **Cost.** On a 16-core Linux host, causet took about 90 seconds, the
   large-file corpus 16 minutes (each full import about 3.5 minutes) and
   git/git 36 minutes (each full import about 8 minutes, in one thread and up
