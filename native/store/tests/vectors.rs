@@ -1,10 +1,14 @@
-//! Holds the chunker to the contract's text: the gear table and parameters of
-//! `docs/native-store/storage.md` §2, and the reference vectors of
-//! `docs/native-store/chunker-vectors.json`.
+//! Holds the store to the contract's text: the gear table and parameters of
+//! `docs/native-store/storage.md` §2, the reference vectors of
+//! `docs/native-store/chunker-vectors.json`, the container header of §4 and
+//! the root marker of objects.md §10.
 
 use causet_model::json::{self, Value};
 use causet_model::sha256;
 use causet_store::chunker::{self, GEAR, MASK_L, MASK_S};
+use causet_store::id::GitAlgorithm;
+use causet_store::objects::Snapshot;
+use causet_store::store::{FORMAT, StoreWriter};
 use std::path::PathBuf;
 
 fn contract(name: &str) -> String {
@@ -125,4 +129,38 @@ fn every_reference_vector_cuts_as_published() {
     let published: Vec<String> = array(member(vector, "chunks")).iter().map(text).collect();
     assert_eq!(ids, published, "{name}: chunk IDs");
   }
+}
+
+#[test]
+fn the_root_marker_is_the_one_the_contract_prints() {
+  let objects = contract("objects.md");
+  assert_eq!(FORMAT.len(), 22);
+  assert!(objects.contains("holds exactly `causet-native-store 1` and a line feed, the 22"));
+  assert!(objects.contains(&format!("`{}`", hex(FORMAT))), "{}", hex(FORMAT));
+}
+
+#[test]
+fn a_new_container_begins_with_the_header_the_contract_prints() {
+  let storage = contract("storage.md");
+  let line = "**A version 1 header** is therefore `";
+  let at = storage.find(line).expect("§4's header") + line.len();
+  let printed: String = storage[at..at + storage[at..].find('`').unwrap()]
+    .split(' ')
+    .collect();
+  let root =
+    std::env::temp_dir().join(format!("causet-store-vectors-{}-header", std::process::id()));
+  let _ = std::fs::remove_dir_all(&root);
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  writer.put_content(b"hello\n").unwrap();
+  writer
+    .finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap())
+    .unwrap();
+  let container = std::fs::read_dir(root.join(".cst/objects"))
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .find(|path| path.extension().is_some_and(|extension| extension == "cstc"))
+    .unwrap();
+  let bytes = std::fs::read(&container).unwrap();
+  std::fs::remove_dir_all(&root).unwrap();
+  assert_eq!(hex(&bytes[..16]), printed);
 }

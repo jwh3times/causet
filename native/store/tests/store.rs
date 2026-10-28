@@ -154,11 +154,47 @@ fn damage_to_a_container_is_reported_as_corruption() {
   std::fs::write(&container, &index).unwrap();
   assert!(matches!(Store::open(&root), Err(StoreError::Corrupt(_))));
 
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_store_of_another_version_is_refused_by_its_version() {
+  let root = scratch("version");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  writer.put_content(b"hello\n").unwrap();
+  writer.finish(&no_refs()).unwrap();
+  assert!(Store::open(&root).is_ok());
+  for (version, marker) in [
+    ("0", b"causet-native-store 0\n".as_slice()),
+    ("2", b"causet-native-store 2\n".as_slice()),
+  ] {
+    std::fs::write(root.join(".cst/format"), marker).unwrap();
+    match Store::open(&root) {
+      Err(StoreError::Unsupported(message)) => {
+        assert!(message.contains(&format!("format version {version}")), "{message}");
+        assert!(message.contains("reads only version 1"), "{message}");
+        assert!(message.contains("import the repository again"), "{message}");
+      }
+      other => panic!("{version}: {:?}", other.map(|_| ())),
+    }
+  }
+  std::fs::write(root.join(".cst/format"), b"something else\n").unwrap();
+  assert!(matches!(Store::open(&root), Err(StoreError::Unsupported(_))));
+
+  // A version 1 store holding a container of another version is corrupt.
   std::fs::write(root.join(".cst/format"), b"causet-native-store 1\n").unwrap();
-  assert!(matches!(
-    Store::open(&root),
-    Err(StoreError::Unsupported(_))
-  ));
+  let container = std::fs::read_dir(root.join(".cst/objects"))
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .find(|path| path.extension().is_some_and(|extension| extension == "cstc"))
+    .unwrap();
+  let mut bytes = std::fs::read(&container).unwrap();
+  bytes[8] = 0x00;
+  std::fs::write(&container, &bytes).unwrap();
+  match Store::open(&root) {
+    Err(StoreError::Corrupt(message)) => assert!(message.contains("not version 1's"), "{message}"),
+    other => panic!("{:?}", other.map(|_| ())),
+  }
   std::fs::remove_dir_all(&root).unwrap();
 }
 

@@ -15,7 +15,7 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, addContainer, aliases, annotation, containers, markAbsent, nativeId, removeEntry,
+  TYPES, addContainer, aliases, annotation, containers, markAbsent, nativeId, removeEntry, setVersion,
 } from "../test-support/native-store.js";
 
 const created = [];
@@ -214,6 +214,25 @@ test("fsck verifies an imported store, every object present", () => {
   const result = cst(history.native, ["fsck"]);
   assert.equal(result.status, 0, result.stderr.toString());
   assert.match(result.stdout.toString(), /^Verified .*: \d+ objects in 1 container, each present copy checked\. \d+ present, 0 absent by promise, 0 absent by policy\.\n$/);
+});
+
+test("a store of format version 0 is refused by every native command, which says to import again", () => {
+  const history = makeHistory("sha1");
+  const { id } = blobOf(history);
+  setVersion(history.native, 0);
+  const refusal = /\.cst[\\/]format says the store is format version 0, and this build reads only version 1\. To use it with this build, import the repository again/;
+  for (const args of [
+    ["cat-file", "-p", id], ["ls-tree", "HEAD"], ["rev-parse", "HEAD"], ["for-each-ref"], ["fsck"], ["import", "--verify"],
+    ["import", history.repo, history.native],
+  ]) {
+    const result = cst(history.native, args);
+    assert.notEqual(result.status, 0, args.join(" "));
+    assert.match(result.stderr.toString(), refusal, args.join(" "));
+  }
+  // The refusal is the format's, not damage: the store was otherwise whole.
+  setVersion(history.native, 1);
+  const checked = cst(history.native, ["fsck"]);
+  assert.equal(checked.status, 0, checked.stderr.toString());
 });
 
 test("a damaged copy is reported, though another container holds a good copy that reads use", () => {

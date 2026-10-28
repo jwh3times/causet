@@ -9,7 +9,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const HEADER = Buffer.concat([Buffer.from("CSTCNTNR"), Buffer.from([0x00, 0x01, 0, 0, 0, 0, 0, 0])]);
+/** The format version a store is written in (README): every reader's. */
+export const VERSION = 1;
+const header = (version) => Buffer.concat([Buffer.from("CSTCNTNR"), Buffer.from([version, 0x01, 0, 0, 0, 0, 0, 0])]);
+const HEADER_LENGTH = 16;
 const INDEX_MAGIC = Buffer.from("CSTINDEX");
 const NO_FRAME = 0xffffffff;
 
@@ -106,13 +109,13 @@ export function readContainer(file) {
 /**
  * Writes a container into `objects`, named by its trailer, and returns its
  * path. Objects are sorted by name; each annotation names its subject, and
- * its position is computed.
+ * its position is computed. Its header says `version`.
  */
-export function writeContainer(objects, container) {
+export function writeContainer(objects, container, { version = VERSION } = {}) {
   const sorted = [...container.objects].sort((a, b) => Buffer.compare(a.name, b.name));
   const frameTable = [];
-  const parts = [HEADER];
-  let offset = HEADER.length;
+  const parts = [header(version)];
+  let offset = HEADER_LENGTH;
   for (const frame of container.frames) {
     const entry = Buffer.alloc(24);
     entry.writeBigUInt64BE(BigInt(offset), 0);
@@ -159,11 +162,22 @@ export function writeContainer(objects, container) {
   return file;
 }
 
+/**
+ * A container as `writeContainer` takes it: each annotation names its
+ * annotation object rather than that object's position, which a change to the
+ * objects would move.
+ */
+function editable(file) {
+  const container = readContainer(file);
+  container.annotations = container.annotations.map(({ subject, position }) => ({ subject, annotation: container.objects[position].name }));
+  return container;
+}
+
 /** Rewrites the container holding `id` with `change` applied to its index. */
 function rewrite(store, id, change) {
   const name = Buffer.from(id, "hex");
   for (const file of containers(store)) {
-    const container = readContainer(file);
+    const container = editable(file);
     const at = container.objects.findIndex((object) => object.name.equals(name));
     if (at === -1) continue;
     change(container, at);
@@ -225,12 +239,35 @@ export function addContainer(store, objects, { after, damage } = {}) {
     }
     if (damage) {
       const first = container.objects.find((object) => object.name.equals(nativeId(objects[0].type, objects[0].body)));
-      const start = HEADER.length + container.frames.slice(0, first.frame).reduce((sum, frame) => sum + frame.bytes.length, 0);
+      const start = HEADER_LENGTH + container.frames.slice(0, first.frame).reduce((sum, frame) => sum + frame.bytes.length, 0);
       const bytes = fs.readFileSync(file);
       bytes[start + first.offset] ^= 0xff;
       fs.writeFileSync(file, bytes);
     }
     return file;
+  }
+}
+
+/**
+ * Rewrites a store's version marks to say `version`: the root marker, each
+ * container's header and each alias file's version byte (objects.md §9.1,
+ * §10, storage.md §4), with every checksum made right again. Nothing else
+ * changes, so this makes a store as an earlier or later build would label
+ * it, not as one would lay it out.
+ */
+export function setVersion(store, version) {
+  fs.writeFileSync(path.join(store, ".cst", "format"), `causet-native-store ${version}\n`);
+  for (const file of containers(store)) {
+    const container = editable(file);
+    fs.rmSync(file);
+    writeContainer(path.dirname(file), container, { version });
+  }
+  const directory = path.join(store, ".cst", "aliases");
+  for (const name of fs.existsSync(directory) ? fs.readdirSync(directory) : []) {
+    const file = path.join(directory, name);
+    const body = Buffer.from(fs.readFileSync(file).subarray(0, -32));
+    body[8] = version;
+    fs.writeFileSync(file, Buffer.concat([body, sha256(body)]));
   }
 }
 

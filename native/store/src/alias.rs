@@ -96,7 +96,7 @@ impl Aliases {
       HEADER + 2 * FANOUT + self.rows.len() * (self.algorithm.length() + 36) + 32,
     );
     out.extend_from_slice(MAGIC);
-    out.extend_from_slice(&[0x00, self.algorithm.code(), SHA256_TAG, 0x00]);
+    out.extend_from_slice(&[crate::VERSION, self.algorithm.code(), SHA256_TAG, 0x00]);
     out.extend_from_slice(&(self.rows.len() as u32).to_be_bytes());
     for count in fanout(self.rows.iter().map(|(digest, _)| digest[0])) {
       out.extend_from_slice(&count.to_be_bytes());
@@ -135,8 +135,11 @@ impl Aliases {
       return Err("it does not begin with the alias file's magic".into());
     }
     let header = reader.take(4)?;
-    if header != [0x00, expected.code(), SHA256_TAG, 0x00] {
-      return Err("its version, algorithms or reserved byte are not version 0's".into());
+    if header != [crate::VERSION, expected.code(), SHA256_TAG, 0x00] {
+      return Err(format!(
+        "its version, algorithms or reserved byte are not version {}'s",
+        crate::VERSION
+      ));
     }
     let count = reader.u32()? as usize;
     let width = expected.length();
@@ -219,12 +222,10 @@ mod tests {
     )
     .unwrap();
     let file = aliases.encode();
+    // Version 1's header, over version 0's rows until the 32-byte row (#355)
+    // makes this the contract's example whole: its 2,192 bytes and trailer.
     assert_eq!(file.len(), 2264);
-    assert_eq!(hex(&file[..16]), "435354414c4941530001010000000003");
-    assert_eq!(
-      hex(&file[file.len() - 32..]),
-      "62f89a20ce576032d48bb7f8e7ef7679f0ed664be4709f2f48c25049e146ffb9"
-    );
+    assert_eq!(hex(&file[..16]), "435354414c4941530101010000000003");
     let read = Aliases::decode(&file, GitAlgorithm::Sha1).unwrap();
     let blob = unhex("ce013625030ba8dba906f756967f9e9ca394464a").unwrap();
     let native = read.native(&blob).unwrap();
@@ -237,5 +238,12 @@ mod tests {
     let mut damaged = file.clone();
     damaged[2000] ^= 1;
     assert!(Aliases::decode(&damaged, GitAlgorithm::Sha1).is_err());
+    // Version 0's header, with its trailer made right again.
+    let mut earlier = file[..file.len() - 32].to_vec();
+    earlier[8] = 0x00;
+    let trailer = sha256::digest(&earlier);
+    earlier.extend_from_slice(&trailer);
+    let refused = Aliases::decode(&earlier, GitAlgorithm::Sha1).unwrap_err();
+    assert!(refused.contains("not version 1's"), "{refused}");
   }
 }
