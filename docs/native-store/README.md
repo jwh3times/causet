@@ -17,10 +17,9 @@ A store written by an earlier build may have to be imported again, and a build
 reads only the version it writes, refusing any other by name. The promise
 starts when a later ADR makes it.
 
-**Version 1 is published ahead of its code,** as decision 10 requires. Until
-[#350](https://github.com/jwh3times/causet/issues/350)'s tickets land,
-`native/store` writes version 0, and its tests hold version 0's examples,
-which this text kept until commit `7c3961c`.
+**Version 1 is published ahead of its code** (see Authority): until
+[#350](https://github.com/jwh3times/causet/issues/350) is done, `native/store`
+writes version 0.
 
 ## Parts
 
@@ -40,6 +39,11 @@ encoders must reproduce every worked example here byte for byte. When the code
 and the text disagree, one of them is fixed in the same change, and a change to
 the text says in that change why the code's answer is right. Neither may drift
 silently.
+
+The one exception is a new format version, which this text publishes before
+the code writes it (ADR-0045, decision 10). Until the code writes the new
+version, it reproduces the previous version's worked examples, as this text's
+history holds them, and the issue that builds the version tracks the gap.
 
 ## Conventions
 

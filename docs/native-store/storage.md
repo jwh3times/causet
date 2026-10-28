@@ -267,7 +267,7 @@ A **frame** is a run of records, compressed together.
   decompresses one frame without the rest, from its start.
 - **Record order.** Content records go in **version order:** the versions of
   one path, oldest first, are adjacent, so zstd finds what successive versions
-  share. Metadata records go in the order of the same walk, import's (§3.2).
+  share. Metadata records go in path order, from the same walk (§3.2).
 
 ### 3.1 Frame bounds
 
@@ -580,8 +580,8 @@ imports causet and git/git in CI, and its numbers, not these, decide the gate.
 
 `.github/workflows/corpora.yml` now imports the real repositories with this
 build and reports both byte counts in each job's summary (docs/testing.md,
-"The real repositories"). #343's CI, on 2026-10-27, measured the same store
-on Ubuntu and Windows:
+"The real repositories"). #343's CI, on 2026-10-27, measured the same version
+0 store on Ubuntu and Windows:
 
 | Repository | cst store | `git gc --aggressive` | Gate |
 | --- | ---: | ---: | --- |
@@ -603,9 +603,9 @@ On git/git the store's parts against Git's pack, split by object type with
 - **content** compresses to about what Git's blobs take, 52.6 MB against
   52.5 MB;
 - **trees, preserved commits and tags** take 129.6 MB in metadata frames,
-  where Git's trees, commits and tags take 54.3 MB. A native tree names its
-  entries by 32-byte native IDs, which do not compress, and no tree is stored
-  against another version of itself;
+  where Git's trees, commits and tags take 54.3 MB. A version 0 tree named
+  its entries by 33-byte native IDs, which do not compress, and in walk order
+  a directory's versions sat in different frames;
 - **per-object metadata**, the container's index (about 29 MB for 610,625
   objects, chunks included) and the alias map (22.9 MB), against 15.4 MB for
   Git's index, reverse index and bitmap.
@@ -625,8 +625,8 @@ chose format version 1:
 Together they measured 0.973 times Git's bytes on git/git. This contract
 describes version 1 from
 [#351](https://github.com/jwh3times/causet/issues/351) on, ahead of the
-store code (ADR-0045, decision 10). The code follows in #352–#356, and #357
-records the measured numbers here.
+store code (ADR-0045, decision 10), and the numbers the real repositories
+measure on version 1 belong here once the code writes it.
 
 ## 7. Determinism
 
@@ -634,9 +634,8 @@ A fresh import of the same history must write a byte-identical store
 (ADR-0045, decision 3). The rules of §1, §3, §4 and §5 fix every choice,
 import's walk (§3.2) included, from the history alone. A fresh import of the
 same history therefore writes the same bytes, whatever Git repository holds
-it. Short references never escape (objects.md §1.3), so a stored tree or
-alias row depends only on its object, not on what the store held when it was
-written. One more thing must be fixed:
+it, short references included (objects.md §1.3). One more thing must be
+fixed:
 
 - **zstd's output** at a given level is not part of RFC 8878 and changes
   between zstd releases. The store is byte-identical for one build, whose

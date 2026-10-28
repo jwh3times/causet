@@ -52,7 +52,8 @@ The other Git algorithm codes are reserved, and a reader refuses them.
 A **short reference** is the first 8 bytes of a native digest, with no
 algorithm byte: the native algorithm is the store's, which every container
 header names (storage.md §4). Version 1 uses short references in two places,
-both stored forms rather than objects, so no ID ever covers one:
+both in stored records rather than in any object's identity input, so no ID
+ever covers one:
 
 - a stored tree's entries, in the short-reference form (§4.4);
 - an alias row's native side (§9.1).
@@ -60,22 +61,33 @@ both stored forms rather than objects, so no ID ever covers one:
 **Resolution.** A short reference's **candidates** are the objects whose
 digest begins with it, among every container's index names (storage.md §4.1).
 The index names every object a stored tree or alias row refers to, absent
-content included (§8), so every reference has at least one candidate.
+content included (§8), so every reference has at least one candidate. A
+reference with exactly one candidate resolves to it; only a shared reference
+needs the verification below.
 
 **Collisions never escape.** A writer always writes the 8 bytes, even when
 another object shares them. A reader keeps the one candidate that verifies:
 
-- in a tree, the one choice of a candidate for every entry whose canonical
-  body (§4.1) hashes to the tree's ID;
-- in an alias row, the one candidate whose Git encoding (§9.2) hashes to the
-  row's Git ID.
+- **in a tree,** the one choice of a candidate for every entry whose canonical
+  body (§4.1) hashes to the tree's ID. This needs only the candidates' IDs, so
+  absent candidates take part like present ones.
+- **in an alias row,** the one candidate whose Git encoding (§9.2) hashes to
+  the row's Git ID. Only a present candidate can be checked so. When none
+  verifies and some candidates are absent, the row is **unverified**, not
+  corrupt, as a chunk list naming absent content is (§8).
+
+**The bound.** A tree may need at most **65,536 choices**: the product, over
+its entries, of each entry's number of candidates. A tree that needs more is
+corrupt, and import refuses to write one, naming it, as it refuses an
+oversized record (storage.md §4). Honest histories never come near the bound.
+A history built to collide can: 8 shared bytes between two objects one party
+makes take about 2^32 hashes. Sharing a tree's existing entry takes about
+2^64, so no later object pushes a stored tree past the bound.
 
 No candidate at all, or more than one choice that verifies, is corrupt. A
-reader may bound how many choices it tries, and reports a tree past the bound
-as corrupt. A stored tree or alias row therefore depends only on its object,
-never on what the store held when it was written. Two objects share 8 bytes
-with about a 3% chance somewhere in a store of a billion objects
-(ADR-0045, amendment of 2026-10-28).
+stored tree or alias row therefore depends only on its object, never on what
+the store held when it was written. Two objects share 8 bytes with about a 3%
+chance somewhere in a store of a billion objects.
 
 ## 2. Identity input
 
@@ -540,9 +552,9 @@ Every clone holds all metadata, and content may be absent (decision 8).
 - **Content** is type `01`, chunk lists included.
 
 An ID is **known** to a store when a present object, a stored chunk list or a
-stored delta (as its base) names it, the current ref snapshot names it, or an alias file lists it. A Git
-ID in a submodule link is not a native ID, and is never known. A known ID is in exactly one
-state:
+stored delta (as its base) names it, the current ref snapshot names it, or an
+alias row resolves to it (§1.3). A Git ID in a submodule link is not a native
+ID, and is never known. A known ID is in exactly one state:
 
 | Code | State | Meaning | Who writes it |
 | --- | --- | --- | --- |
@@ -564,14 +576,19 @@ half defines where they sit.
 - **Only content may be absent.** A tree, preserved object, snapshot or
   annotation in either absent state is corrupt.
 
+**The index lists every known ID,** absent content included: that is what
+resolves a short reference (§1.3) whatever state its object is in.
+
 **Everything else is corrupt:**
 
 - a known ID with no index entry;
 - bytes that do not hash to their ID, or that break the rules of their type;
 - a chunk list whose lengths do not add up, or whose chunks do not hash to the
   content's ID;
-- a short reference with no candidate, or a tree or alias row for which no
-  choice of candidates verifies, or more than one does (§1.3).
+- a short reference with no candidate, a tree for which no choice of
+  candidates verifies, or more than one does, or which needs more choices than
+  the bound, and an alias row for which more than one candidate verifies, or
+  none does and none is absent (§1.3).
 
 `cst fsck` reports each absent object by its state, and each case of
 corruption by the object and the container it is in. In N1 nothing is ever
@@ -634,8 +651,8 @@ repository's algorithm. Each file is two sorted tables over the same rows:
     the row's short reference is resolved (§1.3) to the candidate whose Git
     encoding has that Git ID.
   - **A native ID:** a binary search over the native order finds the rows
-    holding its short reference, and the row whose Git ID the object's Git
-    encoding has is its row.
+    holding its short reference, which sit together, by Git digest; the row
+    whose Git ID the object's Git encoding has is its row.
 
   With one candidate, as in every store yet seen, both are one search.
 - **Digests carry no tags in the file,** since the header names both
@@ -681,8 +698,9 @@ For every row of every alias file, the check:
 2. hashes it with the Git algorithm;
 3. compares the result with the row's Git ID, which the row holds whole.
 
-Every row must match: a row for which no candidate matches fails the check. In N1, where import is the only writer, every object
-the store holds came from Git and must have a row; a phase that writes
+Every row must match: a row for which no candidate matches fails the check.
+In N1, where import is the only writer, every object the store holds came
+from Git and must have a row; a phase that writes
 objects of its own changes this rule (ADR-0044, item 4). The check shows it
 from the store alone:
 
