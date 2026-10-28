@@ -80,3 +80,7 @@ jwh3times 7
 A draft repository security advisory in jwh3times/causet, with access-appropriate tracking on the
 private board. Never a public issue or wiki page; publishing the advisory needs separate disclosure
 authorization.
+
+## New work
+
+issue
