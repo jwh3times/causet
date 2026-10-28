@@ -586,6 +586,19 @@ On git/git the store's parts against Git's pack, split by object type with
 So the gate's gap on git/git is in metadata, not in content: §6's levers
 apply, and trees need one of their own.
 
+[#348](https://github.com/jwh3times/causet/issues/348) measured the levers,
+and ADR-0045's
+[amendment of 2026-10-28](../adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md#amendment-2026-10-28-n1-storage-against-gitgit)
+chose format version 1:
+- short references in trees;
+- metadata in path order;
+- content under 32 KiB stored whole;
+- a narrower alias row.
+
+Together they measured 0.973 times Git's bytes on git/git. This contract
+still describes version 0. It changes to version 1 with #345's first build
+ticket, before any store code (ADR-0045, decision 10).
+
 ## 7. Determinism
 
 A fresh import of the same history must write a byte-identical store
