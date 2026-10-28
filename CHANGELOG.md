@@ -12,7 +12,7 @@
   to the storage gate against `git gc --aggressive`, and the job's summary
   reports both byte counts. `.github/workflows/corpora.yml` runs them on
   Ubuntu and Windows weekly, on dispatch and as part of release gate 11.
-  `test/real-repositories.test.js` skips them unless
+  `test/real-repositories.test.js` runs them only when
   `CAUSET_REAL_REPOSITORIES` names them. Every native read the native-kind
   mode and the generated corpus compare now also runs without Git on its
   `PATH`. Measured locally, the storage gate passes on the large-file corpus

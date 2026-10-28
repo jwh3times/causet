@@ -357,9 +357,11 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
 
 **The real repositories** (ADR-0044 items 1 and 2, ADR-0045 decision 13,
 #309) are three Git repositories imported and checked whole, each with the
-storage gate. `test/real-repositories.test.js` runs them; it skips each one
-unless `CAUSET_REAL_REPOSITORIES` names it (comma separated, or `all`),
-because they fetch from the network and take minutes to hours.
+storage gate. `test/real-repositories.test.js` runs them; it has a test for
+each one only when `CAUSET_REAL_REPOSITORIES` names it (comma separated, or
+`all`), because they fetch from the network and take minutes to hours. It
+adds no skipped test to `npm test`, whose CI jobs expect only the skips they
+know.
 `.github/workflows/corpora.yml` runs each in a job of its own on Ubuntu and
 Windows:
 

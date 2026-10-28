@@ -5,8 +5,10 @@
  * storage gate (`test-support/real-repository-check.js`).
  *
  * They fetch from the network and take minutes to an hour each, so the
- * suite skips them unless `CAUSET_REAL_REPOSITORIES` names them, comma
- * separated or `all`, as `.github/workflows/corpora.yml` does.
+ * suite has a test for each only when `CAUSET_REAL_REPOSITORIES` names it,
+ * comma separated or `all`, as `.github/workflows/corpora.yml` does. A test
+ * that skipped itself would count against the suite jobs, which expect only
+ * the skips they know (`ci.yml`, "Nothing self-skipped unexpectedly").
  */
 
 import assert from "node:assert/strict";
@@ -44,8 +46,8 @@ function summary(report) {
   return `${lines.join("\n")}\n`;
 }
 
-for (const name of Object.keys(REAL_REPOSITORIES)) {
-  test(`the real repository ${name} passes every N1 check and the storage gate`, { skip: !chosen.includes(name) && "set CAUSET_REAL_REPOSITORIES to check it" }, async (t) => {
+for (const name of chosen) {
+  test(`the real repository ${name} passes every N1 check and the storage gate`, async (t) => {
     const report = await checkRepository({ name, env: testEnv });
     // The check ran the CLI: counted here for the report of tests that never
     // invoke a selected CLI (`git-environment.js`).
