@@ -27,15 +27,6 @@ always
 
 none
 
-## Unreleased placeholder
-
-empty
-
 ## Changelog check
 
 none
-
-## Release commit message
-
-`<type>: <summary>` — a conventional-commit subject (`feat:`, `fix:`, `docs:`, `chore:`); a
-release's own is `chore: prepare v<version>`.

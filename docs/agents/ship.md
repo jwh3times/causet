@@ -12,8 +12,9 @@ The required `static checks` job's steps, all from the repository root:
 - `npm run lint:agents`
 - `git diff --check "$(git mktree </dev/null)" HEAD`
 
-The suite jobs (`npm test` under each engine and session mode, on Linux and Windows) and the
-release gates run only in CI.
+CI-only, since each needs a native build or a multi-engine, multi-OS matrix: the `suite` jobs
+(the native build, parser fuzzing, the Rust unit tests and `npm test` under each engine and session
+mode, on Linux and Windows) and the release gates.
 
 ## Issue link
 
