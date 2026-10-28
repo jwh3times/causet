@@ -553,14 +553,22 @@ imports causet and git/git in CI, and its numbers, not these, decide the gate.
 
 `.github/workflows/corpora.yml` now imports the real repositories with this
 build and reports both byte counts in each job's summary (docs/testing.md,
-"The real repositories"). A local run on a 16-core Linux host, on 2026-10-27,
-measured:
+"The real repositories"). #343's CI, on 2026-10-27, measured the same store
+on Ubuntu and Windows:
 
 | Repository | cst store | `git gc --aggressive` | Gate |
 | --- | ---: | ---: | --- |
-| causet, at `08c4365` | 3,196,745 B | 3,196,013 B | fails, by 732 bytes |
-| git/git, at `v2.56.0` | 226,243,470 B | 113,490,152 B | fails, at 1.99× |
-| the large-file corpus | 104,623,402 B | 116,323,992 B | passes, 10% smaller |
+| causet | 3,213,209 B | 3,249,743 B | 1.1% under; listed as a margin |
+| git/git, at `v2.56.0` | 226,243,470 B | 113,017,718 B (Ubuntu), 113,006,176 B (Windows) | 2.00×; listed as a known gap |
+| the large-file corpus | 104,623,402 B | 113,029,969 B | passes, 7.4% under |
+
+A local run on a 16-core Linux host put causet at `08c4365` 732 bytes over
+Git's 3,196,013 B. causet's margin moves with the history under test and with
+Git's own packing, which varied by 11 KB between the two CI hosts on git/git.
+Both are listed against
+[#345](https://github.com/jwh3times/causet/issues/345), which closes the gap,
+and N1 cannot exit while they are listed (docs/testing.md, "The real
+repositories").
 
 On git/git the store's parts against Git's pack, split by object type with
 `git verify-pack` on a clone with every ref:

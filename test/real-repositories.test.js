@@ -33,7 +33,7 @@ const megabytes = (bytes) => `${(bytes / 1e6).toFixed(2)} MB`;
 function summary(report) {
   const parts = (side) => Object.entries(side.parts).sort().map(([part, bytes]) => `${part} ${bytes}`).join(", ");
   const lines = [
-    `### ${report.name}: storage gate ${report.gate ? "passed" : "failed"}`,
+    `### ${report.name}: storage gate ${report.gate}, ${(report.native.total / report.git.total).toFixed(3)} times Git's bytes`,
     "",
     "| | Bytes | Parts |",
     "| --- | ---: | --- |",
@@ -53,7 +53,7 @@ for (const name of chosen) {
     // invoke a selected CLI (`git-environment.js`).
     cstPrefix();
     if (report.native && report.git) {
-      t.diagnostic(`${name}: cst store ${report.native.total} bytes, git gc --aggressive ${report.git.total} bytes`);
+      t.diagnostic(`${name}: cst store ${report.native.total} bytes, git gc --aggressive ${report.git.total} bytes, storage gate ${report.gate}`);
       if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(report));
     }
     t.diagnostic(`${name}: import times ${JSON.stringify(report.seconds)}`);

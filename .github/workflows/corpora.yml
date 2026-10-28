@@ -34,7 +34,9 @@ on:
       - "test-support/import-checks.js"
       - "test-support/real-repositories.js"
       - "test-support/real-repository-check.js"
+      - "test-support/storage-gate.js"
       - "test/real-repositories.test.js"
+      - "test/storage-gate.test.js"
       - ".github/workflows/corpora.yml"
   schedule:
     # Weekly on main, after perf.yml's run.

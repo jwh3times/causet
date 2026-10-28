@@ -15,10 +15,13 @@
   `test/real-repositories.test.js` runs them only when
   `CAUSET_REAL_REPOSITORIES` names them. Every native read the native-kind
   mode and the generated corpus compare now also runs without Git on its
-  `PATH`. Measured locally, the storage gate passes on the large-file corpus
-  (104.6 MB against Git's 116.3 MB) and fails on causet by 732 bytes and on
-  git/git at twice Git's size, its trees and per-object metadata taking the
-  difference (`docs/native-store/storage.md` §6.1).
+  `PATH`. In CI the store is 7.4% under Git's bytes on the large-file
+  corpus (104.6 MB against 113.0 MB) and 1.1% under on causet, and twice
+  Git's size on git/git (226.2 MB against 113.0 MB), its trees and
+  per-object metadata taking the difference (`docs/native-store/storage.md`
+  §6.1). git/git's gap and causet's narrow margin are listed as known gaps
+  against #345, with ceilings that still fail a storage regression; N1
+  cannot exit while they are listed.
 
 - **Contributor workflow: the agent skills install from a shared
   repository.** `end-session`, `handoff`, `lets-go` and `docs-updater` now

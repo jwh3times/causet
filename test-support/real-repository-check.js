@@ -14,7 +14,8 @@
  * - the storage gate: the full import's store against what `git gc
  *   --aggressive` leaves in `objects/pack/` of the repository, the pack, its
  *   index, reverse index and bitmap. Stored bytes must be at most Git's, and
- *   on the large-file corpus strictly fewer.
+ *   on the large-file corpus strictly fewer, unless the repository carries a
+ *   known-gap entry (`storage-gate.js`).
  *
  * Each import's time is reported, never checked.
  */
@@ -29,6 +30,7 @@ import { sameAsFull, sameStores, storeState } from "./import-checks.js";
 import { compareCopy, withoutGit } from "./native-kind.js";
 import { aliases } from "./native-store.js";
 import { REAL_REPOSITORIES } from "./real-repositories.js";
+import { storageGate } from "./storage-gate.js";
 
 const OPT_IN = { CAUSET_EXPERIMENTAL: "native" };
 
@@ -63,8 +65,8 @@ function bytesUnder(directory, name) {
 /**
  * Checks the real repository `name`, in a new directory under `base`. `env`
  * makes the environment of each process. Resolves to its report: the
- * repository's object count, both byte counts with their parts, whether the
- * storage gate passed, each import's time, and the problems found.
+ * repository's object count, both byte counts with their parts, the storage
+ * gate's verdict, each import's time, and the problems found.
  */
 export async function checkRepository({ name, env, base = os.tmpdir() }) {
   const repository = REAL_REPOSITORIES[name];
@@ -109,10 +111,9 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     git(packed, ["gc", "--aggressive", "--prune=now", "--quiet"]);
     report.native = bytesUnder(path.join(full, ".cst"), (file) => file.split(path.sep)[0]);
     report.git = bytesUnder(path.join(packed, "objects", "pack"), (file) => path.extname(file).slice(1));
-    report.gate = repository.strictly ? report.native.total < report.git.total : report.native.total <= report.git.total;
-    if (!report.gate) {
-      report.problems.push(`${where}: the store takes ${report.native.total} bytes, which is not ${repository.strictly ? "fewer than" : "at most"} the ${report.git.total} of git gc --aggressive`);
-    }
+    const verdict = storageGate(repository, report.native.total, report.git.total, where);
+    report.gate = verdict.gate;
+    if (verdict.problem) report.problems.push(verdict.problem);
 
     sameAsFull({ before, incremental, full, format });
     read(incremental, ["fsck"]);

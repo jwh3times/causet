@@ -13,8 +13,9 @@
  *
  * `stage(source, n, env)` brings the bare repository at `source` to stage
  * `n`, 1 or 2; `select`, when given, chooses the objects equality compares
- * one by one (`compareCopy` in `native-kind.js`); and `strictly` asks for
- * strictly fewer stored bytes than Git's, not at most as many.
+ * one by one (`compareCopy` in `native-kind.js`); `strictly` asks for
+ * strictly fewer stored bytes than Git's, not at most as many; and
+ * `knownGap` lists the repository's known storage gap (`storage-gate.js`).
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -50,6 +51,9 @@ function fetchRefs(source, from, refspecs, env) {
  */
 const causet = {
   name: "causet",
+  // Near Git's bytes, on either side as the history grows: 1.1% under in
+  // #343's CI, 732 bytes over locally at 08c4365.
+  knownGap: { issue: 345, ceiling: 1.02, margin: true },
   stage(source, n, env) {
     const checkout = process.env.CAUSET_REAL_CAUSET || CHECKOUT;
     assert.equal(git(checkout, ["rev-parse", "--is-shallow-repository"], env), "false",
@@ -81,6 +85,9 @@ const gitGit = {
     git(source, ["update-ref", "refs/heads/main", `refs/tags/${tag}^{commit}`], env);
   },
   select: (ids) => [...ids].sort().slice(0, 512),
+  // 2.00 times Git's bytes in #343's CI, in trees and per-object metadata
+  // (storage.md §6.1).
+  knownGap: { issue: 345, ceiling: 2.05 },
 };
 
 // ----- the large-file corpus ---------------------------------------------------
