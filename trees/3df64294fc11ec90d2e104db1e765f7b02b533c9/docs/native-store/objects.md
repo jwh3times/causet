@@ -5,7 +5,8 @@ native object is named, how every N1 object type is encoded, the states an
 object can be in, the alias map that ties native objects to Git's, and the
 `.cst/` directory that marks a native repository. Its decisions come from
 [ADR-0045](../adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)
-decisions 2, 4, 5, 8, 9 and 12. Format version 0 promises no compatibility
+decisions 2, 4, 5, 8, 9 and 12, and its amendment of 2026-10-28. Format
+version 1 promises no compatibility
 ([README](README.md)).
 
 The worked examples form one small history: a file `hello.txt` holding
@@ -45,6 +46,48 @@ alias map, and in a submodule link (§4). In binary:
 | digest | 20 or 32 | the Git object ID, 20 bytes for SHA-1 and 32 for SHA-256 |
 
 The other Git algorithm codes are reserved, and a reader refuses them.
+
+### 1.3 Short references
+
+A **short reference** is the first 8 bytes of a native digest, with no
+algorithm byte: the native algorithm is the store's, which every container
+header names (storage.md §4). Version 1 uses short references in two places,
+both in stored records rather than in any object's identity input, so no ID
+ever covers one:
+
+- a stored tree's entries, in the short-reference form (§4.4);
+- an alias row's native side (§9.1).
+
+**Resolution.** A short reference's **candidates** are the objects whose
+digest begins with it, among every container's index names (storage.md §4.1).
+The index names every object a stored tree or alias row refers to, absent
+content included (§8), so every reference has at least one candidate. A
+reference with exactly one candidate resolves to it; only a shared reference
+needs the verification below.
+
+**Collisions never escape.** A writer always writes the 8 bytes, even when
+another object shares them. A reader keeps the one candidate that verifies:
+
+- **in a tree,** the one choice of a candidate for every entry whose canonical
+  body (§4.1) hashes to the tree's ID. This needs only the candidates' IDs, so
+  absent candidates take part like present ones.
+- **in an alias row,** the one candidate whose Git encoding (§9.2) hashes to
+  the row's Git ID. Only a present candidate can be checked so. When none
+  verifies and some candidates are absent, the row is **unverified**, not
+  corrupt, as a chunk list naming absent content is (§8).
+
+**The bound.** A tree may need at most **65,536 choices**: the product, over
+its entries, of each entry's number of candidates. A tree that needs more is
+corrupt, and import refuses to write one, naming it, as it refuses an
+oversized record (storage.md §4). Honest histories never come near the bound.
+A history built to collide can: 8 shared bytes between two objects one party
+makes take about 2^32 hashes. Sharing a tree's existing entry takes about
+2^64, so no later object pushes a stored tree past the bound.
+
+No candidate at all, or more than one choice that verifies, is corrupt. A
+stored tree or alias row therefore depends only on its object, never on what
+the store held when it was written. Two objects share 8 bytes with about a 3%
+chance somewhere in a store of a billion objects.
 
 ## 2. Identity input
 
@@ -136,7 +179,7 @@ count × (
   storing the next version can cut it the same way and share its chunks. A
   reader never re-cuts, so it needs neither to read the content. Chunker `00`
   and `02`–`ff` are reserved, and so is every seed but 0, for N5's acceptance
-  points (ADR-0045, decision 6). Version 0 writes chunker `01` and seed 0, and
+  points (ADR-0045, decision 6). Version 1 writes chunker `01` and seed 0, and
   anything else is corrupt.
 - **The content is the chunks concatenated in order.** It must hash to the
   content ID the list is stored under.
@@ -148,7 +191,7 @@ count × (
   resolution always ends.
 - **When content is stored as a chunk list** is decided by the
   [stored forms](storage.md#1-stored-forms), along with the chunker and the
-  delta form. Under version 0's chunker, a chunk is never itself stored as a
+  delta form. Under version 1's chunker, a chunk is never itself stored as a
   chunk list, but a reader must not assume so. A chunk is never stored as a
   delta either, and that a reader checks: a chunk list naming content stored
   as a delta is corrupt (storage.md §5.2).
@@ -280,6 +323,45 @@ trees that are not canonical, for example:
 Keeping such a tree whole, rather than normalizing it, is what lets it
 reconstruct to its original ID (ADR-0041, decision 9). A native tree that names
 it uses its preserved ID as a kind `04` target.
+
+### 4.4 The short-reference form
+
+A tree is **stored** in one of two forms (storage.md §1):
+
+- form `00`, its body as §4.1 encodes it;
+- form `03`, **short references:** the body with each kind `01`–`04` target
+  replaced by its digest's short reference (§1.3).
+
+The short-reference record:
+
+```
+count    varint   the number of entries
+count × (
+  name   bytes    the entry's name
+  kind   u8       what the entry is
+  target          kind 01–04: 8 bytes, the short reference of its native ID;
+                  kind 05: the Git ID (§1.2), as in the body
+)
+```
+
+A reader resolves every short reference (§1.3), rebuilds the body of §4.1 and
+verifies it against the tree's ID, as it verifies every record. The record
+must otherwise follow §4.1's rules; a record that breaks them is corrupt. The
+tree's ID and its Git encoding (§4.2) are unchanged by the form it is stored
+in.
+
+The tree holding `hello.txt`, in form `03` (20 bytes, against the body's 45):
+
+```
+01                                                                  count 1
+0968656c6c6f2e747874                                                name "hello.txt"
+01                                                                  kind: file
+c32f27e6a5e1d06a                                                    target: "hello\n", short
+```
+
+Its one candidate is `c32f27e6…1988`, and its rebuilt body hashes to
+`754a90b4c821bcf47f6441bdbed3bfe8eae725f9f72f50beafebf4c2b603680a`, the tree's
+ID.
 
 ## 5. Preserved Git objects
 
@@ -470,9 +552,9 @@ Every clone holds all metadata, and content may be absent (decision 8).
 - **Content** is type `01`, chunk lists included.
 
 An ID is **known** to a store when a present object, a stored chunk list or a
-stored delta (as its base) names it, the current ref snapshot names it, or an alias file lists it. A Git
-ID in a submodule link is not a native ID, and is never known. A known ID is in exactly one
-state:
+stored delta (as its base) names it, the current ref snapshot names it, or an
+alias row resolves to it (§1.3). A Git ID in a submodule link is not a native
+ID, and is never known. A known ID is in exactly one state:
 
 | Code | State | Meaning | Who writes it |
 | --- | --- | --- | --- |
@@ -494,12 +576,19 @@ half defines where they sit.
 - **Only content may be absent.** A tree, preserved object, snapshot or
   annotation in either absent state is corrupt.
 
+**The index lists every known ID,** absent content included: that is what
+resolves a short reference (§1.3) whatever state its object is in.
+
 **Everything else is corrupt:**
 
 - a known ID with no index entry;
 - bytes that do not hash to their ID, or that break the rules of their type;
 - a chunk list whose lengths do not add up, or whose chunks do not hash to the
-  content's ID.
+  content's ID;
+- a short reference with no candidate, a tree for which no choice of
+  candidates verifies, or more than one does, or which needs more choices than
+  the bound, and an alias row for which more than one candidate verifies, or
+  none does and none is absent (§1.3).
 
 `cst fsck` reports each absent object by its state, and each case of
 corruption by the object and the container it is in. In N1 nothing is ever
@@ -524,8 +613,10 @@ for each object:
 - each commit, tag and other tree, to its preserved object.
 
 **Within one Git algorithm it is one-to-one.** Equal native objects come from
-equal Git objects, so no two rows share a Git ID, and no two share a native ID.
-A repeated key in either direction is corrupt.
+equal Git objects, so no two rows share a Git ID, and no two resolve to the
+same native ID. A repeated Git ID, or two rows resolving to one native ID, is
+corrupt. Two rows may share a short reference (§1.3); each resolves to its own
+object.
 
 ### 9.1 Alias files
 
@@ -536,13 +627,13 @@ repository's algorithm. Each file is two sorted tables over the same rows:
 | Offset | Size | Field |
 | --- | --- | --- |
 | 0 | 8 | magic `CSTALIAS` (`435354414c494153`) |
-| 8 | 1 | file version, `00` |
+| 8 | 1 | file version, `01` |
 | 9 | 1 | Git algorithm: `01` SHA-1 (G = 20); `02` SHA-256 (G = 32) |
 | 10 | 1 | native algorithm: `01` SHA-256 |
 | 11 | 1 | reserved, `00` |
 | 12 | 4 | row count N, `u32` |
 | 16 | 1024 | Git fan-out: 256 × `u32` |
-| 1040 | N × (G + 32) | rows by Git ID: Git digest, then native digest |
+| 1040 | N × (G + 8) | rows by Git ID: Git digest, then the native digest's short reference (§1.3) |
 | … | 1024 | native fan-out: 256 × `u32` |
 | … | N × 4 | the native order: row numbers as `u32` |
 | … | 32 | trailer: SHA-256 of every byte before it |
@@ -551,20 +642,30 @@ repository's algorithm. Each file is two sorted tables over the same rows:
   the number of rows whose Git digest's first byte is at most `i`, so entry 255
   is N. A Git ID is found by a binary search within its fan-out bucket.
 - **The native order** lists every row number from 0 to N − 1 once, in byte
-  order of the rows' native digests. The native fan-out counts them by the
-  native digest's first byte in the same way. A native ID is found by a binary
-  search over this order. This is the direction a native repository uses to
-  print an optional `gitId` (ADR-0046, decision 5).
+  order of the rows' short references, and of Git digest where two share one.
+  The native fan-out counts them by the short reference's first byte in the
+  same way. This is the direction a native repository uses to print an
+  optional `gitId` (ADR-0046, decision 5).
+- **Looking up.**
+  - **A Git ID:** a binary search within its fan-out bucket finds the row, and
+    the row's short reference is resolved (§1.3) to the candidate whose Git
+    encoding has that Git ID.
+  - **A native ID:** a binary search over the native order finds the rows
+    holding its short reference, which sit together, by Git digest; the row
+    whose Git ID the object's Git encoding has is its row.
+
+  With one candidate, as in every store yet seen, both are one search.
 - **Digests carry no tags in the file,** since the header names both
   algorithms.
-- **What a row costs.** A row takes G + 32 + 4 bytes: 56 for SHA-1 and 68 for
+- **What a row costs.** A row takes G + 8 + 4 bytes: 32 for SHA-1 and 44 for
   SHA-256. The file can be rewritten whole on each import, so a fresh import
   of the same history writes the same bytes (decision 3).
 
 A reader checks the magic, version, algorithms, trailer, fan-outs and both
-orders, and reports any disagreement as corruption.
+orders, and reports any disagreement as corruption. Resolving each row is the
+reconstruction check's (§9.2) and `cst fsck`'s.
 
-The alias file of the example history (SHA-1, 3 rows, 2,264 bytes):
+The alias file of the example history (SHA-1, 3 rows, 2,192 bytes):
 
 | Row | Git ID | Native ID |
 | --- | --- | --- |
@@ -572,29 +673,34 @@ The alias file of the example history (SHA-1, 3 rows, 2,264 bytes):
 | 1 | `aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7` (tree) | `754a90b4c821bcf47f6441bdbed3bfe8eae725f9f72f50beafebf4c2b603680a` |
 | 2 | `ce013625030ba8dba906f756967f9e9ca394464a` (blob) | `c32f27e6a5e1d06a6c75540b1410f868f228ace6b7dcc3b3f1834c6dce1b1988` |
 
-- **The header** is `435354414c494153 00 01 01 00 00000003`.
+- **The header** is `435354414c494153 01 01 01 00 00000003`.
+- **The rows** are `2425d53ec1283e808c60bcaea110ba01aca5a887 1ba8e668bdf6a1eb`,
+  `aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7 754a90b4c821bcf4` and
+  `ce013625030ba8dba906f756967f9e9ca394464a c32f27e6a5e1d06a`.
 - **The Git fan-out** is 0 for entries `00`–`23`, 1 for `24`–`a9`, 2 for
   `aa`–`cd`, and 3 for `ce`–`ff`.
 - **The native order** is rows 0, 1, 2, since `1b…` < `75…` < `c3…`. Its
   fan-out is 0 for `00`–`1a`, 1 for `1b`–`74`, 2 for `75`–`c2`, and 3 for
   `c3`–`ff`.
 - **The trailer** is
-  `62f89a20ce576032d48bb7f8e7ef7679f0ed664be4709f2f48c25049e146ffb9`.
+  `bcf145c3c3792a7e06e16a49b7593fdf01f517d7c1148161d8f75ba30914d7a0`.
 
 ### 9.2 The reconstruction check
 
 The alias map is what the reconstruction check verifies (ADR-0044, item 4).
 For every row of every alias file, the check:
 
-1. rebuilds the native object in Git's encoding for that file's algorithm:
+1. resolves the row's short reference (§1.3) and rebuilds the native object
+   in Git's encoding for that file's algorithm:
    - content as `blob <size>`, a NUL and its bytes;
    - a native tree by §4.2;
    - a preserved object as `<kind> <size>`, a NUL and its payload;
 2. hashes it with the Git algorithm;
-3. compares the result with the row's Git ID.
+3. compares the result with the row's Git ID, which the row holds whole.
 
-Every row must match. In N1, where import is the only writer, every object
-the store holds came from Git and must have a row; a phase that writes
+Every row must match: a row for which no candidate matches fails the check.
+In N1, where import is the only writer, every object the store holds came
+from Git and must have a row; a phase that writes
 objects of its own changes this rule (ADR-0044, item 4). The check shows it
 from the store alone:
 
@@ -631,7 +737,8 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
   objects/        containers, each with its index ([storage.md](storage.md#4-containers))
 ```
 
-- **`format`** holds exactly `causet-native-store 0` and a line feed. A reader
+- **`format`** holds exactly `causet-native-store 1` and a line feed, the 22
+  bytes `6361757365742d6e61746976652d73746f726520310a`. A reader
   refuses any other content, naming the version it reads. A directory holding
   both `.cst/` and `.git` is refused as ambiguous, since every repository is
   one kind (ADR-0042, decision 1).
@@ -660,6 +767,6 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
     It holds the importing process's ID. One left by an import that was
     killed is removed by hand. A reader ignores it.
 - **Other names under `.cst/` are reserved** for later parts of the contract
-  and later phases. A version 0 reader ignores the names it does not know.
+  and later phases. A version 1 reader ignores the names it does not know.
 - **`.cst/` holds only the store.** There is no working copy in N1: a native
   repository is written only by import (decision 11).

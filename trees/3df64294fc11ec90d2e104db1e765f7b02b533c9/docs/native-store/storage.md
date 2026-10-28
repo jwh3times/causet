@@ -5,9 +5,9 @@ content is cut into chunks, how stored forms are grouped into compressed
 frames, how frames go into containers with a trailing index, and when a large
 file is stored as a delta. Its decisions come from
 [ADR-0045](../adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)
-decisions 6, 7 and 10. The objects, IDs and object states it stores are in
-[the first half](objects.md). Format version 0 promises no compatibility
-([README](README.md)).
+decisions 6, 7 and 10, and its amendment of 2026-10-28. The objects, IDs and
+object states it stores are in [the first half](objects.md). Format version 1
+promises no compatibility ([README](README.md)).
 
 None of this changes an ID. Chunking, frames, containers and deltas are how a
 store keeps its objects; every stored form is verified by hashing back to the
@@ -22,17 +22,27 @@ Every object is kept as one **record**, in one of three stored forms:
 | `00` | the body | every type: for content, its bytes; for types `02`–`05`, the body of objects.md |
 | `01` | a chunk list (objects.md §3.3) | content stored in pieces |
 | `02` | a delta (§5) | content of a large file, stored against a previous version |
+| `03` | short references (objects.md §4.4) | a tree, its entries named by the first 8 bytes of their native digests |
 
 The other form codes are reserved. Only content (type `01`) takes forms `01`
-and `02`.
+and `02`, and only a tree (type `02`) takes form `03`.
 
-A version 0 writer chooses a content object's form by these rules, in order:
+A version 1 writer stores every tree in form `03`, and every other metadata
+object in form `00`. It chooses a content object's form by these rules, in
+order:
 
 1. **A delta,** when §5 allows one and it is smaller.
-2. **Its bytes,** when the content is at most 2 KiB, or when the chunker (§2)
-   cuts it as one chunk.
+2. **Its bytes,** when the content is shorter than **32 KiB** (32,768 bytes),
+   or when the chunker (§2) cuts it as one chunk.
 3. **A chunk list** otherwise. Each chunk the store does not hold yet is then
    stored as content of its own, in form `00`.
+
+**The reason for 32 KiB.** Below it, a version's chunks are few, and storing
+it whole costs fewer bytes than the chunk list, the chunks' own index entries
+and what deduplication saves. On git/git, storing content under 32 KiB whole
+saved 5.0 MB; under 128 KiB it saved almost nothing, and under 1 MiB it cost
+15.5 MB ([#348](https://github.com/jwh3times/causet/issues/348)). Version 0's
+limit was 2 KiB.
 
 The rules are part of the format, not a writer's preference: a fresh import
 must produce a byte-identical store (ADR-0045, decision 3).
@@ -246,7 +256,7 @@ A **frame** is a run of records, compressed together.
 - **The codec:**
   - `01`, zstd: the records concatenated, compressed as exactly one zstd frame
     (RFC 8878), with nothing before or after it;
-  - `00`, stored: the record, uncompressed. In version 0 it holds exactly one
+  - `00`, stored: the record, uncompressed. In version 1 it holds exactly one
     delta (§5), which is already compressed, and its compressed and
     uncompressed lengths are equal.
 
@@ -257,7 +267,7 @@ A **frame** is a run of records, compressed together.
   decompresses one frame without the rest, from its start.
 - **Record order.** Content records go in **version order:** the versions of
   one path, oldest first, are adjacent, so zstd finds what successive versions
-  share. Metadata records go in the order of the same walk, import's (§3.2).
+  share. Metadata records go in path order, from the same walk (§3.2).
 
 ### 3.1 Frame bounds
 
@@ -313,8 +323,23 @@ or loose.
 - **An object's path** is where the walk first reaches it. A tip, a commit's
   tree and a tag's object are at the root, the empty path. A tree's entry is at
   the tree's path, then `/` (unless that is the root) and the entry's name.
-- **Metadata records** go in the order the walk leaves their objects, so each
-  tree comes after every tree it names. The ref snapshot goes last.
+- **Metadata records go in path order.** Within a container:
+  1. **Trees,** native and preserved, grouped by their path. The groups go in
+     the order the walk leaves the first tree at each path, and within a group
+     trees go in the order the walk leaves them, so a directory's versions are
+     oldest first. Every tree has a path: one that a ref or a tag names
+     directly is at the root.
+  2. **Commits and tags,** and any other metadata but the snapshot, in the
+     order the walk leaves them.
+  3. **The ref snapshot,** last.
+
+  **The reason.** A history's versions of one directory then sit together in
+  a frame, where zstd finds what they share. In walk order they are scattered
+  among every other tree: on git/git, trees took 110.4 MB in walk order, and
+  path order saved 66.7 MB of the store
+  ([#348](https://github.com/jwh3times/causet/issues/348)). A writer holds a
+  container's trees until it closes the container, since the last tree at a
+  path may come late in the walk; how it holds them is its own.
 - **Content records** are grouped by their blob's path. The groups go in the
   order the walk leaves the first blob at each path. Within a group, blobs go
   in the order the walk leaves them, so a path's versions are oldest first.
@@ -338,12 +363,13 @@ rename it. A container named otherwise than by its trailer is corrupt.
 
 | Part | Size | Content |
 | --- | --- | --- |
-| header | 16 | the magic, version `00`, native algorithm `01` (SHA-256), 6 reserved `00` bytes |
+| header | 16 | the magic, version `01`, native algorithm `01` (SHA-256), 6 reserved `00` bytes |
 | frames | … | every frame, back to back from offset 16, in the order the writer closed them |
 | index | … | §4.1 |
 | footer | 72 | the index's offset as `u64`, the index's SHA-256, then the trailer |
 
 - **The magic** is the 8 ASCII bytes `CSTCNTNR`, `435354434e544e52`.
+- **A version 1 header** is therefore `435354434e544e52 01 01 000000000000`.
 - **Every offset in a container is from the start of the file.**
 - **The index's SHA-256** covers the index alone, so a lazy reader that
   fetches only the index can verify it.
@@ -462,7 +488,7 @@ data            one zstd frame, compressed with the base's bytes as its prefix
 
 ### 5.1 When a delta is written
 
-A version 0 writer writes a delta when all of these hold:
+A version 1 writer writes a delta when all of these hold:
 
 | Condition | Value | Reason |
 | --- | --- | --- |
@@ -511,7 +537,8 @@ its base's for a delta. **The depth limit is 8.**
 ## 6. Costs and the storage gate
 
 ADR-0044 item 2 limits stored bytes to Git's fully packed size. The table
-shows what the format spends on causet's history at commit `1680ea7`. These
+shows what format version 0 spent on causet's history at commit `1680ea7`,
+before #309 measured the real repositories (§6.1). These
 are local measurements with a throwaway chunker written from §2, and Node's
 zstd at level 19. They are informational, never gate evidence.
 
@@ -553,8 +580,8 @@ imports causet and git/git in CI, and its numbers, not these, decide the gate.
 
 `.github/workflows/corpora.yml` now imports the real repositories with this
 build and reports both byte counts in each job's summary (docs/testing.md,
-"The real repositories"). #343's CI, on 2026-10-27, measured the same store
-on Ubuntu and Windows:
+"The real repositories"). #343's CI, on 2026-10-27, measured the same version
+0 store on Ubuntu and Windows:
 
 | Repository | cst store | `git gc --aggressive` | Gate |
 | --- | ---: | ---: | --- |
@@ -576,9 +603,9 @@ On git/git the store's parts against Git's pack, split by object type with
 - **content** compresses to about what Git's blobs take, 52.6 MB against
   52.5 MB;
 - **trees, preserved commits and tags** take 129.6 MB in metadata frames,
-  where Git's trees, commits and tags take 54.3 MB. A native tree names its
-  entries by 32-byte native IDs, which do not compress, and no tree is stored
-  against another version of itself;
+  where Git's trees, commits and tags take 54.3 MB. A version 0 tree named
+  its entries by 33-byte native IDs, which do not compress, and in walk order
+  a directory's versions sat in different frames;
 - **per-object metadata**, the container's index (about 29 MB for 610,625
   objects, chunks included) and the alias map (22.9 MB), against 15.4 MB for
   Git's index, reverse index and bitmap.
@@ -596,8 +623,10 @@ chose format version 1:
 - a narrower alias row.
 
 Together they measured 0.973 times Git's bytes on git/git. This contract
-still describes version 0. It changes to version 1 with #345's first build
-ticket, before any store code (ADR-0045, decision 10).
+describes version 1 from
+[#351](https://github.com/jwh3times/causet/issues/351) on, ahead of the
+store code (ADR-0045, decision 10), and the numbers the real repositories
+measure on version 1 belong here once the code writes it.
 
 ## 7. Determinism
 
@@ -605,7 +634,8 @@ A fresh import of the same history must write a byte-identical store
 (ADR-0045, decision 3). The rules of §1, §3, §4 and §5 fix every choice,
 import's walk (§3.2) included, from the history alone. A fresh import of the
 same history therefore writes the same bytes, whatever Git repository holds
-it. One more thing must be fixed:
+it, short references included (objects.md §1.3). One more thing must be
+fixed:
 
 - **zstd's output** at a given level is not part of RFC 8878 and changes
   between zstd releases. The store is byte-identical for one build, whose

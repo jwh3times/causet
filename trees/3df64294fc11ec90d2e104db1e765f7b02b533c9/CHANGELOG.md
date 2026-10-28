@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Contributor workflow: the shared agent skills supply defaults.** The
+  skills from `jwh3times/skills` are refreshed, and `docs/agents/releases.md`
+  drops the `Unreleased placeholder` and `Release commit message` settings
+  to take their shared defaults: `ship` commits its docs and changelog edits
+  as `docs: update docs and changelog`, and `Unreleased`, once emptied,
+  holds `No unreleased changes.` rather than a bare heading.
+  `docs/agents/ship.md` names the suites that run only in CI after its fast
+  checks, and new human follow-up wiki pages are named
+  `<Topic>-<YYYY-MM-DD>`.
+
 - **The real repositories and the storage gate** (#309, ADR-0045 decision
   13). causet's own history, git/git at `v2.56.0`, and a large-file corpus
   of six Node.js release executables pinned by checksum plus generated

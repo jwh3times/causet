@@ -10,9 +10,16 @@ decision 10) require.
 
 **No format compatibility is promised yet**
 ([ADR-0042](../adr/0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md),
-decision 5). This is format version 0. A store written by an earlier build may
-have to be imported again, and a build reads only the version it writes. The
-promise starts when a later ADR makes it.
+decision 5). This is format version 1, which replaced version 0 by
+ADR-0045's
+[amendment of 2026-10-28](../adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md#amendment-2026-10-28-n1-storage-against-gitgit).
+A store written by an earlier build may have to be imported again, and a build
+reads only the version it writes, refusing any other by name. The promise
+starts when a later ADR makes it.
+
+**Version 1 is published ahead of its code** (see Authority): until
+[#350](https://github.com/jwh3times/causet/issues/350) is done, `native/store`
+writes version 0.
 
 ## Parts
 
@@ -32,6 +39,11 @@ encoders must reproduce every worked example here byte for byte. When the code
 and the text disagree, one of them is fixed in the same change, and a change to
 the text says in that change why the code's answer is right. Neither may drift
 silently.
+
+The one exception is a new format version, which this text publishes before
+the code writes it (ADR-0045, decision 10). Until the code writes the new
+version, it reproduces the previous version's worked examples, as this text's
+history holds them, and the issue that builds the version tracks the gap.
 
 ## Conventions
 
