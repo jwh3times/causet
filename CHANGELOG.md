@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Contributor workflow: the shared agent skills are refreshed.**
+  `/end-session` records work it discovers as an issue on the board, per the
+  new `New work` setting in `docs/agents/issue-tracker.md`, and falls back to
+  GitHub's MCP tools where `gh` is missing. `docs-updater` skips only the
+  skills the Doc map marks `frozen`. `npm run lint:agents`' script also lints
+  another checkout when given its root, and names the root it linted.
+
 - **Contributor workflow: the agent skills install from a shared
   repository.** `end-session`, `handoff`, `lets-go` and `docs-updater` now
   come from `jwh3times/skills` instead of being maintained here, and `ship`
