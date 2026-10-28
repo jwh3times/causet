@@ -219,9 +219,9 @@ function repositories(directory, env) {
  * A process's exit status and output, as `spawnSync` gives them. One that
  * runs past `PROCESS_LIMIT` is stopped, which fails its comparison.
  */
-function run(command, args, { cwd, env, input }) {
+function run(command, args, { cwd, env, input, limit = PROCESS_LIMIT }) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, timeout: PROCESS_LIMIT });
+    const child = spawn(command, args, { cwd, env, timeout: limit });
     const ending = bounded(child);
     const [stdout, stderr] = [[], []];
     child.stdout.on("data", (chunk) => stdout.push(chunk));
@@ -252,6 +252,31 @@ function cst(cwd, args, env) {
   return run(cstCommand, [...cstPrefix(), ...args], { cwd, env: env(OPT_IN) });
 }
 
+let gitless = null;
+
+/**
+ * `environment` with a `PATH` that holds no Git, so that a process started
+ * in it fails if it starts Git: a native repository runs none (ADR-0044
+ * item 2).
+ */
+export function withoutGit(environment) {
+  if (gitless === null) {
+    gitless = fs.mkdtempSync(path.join(os.tmpdir(), "cst-no-git-"));
+    const made = gitless;
+    process.on("exit", () => fs.rmSync(made, { recursive: true, force: true }));
+  }
+  const kept = Object.entries(environment).filter(([name]) => name.toUpperCase() !== "PATH");
+  return { ...Object.fromEntries(kept), PATH: gitless };
+}
+
+/**
+ * `cst` reading a native repository without Git, so each comparison also
+ * shows that a native read runs no Git process.
+ */
+function read(cwd, args, env, limit) {
+  return run(cstCommand, [...cstPrefix(), ...args], { cwd, env: withoutGit(env(OPT_IN)), limit });
+}
+
 /** Runs `jobs`, each a function returning a promise, `width` at a time. */
 async function pool(jobs, width) {
   let next = 0;
@@ -275,13 +300,19 @@ async function compare(repository, destination, { env, file, testName }) {
   return compareCopy(repository, destination, { env, where });
 }
 
+/** At most how many bytes of Git's objects a comparison holds at once. */
+const HELD = 64 * 1024 * 1024;
+
 /**
  * N1's answers on `destination`, an import of `repository` (`{ path,
  * common }`), against Git's on it: the problems found, each starting with
- * `where`. `width` is how many processes run at a time.
+ * `where`. `width` is how many processes run at a time. `select`, given the
+ * Git IDs of every object the alias map names, returns those to compare one
+ * by one; by default, all of them. `limit` bounds the reconstruction check,
+ * which reads every object. Every `cst` here runs without Git.
  */
-export async function compareCopy(repository, destination, { env, where, width = os.availableParallelism() }) {
-  const verified = await cst(destination, ["import", "--verify"], env);
+export async function compareCopy(repository, destination, { env, where, width = os.availableParallelism(), select = (ids) => ids, limit }) {
+  const verified = await read(destination, ["import", "--verify"], env, limit);
   if (verified.status !== 0) {
     return [`${where}: import --verify failed: ${verified.stderr}`];
   }
@@ -320,12 +351,12 @@ export async function compareCopy(repository, destination, { env, where, width =
   };
   const jobs = [];
   const same = (gitArgs, cstArgs, translate) => jobs.push(async () => {
-    const [expected, answered] = await Promise.all([gitAsync(neutral, inGit(gitArgs), env), cst(destination, cstArgs, env)]);
+    const [expected, answered] = await Promise.all([gitAsync(neutral, inGit(gitArgs), env), read(destination, cstArgs, env)]);
     const answer = translate(expected.stdout.toString("latin1"));
     differs(`git ${gitArgs.join(" ")}`, { status: expected.status, stdout: Buffer.from(answer, "latin1") }, answered);
   });
   const known = (gitArgs, cstArgs, stdout) => jobs.push(async () => {
-    differs(`git ${gitArgs.join(" ")}`, { status: 0, stdout }, await cst(destination, cstArgs, env));
+    differs(`git ${gitArgs.join(" ")}`, { status: 0, stdout }, await read(destination, cstArgs, env));
   });
   same(["for-each-ref"], ["for-each-ref"], refs);
   same(["rev-parse", "HEAD"], ["rev-parse", "HEAD"], lines);
@@ -339,28 +370,44 @@ export async function compareCopy(repository, destination, { env, where, width =
       same(["ls-tree", "-r", "-t", "-l", tip], ["ls-tree", "-r", "-t", "-l", rows.get(tip)], entries);
     }
   }
-  // Git's side of every object but a tree's listing in one process: its
-  // type, size and bytes.
-  const ids = [...rows.keys()];
-  const read = ids.length === 0 ? { status: 0, stdout: Buffer.alloc(0) }
-    : git(neutral, inGit(["cat-file", "--batch"]), env, Buffer.from(`${ids.join("\n")}\n`));
-  const objects = read.status === 0 ? batch(read.stdout) : [];
-  if (objects.length !== ids.length) {
-    problems.push(`${where}: git cat-file --batch read ${objects.length} of the ${ids.length} objects the alias map names: ${read.stderr ?? read.error}`);
+  await pool(jobs.splice(0), width);
+  // Git's side of each object but a tree's listing, its type, size and
+  // bytes, read by as few processes as hold at most `HELD` bytes each, and
+  // compared before the next group is read.
+  const ids = select([...rows.keys()]);
+  const sizes = ids.length === 0 ? { status: 0, stdout: Buffer.alloc(0) }
+    : git(neutral, inGit(["cat-file", "--batch-check=%(objectsize)"]), env, Buffer.from(`${ids.join("\n")}\n`));
+  const sized = (sizes.stdout ?? "").toString().split("\n").filter(Boolean).map(Number);
+  if (sizes.status !== 0 || sized.length !== ids.length || sized.some((size) => !Number.isSafeInteger(size))) {
+    problems.push(`${where}: git cat-file --batch-check sized ${sized.length} of the ${ids.length} objects the alias map names: ${sizes.error ?? sizes.stderr}`);
+    return problems;
   }
-  for (const { git: gitId, type, bytes } of objects) {
-    const native = rows.get(gitId);
-    known(["cat-file", "-t", gitId], ["cat-file", "-t", native], Buffer.from(`${type}\n`));
-    known(["cat-file", "-s", gitId], ["cat-file", "-s", native], Buffer.from(`${bytes.length}\n`));
-    if (type === "tree") {
-      same(["cat-file", "-p", gitId], ["cat-file", "-p", native], entries);
-    } else if (type === "blob") {
-      known(["cat-file", "-p", gitId], ["cat-file", "-p", native], bytes);
-    } else {
-      known(["cat-file", "-p", gitId], ["cat-file", "-p", native], Buffer.from(headers(type, bytes.toString("latin1"), rows), "latin1"));
+  for (let at = 0; at < ids.length;) {
+    const group = [];
+    for (let held = 0; at < ids.length && (group.length === 0 || held + sized[at] <= HELD); at++) {
+      group.push(ids[at]);
+      held += sized[at];
     }
+    const listed = git(neutral, inGit(["cat-file", "--batch"]), env, Buffer.from(`${group.join("\n")}\n`));
+    const objects = listed.status === 0 ? batch(listed.stdout) : [];
+    if (objects.length !== group.length) {
+      problems.push(`${where}: git cat-file --batch read ${objects.length} of ${group.length} objects the alias map names: ${listed.error ?? listed.stderr}`);
+      return problems;
+    }
+    for (const { git: gitId, type, bytes } of objects) {
+      const native = rows.get(gitId);
+      known(["cat-file", "-t", gitId], ["cat-file", "-t", native], Buffer.from(`${type}\n`));
+      known(["cat-file", "-s", gitId], ["cat-file", "-s", native], Buffer.from(`${bytes.length}\n`));
+      if (type === "tree") {
+        same(["cat-file", "-p", gitId], ["cat-file", "-p", native], entries);
+      } else if (type === "blob") {
+        known(["cat-file", "-p", gitId], ["cat-file", "-p", native], bytes);
+      } else {
+        known(["cat-file", "-p", gitId], ["cat-file", "-p", native], Buffer.from(headers(type, bytes.toString("latin1"), rows), "latin1"));
+      }
+    }
+    await pool(jobs.splice(0), width);
   }
-  await pool(jobs, width);
   return problems;
 }
 

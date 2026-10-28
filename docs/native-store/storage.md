@@ -549,6 +549,43 @@ alone:
 Whichever is taken, [#309](https://github.com/jwh3times/causet/issues/309)
 imports causet and git/git in CI, and its numbers, not these, decide the gate.
 
+### 6.1 The real repositories
+
+`.github/workflows/corpora.yml` now imports the real repositories with this
+build and reports both byte counts in each job's summary (docs/testing.md,
+"The real repositories"). #343's CI, on 2026-10-27, measured the same store
+on Ubuntu and Windows:
+
+| Repository | cst store | `git gc --aggressive` | Gate |
+| --- | ---: | ---: | --- |
+| causet | 3,213,209 B | 3,249,743 B | 1.1% under; listed as a margin |
+| git/git, at `v2.56.0` | 226,243,470 B | 113,017,718 B (Ubuntu), 113,006,176 B (Windows) | 2.00×; listed as a known gap |
+| the large-file corpus | 104,623,402 B | 113,029,969 B | passes, 7.4% under |
+
+A local run on a 16-core Linux host put causet at `08c4365` 732 bytes over
+Git's 3,196,013 B. causet's margin moves with the history under test and with
+Git's own packing, which varied by 11 KB between the two CI hosts on git/git.
+Both are listed against
+[#345](https://github.com/jwh3times/causet/issues/345), which closes the gap,
+and N1 cannot exit while they are listed (docs/testing.md, "The real
+repositories").
+
+On git/git the store's parts against Git's pack, split by object type with
+`git verify-pack` on a clone with every ref:
+
+- **content** compresses to about what Git's blobs take, 52.6 MB against
+  52.5 MB;
+- **trees, preserved commits and tags** take 129.6 MB in metadata frames,
+  where Git's trees, commits and tags take 54.3 MB. A native tree names its
+  entries by 32-byte native IDs, which do not compress, and no tree is stored
+  against another version of itself;
+- **per-object metadata**, the container's index (about 29 MB for 610,625
+  objects, chunks included) and the alias map (22.9 MB), against 15.4 MB for
+  Git's index, reverse index and bitmap.
+
+So the gate's gap on git/git is in metadata, not in content: §6's levers
+apply, and trees need one of their own.
+
 ## 7. Determinism
 
 A fresh import of the same history must write a byte-identical store

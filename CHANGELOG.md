@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **The real repositories and the storage gate** (#309, ADR-0045 decision
+  13). causet's own history, git/git at `v2.56.0`, and a large-file corpus
+  of six Node.js release executables pinned by checksum plus generated
+  asset-edit histories are each imported in two stages and run through
+  every N1 check: both import checks, `cst fsck`, the reconstruction check,
+  equality with Git (on git/git, the refs, each ref's tree and a sample of
+  512 objects), and zero Git processes in native reads. Each is also held
+  to the storage gate against `git gc --aggressive`, and the job's summary
+  reports both byte counts. `.github/workflows/corpora.yml` runs them on
+  Ubuntu and Windows weekly, on dispatch and as part of release gate 11.
+  `test/real-repositories.test.js` runs them only when
+  `CAUSET_REAL_REPOSITORIES` names them. Every native read the native-kind
+  mode and the generated corpus compare now also runs without Git on its
+  `PATH`. In CI the store is 7.4% under Git's bytes on the large-file
+  corpus (104.6 MB against 113.0 MB) and 1.1% under on causet, and twice
+  Git's size on git/git (226.2 MB against 113.0 MB), its trees and
+  per-object metadata taking the difference (`docs/native-store/storage.md`
+  §6.1). git/git's gap and causet's narrow margin are listed as known gaps
+  against #345, with ceilings that still fail a storage regression; N1
+  cannot exit while they are listed.
+
 - **Contributor workflow: the shared agent skills are refreshed.**
   `/end-session` records work it discovers as an issue on the board, per the
   new `New work` setting in `docs/agents/issue-tracker.md`, and falls back to

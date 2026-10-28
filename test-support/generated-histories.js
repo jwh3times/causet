@@ -88,7 +88,7 @@ const WORDS = ["add", "fix", "the", "store", "tree", "merge", "branch", "record"
  * A stream of numbers from `seed`: SHA-256 of the seed and a counter, read
  * four bytes at a time.
  */
-function stream(seed) {
+export function stream(seed) {
   let block = Buffer.alloc(0);
   let at = 0;
   let counter = 0;
