@@ -5,7 +5,7 @@ use crate::encoding::Reader;
 use causet_model::sha256::Sha256;
 use std::fmt;
 
-/// The algorithm tag of every native ID version 0 writes: SHA-256.
+/// The algorithm tag of every native ID version 1 writes: SHA-256.
 pub const SHA256_TAG: u8 = 0x01;
 
 /// What an object is, by its type code (objects.md §2).
@@ -36,7 +36,7 @@ impl Type {
 }
 
 /// A native ID: the SHA-256 digest of an object's identity input. Its tag is
-/// implied, since version 0 knows one algorithm.
+/// implied, since version 1 knows one algorithm.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NativeId(pub [u8; 32]);
 

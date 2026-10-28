@@ -19,7 +19,9 @@ starts when a later ADR makes it.
 
 **Version 1 is published ahead of its code** (see Authority): until
 [#350](https://github.com/jwh3times/causet/issues/350) is done, `native/store`
-writes version 0.
+writes version 1's version marks over version 0's encodings. It reproduces
+version 1's container header and root marker, and version 0's other worked
+examples, the alias file's under version 1's header.
 
 ## Parts
 

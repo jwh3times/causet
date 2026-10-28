@@ -18,6 +18,11 @@ pub mod verify;
 use std::fmt;
 use std::path::Path;
 
+/// The format version this build writes and the only one it reads
+/// (README: no compatibility is promised yet): the container header's and the
+/// alias file's version byte, and the root marker's number.
+pub const VERSION: u8 = 1;
+
 /// Why a store operation failed. The command that reports it gives each a
 /// published error code.
 #[derive(Debug)]

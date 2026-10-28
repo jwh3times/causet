@@ -36,11 +36,11 @@ impl ChunkList {
     let chunker = reader.u8()?;
     if chunker != CHUNKER_FASTCDC {
       return Err(format!(
-        "a chunk list names the chunker {chunker:02x}, which version 0 does not write"
+        "a chunk list names the chunker {chunker:02x}, which version 1 does not write"
       ));
     }
     if reader.u64()? != 0 {
-      return Err("a chunk list has a seed, which version 0 does not write".into());
+      return Err("a chunk list has a seed, which version 1 does not write".into());
     }
     let size = reader.varint()?;
     let count = reader.varint()?;

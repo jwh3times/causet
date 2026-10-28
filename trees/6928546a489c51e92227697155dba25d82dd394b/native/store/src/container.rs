@@ -123,7 +123,7 @@ impl ContainerWriter {
       open: [OpenFrame::default(), OpenFrame::default()],
     };
     let mut header = CONTAINER_MAGIC.to_vec();
-    header.extend_from_slice(&[0x00, 0x01, 0, 0, 0, 0, 0, 0]);
+    header.extend_from_slice(&[crate::VERSION, 0x01, 0, 0, 0, 0, 0, 0]);
     writer.write(&header)?;
     Ok(writer)
   }
@@ -405,8 +405,8 @@ impl Container {
     file
       .read_exact(&mut header)
       .map_err(|error| io(path, error))?;
-    if &header[..8] != CONTAINER_MAGIC || header[8..] != [0x00, 0x01, 0, 0, 0, 0, 0, 0] {
-      return Err(corrupt("its header is not version 0's".into()));
+    if &header[..8] != CONTAINER_MAGIC || header[8..] != [crate::VERSION, 0x01, 0, 0, 0, 0, 0, 0] {
+      return Err(corrupt(format!("its header is not version {}'s", crate::VERSION)));
     }
     let mut footer = [0u8; 72];
     file

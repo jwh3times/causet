@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Native stores are labelled format version 1** (#352, part of #350).
+  `cst import` writes version 1 in the store's root marker, each container's
+  header and each alias file's header, as `docs/native-store/` now
+  publishes. A store an earlier build wrote says version 0: every command in
+  a native repository, an import into it included, refuses it by name and
+  says to import the Git repository again into a new directory. The format
+  promises no compatibility yet (ADR-0042 decision 5). The encodings stay
+  version 0's until the rest of #350 lands.
+
 - **Contributor workflow: the shared agent skills supply defaults.** The
   skills from `jwh3times/skills` are refreshed, and `docs/agents/releases.md`
   drops the `Unreleased placeholder` and `Release commit message` settings
