@@ -1,6 +1,6 @@
 # ADR-0045: Build N1 as a whole-content store with lossless Git import
 
-- **Status:** Accepted (owner, 2026-10-17); command names in [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md); decision 3 amended 2026-10-26 (see below)
+- **Status:** Accepted (owner, 2026-10-17); command names in [ADR-0046](0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md); decision 3 amended 2026-10-26; decisions 5 and 7's storage and the format version amended 2026-10-28 (see below)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, NFR-PERF-06, NFR-PERF-07, NFR-PORT-01
@@ -269,3 +269,97 @@ The check (`test-support/generated-history-check.js`) holds every other form
 equal, each object the earlier import wrote to its first form, and every chunk
 to one the earlier store or the full import holds, unless a version new to the
 incremental import is a chunk list there and a delta in the full one.
+
+## Amendment 2026-10-28: N1 storage against git/git
+
+Decided on [#345](https://github.com/jwh3times/causet/issues/345), from the
+measurement of [#348](https://github.com/jwh3times/causet/issues/348).
+
+**What failed.** The storage gate (ADR-0044 item 2), run on the real
+repositories by #309:
+- **git/git at `v2.56.0`:** 226.2 MB against the 113.4 MB `git gc
+  --aggressive` leaves on the same refs, 2.00×.
+- **causet:** level with Git.
+
+Content was never the problem. git/git's 82,327 commits each write a whole
+root tree of about 18 KB. Import's walk scatters each directory's versions
+across frames, and every entry names its target by 33 bytes zstd cannot
+compress. So trees took 110.4 MB, against Git's 17.8 MB of deltas. The
+container index and the alias map took 51.1 MB more, against 15.4 MB for
+Git's idx, rev and bitmap.
+
+**What changes.** Format version `01` of containers and alias files. A build
+still reads only the version it writes, so a version `00` store is refused by
+name and imported again.
+
+1. **A stored tree names its entries by short references** (decision 7's
+   storage, objects.md §4).
+   - Each entry's target is the first 8 bytes of its native digest, not its
+     33-byte native ID, in a new stored form `03` for trees.
+   - A version 1 writer stores every tree so. Form `00`, the canonical body,
+     stays valid for trees.
+   - A tree's native ID still hashes its canonical encoding (decision 4).
+2. **Metadata goes in path order** (storage.md §3.2). Within a container:
+   - first the trees, grouped by the path where import's walk first reaches
+     them, with paths in that order and each path's versions oldest first;
+   - then commits and tags, in walk order;
+   - then the ref snapshot.
+
+   The rule that each tree follows every tree it names is dropped. It was a
+   writer's rule that no reader relies on.
+3. **Content under 32 KiB is stored whole** (storage.md §1, rule 2). Before,
+   the limit was 2 KiB, or one chunk. Chunking never changes an ID, so this is
+   retuned without a migration (decision 4).
+4. **An alias row keeps the full Git digest and the native digest's first 8
+   bytes** (decision 5, objects.md §9.1): 32 bytes a row, not 56. The Git side
+   stays whole, so the reconstruction check compares full Git IDs as before.
+5. **Short references never escape.** A writer always writes 8 bytes, and a
+   reader resolves a shared prefix by verification:
+   - in a tree, by the one choice of candidates whose canonical encoding hashes
+     to the tree's ID;
+   - in an alias row, by the candidate whose Git encoding has the row's Git ID.
+
+   No match, or more than one, is corruption. Resolution works because the
+   index lists every object a tree names, absent content included (objects.md
+   §8). A stored record therefore depends only on its object, never on what the
+   store held when it was written. Incremental and full imports still hold the
+   same objects in the same forms, apart from large versions (the amendment of
+   2026-10-26).
+6. **Import spills a container's trees to a temporary file** and writes them
+   in path order when the container closes. Its memory stays bounded. The
+   temporary file, about the size of the uncompressed trees (1.4 GB on
+   git/git), is an import cost, tracked with the others on
+   [#347](https://github.com/jwh3times/causet/issues/347).
+
+**The measurement.** #348 measured with a prototype that rebuilt real stores
+under each lever. It reproduced the stores within 0.003% (git/git) and 0.04%
+(causet).
+- **Together, these changes measured:**
+  - git/git: 110.3 MB, **0.973×** Git's bytes;
+  - causet: 2.85 MB, **0.883×**.
+- **Each lever alone, on git/git:**
+  - short references in trees: −82.6 MB;
+  - path order: −66.7 MB;
+  - the narrower alias row: −9.8 MB;
+  - whole content under 32 KiB: −5.0 MB.
+
+Decision 7's frames of 1–4 MiB are kept. The decision holds when
+`corpora.yml` measures git/git at or under Git's bytes on both hosts, and the
+known-gap entries of #343's decision 1 come out then.
+
+**Rejected,** each measured on git/git by #348:
+- **Index positions in trees and alias rows** (4 bytes, 0.916× in
+  combination). A position means something only within its container. An
+  incremental import's trees would then differ from a full import's, and the
+  writer would have to sort the index before writing any metadata.
+- **Tree deltas.** An entry-level delta against the previous version at the
+  path saves 0.6 MB once trees are in path order. It would cost a new form and
+  up to 50 patches per read.
+- **Larger metadata frames.** 16 MiB saves 2.9 MB more in combination, at 4.3
+  ms rather than 1.1 ms per frame read; 64 MiB takes 51 ms.
+- **An 11-byte index record.** It saves 2.9 MB but caps a container at 65,535
+  frames.
+- **No stored alias map.** It saves all 22.9 MB, but the reconstruction check
+  would lose the Git IDs it compares against.
+- **Larger whole-content thresholds.** 128 KiB saves almost nothing, and 1 MiB
+  or more costs 15.5 MB.
