@@ -167,7 +167,7 @@ export function writeContainer(objects, container, { version = VERSION } = {}) {
  * annotation object rather than that object's position, which a change to the
  * objects would move.
  */
-function editable(file) {
+function readForRewrite(file) {
   const container = readContainer(file);
   container.annotations = container.annotations.map(({ subject, position }) => ({ subject, annotation: container.objects[position].name }));
   return container;
@@ -177,7 +177,7 @@ function editable(file) {
 function rewrite(store, id, change) {
   const name = Buffer.from(id, "hex");
   for (const file of containers(store)) {
-    const container = editable(file);
+    const container = readForRewrite(file);
     const at = container.objects.findIndex((object) => object.name.equals(name));
     if (at === -1) continue;
     change(container, at);
@@ -258,7 +258,7 @@ export function addContainer(store, objects, { after, damage } = {}) {
 export function setVersion(store, version) {
   fs.writeFileSync(path.join(store, ".cst", "format"), `causet-native-store ${version}\n`);
   for (const file of containers(store)) {
-    const container = editable(file);
+    const container = readForRewrite(file);
     fs.rmSync(file);
     writeContainer(path.dirname(file), container, { version });
   }

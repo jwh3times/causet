@@ -483,6 +483,14 @@ pub struct Store {
   frame: RefCell<Option<((usize, u32), std::rc::Rc<Vec<u8>>)>>,
 }
 
+/// The version a root marker of another build names: `causet-native-store`,
+/// a space, a number in decimal without leading zeros, and a line feed.
+fn marker_version(marker: &[u8]) -> Option<&str> {
+  let number = std::str::from_utf8(marker).ok()?.strip_prefix(MARKER)?.strip_suffix('\n')?;
+  let digits = !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit());
+  (digits && (number == "0" || !number.starts_with('0'))).then_some(number)
+}
+
 impl Store {
   /// The store of the native repository whose root is `root`.
   pub fn open(root: &Path) -> Result<Store, StoreError> {
@@ -490,14 +498,10 @@ impl Store {
     let format = store.join("format");
     let marker = std::fs::read(&format).map_err(|error| StoreError::io(&format, error))?;
     if marker != FORMAT {
-      let found = std::str::from_utf8(&marker)
-        .ok()
-        .and_then(|text| text.strip_prefix(MARKER)?.strip_suffix('\n'))
-        .filter(|number| !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()));
-      return Err(StoreError::Unsupported(match found {
+      return Err(StoreError::Unsupported(match marker_version(&marker) {
         Some(version) => format!(
           "{} says the store is format version {version}, and this build reads only version {}. \
-           To use it with this build, import the repository again",
+           To use it with this build, import the repository again into a new directory",
           format.display(),
           crate::VERSION
         ),

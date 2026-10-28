@@ -226,6 +226,10 @@ mod tests {
     // makes this the contract's example whole: its 2,192 bytes and trailer.
     assert_eq!(file.len(), 2264);
     assert_eq!(hex(&file[..16]), "435354414c4941530101010000000003");
+    assert_eq!(
+      hex(&file[file.len() - 32..]),
+      "c1d082387265c986dc4d176a9b4e90ab9d36463e5e15211c35e66aab81777bcf"
+    );
     let read = Aliases::decode(&file, GitAlgorithm::Sha1).unwrap();
     let blob = unhex("ce013625030ba8dba906f756967f9e9ca394464a").unwrap();
     let native = read.native(&blob).unwrap();

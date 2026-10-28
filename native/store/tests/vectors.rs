@@ -8,6 +8,7 @@ use causet_model::sha256;
 use causet_store::chunker::{self, GEAR, MASK_L, MASK_S};
 use causet_store::id::GitAlgorithm;
 use causet_store::objects::Snapshot;
+use causet_store::VERSION;
 use causet_store::store::{FORMAT, StoreWriter};
 use std::path::PathBuf;
 
@@ -134,6 +135,7 @@ fn every_reference_vector_cuts_as_published() {
 #[test]
 fn the_root_marker_is_the_one_the_contract_prints() {
   let objects = contract("objects.md");
+  assert_eq!(FORMAT, format!("causet-native-store {VERSION}\n").as_bytes());
   assert_eq!(FORMAT.len(), 22);
   assert!(objects.contains("holds exactly `causet-native-store 1` and a line feed, the 22"));
   assert!(objects.contains(&format!("`{}`", hex(FORMAT))), "{}", hex(FORMAT));

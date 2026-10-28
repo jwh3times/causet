@@ -220,7 +220,7 @@ test("a store of format version 0 is refused by every native command, which says
   const history = makeHistory("sha1");
   const { id } = blobOf(history);
   setVersion(history.native, 0);
-  const refusal = /\.cst[\\/]format says the store is format version 0, and this build reads only version 1\. To use it with this build, import the repository again/;
+  const refusal = /\.cst[\\/]format says the store is format version 0, and this build reads only version 1\. To use it with this build, import the repository again into a new directory/;
   for (const args of [
     ["cat-file", "-p", id], ["ls-tree", "HEAD"], ["rev-parse", "HEAD"], ["for-each-ref"], ["fsck"], ["import", "--verify"],
     ["import", history.repo, history.native],

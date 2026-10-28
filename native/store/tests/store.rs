@@ -173,13 +173,20 @@ fn a_store_of_another_version_is_refused_by_its_version() {
       Err(StoreError::Unsupported(message)) => {
         assert!(message.contains(&format!("format version {version}")), "{message}");
         assert!(message.contains("reads only version 1"), "{message}");
-        assert!(message.contains("import the repository again"), "{message}");
+        assert!(message.contains("import the repository again into a new directory"), "{message}");
       }
       other => panic!("{version}: {:?}", other.map(|_| ())),
     }
   }
-  std::fs::write(root.join(".cst/format"), b"something else\n").unwrap();
-  assert!(matches!(Store::open(&root), Err(StoreError::Unsupported(_))));
+  for marker in [b"something else\n".as_slice(), b"causet-native-store 01\n"] {
+    std::fs::write(root.join(".cst/format"), marker).unwrap();
+    match Store::open(&root) {
+      Err(StoreError::Unsupported(message)) => {
+        assert!(message.contains("the only format this build reads"), "{message}")
+      }
+      other => panic!("{:?}", other.map(|_| ())),
+    }
+  }
 
   // A version 1 store holding a container of another version is corrupt.
   std::fs::write(root.join(".cst/format"), b"causet-native-store 1\n").unwrap();
