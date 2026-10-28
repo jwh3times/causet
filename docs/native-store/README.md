@@ -10,9 +10,17 @@ decision 10) require.
 
 **No format compatibility is promised yet**
 ([ADR-0042](../adr/0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md),
-decision 5). This is format version 0. A store written by an earlier build may
-have to be imported again, and a build reads only the version it writes. The
-promise starts when a later ADR makes it.
+decision 5). This is format version 1, which replaced version 0 by
+ADR-0045's
+[amendment of 2026-10-28](../adr/0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md#amendment-2026-10-28-n1-storage-against-gitgit).
+A store written by an earlier build may have to be imported again, and a build
+reads only the version it writes, refusing any other by name. The promise
+starts when a later ADR makes it.
+
+**Version 1 is published ahead of its code,** as decision 10 requires. Until
+[#350](https://github.com/jwh3times/causet/issues/350)'s tickets land,
+`native/store` writes version 0, and its tests hold version 0's examples,
+which this text kept until commit `7c3961c`.
 
 ## Parts
 
