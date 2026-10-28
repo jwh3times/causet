@@ -549,6 +549,35 @@ alone:
 Whichever is taken, [#309](https://github.com/jwh3times/causet/issues/309)
 imports causet and git/git in CI, and its numbers, not these, decide the gate.
 
+### 6.1 The real repositories
+
+`.github/workflows/corpora.yml` now imports the real repositories with this
+build and reports both byte counts in each job's summary (docs/testing.md,
+"The real repositories"). A local run on a 16-core Linux host, on 2026-10-27,
+measured:
+
+| Repository | cst store | `git gc --aggressive` | Gate |
+| --- | ---: | ---: | --- |
+| causet, at `08c4365` | 3,196,745 B | 3,196,013 B | fails, by 732 bytes |
+| git/git, at `v2.56.0` | 226,243,470 B | 113,490,152 B | fails, at 1.99× |
+| the large-file corpus | 104,623,402 B | 116,323,992 B | passes, 10% smaller |
+
+On git/git the store's parts against Git's pack, split by object type with
+`git verify-pack` on a clone with every ref:
+
+- **content** compresses to about what Git's blobs take, 52.6 MB against
+  52.5 MB;
+- **trees, preserved commits and tags** take 129.6 MB in metadata frames,
+  where Git's trees, commits and tags take 54.3 MB. A native tree names its
+  entries by 32-byte native IDs, which do not compress, and no tree is stored
+  against another version of itself;
+- **per-object metadata**, the container's index (about 29 MB for 610,625
+  objects, chunks included) and the alias map (22.9 MB), against 15.4 MB for
+  Git's index, reverse index and bitmap.
+
+So the gate's gap on git/git is in metadata, not in content: §6's levers
+apply, and trees need one of their own.
+
 ## 7. Determinism
 
 A fresh import of the same history must write a byte-identical store

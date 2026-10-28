@@ -7,7 +7,8 @@ name: release gates
 #   gate 4   every maintained demo completes
 #   gate 5   metadata validation of this repository reports no errors
 #   gate 10  the deterministic benchmark check passes
-#   gate 11  the generated-history corpus passes every N1 check (corpora.yml)
+#   gate 11  the generated-history corpus and the real repositories pass every
+#            N1 check, the real repositories the storage gate too (corpora.yml)
 #
 # Dispatch it on the release commit. It also runs for a pull request that
 # touches the benchmark, its baseline, or this file.

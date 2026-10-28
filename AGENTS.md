@@ -58,10 +58,12 @@ no npm dependencies.
   and comparisons within one run). Timings never fail it; the absolute
   reference stays the local procedure on the wiki's Performance testing page.
 - `.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
-  today the generated-history corpus (`test/generated-histories.test.js` with
-  `CAUSET_GENERATED_HISTORIES=1000`), on hosted Windows and Ubuntu runners:
+  the generated-history corpus (`test/generated-histories.test.js` with
+  `CAUSET_GENERATED_HISTORIES=1000`) and the real repositories with the
+  storage gate (`test/real-repositories.test.js` with
+  `CAUSET_REAL_REPOSITORIES=<name>`), on hosted Windows and Ubuntu runners:
   weekly on `main`, on manual dispatch, as release gate 11 from
-  `release-gates.yml`, and for PRs touching the corpus.
+  `release-gates.yml`, and for PRs touching the corpora.
 - `.github/workflows/release.yml` builds the `cst` executable per platform,
   packs the ADR-0038 package set with `scripts/pack-release.mjs`, and installs
   it on each runner, by npm and by `scripts/install.sh` or

@@ -227,7 +227,12 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   commit's message and a tree entry's name stay Git's. A commit or tag
   translates only the header lines Git's parser follows. Git answers as import
   reads, with replacement refs off, and for the common directory, so `HEAD` is
-  the main worktree's. A `cst` or Git process the comparison starts is stopped
+  the main worktree's. Every `cst` the comparison starts runs with a `PATH`
+  that holds no Git, so a native read that started a Git process would fail
+  (ADR-0044 item 2). Git's side of the objects is read a group at a time, at
+  most 64 MiB of them, and the comparison takes an optional selection of the
+  objects it compares one by one (the real repositories use it for git/git).
+  A `cst` or Git process the comparison starts is stopped
   after 5 minutes (`test-support/bounded-process.js`), which fails it: a
   `cst` that never ends fails its test rather than holding the run.
 - **Refusals.** A repository that import refuses fails its test, unless
@@ -347,6 +352,67 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
 - **Cost.** On a 16-core Linux host, 1,000 histories took 4 to 6 minutes, and
   the default 24 about 10 seconds. On GitHub's hosted runners, 1,000 took 22
   minutes on Ubuntu and 44 on Windows (#333).
+
+**The real repositories** (ADR-0044 items 1 and 2, ADR-0045 decision 13,
+#309) are three Git repositories imported and checked whole, each with the
+storage gate. `test/real-repositories.test.js` runs them; it skips each one
+unless `CAUSET_REAL_REPOSITORIES` names it (comma separated, or `all`),
+because they fetch from the network and take minutes to hours.
+`.github/workflows/corpora.yml` runs each in a job of its own on Ubuntu and
+Windows:
+
+```bash
+CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
+```
+
+- **What each holds** (`test-support/real-repositories.js`). Each is made in
+  a bare repository in two stages, so that both import checks run on it:
+  - `causet`: this repository at the commit under test, as `main`, with the
+    `v*` tags, fetched from the checkout. It needs the whole history, so CI
+    checks out with `fetch-depth: 0`; `CAUSET_REAL_CAUSET` names another
+    checkout. The first stage is the history at `v0.25.0`.
+  - `git`: git/git at the tag `v2.56.0`, fetched from GitHub, with that tag
+    and `main` at it. The first stage is `v2.55.0`. Tags never move, so the
+    history is the same every week. `CAUSET_REAL_GIT_URL` names another copy.
+  - `large-files`: six successive Node.js releases, `v24.18.0` to `v24.22.0`,
+    each archive pinned by the SHA-256 its release publishes. Every host
+    commits the Linux x64 `bin/node`, about 125 MB, whatever it runs on. Beside it
+    are three generated assets, edited at every commit: a 16 MiB image painted
+    over in places, a scene file with records inserted and removed, and an
+    audio file that grows at its end. `git fast-import` writes the 18 commits
+    with fixed dates, and each release's first commit is tagged. The first
+    stage is the first nine commits. The archives are downloaded once into
+    `CAUSET_LARGE_FILE_CACHE` (by default under the system's temporary
+    directory), which CI caches.
+- **What is checked** (`test-support/real-repository-check.js`):
+  - the import checks of the generated corpus (`test-support/import-checks.js`):
+    the first stage imported and then the second into the same copy holds
+    what a full import of the second holds, and a fresh import of a copy
+    with every object and ref packed is byte-identical to the full import;
+  - `cst fsck` and `cst import --verify` on both copies, and the native-kind
+    mode's comparison (`compareCopy`) on the full import. On git/git, a `cst`
+    process for each of three answers on each of 420,000 objects would take
+    hours, so the comparison checks the refs, each ref's whole tree and the
+    512 lowest Git IDs one by one, a mix of every type; the reconstruction
+    check still rebuilds every object to its Git ID;
+  - zero Git processes: every native read runs with no Git on its `PATH`;
+  - **the storage gate:** every file of the full import's `.cst/` against
+    what `git gc --aggressive --prune=now` leaves in `objects/pack/` of the
+    bare repository, that is, its pack, index, reverse index and bitmap.
+    `objects/info/commit-graph` is left out, as the early estimate in
+    storage.md §6 left it out.
+    Stored bytes must be at most Git's, and on the large-file corpus strictly
+    fewer.
+
+  Each job's summary reports both byte counts with their parts, the number
+  of Git objects, and each import's time. Times are reported, never checked.
+  A process here may run for 3 hours, not the 5 minutes the generated corpus
+  allows.
+- **Cost.** On a 16-core Linux host, causet took about 90 seconds, the
+  large-file corpus 16 minutes (each full import about 3.5 minutes) and
+  git/git 36 minutes (each full import about 8 minutes, in one thread and up
+  to 6.3 GB of memory). On git/git each `cst` read opens a store of 610,000
+  objects and takes about 0.9 s, which is why its comparison is a sample.
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of
@@ -1050,7 +1116,10 @@ A release candidate is eligible only when:
     materialization counts, which are properties of the code, and the
     forecast engines' semantic equality; and
 11. the generated-history corpus passes every N1 check on both runners: 1,000
-    histories of the seed `causet-n1` (ADR-0044 item 7, #308).
+    histories of the seed `causet-n1` (ADR-0044 item 7, #308); and so do the
+    real repositories, causet, git/git and the large-file corpus, each also
+    with zero Git processes in native reads and within the storage gate
+    (#309).
 
 **Latency is evidence, not a gate.** Absolute timings cannot travel between
 machines and a shared runner cannot measure them, so no gate depends on them.
@@ -1211,10 +1280,11 @@ native-kind mode runs for anything under `native/`, and under `test/` and
 `test-support/`, because the suites and their harness decide which
 repositories it imports; an unknown change set counts too.
 `.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
-today the generated-history corpus, on Ubuntu and Windows: weekly on `main`,
-on manual dispatch, from `release-gates.yml` when a release is qualified, and
-for a pull request that changes the corpus or the workflow. Its jobs have a
-90-minute timeout, about twice the slowest run measured.
+the generated-history corpus and the real repositories, on Ubuntu and
+Windows: weekly on `main`, on manual dispatch, from `release-gates.yml` when a
+release is qualified, and for a pull request that changes a corpus or the
+workflow. Its jobs have a 90-minute timeout, about twice the slowest run
+measured, except git/git's, which has 300 minutes.
 `ci.yml` has no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
