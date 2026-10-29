@@ -30,6 +30,16 @@ fn varied(length: usize, seed: u32) -> Vec<u8> {
     .collect()
 }
 
+/// The form an object present in `store` is stored in.
+fn form(store: &Store, id: &NativeId) -> Form {
+  store
+    .present()
+    .into_iter()
+    .find(|(found, _, _)| found == id)
+    .map(|(_, _, form)| form)
+    .unwrap()
+}
+
 /// A snapshot with no refs, as a repository with none has.
 fn no_refs() -> Snapshot {
   Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap()
@@ -134,15 +144,8 @@ fn content_under_32_kib_is_stored_whole_even_when_the_chunker_would_cut_it() {
   let listed = writer.put_content(&at).unwrap();
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&root).unwrap();
-  let form_of = |id: &NativeId| {
-    store
-      .present()
-      .into_iter()
-      .find(|(found, _, _)| found == id)
-      .map(|(_, _, form)| form)
-  };
-  assert_eq!(form_of(&whole), Some(Form::Body), "32,767 bytes are stored as their bytes");
-  assert_eq!(form_of(&listed), Some(Form::ChunkList), "32,768 bytes are stored as a chunk list");
+  assert_eq!(form(&store, &whole), Form::Body, "32,767 bytes are stored as their bytes");
+  assert_eq!(form(&store, &listed), Form::ChunkList, "32,768 bytes are stored as a chunk list");
   assert_eq!(store.read(&whole).unwrap().body, below);
   assert_eq!(store.read(&listed).unwrap().body, at);
   std::fs::remove_dir_all(&root).unwrap();
