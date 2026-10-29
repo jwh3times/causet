@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Content under 32 KiB is stored whole** (#353, part of #350).
+  `cst import` stores a file's content shorter than 32,768 bytes as its
+  bytes, not as a chunk list, as `docs/native-store/storage.md` §1 now
+  sets for format version 1; before, only content of at most 2 KiB or a
+  single chunk was. Larger content is still chunked, large versions still
+  take deltas, and readers are unchanged. IDs do not change, but a fresh
+  import of the same history now writes different containers. The
+  large-file corpus is unaffected (104,623,402 bytes, as before); the
+  saving is on histories of many mid-sized files such as git/git.
+
 - **Native stores are labelled format version 1** (#352, part of #350).
   `cst import` writes version 1 in the store's root marker, each container's
   header and each alias file's header, as `docs/native-store/` now
