@@ -7,7 +7,7 @@ use crate::chunker;
 use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
 use crate::delta::{self, DEPTH_LIMIT, Delta};
 use crate::id::{GitAlgorithm, NativeId, Short, Type, unhex};
-use crate::objects::{CHOICES, ChunkList, Preserved, RefTarget, ShortTree, Snapshot, Tree};
+use crate::objects::{CHOICES, ChunkList, Preserved, RefTarget, ShortTarget, ShortTree, Snapshot, Target, Tree};
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write as _;
@@ -314,20 +314,97 @@ impl StoreWriter {
 
   /// Stores a tree in short references (objects.md §4.4). A tree whose
   /// references would need more than 65,536 choices among what the store
-  /// holds is refused, naming it (§1.3).
+  /// holds is refused, naming it (§1.3), and so is one naming an object the
+  /// store does not hold, which no reader could resolve. `finish` checks the
+  /// bound again, against what the import wrote after the tree.
   pub fn put_tree(&mut self, tree: &Tree) -> Result<NativeId, StoreError> {
     let id = NativeId::of(Type::Tree, &tree.encode());
     if self.present.contains(&id) {
       return Ok(id);
     }
-    let choices = tree.choices(&|short| self.candidates(short));
+    let shorts = tree.entries.iter().filter_map(|entry| match &entry.target {
+      Target::Native(target) => Some(target.short()),
+      Target::Git(_) => None,
+    });
+    match self.choices(shorts) {
+      None => {
+        return Err(StoreError::Codec(format!(
+          "the tree {id} names an object the store does not hold"
+        )));
+      }
+      Some(choices) => self.within_bound(&id, choices)?,
+    }
+    self.add(&id, Type::Tree, Form::ShortReferences, &tree.encode_short())?;
+    Ok(id)
+  }
+
+  /// The product of each short reference's number of candidates, or `None`
+  /// when one has none.
+  fn choices(&self, shorts: impl Iterator<Item = Short>) -> Option<u64> {
+    let mut choices: u64 = 1;
+    for short in shorts {
+      match self.candidates(&short).len() as u64 {
+        0 => return None,
+        found => choices = choices.saturating_mul(found),
+      }
+    }
+    Some(choices)
+  }
+
+  fn within_bound(&self, id: &NativeId, choices: u64) -> Result<(), StoreError> {
     if choices > CHOICES {
       return Err(StoreError::TooLarge(format!(
         "the tree {id}'s short references would allow {choices} choices, and a tree may need at most {CHOICES}"
       )));
     }
-    self.add(&id, Type::Tree, Form::ShortReferences, &tree.encode_short())?;
-    Ok(id)
+    Ok(())
+  }
+
+  /// Checks the bound again for every tree in the container this import
+  /// wrote, now that every object it wrote is a candidate: an object written
+  /// after a tree may share its references (objects.md §1.3). When no
+  /// reference the container's names begin with has two candidates, no tree
+  /// needs more than one choice, and no tree is read.
+  fn check_bound(&self, path: &Path) -> Result<(), StoreError> {
+    let container = Container::open(path)?;
+    let shared: HashSet<Short> = container
+      .names
+      .iter()
+      .map(|name| NativeId(*name).short())
+      .filter(|short| self.candidates(short).len() > 1)
+      .collect();
+    if shared.is_empty() {
+      return Ok(());
+    }
+    let mut trees: Vec<(&[u8; 32], &Record)> = container
+      .names
+      .iter()
+      .zip(&container.records)
+      .filter(|(_, record)| record.form == Form::ShortReferences)
+      .collect();
+    trees.sort_by_key(|(_, record)| (record.frame, record.offset));
+    let mut frame: Option<(u32, Vec<u8>)> = None;
+    for (name, record) in trees {
+      if frame.as_ref().is_none_or(|(number, _)| *number != record.frame) {
+        frame = Some((record.frame, container.frame(record.frame)?));
+      }
+      let bytes = &frame.as_ref().expect("the frame just read").1;
+      let start = record.offset as usize;
+      let id = NativeId(*name);
+      let short = ShortTree::decode(&bytes[start..start + record.length as usize])
+        .map_err(|what| StoreError::Corrupt(format!("{id}: {what}")))?;
+      if !short.entries.iter().any(|entry| matches!(&entry.target, ShortTarget::Short(at) if shared.contains(at))) {
+        continue;
+      }
+      let shorts = short.entries.iter().filter_map(|entry| match &entry.target {
+        ShortTarget::Short(at) => Some(*at),
+        ShortTarget::Git(_) => None,
+      });
+      if let Some(choices) = self.choices(shorts) {
+        self.within_bound(&id, choices)?;
+      }
+    }
+    Ok(())
   }
 
   /// The objects whose digest begins with `short`: what this import has
@@ -401,7 +478,8 @@ impl StoreWriter {
     let named = self.staging.join("snapshot");
     let snapshot_file = format!("{}\n", id.hex());
     if self.existing.is_none() {
-      container.finish()?;
+      let path = container.finish()?;
+      self.check_bound(&path)?;
       write(&file, &aliases)?;
       write(&named, snapshot_file.as_bytes())?;
       write(&self.staging.join("format"), FORMAT)?;
@@ -414,7 +492,10 @@ impl StoreWriter {
     if container.is_empty() {
       container.abandon();
     } else {
-      self.placed.container = Some(container.finish()?);
+      let path = container.finish()?;
+      // Placed first, so a refusal below takes it back.
+      self.placed.container = Some(path.clone());
+      self.check_bound(&path)?;
       sync_directory(&self.staging.join("objects"));
     }
     let before = match std::fs::read(&file) {
@@ -1003,5 +1084,48 @@ impl Store {
       }
     }
     Ok(out)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::objects::{Entry, Kind};
+
+  #[test]
+  fn objects_written_after_a_tree_that_share_its_references_count_against_its_bound() {
+    let root = std::env::temp_dir().join(format!("causet-store-unit-{}-bound", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+    let targets: Vec<NativeId> = (0..17u8).map(|n| writer.put_content(&[n]).unwrap()).collect();
+    let tree = Tree::from_entries(
+      targets
+        .iter()
+        .enumerate()
+        .map(|(n, target)| Entry {
+          name: format!("f{n:02}").into_bytes(),
+          kind: Kind::File,
+          target: Target::Native(*target),
+        })
+        .collect(),
+    )
+    .unwrap();
+    // One candidate each when the tree is written.
+    let id = writer.put_tree(&tree).unwrap();
+    // Then objects of the same import sharing each target's 8 bytes, as a
+    // history built to collide would hold: 2^17 choices once they are written.
+    for target in &targets {
+      let mut digest = target.0;
+      digest[31] ^= 0xff;
+      writer.present.insert(NativeId(digest));
+    }
+    match writer.finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap()) {
+      Err(StoreError::TooLarge(why)) => assert_eq!(
+        why,
+        format!("the tree {id}'s short references would allow 131072 choices, and a tree may need at most 65536")
+      ),
+      other => panic!("{other:?}"),
+    }
+    std::fs::remove_dir_all(&root).unwrap();
   }
 }

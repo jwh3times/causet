@@ -181,46 +181,28 @@ impl Tree {
   }
 
   pub fn encode(&self) -> Vec<u8> {
-    let mut out = Vec::new();
-    put_varint(&mut out, self.entries.len() as u64);
-    for entry in &self.entries {
-      put_bytes(&mut out, &entry.name);
-      out.push(entry.kind as u8);
-      match &entry.target {
-        Target::Native(id) => id.put(&mut out),
-        Target::Git(id) => id.put(&mut out),
-      }
-    }
-    out
+    self.encode_with(|id, out| id.put(out))
   }
 
   /// The short-reference record (objects.md §4.4): the body with each native
   /// target replaced by its short reference.
   pub fn encode_short(&self) -> Vec<u8> {
+    self.encode_with(|id, out| out.extend_from_slice(&id.short()))
+  }
+
+  /// The entries, each native target written by `native`.
+  fn encode_with(&self, native: impl Fn(&NativeId, &mut Vec<u8>)) -> Vec<u8> {
     let mut out = Vec::new();
     put_varint(&mut out, self.entries.len() as u64);
     for entry in &self.entries {
       put_bytes(&mut out, &entry.name);
       out.push(entry.kind as u8);
       match &entry.target {
-        Target::Native(id) => out.extend_from_slice(&id.short()),
+        Target::Native(id) => native(id, &mut out),
         Target::Git(id) => id.put(&mut out),
       }
     }
     out
-  }
-
-  /// How many choices a reader of its short-reference record needs (§1.3):
-  /// the product of each native target's number of candidates.
-  pub fn choices(&self, candidates: &dyn Fn(&Short) -> Vec<NativeId>) -> u64 {
-    self
-      .entries
-      .iter()
-      .filter_map(|entry| match &entry.target {
-        Target::Native(id) => Some(candidates(&id.short()).len() as u64),
-        Target::Git(_) => None,
-      })
-      .fold(1, u64::saturating_mul)
   }
 
   pub fn decode(body: &[u8]) -> Result<Tree, String> {
@@ -429,19 +411,17 @@ impl ShortTree {
         }
         verified = Some(tree);
       }
-      let next = at
-        .iter_mut()
-        .zip(&options)
-        .find_map(|(chosen, found)| {
-          if *chosen + 1 < found.len() {
-            *chosen += 1;
-            Some(())
-          } else {
-            *chosen = 0;
-            None
-          }
-        });
-      if next.is_none() {
+      // The next choice, as an odometer: each entry's candidate turns over
+      // to its first and carries to the next entry's.
+      let advanced = at.iter_mut().zip(&options).any(|(chosen, found)| {
+        *chosen += 1;
+        if *chosen < found.len() {
+          return true;
+        }
+        *chosen = 0;
+        false
+      });
+      if !advanced {
         break;
       }
     }
@@ -979,7 +959,6 @@ mod tests {
         .unwrap_err(),
       "its short references allow 131072 choices, and a tree may need at most 65536"
     );
-    assert_eq!(wide.choices(&pairs), 131_072);
   }
 
   #[test]

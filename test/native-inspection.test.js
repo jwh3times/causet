@@ -324,7 +324,7 @@ test("a tree whose short reference no candidate verifies is corrupt, named by it
 
 test("metadata is never absent: a tree marked absent is corruption", () => {
   const history = makeHistory("sha1");
-  const tree = history.rows.get(execFileSync("git", ["rev-parse", "HEAD:dir"], { cwd: history.repo, env: testEnv() }).toString().trim());
+  const tree = treeOf(history, "HEAD:dir");
   markAbsent(history.native, tree, 1);
   const checked = cst(history.native, ["fsck"]);
   assert.notEqual(checked.status, 0);
