@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 /// The root marker's exact content, naming [`crate::VERSION`].
 pub const FORMAT: &[u8] = b"causet-native-store 1\n";
 const MARKER: &str = "causet-native-store ";
-/// Content no longer than this is stored as its bytes (storage.md §1).
-const SMALL: usize = 2048;
+/// Content shorter than this is stored as its bytes (storage.md §1, rule 2).
+const WHOLE: usize = 32 * 1024;
 const STAGING: &str = ".cst-import";
 /// Held under `.cst/` while an import adds to the store (objects.md §10).
 pub const LOCK: &str = "import.lock";
@@ -184,7 +184,7 @@ impl StoreWriter {
   }
 
   /// Stores content in the form storage.md §1 chooses: its bytes when it is
-  /// small or one chunk, otherwise a chunk list and each new chunk.
+  /// under 32 KiB or one chunk, otherwise a chunk list and each new chunk.
   pub fn put_content(&mut self, bytes: &[u8]) -> Result<NativeId, StoreError> {
     self.put_version(bytes, None)
   }
@@ -197,7 +197,7 @@ impl StoreWriter {
     if self.present.contains(&id) {
       return Ok(id);
     }
-    let chunks: Vec<&[u8]> = if bytes.len() <= SMALL {
+    let chunks: Vec<&[u8]> = if bytes.len() < WHOLE {
       vec![bytes]
     } else {
       chunker::chunks(bytes).collect()
