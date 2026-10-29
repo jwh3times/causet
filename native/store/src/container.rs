@@ -5,7 +5,7 @@
 //! check the contract lists for a reader that reads the index.
 
 use crate::StoreError;
-use crate::id::{NativeId, Type, hex};
+use crate::id::{NativeId, Short, Type, hex};
 use causet_model::sha256::{self, Sha256};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -32,6 +32,7 @@ pub enum Form {
   Body = 0,
   ChunkList = 1,
   Delta = 2,
+  ShortReferences = 3,
 }
 
 impl Form {
@@ -40,7 +41,18 @@ impl Form {
       0 => Some(Form::Body),
       1 => Some(Form::ChunkList),
       2 => Some(Form::Delta),
+      3 => Some(Form::ShortReferences),
       _ => None,
+    }
+  }
+
+  /// Whether an object of `kind` may take this form (§1): a chunk list and a
+  /// delta only content, short references only a tree.
+  fn fits(self, kind: Type) -> bool {
+    match self {
+      Form::Body => true,
+      Form::ChunkList | Form::Delta => kind == Type::Content,
+      Form::ShortReferences => kind == Type::Tree,
     }
   }
 }
@@ -455,6 +467,14 @@ impl Container {
       .map(|at| &self.records[at])
   }
 
+  /// The names that begin with a short reference (objects.md §1.3), found
+  /// by binary search of the index's sorted names.
+  pub fn starting(&self, short: &Short) -> &[[u8; 32]] {
+    let start = self.names.partition_point(|name| name[..8] < short[..]);
+    let end = start + self.names[start..].partition_point(|name| name[..8] == short[..]);
+    &self.names[start..end]
+  }
+
   /// A frame's uncompressed bytes.
   pub fn frame(&self, number: u32) -> Result<Vec<u8>, StoreError> {
     let corrupt = |what: String| {
@@ -579,10 +599,8 @@ fn parse_index(path: &Path, index: &[u8], index_offset: u64) -> Result<Container
     if state > ABSENT_BY_POLICY {
       return Err(format!("{id} has a reserved state"));
     }
-    if form != Form::Body && kind != Type::Content {
-      return Err(format!(
-        "{id} is metadata stored in a form only content takes"
-      ));
+    if !form.fits(kind) {
+      return Err(format!("{id} is stored in a form its type does not take"));
     }
     if state == PRESENT {
       let frame = frames

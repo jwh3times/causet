@@ -6,10 +6,10 @@ use crate::alias::Aliases;
 use crate::chunker;
 use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
 use crate::delta::{self, DEPTH_LIMIT, Delta};
-use crate::id::{GitAlgorithm, NativeId, Type, unhex};
-use crate::objects::{ChunkList, Preserved, RefTarget, Snapshot, Tree};
+use crate::id::{GitAlgorithm, NativeId, Short, Type, unhex};
+use crate::objects::{CHOICES, ChunkList, Preserved, RefTarget, ShortTree, Snapshot, Tree};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -34,7 +34,9 @@ pub struct StoreWriter {
   staging: PathBuf,
   algorithm: GitAlgorithm,
   container: Option<ContainerWriter>,
-  present: HashSet<NativeId>,
+  /// Every object held present, in order, so a short reference's
+  /// candidates are a range of it.
+  present: BTreeSet<NativeId>,
   /// The depth of each delta this writer stored (storage.md §5.2).
   depths: HashMap<NativeId, usize>,
   aliases: Vec<(Vec<u8>, NativeId)>,
@@ -88,7 +90,7 @@ impl StoreWriter {
       container: Some(ContainerWriter::create(&objects)?),
       staging,
       algorithm,
-      present: HashSet::new(),
+      present: BTreeSet::new(),
       depths: HashMap::new(),
       aliases: Vec::new(),
       existing: None,
@@ -123,7 +125,7 @@ impl StoreWriter {
       container: None,
       staging,
       algorithm,
-      present: HashSet::new(),
+      present: BTreeSet::new(),
       depths: HashMap::new(),
       aliases: Vec::new(),
       existing: None,
@@ -310,8 +312,42 @@ impl StoreWriter {
     }
   }
 
+  /// Stores a tree in short references (objects.md §4.4). A tree whose
+  /// references would need more than 65,536 choices among what the store
+  /// holds is refused, naming it (§1.3).
   pub fn put_tree(&mut self, tree: &Tree) -> Result<NativeId, StoreError> {
-    self.put_metadata(Type::Tree, &tree.encode())
+    let id = NativeId::of(Type::Tree, &tree.encode());
+    if self.present.contains(&id) {
+      return Ok(id);
+    }
+    let choices = tree.choices(&|short| self.candidates(short));
+    if choices > CHOICES {
+      return Err(StoreError::TooLarge(format!(
+        "the tree {id}'s short references would allow {choices} choices, and a tree may need at most {CHOICES}"
+      )));
+    }
+    self.add(&id, Type::Tree, Form::ShortReferences, &tree.encode_short())?;
+    Ok(id)
+  }
+
+  /// The objects whose digest begins with `short`: what this import has
+  /// written, and every index entry of the store it adds to.
+  fn candidates(&self, short: &Short) -> Vec<NativeId> {
+    let mut low = [0u8; 32];
+    low[..8].copy_from_slice(short);
+    let mut high = [0xffu8; 32];
+    high[..8].copy_from_slice(short);
+    let mut found: Vec<NativeId> = self
+      .present
+      .range(NativeId(low)..=NativeId(high))
+      .copied()
+      .collect();
+    if let Some(store) = &self.existing {
+      found.extend(store.candidates(short));
+      found.sort();
+      found.dedup();
+    }
+    found
   }
 
   pub fn put_preserved(&mut self, preserved: &Preserved) -> Result<NativeId, StoreError> {
@@ -688,6 +724,27 @@ impl Store {
     found
   }
 
+  /// A short reference's candidates (objects.md §1.3): every object, present
+  /// or absent, whose digest begins with it, in any container, each once and
+  /// in order.
+  pub fn candidates(&self, short: &Short) -> Vec<NativeId> {
+    let mut found: Vec<NativeId> = self
+      .containers
+      .iter()
+      .flat_map(|container| container.starting(short))
+      .map(|name| NativeId(*name))
+      .collect();
+    found.sort();
+    found.dedup();
+    found
+  }
+
+  /// A tree stored in short references, resolved (objects.md §4.4). `Err`
+  /// is its corruption.
+  pub(crate) fn unshorten(&self, id: &NativeId, record: &[u8]) -> Result<Tree, String> {
+    ShortTree::decode(record)?.resolve(id, &|short| self.candidates(short))
+  }
+
   fn record(&self, id: &NativeId) -> Result<(Type, Form, Vec<u8>), StoreError> {
     let (number, record) = self
       .locate(id)
@@ -731,6 +788,13 @@ impl Store {
       Form::ChunkList => self.resolve(id, &record)?,
       // Each version a delta produces is verified as it is produced.
       Form::Delta => return Ok(Object { kind, body: self.undelta(id, &record)? }),
+      // Resolution keeps only the choice whose body hashes to the ID.
+      Form::ShortReferences => {
+        let tree = self
+          .unshorten(id, &record)
+          .map_err(|what| StoreError::Corrupt(format!("{id}: {what}")))?;
+        return Ok(Object { kind, body: tree.encode() });
+      }
     };
     if NativeId::of(kind, &body) != *id {
       return Err(StoreError::Corrupt(format!(
@@ -813,6 +877,7 @@ impl Store {
           base = next;
           continue;
         }
+        Form::ShortReferences => unreachable!("an index admits short references only for a tree"),
       };
       if NativeId::of(Type::Content, &content) != base {
         return Err(corrupt(&base, "its bytes do not hash to its ID".into()));
@@ -929,6 +994,9 @@ impl Store {
                 id,
                 &format!("its chunk list names {chunk}, which is stored as a delta"),
               ));
+            }
+            Form::ShortReferences => {
+              unreachable!("an index admits short references only for a tree")
             }
           }
         }

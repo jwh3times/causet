@@ -1,15 +1,16 @@
 //! Holds the store to the contract's text: the gear table and parameters of
 //! `docs/native-store/storage.md` §2, the reference vectors of
-//! `docs/native-store/chunker-vectors.json`, the container header of §4 and
-//! the root marker of objects.md §10.
+//! `docs/native-store/chunker-vectors.json`, the container header of §4, the
+//! root marker of objects.md §10 and its short-reference tree of §4.4.
 
 use causet_model::json::{self, Value};
 use causet_model::sha256;
 use causet_store::chunker::{self, GEAR, MASK_L, MASK_S};
-use causet_store::id::GitAlgorithm;
-use causet_store::objects::Snapshot;
+use causet_store::container::{Container, Form};
+use causet_store::id::{GitAlgorithm, NativeId, Type};
+use causet_store::objects::{Entry, Kind, Snapshot, Target, Tree};
 use causet_store::VERSION;
-use causet_store::store::{FORMAT, StoreWriter};
+use causet_store::store::{FORMAT, Store, StoreWriter};
 use std::path::PathBuf;
 
 fn contract(name: &str) -> String {
@@ -165,4 +166,62 @@ fn a_new_container_begins_with_the_header_the_contract_prints() {
   let bytes = std::fs::read(&container).unwrap();
   std::fs::remove_dir_all(&root).unwrap();
   assert_eq!(hex(&bytes[..16]), printed);
+}
+
+/// The bytes of the example printed after `line`: the first word of each
+/// line of the code block that follows it.
+fn printed_after(text: &str, line: &str) -> Vec<u8> {
+  let at = text.find(line).unwrap_or_else(|| panic!("the contract prints {line:?}"));
+  let block = &text[at..];
+  let start = block.find("```\n").unwrap() + 4;
+  let end = start + block[start..].find("```").unwrap();
+  let words: String = block[start..end]
+    .lines()
+    .filter_map(|line| line.split_whitespace().next())
+    .collect();
+  unhex(&words)
+}
+
+#[test]
+fn a_tree_is_stored_as_the_contracts_short_reference_example() {
+  let objects = contract("objects.md");
+  let printed = printed_after(&objects, "The tree holding `hello.txt`, in form `03` (20 bytes");
+  assert_eq!(printed.len(), 20);
+  let root =
+    std::env::temp_dir().join(format!("causet-store-vectors-{}-short", std::process::id()));
+  let _ = std::fs::remove_dir_all(&root);
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let hello = writer.put_content(b"hello\n").unwrap();
+  let tree = Tree::from_entries(vec![Entry {
+    name: b"hello.txt".to_vec(),
+    kind: Kind::File,
+    target: Target::Native(hello),
+  }])
+  .unwrap();
+  let id = writer.put_tree(&tree).unwrap();
+  writer
+    .finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap())
+    .unwrap();
+  assert_eq!(id.hex(), "754a90b4c821bcf47f6441bdbed3bfe8eae725f9f72f50beafebf4c2b603680a");
+  assert_eq!(tree.encode_short(), printed);
+
+  // The record a container holds is that example, in form 03.
+  let path = std::fs::read_dir(root.join(".cst/objects"))
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .find(|path| path.extension().is_some_and(|extension| extension == "cstc"))
+    .unwrap();
+  let container = Container::open(&path).unwrap();
+  let record = container.find(&id).unwrap();
+  assert_eq!(record.form, Form::ShortReferences);
+  let frame = container.frame(record.frame).unwrap();
+  let start = record.offset as usize;
+  assert_eq!(frame[start..start + record.length as usize], printed[..]);
+  // Its one candidate is the content, and the rebuilt body is the tree's.
+  let store = Store::open(&root).unwrap();
+  assert_eq!(store.candidates(&hello.short()), vec![hello]);
+  let read = store.read(&id).unwrap();
+  assert_eq!((read.kind, read.body), (Type::Tree, tree.encode()));
+  assert_eq!(NativeId::of(Type::Tree, &tree.encode()), id);
+  std::fs::remove_dir_all(&root).unwrap();
 }

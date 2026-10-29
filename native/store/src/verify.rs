@@ -280,6 +280,9 @@ fn check_copy(
         Err(other) => return Err(other),
       });
     }
+    // Resolution needs only the candidates' IDs, so absent ones take part
+    // (objects.md §1.3), and keeps only a choice that hashes to the ID.
+    Form::ShortReferences => return Ok(store.unshorten(id, bytes).map(Names::Tree)),
   }
   if NativeId::of(kind, bytes) != *id {
     return Ok(Err("its bytes do not hash to its ID".into()));
