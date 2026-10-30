@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.note/v1",
+  "title": "Causal note container",
+  "description": "The single JSON container stored in each refs/notes/vcs-lab note blob. Only this container yields records; an unparsable note is preserved as one opaque legacy record ({type: 'legacy-note', text}) and any other JSON shape yields no records.",
+  "x-vcs-lab-scope": "note-container",
+  "type": "object",
+  "required": ["schema", "records"],
+  "properties": {
+    "schema": { "const": "vcs-lab.note/v1" },
+    "records": {
+      "type": "array",
+      "description": "Causal records attached to this Git object, in append order. Each is one of the note-record families of this catalog, or a preserved legacy record.",
+      "items": { "type": "object", "required": ["type"] }
+    }
+  }
+}
