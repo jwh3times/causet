@@ -28,7 +28,7 @@ import { performance } from "node:perf_hooks";
 import { cstCommand, cstPrefix } from "./cst-command.js";
 import { sameAsFull, sameStores, storeState } from "./import-checks.js";
 import { compareCopy, withoutGit } from "./native-kind.js";
-import { aliases } from "./native-store.js";
+import { aliasRows } from "./native-store.js";
 import { REAL_REPOSITORIES } from "./real-repositories.js";
 import { storageGate } from "./storage-gate.js";
 
@@ -124,7 +124,7 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     fs.rmSync(path.join(root, "again"), { recursive: true, force: true });
 
     read(full, ["fsck"]);
-    report.objects = aliases(full, format).size;
+    report.objects = aliasRows(full, format).size;
     report.problems.push(...await compareCopy({ path: source, common: source }, full, {
       env, where, select: repository.select, limit: LIMIT,
     }));

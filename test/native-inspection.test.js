@@ -15,7 +15,8 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, addAbsent, addContainer, aliases, annotation, containers, markAbsent, nativeId, removeEntry, setVersion, sharingShort,
+  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, markAbsent, nativeId, removeEntry, setVersion, sharingShort,
+  writeAliases,
 } from "../test-support/native-store.js";
 
 const created = [];
@@ -288,17 +289,20 @@ test("the same content removed and not marked is reported as corruption", () => 
   assert.match(report, /the native store is corrupt/);
   // The tree names it by its short reference, which no index entry now has.
   assert.match(report, new RegExp(`${treeOf(history, "refs/heads/v1^{tree}")}, its copy in [0-9a-f]{64}\\.cstc: its entry top names ${id.slice(0, 16)}, a short reference no index entry's name begins with`));
-  assert.match(report, new RegExp(`the sha1 alias row of ${history.file} names ${id}, which has no index entry`));
+  assert.match(report, new RegExp(`the sha1 alias row of ${history.file} names ${id.slice(0, 16)}, a short reference no index entry's name begins with`));
 });
 
-test("an absent index entry sharing a tree target's short reference changes no read and no verdict", () => {
+test("an absent index entry sharing a tree target's and an alias row's short reference changes no read and no verdict", () => {
   const history = makeHistory("sha1");
   const { id } = blobOf(history);
   const shared = sharingShort(id);
   addAbsent(history.native, [shared]);
   // The trees naming the content now have two candidates for it, and keep
-  // the one whose rebuilt body verifies.
-  for (const args of [["ls-tree", "-r", "-l", "refs/heads/v1"], ["ls-tree", "refs/heads/v1"], ["ls-tree", "-r", "HEAD"], ["cat-file", "-p", "refs/heads/v1^{tree}"]]) {
+  // the one whose rebuilt body verifies. So does its alias row, which keeps
+  // the one whose Git encoding has the row's Git ID: a ref names the content,
+  // and a tree kept in Git's encoding names it by its Git ID.
+  for (const args of [["ls-tree", "-r", "-l", "refs/heads/v1"], ["ls-tree", "refs/heads/v1"], ["ls-tree", "-r", "HEAD"], ["cat-file", "-p", "refs/heads/v1^{tree}"],
+    ["rev-parse", "raw-blob", "blob-tag^{blob}"], ["for-each-ref"], ["ls-tree", "odd"]]) {
     same(history, args);
   }
   const checked = cst(history.native, ["fsck"]);
@@ -320,6 +324,46 @@ test("a tree whose short reference no candidate verifies is corrupt, named by it
   // A candidate that does not verify could stand for any entry, so the tree
   // is named; a reference with no candidate names its entry (above).
   assert.match(checked.stderr.toString(), new RegExp(`${tree}, its copy in [0-9a-f]{64}\\.cstc: no choice of its short references' candidates hashes to its ID`));
+});
+
+test("the alias file holds each Git ID whole and its native ID's short reference, as the contract lays it out", () => {
+  const history = makeHistory("sha1");
+  const file = path.join(history.native, ".cst", "aliases", "sha1");
+  const written = fs.readFileSync(file);
+  const rows = aliasRows(history.native, "sha1");
+  assert.equal(written.length, 16 + 2 * 1024 + rows.size * (20 + 8 + 4) + 32);
+  for (const [gitId, short] of rows) assert.equal(history.rows.get(gitId).slice(0, 16), short, gitId);
+  // The helper that writes states import never makes writes import's bytes.
+  writeAliases(history.native, "sha1", rows);
+  assert.deepEqual(fs.readFileSync(file), written);
+});
+
+test("an alias row whose short reference no index entry's name begins with is corrupt", () => {
+  const history = makeHistory("sha1");
+  const rows = aliasRows(history.native, "sha1");
+  // Content no ref names directly, so the store still opens to its refs.
+  const blob = execFileSync("git", ["rev-parse", "v1:dir/g"], { cwd: history.repo, env: testEnv() }).toString().trim();
+  const short = Buffer.from(rows.get(blob), "hex");
+  short[7] ^= 0xff;
+  writeAliases(history.native, "sha1", new Map([...rows, [blob, short.toString("hex")]]));
+  const checked = cst(history.native, ["fsck"]);
+  assert.notEqual(checked.status, 0);
+  assert.match(checked.stderr.toString(), new RegExp(`the sha1 alias row of ${blob} names ${short.toString("hex")}, a short reference no index entry's name begins with`));
+  // The reconstruction check fails on it, by its whole Git ID.
+  const verified = cst(history.native, ["import", "--verify"]);
+  assert.notEqual(verified.status, 0);
+  assert.match(verified.stderr.toString(), new RegExp(`sha1 ${blob}: it names ${short.toString("hex")}, a short reference`));
+});
+
+test("two alias rows resolving to one object are corrupt", () => {
+  const history = makeHistory("sha1");
+  const rows = aliasRows(history.native, "sha1");
+  const one = execFileSync("git", ["rev-parse", "v1"], { cwd: history.repo, env: testEnv() }).toString().trim();
+  writeAliases(history.native, "sha1", new Map([...rows, [history.file, rows.get(one)]]));
+  const checked = cst(history.native, ["fsck"]);
+  assert.notEqual(checked.status, 0);
+  const [first, second] = [history.file, one].sort();
+  assert.match(checked.stderr.toString(), new RegExp(`the sha1 alias rows of ${first} and ${second} both resolve to ${history.rows.get(one)}`));
 });
 
 test("metadata is never absent: a tree marked absent is corruption", () => {

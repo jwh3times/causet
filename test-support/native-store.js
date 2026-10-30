@@ -26,17 +26,80 @@ export function nativeId(type, body) {
   return sha256(Buffer.concat([Buffer.from("cst"), Buffer.from([type]), body]));
 }
 
-/** The alias file's rows, Git ID → native ID, both as hex. */
-export function aliases(store, format) {
+const ALIAS_HEADER = 16;
+const FANOUT = 1024;
+const gitWidth = (format) => (format === "sha1" ? 20 : 32);
+
+/**
+ * The alias file's rows as stored (objects.md §9.1): Git ID → the native
+ * digest's short reference, its first 8 bytes, both as hex.
+ */
+export function aliasRows(store, format) {
   const file = fs.readFileSync(path.join(store, ".cst", "aliases", format));
-  const width = format === "sha1" ? 20 : 32;
+  const width = gitWidth(format);
   const count = file.readUInt32BE(12);
   const rows = new Map();
   for (let row = 0; row < count; row++) {
-    const at = 16 + 1024 + row * (width + 32);
-    rows.set(file.subarray(at, at + width).toString("hex"), file.subarray(at + width, at + width + 32).toString("hex"));
+    const at = ALIAS_HEADER + FANOUT + row * (width + 8);
+    rows.set(file.subarray(at, at + width).toString("hex"), file.subarray(at + width, at + width + 8).toString("hex"));
   }
   return rows;
+}
+
+/**
+ * The alias file's rows, Git ID → native ID, both as hex: each short
+ * reference resolved to the one object of the store's indexes it begins, or
+ * where several do, the one present (objects.md §1.3). A row it cannot
+ * resolve so is an error: the suites resolve only stores import wrote.
+ */
+export function aliases(store, format) {
+  const candidates = new Map();
+  for (const file of containers(store)) {
+    for (const object of readContainer(file).objects) {
+      const short = object.name.subarray(0, 8).toString("hex");
+      const found = candidates.get(short) ?? new Map();
+      const id = object.name.toString("hex");
+      found.set(id, found.get(id) || object.state === 0);
+      candidates.set(short, found);
+    }
+  }
+  const rows = new Map();
+  for (const [gitId, short] of aliasRows(store, format)) {
+    const found = [...(candidates.get(short) ?? new Map())];
+    const chosen = found.length === 1 ? found : found.filter(([, present]) => present);
+    if (chosen.length !== 1) throw new Error(`the ${format} alias row of ${gitId} names ${short}, which ${found.length} objects begin`);
+    rows.set(gitId, chosen[0][0]);
+  }
+  return rows;
+}
+
+/**
+ * Writes the alias file of these rows, Git ID → short reference (hex), as
+ * objects.md §9.1 lays it out, replacing the store's. Rows may share a short
+ * reference.
+ */
+export function writeAliases(store, format, rows) {
+  const width = gitWidth(format);
+  const sorted = [...rows].map(([gitId, short]) => [Buffer.from(gitId, "hex"), Buffer.from(short, "hex")])
+    .sort((a, b) => Buffer.compare(a[0], b[0]));
+  const order = sorted.map((_, row) => row)
+    .sort((a, b) => Buffer.compare(sorted[a][1], sorted[b][1]) || Buffer.compare(sorted[a][0], sorted[b][0]));
+  const fanout = (firsts) => {
+    const table = Buffer.alloc(FANOUT);
+    for (let byte = 0; byte < 256; byte++) table.writeUInt32BE(firsts.filter((first) => first <= byte).length, byte * 4);
+    return table;
+  };
+  const head = Buffer.alloc(ALIAS_HEADER);
+  Buffer.from("CSTALIAS").copy(head);
+  head.set([VERSION, width === 20 ? 0x01 : 0x02, 0x01, 0x00], 8);
+  head.writeUInt32BE(sorted.length, 12);
+  const numbers = Buffer.alloc(order.length * 4);
+  order.forEach((row, at) => numbers.writeUInt32BE(row, at * 4));
+  const body = Buffer.concat([
+    head, fanout(sorted.map(([gitId]) => gitId[0])), ...sorted.flat(),
+    fanout(order.map((row) => sorted[row][1][0])), numbers,
+  ]);
+  fs.writeFileSync(path.join(store, ".cst", "aliases", format), Buffer.concat([body, sha256(body)]));
 }
 
 /** The store's containers, in name order. */

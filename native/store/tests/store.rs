@@ -106,9 +106,8 @@ fn every_object_written_reads_back_verified() {
     Preserved::decode(&store.read(&preserved_id).unwrap().body).unwrap(),
     preserved
   );
-  let aliases = store.aliases_for(GitAlgorithm::Sha1).unwrap();
-  assert_eq!(aliases.native(&[0xce; 20]), Some(small));
-  assert_eq!(aliases.git(&tree_id), Some([0x11; 20].as_slice()));
+  assert_eq!(store.native(GitAlgorithm::Sha1, &[0xce; 20]), Some(small));
+  assert_eq!(store.git(GitAlgorithm::Sha1, &tree_id), Some(vec![0x11; 20]));
   assert_eq!(store.matching(&small.hex()[..12], |_| true), [small]);
   assert_eq!(store.refs().unwrap(), snapshot);
   assert_eq!(store.read(&store.snapshot).unwrap().kind, Type::Snapshot);
@@ -446,6 +445,30 @@ fn an_incremental_import_stores_a_tree_naming_an_earlier_containers_objects() {
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&root).unwrap();
   assert_eq!(store.read(&id).unwrap().body, tree.encode());
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn an_import_refuses_a_row_for_an_object_the_store_holds_under_another_git_id() {
+  let root = scratch("alias-one-to-one");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let hello = writer.put_content(b"hello\n").unwrap();
+  writer.alias(vec![0xce; 20], hello);
+  writer.finish(&no_refs()).unwrap();
+  let before = std::fs::read(root.join(".cst/aliases/sha1")).unwrap();
+  // The store's row holds only hello's short reference, so the import checks
+  // its own whole rows against the object each held row resolves to.
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  writer.alias(vec![0x11; 20], hello);
+  match writer.finish(&no_refs()) {
+    Err(StoreError::Corrupt(why)) => assert_eq!(why, "two alias rows have the same native ID"),
+    other => panic!("{other:?}"),
+  }
+  // The same row again is no second row.
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  writer.alias(vec![0xce; 20], hello);
+  writer.finish(&no_refs()).unwrap();
+  assert_eq!(std::fs::read(root.join(".cst/aliases/sha1")).unwrap(), before);
   std::fs::remove_dir_all(&root).unwrap();
 }
 

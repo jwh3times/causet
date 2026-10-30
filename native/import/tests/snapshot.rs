@@ -121,7 +121,6 @@ fn source(root: &Path, format: &str) -> PathBuf {
 /// The snapshot's refs as (name, Git ID it resolves to, symbolic target).
 fn recorded(store: &Store) -> Vec<(String, Option<String>, Option<String>)> {
   let snapshot: Snapshot = store.refs().unwrap();
-  let aliases = store.aliases_for(snapshot.algorithm).unwrap();
   let resolve = |name: &[u8]| {
     let mut name = name.to_vec();
     for _ in 0..=snapshot.refs.len() {
@@ -131,7 +130,7 @@ fn recorded(store: &Store) -> Vec<(String, Option<String>, Option<String>)> {
         .find(|entry| entry.name == name)?
         .target
       {
-        RefTarget::Direct(id) => return Some(hex(aliases.git(id).unwrap())),
+        RefTarget::Direct(id) => return Some(hex(&store.git(snapshot.algorithm, id).unwrap())),
         RefTarget::Symbolic(target) => name = target.clone(),
       }
     }
@@ -237,7 +236,6 @@ fn an_unborn_or_detached_head_is_recorded_as_it_is() {
     .find(|(name, _, _)| name == "HEAD")
     .unwrap();
   assert_eq!(head, ("HEAD".into(), Some(topic.clone()), None));
-  let aliases = store.aliases_for(GitAlgorithm::Sha1).unwrap();
-  assert_eq!(hex(aliases.git(&imported.head.unwrap()).unwrap()), topic);
+  assert_eq!(hex(&store.git(GitAlgorithm::Sha1, &imported.head.unwrap()).unwrap()), topic);
   std::fs::remove_dir_all(&root).unwrap();
 }

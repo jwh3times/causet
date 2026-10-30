@@ -244,9 +244,24 @@ fn each_row_that_does_not_rebuild_is_named_and_the_rest_are_still_checked() {
     named(&hex(&[0x44; 20])),
     "it is a ref snapshot, which no Git object becomes"
   );
+  // The row holds only the missing object's short reference, which no index
+  // entry's name begins with, so it names no native object.
   assert_eq!(
     named(&hex(&[0x55; 20])),
-    format!("{missing} is named in the store but not held by it")
+    format!(
+      "it names {}, a short reference no index entry's name begins with",
+      hex(&missing.short())
+    )
+  );
+  let unresolved = found
+    .failures
+    .iter()
+    .find(|failure| failure.git.as_ref().is_some_and(|git| git.digest == [0x55; 20]))
+    .unwrap();
+  assert_eq!(unresolved.native, None);
+  assert_eq!(
+    unresolved.to_string(),
+    format!("sha1 {}: {}", hex(&[0x55; 20]), unresolved.why)
   );
   let shown = found.failures[0].to_string();
   assert!(
@@ -350,7 +365,7 @@ fn only_the_header_lines_git_reads_are_followed() {
     why,
     [format!("it names sha1 {late}, which has no alias row")]
   );
-  assert_eq!(found.failures[0].native, child);
+  assert_eq!(found.failures[0].native, Some(child));
   assert_eq!(
     (
       found.rebuilt.trees,
