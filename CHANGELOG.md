@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Alias rows hold a short reference** (#355, part of #350). `cst import`
+  writes each alias row as the full Git digest followed by the first 8
+  bytes of the native digest, as `docs/native-store/objects.md` §9.1 sets
+  for format version 1: 32 bytes a row for SHA-1 instead of 52. The native
+  order lists rows by short reference, then Git digest. A lookup resolves
+  a row through every container's index, and where several objects share
+  its 8 bytes, keeps the present one whose Git encoding has the row's Git
+  ID. `cst fsck` reports a row whose short reference no index entry begins
+  with, or that no candidate verifies, and two rows resolving to one
+  object, as corruption; `cst import --verify` still compares every rebuilt
+  object with the row's whole Git ID. Every N1 command answers as before,
+  and a fresh import of the same history writes a smaller alias file.
+
 - **Trees are stored in short references** (#354, part of #350).
   `cst import` stores every native tree in form `03`, as
   `docs/native-store/objects.md` §4.4 sets for format version 1: each
