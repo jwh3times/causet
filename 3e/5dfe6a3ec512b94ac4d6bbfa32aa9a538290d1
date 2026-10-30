@@ -1,5 +1,5 @@
 {
-  "schema": "vcs-lab.note/v1",
+  "schema": "causet.note/v1",
   "records": [
     {
       "schema": "vcs-lab.application/v4",
@@ -19,24 +19,6 @@
       "resolutions": [],
       "semanticMerges": [],
       "createdAt": "2026-09-14T06:05:03.767Z"
-    },
-    {
-      "schema": "vcs-lab.provenance/v1",
-      "type": "provenance",
-      "id": "prov_0mu0u9cxxb37f99446f2a",
-      "commit": "3e5dfe6a3ec512b94ac4d6bbfa32aa9a538290d1",
-      "changeId": "ch_0mu0u67i37d24359a78d1",
-      "actors": [
-        {
-          "role": "generated",
-          "actor": "codex"
-        }
-      ],
-      "origin": "carried",
-      "carriedFrom": [
-        "10b0f1ac2ca065fcce8ae53dacca5981358f18ed"
-      ],
-      "createdAt": "2026-09-14T06:05:05.349Z"
     },
     {
       "schema": "vcs-lab.reconciliation/v6",
@@ -105,6 +87,24 @@
       },
       "startedAt": "2026-09-14T06:05:03.659Z",
       "createdAt": "2026-09-14T06:05:03.770Z"
+    },
+    {
+      "schema": "vcs-lab.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mu0u9cxxb37f99446f2a",
+      "commit": "3e5dfe6a3ec512b94ac4d6bbfa32aa9a538290d1",
+      "changeId": "ch_0mu0u67i37d24359a78d1",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "codex"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "10b0f1ac2ca065fcce8ae53dacca5981358f18ed"
+      ],
+      "createdAt": "2026-09-14T06:05:05.349Z"
     }
   ]
 }
