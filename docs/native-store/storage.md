@@ -592,10 +592,10 @@ build and reports both byte counts in each job's summary (docs/testing.md,
 A local run on a 16-core Linux host put causet at `08c4365` 732 bytes over
 Git's 3,196,013 B. causet's margin moves with the history under test and with
 Git's own packing, which varied by 11 KB between the two CI hosts on git/git.
-Both are listed against
-[#345](https://github.com/jwh3times/causet/issues/345), which closes the gap,
-and N1 cannot exit while they are listed (docs/testing.md, "The real
-repositories").
+Both were listed against
+[#345](https://github.com/jwh3times/causet/issues/345) until version 1
+closed the gap; N1 cannot exit while any entry is listed (docs/testing.md,
+"The real repositories").
 
 On git/git the store's parts against Git's pack, split by object type with
 `git verify-pack` on a clone with every ref:
@@ -610,8 +610,8 @@ On git/git the store's parts against Git's pack, split by object type with
   objects, chunks included) and the alias map (22.9 MB), against 15.4 MB for
   Git's index, reverse index and bitmap.
 
-So the gate's gap on git/git is in metadata, not in content: §6's levers
-apply, and trees need one of their own.
+So on version 0 the gate's gap on git/git was in metadata, not in content:
+§6's levers applied, and trees needed one of their own.
 
 [#348](https://github.com/jwh3times/causet/issues/348) measured the levers,
 and ADR-0045's
@@ -625,8 +625,26 @@ chose format version 1:
 Together they measured 0.973 times Git's bytes on git/git. This contract
 describes version 1 from
 [#351](https://github.com/jwh3times/causet/issues/351) on, ahead of the
-store code (ADR-0045, decision 10), and the numbers the real repositories
-measure on version 1 belong here once the code writes it.
+store code (ADR-0045, decision 10).
+
+**Version 1.** With the code writing version 1
+([#353](https://github.com/jwh3times/causet/issues/353) to
+[#356](https://github.com/jwh3times/causet/issues/356)), every real
+repository meets the gate, and
+[#357](https://github.com/jwh3times/causet/issues/357) removed both entries:
+the storage gate runs with no list. A local run on Windows, on 2026-10-30 at
+`adda916`, measured:
+
+| Repository | cst store | `git gc --aggressive` | Gate |
+| --- | ---: | ---: | --- |
+| causet | 2,905,393 B | 3,320,083 B | passes, 0.875× |
+| git/git, at `v2.56.0` | 110,330,078 B | 113,304,945 B | passes, 0.974× |
+| the large-file corpus | 104,618,124 B | 113,029,969 B | passes, 0.926× |
+
+On git/git, the containers take 97.3 MB against Git's pack at 97.9 MB, and
+the alias map 13.1 MB against 15.4 MB for Git's index, reverse index and
+bitmap. Version 1's levers act on trees, small content and per-object
+metadata, so the large-file corpus is within 6 KB of its version 0 store.
 
 ## 7. Determinism
 

@@ -21,10 +21,11 @@ starts when a later ADR makes it.
 now writes all of it: version 1's version marks, content under 32 KiB whole,
 trees in short references, the 32-byte alias row and metadata in path order.
 It reproduces version 1's container header, root marker, short-reference tree
-and alias file, and the worked examples version 1 kept from version 0.
-[#350](https://github.com/jwh3times/causet/issues/350) stays open until the
-storage gate measures version 1 on git/git
-([#357](https://github.com/jwh3times/causet/issues/357)).
+and alias file, and the worked examples version 1 kept from version 0. On version 1
+every real repository meets the storage gate with no known-gap entry,
+git/git at 0.974 times Git's bytes
+([storage.md §6.1](storage.md#61-the-real-repositories),
+[#357](https://github.com/jwh3times/causet/issues/357)).
 
 ## Parts
 
