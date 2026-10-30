@@ -52,14 +52,18 @@ fn example(name: &str, algorithm: GitAlgorithm, ids: [&str; 3]) -> PathBuf {
         target: Target::Native(content),
       }])
       .unwrap(),
+      b"",
     )
     .unwrap();
   let commit = writer
-    .put_preserved(&Preserved {
-      algorithm,
-      kind: GitKind::Commit,
-      payload: commit(ids[1]),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm,
+        kind: GitKind::Commit,
+        payload: commit(ids[1]),
+      },
+      b"",
+    )
     .unwrap();
   for (id, native) in ids.iter().zip([content, tree, commit]) {
     writer.alias(digest(id), native);
@@ -136,36 +140,46 @@ fn each_row_that_does_not_rebuild_is_named_and_the_rest_are_still_checked() {
         target: Target::Native(orphan),
       }])
       .unwrap(),
+      b"",
     )
     .unwrap();
   writer.alias(vec![0x11; 20], tree);
   // A commit built on a tree that has no row.
   let commit = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Commit,
-      payload: commit("aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7"),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Commit,
+        payload: commit("aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7"),
+      },
+      b"",
+    )
     .unwrap();
   writer.alias(digest("2425d53ec1283e808c60bcaea110ba01aca5a887"), commit);
   // A kept tree, `040000 sub` naming the empty tree, which has no row.
   let mut payload = b"040000 sub\0".to_vec();
   payload.extend(digest("4b825dc642cb6eb9a060e54bf8d69288fbee4904"));
   let kept = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Tree,
-      payload,
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Tree,
+        payload,
+      },
+      b"",
+    )
     .unwrap();
   writer.alias(vec![0x22; 20], kept);
   // A SHA-256 object in the SHA-1 file.
   let foreign = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha256,
-      kind: GitKind::Tag,
-      payload: b"not parsed".to_vec(),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha256,
+        kind: GitKind::Tag,
+        payload: b"not parsed".to_vec(),
+      },
+      b"",
+    )
     .unwrap();
   writer.alias(vec![0x33; 20], foreign);
   // A ref snapshot, which no Git object becomes, and an object the store
@@ -178,7 +192,7 @@ fn each_row_that_does_not_rebuild_is_named_and_the_rest_are_still_checked() {
   let missing = NativeId([0x07; 32]);
   writer.alias(vec![0x55; 20], missing);
   // And one row that rebuilds.
-  let empty = writer.put_tree(&Tree::default()).unwrap();
+  let empty = writer.put_tree(&Tree::default(), b"").unwrap();
   writer.alias(digest("4b825dc642cb6eb9a060e54bf8d69288fbee4904"), empty);
   writer.finish(&snapshot).unwrap();
 
@@ -284,11 +298,14 @@ fn a_kept_tree_naming_an_object_with_no_row_is_named() {
   payload.extend(b"160000 link\0");
   payload.extend([0x66; 20]);
   let kept = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Tree,
-      payload,
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Tree,
+        payload,
+      },
+      b"",
+    )
     .unwrap();
   writer.alias(vec![0x22; 20], kept);
   writer
@@ -307,7 +324,7 @@ fn a_kept_tree_naming_an_object_with_no_row_is_named() {
 fn only_the_header_lines_git_reads_are_followed() {
   let root = scratch("headers");
   let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
-  let empty = writer.put_tree(&Tree::default()).unwrap();
+  let empty = writer.put_tree(&Tree::default(), b"").unwrap();
   writer.alias(digest("4b825dc642cb6eb9a060e54bf8d69288fbee4904"), empty);
   // Git reads a commit's first line as its tree and the `parent` lines
   // straight after it as its parents, and a tag's first line as its object;
@@ -318,22 +335,28 @@ fn only_the_header_lines_git_reads_are_followed() {
      author A <a@e> 1 +0000\nparent {late}\ncommitter C <c@e> 1 +0000\ntree {late}\n\nlate\n"
   );
   let commit = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Commit,
-      payload: payload.clone().into_bytes(),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Commit,
+        payload: payload.clone().into_bytes(),
+      },
+      b"",
+    )
     .unwrap();
   let id = sha1(&format!("commit {}\0{payload}", payload.len()));
   writer.alias(digest(&id), commit);
   let payload =
     format!("object {id}\ntype commit\ntag v\ntagger T <t@e> 1 +0000\nobject {late}\n\nmsg\n");
   let tag = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Tag,
-      payload: payload.clone().into_bytes(),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Tag,
+        payload: payload.clone().into_bytes(),
+      },
+      b"",
+    )
     .unwrap();
   writer.alias(
     digest(&sha1(&format!("tag {}\0{payload}", payload.len()))),
@@ -342,11 +365,14 @@ fn only_the_header_lines_git_reads_are_followed() {
   // A parent straight after the tree is followed.
   let payload = format!("tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nparent {late}\n\nchild\n");
   let child = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Commit,
-      payload: payload.clone().into_bytes(),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Commit,
+        payload: payload.clone().into_bytes(),
+      },
+      b"",
+    )
     .unwrap();
   writer.alias(
     digest(&sha1(&format!("commit {}\0{payload}", payload.len()))),
@@ -386,13 +412,16 @@ fn an_object_the_store_holds_from_git_without_a_row_is_named() {
     .map(|at| (at.wrapping_mul(2_654_435_761) >> 24) as u8)
     .collect();
   let content = writer.put_content(&large).unwrap();
-  let tree = writer.put_tree(&Tree::default()).unwrap();
+  let tree = writer.put_tree(&Tree::default(), b"").unwrap();
   let kept = writer
-    .put_preserved(&Preserved {
-      algorithm: GitAlgorithm::Sha1,
-      kind: GitKind::Commit,
-      payload: b"not parsed".to_vec(),
-    })
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Commit,
+        payload: b"not parsed".to_vec(),
+      },
+      b"",
+    )
     .unwrap();
   writer
     .finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap())

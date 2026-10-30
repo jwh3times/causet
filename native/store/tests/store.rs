@@ -3,7 +3,7 @@
 
 use causet_store::StoreError;
 use causet_store::id::{GitAlgorithm, NativeId, Type};
-use causet_store::container::{ContainerWriter, Form};
+use causet_store::container::{Container, ContainerWriter, Form};
 use causet_store::objects::{
   ChunkList, Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree,
 };
@@ -70,13 +70,13 @@ fn every_object_written_reads_back_verified() {
     },
   ])
   .unwrap();
-  let tree_id = writer.put_tree(&tree).unwrap();
+  let tree_id = writer.put_tree(&tree, b"").unwrap();
   let preserved = Preserved {
     algorithm: GitAlgorithm::Sha1,
     kind: GitKind::Tree,
     payload: b"040000 sub\0aaaaaaaaaaaaaaaaaaaa".to_vec(),
   };
-  let preserved_id = writer.put_preserved(&preserved).unwrap();
+  let preserved_id = writer.put_preserved(&preserved, b"").unwrap();
   writer.alias(vec![0xce; 20], small);
   writer.alias(vec![0x11; 20], tree_id);
   let snapshot = Snapshot::new(
@@ -115,6 +115,141 @@ fn every_object_written_reads_back_verified() {
     store.read(&NativeId([0; 32])),
     Err(StoreError::NotFound(_))
   ));
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// The names in a directory.
+fn listing(directory: &std::path::Path) -> std::collections::BTreeSet<String> {
+  std::fs::read_dir(directory)
+    .unwrap()
+    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+    .collect()
+}
+
+/// The container a store holds alone, and its metadata records' IDs in the
+/// order its frames hold them.
+fn metadata_order(root: &std::path::Path) -> Vec<NativeId> {
+  let path = std::fs::read_dir(root.join(".cst/objects"))
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .find(|path| path.extension().is_some_and(|extension| extension == "cstc"))
+    .unwrap();
+  let container = Container::open(&path).unwrap();
+  let mut held: Vec<(u32, u32, NativeId)> = container
+    .names
+    .iter()
+    .zip(&container.records)
+    .filter(|(_, record)| record.kind != Type::Content)
+    .map(|(name, record)| (record.frame, record.offset, NativeId(*name)))
+    .collect();
+  held.sort();
+  held.into_iter().map(|(_, _, id)| id).collect()
+}
+
+#[test]
+fn metadata_is_written_trees_by_path_then_commits_and_tags_then_the_snapshot() {
+  let root = scratch("path-order");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let file = |writer: &mut StoreWriter, bytes: &[u8]| {
+    let content = writer.put_content(bytes).unwrap();
+    Tree::from_entries(vec![Entry {
+      name: b"f".to_vec(),
+      kind: Kind::File,
+      target: Target::Native(content),
+    }])
+    .unwrap()
+  };
+  let inside = |tree: NativeId| {
+    Tree::from_entries(vec![Entry {
+      name: b"dir".to_vec(),
+      kind: Kind::Tree,
+      target: Target::Native(tree),
+    }])
+    .unwrap()
+  };
+  let commit = |message: &str| Preserved {
+    algorithm: GitAlgorithm::Sha1,
+    kind: GitKind::Commit,
+    payload: format!("tree 0000000000000000000000000000000000000000\n\n{message}\n").into_bytes(),
+  };
+  // Two commits as import's walk leaves them: each one's `dir`, then its
+  // root, then the commit. A preserved tree is grouped by its path too.
+  let tree = file(&mut writer, b"one\n");
+  let dir_one = writer.put_tree(&tree, b"dir").unwrap();
+  let root_one = writer.put_tree(&inside(dir_one), b"").unwrap();
+  let commit_one = writer.put_preserved(&commit("one"), b"").unwrap();
+  let tree = file(&mut writer, b"two\n");
+  let dir_two = writer.put_tree(&tree, b"dir").unwrap();
+  let odd = writer
+    .put_preserved(
+      &Preserved {
+        algorithm: GitAlgorithm::Sha1,
+        kind: GitKind::Tree,
+        payload: b"100644 f\0bbbbbbbbbbbbbbbbbbbb".to_vec(),
+      },
+      b"dir",
+    )
+    .unwrap();
+  let root_two = writer.put_tree(&inside(dir_two), b"").unwrap();
+  let commit_two = writer.put_preserved(&commit("two"), b"").unwrap();
+  // An object written again keeps its first place.
+  assert_eq!(writer.put_tree(&inside(dir_one), b"elsewhere").unwrap(), root_one);
+  let snapshot = no_refs();
+  writer.finish(&snapshot).unwrap();
+
+  assert_eq!(
+    metadata_order(&root),
+    [
+      dir_one,
+      dir_two,
+      odd,
+      root_one,
+      root_two,
+      commit_one,
+      commit_two,
+      NativeId::of(Type::Snapshot, &snapshot.encode()),
+    ]
+  );
+  // The metadata held until the container closed is gone with the staging.
+  assert_eq!(
+    listing(&root.join(".cst")),
+    ["aliases", "format", "objects", "snapshot"].map(String::from).into()
+  );
+  let store = Store::open(&root).unwrap();
+  assert_eq!(store.read(&root_two).unwrap().kind, Type::Tree);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn an_import_that_does_not_finish_leaves_no_held_metadata() {
+  let hold_a_tree = |writer: &mut StoreWriter| {
+    let content = writer.put_content(b"kept back\n").unwrap();
+    let tree = Tree::from_entries(vec![Entry {
+      name: b"f".to_vec(),
+      kind: Kind::File,
+      target: Target::Native(content),
+    }])
+    .unwrap();
+    writer.put_tree(&tree, b"").unwrap();
+  };
+  // A new store holds it in its staging directory, which import removes.
+  let root = scratch("held-failure");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  hold_a_tree(&mut writer);
+  assert!(root.join(".cst-import/import.metadata").is_file(), "the tree is held in the staging");
+  drop(writer);
+  assert!(!root.join(".cst-import/import.metadata").exists());
+  std::fs::remove_dir_all(&root).unwrap();
+
+  // An existing store holds it beside the lock, and is left as it was.
+  let writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let before = listing(&root.join(".cst"));
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  hold_a_tree(&mut writer);
+  assert!(root.join(".cst/import.metadata").is_file(), "the tree is held beside the lock");
+  drop(writer);
+  assert_eq!(listing(&root.join(".cst")), before);
   std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -399,7 +534,7 @@ fn a_tree_is_stored_in_short_references_and_reads_back_beside_an_entry_sharing_i
   let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
   let hello = writer.put_content(b"hello\n").unwrap();
   let inner = Tree::from_entries(vec![file("hello.txt", hello)]).unwrap();
-  let inner_id = writer.put_tree(&inner).unwrap();
+  let inner_id = writer.put_tree(&inner, b"").unwrap();
   let outer = Tree::from_entries(vec![
     file("a", hello),
     Entry {
@@ -414,7 +549,7 @@ fn a_tree_is_stored_in_short_references_and_reads_back_beside_an_entry_sharing_i
     },
   ])
   .unwrap();
-  let outer_id = writer.put_tree(&outer).unwrap();
+  let outer_id = writer.put_tree(&outer, b"").unwrap();
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&root).unwrap();
   assert_eq!(form(&store, &outer_id), Form::ShortReferences);
@@ -441,7 +576,7 @@ fn an_incremental_import_stores_a_tree_naming_an_earlier_containers_objects() {
   writer.finish(&no_refs()).unwrap();
   let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
   let tree = Tree::from_entries(vec![file("hello.txt", hello)]).unwrap();
-  let id = writer.put_tree(&tree).unwrap();
+  let id = writer.put_tree(&tree, b"").unwrap();
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&root).unwrap();
   assert_eq!(store.read(&id).unwrap().body, tree.encode());
@@ -494,7 +629,7 @@ fn a_tree_needing_more_than_65536_choices_is_refused_naming_it_and_one_needing_6
   let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
   let refused = entries(17);
   let refused_id = NativeId::of(Type::Tree, &refused.encode());
-  match writer.put_tree(&refused) {
+  match writer.put_tree(&refused, b"") {
     Err(StoreError::TooLarge(why)) => assert_eq!(
       why,
       format!("the tree {refused_id}'s short references would allow 131072 choices, and a tree may need at most 65536")
@@ -506,7 +641,7 @@ fn a_tree_needing_more_than_65536_choices_is_refused_naming_it_and_one_needing_6
   // 16 entries of two candidates each are 65,536 choices, the bound itself.
   let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
   let kept = entries(16);
-  let kept_id = writer.put_tree(&kept).unwrap();
+  let kept_id = writer.put_tree(&kept, b"").unwrap();
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&root).unwrap();
   assert_eq!(store.read(&kept_id).unwrap().body, kept.encode());
@@ -519,7 +654,7 @@ fn a_tree_naming_an_object_the_store_does_not_hold_is_refused() {
   let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
   let tree = Tree::from_entries(vec![file("gone", NativeId::of(Type::Content, b"never written"))]).unwrap();
   let id = NativeId::of(Type::Tree, &tree.encode());
-  match writer.put_tree(&tree) {
+  match writer.put_tree(&tree, b"") {
     Err(StoreError::Codec(why)) => {
       assert_eq!(why, format!("the tree {id} names an object the store does not hold"))
     }
@@ -538,7 +673,7 @@ fn a_preserved_git_tree_is_stored_as_its_body() {
     kind: GitKind::Tree,
     payload: b"040000 sub\0aaaaaaaaaaaaaaaaaaaa".to_vec(),
   };
-  let id = writer.put_preserved(&preserved).unwrap();
+  let id = writer.put_preserved(&preserved, b"").unwrap();
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&root).unwrap();
   assert_eq!(form(&store, &id), Form::Body);

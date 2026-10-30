@@ -1527,7 +1527,7 @@ mod tests {
       let mut kind = Kind::File;
       for _ in 0..levels {
         let tree = Tree { entries: vec![Entry { name: b"d".to_vec(), kind, target }] };
-        target = Target::Native(writer.put_tree(&tree).unwrap());
+        target = Target::Native(writer.put_tree(&tree, b"").unwrap());
         kind = Kind::Tree;
       }
       let Target::Native(top) = target else { unreachable!() };

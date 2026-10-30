@@ -7,7 +7,8 @@
 //! import: `rev-list` is asked only for commit ancestry, so a tree Git would
 //! not walk, such as one named by a file entry, is still read and imported
 //! whole. Records are written in the order of import's walk (storage.md §3.2),
-//! so a fresh import of the same history writes the same bytes. A version of
+//! trees grouped by the path the walk first reaches each at, so a
+//! fresh import of the same history writes the same bytes. A version of
 //! a large file may be stored as a delta against the content its path held in
 //! the first parent of the commit that introduced it (§5.1). An import
 //! into an existing native repository reads and writes only what its store
@@ -85,9 +86,9 @@ struct Importer<'a> {
 }
 
 /// What import's walk puts in order (storage.md §3.2): the commits, tags and
-/// trees, then the blobs.
+/// trees, each with its path, then the blobs.
 struct Walk {
-  metadata: Vec<String>,
+  metadata: Vec<(String, Vec<u8>)>,
   content: Vec<String>,
   /// Each blob of at least 1 MiB that a commit introduces: the commit, and
   /// the blob's path (§3.2), which find its base (§5.1).
@@ -201,8 +202,8 @@ fn write(
     ));
   }
   importer.content(&walk.content, &bases)?;
-  for id in &walk.metadata {
-    importer.metadata(id)?;
+  for (id, path) in &walk.metadata {
+    importer.metadata(id, path)?;
   }
   let mut recorded = Vec::with_capacity(refs.len());
   for listed in refs {
@@ -451,7 +452,8 @@ impl Importer<'_> {
 
   /// Import's walk (storage.md §3.2): depth first from the tips, each object
   /// after everything it names. Commits, tags and trees are in the order the
-  /// walk leaves them; blobs are grouped by the path each is first reached
+  /// walk leaves them, each with the path it is first reached at, which the
+  /// store orders trees by; blobs are grouped by the path each is first reached
   /// at, the paths in the order the walk first reaches a blob at them, and
   /// within a path in the walk's order, so a path's versions are adjacent,
   /// oldest first.
@@ -496,7 +498,7 @@ impl Importer<'_> {
             let rank = *paths.entry(path).or_insert(next);
             content.push((rank, content.len(), id));
           } else {
-            metadata.push(id);
+            metadata.push((id, path));
           }
         }
       }
@@ -664,9 +666,9 @@ impl Importer<'_> {
     }
   }
 
-  /// Stores a commit, tag or tree. Everything a tree names is stored
-  /// already, since the walk leaves an object after what it names.
-  fn metadata(&mut self, id: &str) -> GitResult<()> {
+  /// Stores a commit, tag or tree reached at `path`. Everything a tree names
+  /// is stored already, since the walk leaves an object after what it names.
+  fn metadata(&mut self, id: &str, path: &[u8]) -> GitResult<()> {
     let payload = self.raw.remove(id).ok_or_else(|| {
       GitError::new(
         "git-response-malformed",
@@ -677,32 +679,32 @@ impl Importer<'_> {
       "tree" => match self.canonical(&payload) {
         Some(tree) => {
           self.imported.trees += 1;
-          self.store.put_tree(&tree).map_err(store_error)?
+          self.store.put_tree(&tree, path).map_err(store_error)?
         }
         None => {
           self.imported.preserved_trees += 1;
-          self.preserved(GitKind::Tree, payload)?
+          self.preserved(GitKind::Tree, payload, path)?
         }
       },
       "commit" => {
         self.imported.commits += 1;
-        self.preserved(GitKind::Commit, payload)?
+        self.preserved(GitKind::Commit, payload, path)?
       }
       _ => {
         self.imported.tags += 1;
-        self.preserved(GitKind::Tag, payload)?
+        self.preserved(GitKind::Tag, payload, path)?
       }
     };
     self.record(id, native)
   }
 
-  fn preserved(&mut self, kind: GitKind, payload: Vec<u8>) -> GitResult<NativeId> {
+  fn preserved(&mut self, kind: GitKind, payload: Vec<u8>, path: &[u8]) -> GitResult<NativeId> {
     let preserved = Preserved {
       algorithm: self.algorithm,
       kind,
       payload,
     };
-    self.store.put_preserved(&preserved).map_err(store_error)
+    self.store.put_preserved(&preserved, path).map_err(store_error)
   }
 
   fn record(&mut self, id: &str, native: NativeId) -> GitResult<()> {

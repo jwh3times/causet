@@ -766,6 +766,12 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
     it adds to, and removed when it ends, so only one import adds at a time.
     It holds the importing process's ID. One left by an import that was
     killed is removed by hand. A reader ignores it.
+  - **`import.metadata`** is where an import holds its container's metadata
+    until it closes the container and writes it in path order (storage.md
+    §3.2). It is in `.cst-import/` for a new store and beside `import.lock`
+    for an existing one, and it is removed when the import ends, whether it
+    succeeds or fails. One left by an import that was killed is replaced by
+    the next import, or removed by hand. A reader ignores it.
 - **Other names under `.cst/` are reserved** for later parts of the contract
   and later phases. A version 1 reader ignores the names it does not know.
 - **`.cst/` holds only the store.** There is no working copy in N1: a native
