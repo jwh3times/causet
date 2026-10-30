@@ -57,10 +57,6 @@ work leaves required human actions.
 
 jwh3times/causet
 
-## Private issue repository
-
-none
-
 ## Board
 
 jwh3times 7
@@ -74,13 +70,3 @@ jwh3times 7
 - `Area`: `Rebase and workspaces`, `Structured documents`, `Identity and provenance`,
   `Proof and verification`, `Trust and protocol`, `Native core and performance`,
   `Docs and process`, `Defect`.
-
-## Security findings
-
-A draft repository security advisory in jwh3times/causet, with access-appropriate tracking on the
-private board. Never a public issue or wiki page; publishing the advisory needs separate disclosure
-authorization.
-
-## New work
-
-issue

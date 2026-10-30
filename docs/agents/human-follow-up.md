@@ -12,13 +12,9 @@ decision, such as an npm publish.
 
 The public destinations are intentional: ordinary follow-ups need no private repository, and the
 private board does not make the issues or wiki pages it links private. Do not change visibility to
-perform a handoff. A sensitive vulnerability follows `Security findings` in `issue-tracker.md`: the
+perform a handoff. A sensitive vulnerability follows the default `Security findings` route: the
 detailed instructions live in the draft advisory, and only an access-appropriate draft item goes on
 the board. Keep the board private; check it before adding an item.
-
-## Follow-up destination
-
-Issues in jwh3times/causet (public), selected explicitly with `--repo jwh3times/causet`.
 
 ## Follow-up label
 
@@ -27,8 +23,3 @@ Issues in jwh3times/causet (public), selected explicitly with `--repo jwh3times/
 ## Follow-up board
 
 same as Board — set `Status`, `Gate` and `Area`.
-
-## Follow-up wiki
-
-The public repository wiki (`https://github.com/jwh3times/causet.wiki.git`), index page
-`human-todo`. Push without asking: publishing the instructions is part of the follow-up.

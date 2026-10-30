@@ -4,10 +4,6 @@
 
 none
 
-## Workspace status command
-
-`git status --short --branch` and `git worktree list`
-
 ## Sync with main
 
 `cst pull --ff-only`
@@ -30,14 +26,6 @@ none
 - never `git clean -x`
 
 ## Dev stack
-
-none
-
-## Generated-config check
-
-`npm run sync:agents:check`, regenerated with `npm run sync:agents` — always.
-
-## Final portability check
 
 none
 
