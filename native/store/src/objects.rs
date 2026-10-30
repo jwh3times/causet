@@ -1,6 +1,7 @@
 //! The bodies of the N1 object types (objects.md §3–§7): chunk lists, native
-//! trees and their Git encoding, preserved Git objects, ref snapshots (§6)
-//! and annotations (§7), each with the rules a reader checks.
+//! trees with their Git encoding and their short-reference stored form
+//! (§4.4), preserved Git objects, ref snapshots (§6) and annotations (§7),
+//! each with the rules a reader checks.
 
 use crate::encoding::{Reader, put_bytes, put_varint};
 use crate::id::{GitAlgorithm, GitId, NativeId, Short, Type, hex, unhex};

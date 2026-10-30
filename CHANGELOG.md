@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Trees are stored in short references** (#354, part of #350).
+  `cst import` stores every native tree in form `03`, as
+  `docs/native-store/objects.md` §4.4 sets for format version 1: each
+  entry names its target by the first 8 bytes of its native digest
+  instead of the 33-byte ID. A read resolves each reference through
+  every container's index and keeps the one choice of candidates whose
+  rebuilt tree hashes to its ID; no choice, more than one, or more than
+  65,536 to try is reported as corruption, naming the tree, and a
+  reference no index name begins with also names its entry. An import
+  refuses a tree past that bound, or one naming an object the store does
+  not hold. Preserved Git trees and submodule targets are stored as
+  before, and every N1 command answers as it did. IDs do not change, but
+  a fresh import of the same history now writes smaller containers.
+
 - **Content under 32 KiB is stored whole** (#353, part of #350).
   `cst import` stores a file's content shorter than 32,768 bytes as its
   bytes, not as a chunk list, as `docs/native-store/storage.md` §1 now

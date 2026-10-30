@@ -1,5 +1,6 @@
 //! A native repository's store (objects.md §10): writing one, and reading it
-//! back with every object verified by its ID.
+//! back with every object verified by its ID, a tree's short references
+//! resolved through every container's index.
 
 use crate::StoreError;
 use crate::alias::Aliases;
