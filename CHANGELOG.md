@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Format version 1 meets the storage gate on every real repository**
+  (#357, closing #345 and #350). With short references in trees,
+  metadata in path order, content under 32 KiB stored whole and the
+  32-byte alias row, a native store is now at most `git gc
+  --aggressive`'s bytes on causet, git/git and the large-file corpus. The
+  known-gap entry for git/git and the margin entry for causet are
+  removed, so the storage gate runs with no list and N1's storage
+  condition (ADR-0044 item 2) no longer blocks its exit. Measured locally
+  on Windows at `adda916`: git/git at `v2.56.0` takes 110.3 MB against
+  Git's 113.3 MB (0.974×, down from 2.00× on version 0), causet 0.875×
+  and the large-file corpus 0.926×
+  (`docs/native-store/storage.md` §6.1).
+
 - **Metadata is stored in path order** (#356, part of #350). `cst import`
   writes a container's metadata in the order `docs/native-store/storage.md`
   §3.2 sets for format version 1. Trees, native and preserved, come first,

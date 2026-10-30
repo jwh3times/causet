@@ -406,13 +406,13 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
     `objects/info/commit-graph` is left out, as the early estimate in
     storage.md §6 left it out.
     Stored bytes must be at most Git's, and on the large-file corpus strictly
-    fewer. A known storage gap is listed instead of failing the job, on the
-    repository in `real-repositories.js` and against the issue that closes
-    it (`test-support/storage-gate.js`, #343 decision 1). N1 cannot exit
-    while any entry is listed. A gap entry (git/git, ceiling 2.05 times
-    Git's bytes, #345) passes up to its ceiling and fails once the store
-    meets the gate, so that it is removed. A margin entry (causet, ceiling
-    1.02, #345) is for a store near Git's bytes that crosses them as the
+    fewer. No repository is listed against the gate since #357, so every
+    job holds it. A known storage gap may be listed instead of failing the
+    job, on the repository in `real-repositories.js` and against the issue
+    that closes it (`test-support/storage-gate.js`, #343 decision 1), but
+    N1 cannot exit while any entry is listed. A gap entry passes up to its
+    ceiling and fails once the store meets the gate, so that it is removed.
+    A margin entry is for a store near Git's bytes that crosses them as the
     history grows: it passes either side up to its ceiling and is removed by
     hand once the store is clearly under them. `test/storage-gate.test.js`
     holds these rules in `npm test`.
