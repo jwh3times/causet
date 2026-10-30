@@ -367,3 +367,158 @@ fn a_snapshot_the_store_does_not_hold_or_that_names_no_imported_object_is_corrup
   assert!(matches!(store.refs(), Err(StoreError::Corrupt(_))));
   std::fs::remove_dir_all(&root).unwrap();
 }
+
+/// An ID sharing `id`'s short reference (objects.md §1.3): only its last
+/// byte differs, as a collision in the first 8 bytes would.
+fn sharing(id: &NativeId) -> NativeId {
+  let mut digest = id.0;
+  digest[31] ^= 0xff;
+  NativeId(digest)
+}
+
+/// Adds a container to the store at `root` whose index lists each of `ids`
+/// as content absent by promise: index names a reader must consider.
+fn add_absent(root: &std::path::Path, ids: &[NativeId]) {
+  let mut container = ContainerWriter::create(&root.join(".cst").join("objects")).unwrap();
+  for id in ids {
+    container.add_absent(id, Type::Content, causet_store::container::ABSENT_BY_PROMISE);
+  }
+  container.finish().unwrap();
+}
+
+fn file(name: &str, target: NativeId) -> Entry {
+  Entry {
+    name: name.as_bytes().to_vec(),
+    kind: Kind::File,
+    target: Target::Native(target),
+  }
+}
+
+#[test]
+fn a_tree_is_stored_in_short_references_and_reads_back_beside_an_entry_sharing_its_prefix() {
+  let root = scratch("short-references");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let hello = writer.put_content(b"hello\n").unwrap();
+  let inner = Tree::from_entries(vec![file("hello.txt", hello)]).unwrap();
+  let inner_id = writer.put_tree(&inner).unwrap();
+  let outer = Tree::from_entries(vec![
+    file("a", hello),
+    Entry {
+      name: b"dir".to_vec(),
+      kind: Kind::Tree,
+      target: Target::Native(inner_id),
+    },
+    Entry {
+      name: b"module".to_vec(),
+      kind: Kind::Submodule,
+      target: Target::Git(causet_store::id::GitId::new(GitAlgorithm::Sha1, vec![1; 20])),
+    },
+  ])
+  .unwrap();
+  let outer_id = writer.put_tree(&outer).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let store = Store::open(&root).unwrap();
+  assert_eq!(form(&store, &outer_id), Form::ShortReferences);
+  assert_eq!(form(&store, &inner_id), Form::ShortReferences);
+  assert_eq!(store.read(&outer_id).unwrap().body, outer.encode());
+
+  // An absent entry shares the content's 8 bytes: two candidates, and the
+  // reader keeps the one that verifies.
+  add_absent(&root, &[sharing(&hello)]);
+  let store = Store::open(&root).unwrap();
+  assert_eq!(store.candidates(&hello.short()), vec![sharing(&hello), hello], "in order");
+  assert_eq!(store.read(&outer_id).unwrap().body, outer.encode());
+  assert_eq!(store.read(&inner_id).unwrap().body, inner.encode());
+  let found = causet_store::verify::verify(&store).unwrap();
+  assert!(found.problems.is_empty(), "{:?}", found.problems);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn an_incremental_import_stores_a_tree_naming_an_earlier_containers_objects() {
+  let root = scratch("short-incremental");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let hello = writer.put_content(b"hello\n").unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  let tree = Tree::from_entries(vec![file("hello.txt", hello)]).unwrap();
+  let id = writer.put_tree(&tree).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let store = Store::open(&root).unwrap();
+  assert_eq!(store.read(&id).unwrap().body, tree.encode());
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_tree_needing_more_than_65536_choices_is_refused_naming_it_and_one_needing_65536_reads() {
+  let root = scratch("short-bound");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let targets: Vec<NativeId> = (0..17u8).map(|n| writer.put_content(&[n]).unwrap()).collect();
+  writer.finish(&no_refs()).unwrap();
+  // Every target's reference then has two candidates.
+  add_absent(&root, &targets.iter().map(sharing).collect::<Vec<_>>());
+  let entries = |count: usize| -> Tree {
+    Tree::from_entries(
+      targets[..count]
+        .iter()
+        .enumerate()
+        .map(|(n, target)| file(&format!("f{n:02}"), *target))
+        .collect(),
+    )
+    .unwrap()
+  };
+
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  let refused = entries(17);
+  let refused_id = NativeId::of(Type::Tree, &refused.encode());
+  match writer.put_tree(&refused) {
+    Err(StoreError::TooLarge(why)) => assert_eq!(
+      why,
+      format!("the tree {refused_id}'s short references would allow 131072 choices, and a tree may need at most 65536")
+    ),
+    other => panic!("{other:?}"),
+  }
+  drop(writer);
+
+  // 16 entries of two candidates each are 65,536 choices, the bound itself.
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  let kept = entries(16);
+  let kept_id = writer.put_tree(&kept).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let store = Store::open(&root).unwrap();
+  assert_eq!(store.read(&kept_id).unwrap().body, kept.encode());
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_tree_naming_an_object_the_store_does_not_hold_is_refused() {
+  let root = scratch("short-unheld");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let tree = Tree::from_entries(vec![file("gone", NativeId::of(Type::Content, b"never written"))]).unwrap();
+  let id = NativeId::of(Type::Tree, &tree.encode());
+  match writer.put_tree(&tree) {
+    Err(StoreError::Codec(why)) => {
+      assert_eq!(why, format!("the tree {id} names an object the store does not hold"))
+    }
+    other => panic!("{other:?}"),
+  }
+  drop(writer);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_preserved_git_tree_is_stored_as_its_body() {
+  let root = scratch("preserved-body");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let preserved = Preserved {
+    algorithm: GitAlgorithm::Sha1,
+    kind: GitKind::Tree,
+    payload: b"040000 sub\0aaaaaaaaaaaaaaaaaaaa".to_vec(),
+  };
+  let id = writer.put_preserved(&preserved).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let store = Store::open(&root).unwrap();
+  assert_eq!(form(&store, &id), Form::Body);
+  assert_eq!(store.read(&id).unwrap().body, preserved.encode());
+  std::fs::remove_dir_all(&root).unwrap();
+}

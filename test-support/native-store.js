@@ -205,6 +205,24 @@ export function removeEntry(store, id) {
 }
 
 /**
+ * Adds a container whose index lists each of `ids` (hex) as content absent
+ * by promise (1) or by policy (2), with no frames. The names need not be the
+ * ID of any content, so a test can make one share another object's short
+ * reference (objects.md §1.3), as only a collision would.
+ */
+export function addAbsent(store, ids, state = 1) {
+  const objects = ids.map((id) => ({ name: Buffer.from(id, "hex"), type: TYPES.content, form: 0, state, frame: NO_FRAME, offset: 0, length: 0 }));
+  return writeContainer(path.join(store, ".cst", "objects"), { frames: [], objects, annotations: [] });
+}
+
+/** An ID sharing `id`'s short reference, the first 8 bytes: its last byte differs. */
+export function sharingShort(id) {
+  const digest = Buffer.from(id, "hex");
+  digest[31] ^= 0xff;
+  return digest.toString("hex");
+}
+
+/**
  * Adds a container holding these objects, each a body in one stored frame of
  * its class, and annotations of their subjects. With `after`, the container
  * is padded with an annotation until its name sorts after that container's,

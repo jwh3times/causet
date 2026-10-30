@@ -1,9 +1,10 @@
 //! The bodies of the N1 object types (objects.md §3–§7): chunk lists, native
-//! trees and their Git encoding, preserved Git objects, ref snapshots (§6)
-//! and annotations (§7), each with the rules a reader checks.
+//! trees with their Git encoding and their short-reference stored form
+//! (§4.4), preserved Git objects, ref snapshots (§6) and annotations (§7),
+//! each with the rules a reader checks.
 
 use crate::encoding::{Reader, put_bytes, put_varint};
-use crate::id::{GitAlgorithm, GitId, NativeId, unhex};
+use crate::id::{GitAlgorithm, GitId, NativeId, Short, Type, hex, unhex};
 use std::cmp::Ordering;
 use std::ops::Range;
 
@@ -166,41 +167,39 @@ impl Tree {
   }
 
   fn check(&self) -> Result<(), String> {
-    let mut algorithm = None;
-    for (index, entry) in self.entries.iter().enumerate() {
-      if !valid_name(&entry.name) {
-        return Err(format!(
-          "a tree has the entry name {:?}, which is not valid",
-          String::from_utf8_lossy(&entry.name)
-        ));
-      }
-      if index > 0 && self.entries[index - 1].name >= entry.name {
-        return Err("a tree's entries are not in byte order of their names, or repeat one".into());
-      }
-      match (&entry.kind, &entry.target) {
-        (Kind::Submodule, Target::Git(id)) => {
-          if algorithm.is_some_and(|known| known != id.algorithm) {
-            return Err("a tree names Git IDs of two algorithms".into());
-          }
-          algorithm = Some(id.algorithm);
-        }
-        (Kind::Submodule, Target::Native(_)) | (_, Target::Git(_)) => {
-          return Err("a tree entry's target does not fit its kind".into());
-        }
-        _ => {}
+    for entry in &self.entries {
+      if matches!(entry.target, Target::Git(_)) != (entry.kind == Kind::Submodule) {
+        return Err("a tree entry's target does not fit its kind".into());
       }
     }
-    Ok(())
+    check_entries(self.entries.iter().map(|entry| {
+      let algorithm = match &entry.target {
+        Target::Git(id) => Some(id.algorithm),
+        Target::Native(_) => None,
+      };
+      (entry.name.as_slice(), algorithm)
+    }))
   }
 
   pub fn encode(&self) -> Vec<u8> {
+    self.encode_with(|id, out| id.put(out))
+  }
+
+  /// The short-reference record (objects.md §4.4): the body with each native
+  /// target replaced by its short reference.
+  pub fn encode_short(&self) -> Vec<u8> {
+    self.encode_with(|id, out| out.extend_from_slice(&id.short()))
+  }
+
+  /// The entries, each native target written by `native`.
+  fn encode_with(&self, native: impl Fn(&NativeId, &mut Vec<u8>)) -> Vec<u8> {
     let mut out = Vec::new();
     put_varint(&mut out, self.entries.len() as u64);
     for entry in &self.entries {
       put_bytes(&mut out, &entry.name);
       out.push(entry.kind as u8);
       match &entry.target {
-        Target::Native(id) => id.put(&mut out),
+        Target::Native(id) => native(id, &mut out),
         Target::Git(id) => id.put(&mut out),
       }
     }
@@ -266,6 +265,168 @@ impl Tree {
       .iter()
       .map(|entry| entry.kind.git_mode().len() + entry.name.len() + 2 + algorithm.length())
       .sum()
+  }
+}
+
+/// The rules of objects.md §4.1 a tree's entries keep in either stored form:
+/// valid names, in byte order, each once, and at most one Git algorithm among
+/// its submodule links. Each entry is its name and its link's algorithm.
+fn check_entries<'a>(
+  entries: impl Iterator<Item = (&'a [u8], Option<u8>)>,
+) -> Result<(), String> {
+  let mut previous: Option<&[u8]> = None;
+  let mut algorithm = None;
+  for (name, linked) in entries {
+    if !valid_name(name) {
+      return Err(format!(
+        "a tree has the entry name {:?}, which is not valid",
+        String::from_utf8_lossy(name)
+      ));
+    }
+    if previous.is_some_and(|before| before >= name) {
+      return Err("a tree's entries are not in byte order of their names, or repeat one".into());
+    }
+    previous = Some(name);
+    if let Some(linked) = linked {
+      if algorithm.is_some_and(|known| known != linked) {
+        return Err("a tree names Git IDs of two algorithms".into());
+      }
+      algorithm = Some(linked);
+    }
+  }
+  Ok(())
+}
+
+/// The most choices a stored tree's short references may need (objects.md
+/// §1.3).
+pub const CHOICES: u64 = 65_536;
+
+/// What a short-reference record's entry names (objects.md §4.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ShortTarget {
+  Short(Short),
+  Git(GitId),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShortEntry {
+  pub name: Vec<u8>,
+  pub kind: Kind,
+  pub target: ShortTarget,
+}
+
+/// A tree as stored in form `03` (objects.md §4.4), its native targets not
+/// yet resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShortTree {
+  pub entries: Vec<ShortEntry>,
+}
+
+impl ShortTree {
+  /// The record, checked against every rule of §4.1 but its targets'.
+  pub fn decode(record: &[u8]) -> Result<ShortTree, String> {
+    let mut reader = Reader::new(record);
+    let count = reader.varint()?;
+    let mut entries = Vec::new();
+    for _ in 0..count {
+      let name = reader.bytes()?.to_vec();
+      let code = reader.u8()?;
+      let kind = Kind::from_code(code)
+        .ok_or_else(|| format!("a tree entry has the kind {code:02x}, which is reserved"))?;
+      let target = match kind {
+        Kind::Submodule => ShortTarget::Git(GitId::read(&mut reader)?),
+        _ => ShortTarget::Short(reader.take(8)?.try_into().expect("8 bytes")),
+      };
+      entries.push(ShortEntry { name, kind, target });
+    }
+    if !reader.is_empty() {
+      return Err("a tree has bytes after its last entry".into());
+    }
+    check_entries(entries.iter().map(|entry| {
+      let algorithm = match &entry.target {
+        ShortTarget::Git(id) => Some(id.algorithm),
+        ShortTarget::Short(_) => None,
+      };
+      (entry.name.as_slice(), algorithm)
+    }))?;
+    Ok(ShortTree { entries })
+  }
+
+  /// The tree `id` names, its short references resolved through
+  /// `candidates` (§1.3): the one choice of a candidate for every entry whose
+  /// body hashes to `id`. No candidate for an entry, more than [`CHOICES`]
+  /// choices, and no choice or more than one that verifies are corrupt.
+  pub fn resolve(
+    &self,
+    id: &NativeId,
+    candidates: &dyn Fn(&Short) -> Vec<NativeId>,
+  ) -> Result<Tree, String> {
+    let mut options: Vec<Vec<NativeId>> = Vec::with_capacity(self.entries.len());
+    let mut choices: u64 = 1;
+    for entry in &self.entries {
+      let found = match &entry.target {
+        ShortTarget::Short(short) => {
+          let found = candidates(short);
+          if found.is_empty() {
+            return Err(format!(
+              "its entry {} names {}, a short reference no index entry's name begins with",
+              String::from_utf8_lossy(&entry.name),
+              hex(short)
+            ));
+          }
+          choices = choices.saturating_mul(found.len() as u64);
+          found
+        }
+        ShortTarget::Git(_) => Vec::new(),
+      };
+      options.push(found);
+    }
+    if choices > CHOICES {
+      return Err(format!(
+        "its short references allow {choices} choices, and a tree may need at most {CHOICES}"
+      ));
+    }
+    // Every choice is tried, so a second one that verifies is found too.
+    let mut at = vec![0usize; self.entries.len()];
+    let mut verified = None;
+    loop {
+      let tree = Tree {
+        entries: self
+          .entries
+          .iter()
+          .zip(&options)
+          .zip(&at)
+          .map(|((entry, found), &chosen)| Entry {
+            name: entry.name.clone(),
+            kind: entry.kind,
+            target: match &entry.target {
+              ShortTarget::Short(_) => Target::Native(found[chosen]),
+              ShortTarget::Git(git) => Target::Git(git.clone()),
+            },
+          })
+          .collect(),
+      };
+      if NativeId::of(Type::Tree, &tree.encode()) == *id {
+        if verified.is_some() {
+          return Err("more than one choice of its short references' candidates hashes to its ID".into());
+        }
+        verified = Some(tree);
+      }
+      // The next choice, as an odometer: each entry's candidate turns over
+      // to its first and carries to the next entry's.
+      let advanced = at.iter_mut().zip(&options).any(|(chosen, found)| {
+        *chosen += 1;
+        if *chosen < found.len() {
+          return true;
+        }
+        *chosen = 0;
+        false
+      });
+      if !advanced {
+        break;
+      }
+    }
+    verified.ok_or_else(|| "no choice of its short references' candidates hashes to its ID".into())
   }
 }
 
@@ -679,6 +840,149 @@ mod tests {
     let git = hello.git_encoding(&|_| Some(blob.clone())).unwrap();
     assert_eq!(git, [b"100644 hello.txt\0".as_slice(), &blob].concat());
     assert_eq!(hello.git_size(GitAlgorithm::Sha1), git.len());
+  }
+
+  /// An ID sharing `id`'s short reference, as an index name may: only its
+  /// last byte differs.
+  fn sharing(id: &NativeId) -> NativeId {
+    let mut digest = id.0;
+    digest[31] ^= 0xff;
+    NativeId(digest)
+  }
+
+  fn hello() -> Tree {
+    Tree::from_entries(vec![Entry {
+      name: b"hello.txt".to_vec(),
+      kind: Kind::File,
+      target: Target::Native(content(b"hello\n")),
+    }])
+    .unwrap()
+  }
+
+  #[test]
+  fn the_short_reference_form_is_the_contracts_example() {
+    let tree = hello();
+    let id = NativeId::of(Type::Tree, &tree.encode());
+    let record = tree.encode_short();
+    assert_eq!(record.len(), 20);
+    assert_eq!(hex(&record), "010968656c6c6f2e74787401c32f27e6a5e1d06a");
+    let short = ShortTree::decode(&record).unwrap();
+    let resolved = short
+      .resolve(&id, &|prefix| {
+        assert_eq!(hex(prefix), "c32f27e6a5e1d06a");
+        vec![content(b"hello\n")]
+      })
+      .unwrap();
+    assert_eq!(resolved, tree);
+  }
+
+  #[test]
+  fn a_shared_reference_resolves_to_the_one_choice_that_verifies() {
+    let target = content(b"hello\n");
+    let tree = Tree::from_entries(vec![
+      Entry {
+        name: b"a".to_vec(),
+        kind: Kind::File,
+        target: Target::Native(target),
+      },
+      Entry {
+        name: b"m".to_vec(),
+        kind: Kind::Submodule,
+        target: Target::Git(GitId::new(GitAlgorithm::Sha1, vec![7; 20])),
+      },
+      Entry {
+        name: b"z".to_vec(),
+        kind: Kind::Tree,
+        target: Target::Native(NativeId::of(Type::Tree, &[0])),
+      },
+    ])
+    .unwrap();
+    let id = NativeId::of(Type::Tree, &tree.encode());
+    let short = ShortTree::decode(&tree.encode_short()).unwrap();
+    // The other candidate sorts first, so the reader cannot just take the
+    // first; a submodule link keeps its whole Git ID.
+    let candidates = |prefix: &[u8; 8]| {
+      let mut found = vec![target, sharing(&target), NativeId::of(Type::Tree, &[0])];
+      found.retain(|candidate| candidate.short() == *prefix);
+      found.sort();
+      found
+    };
+    assert_eq!(short.resolve(&id, &candidates).unwrap(), tree);
+  }
+
+  #[test]
+  fn a_reference_with_no_candidate_is_corrupt_naming_its_entry() {
+    let tree = hello();
+    let id = NativeId::of(Type::Tree, &tree.encode());
+    let short = ShortTree::decode(&tree.encode_short()).unwrap();
+    assert_eq!(
+      short.resolve(&id, &|_| Vec::new()).unwrap_err(),
+      "its entry hello.txt names c32f27e6a5e1d06a, a short reference no index entry's name begins with"
+    );
+  }
+
+  #[test]
+  fn no_choice_that_verifies_or_more_than_the_bound_is_corrupt() {
+    let tree = hello();
+    let id = NativeId::of(Type::Tree, &tree.encode());
+    let short = ShortTree::decode(&tree.encode_short()).unwrap();
+    let wrong = sharing(&content(b"hello\n"));
+    assert_eq!(
+      short.resolve(&id, &|_| vec![wrong]).unwrap_err(),
+      "no choice of its short references' candidates hashes to its ID"
+    );
+    // 17 entries of two candidates each need 131,072 choices.
+    let entries: Vec<Entry> = (0..17u8)
+      .map(|n| Entry {
+        name: vec![b'a' + n],
+        kind: Kind::File,
+        target: Target::Native(content(&[n])),
+      })
+      .collect();
+    let wide = Tree::from_entries(entries).unwrap();
+    let wide_id = NativeId::of(Type::Tree, &wide.encode());
+    let pairs = |prefix: &[u8; 8]| {
+      let mut digest = [0xff; 32];
+      digest[..8].copy_from_slice(prefix);
+      vec![NativeId(digest), NativeId(digest)]
+        .into_iter()
+        .enumerate()
+        .map(|(n, mut id)| {
+          id.0[31] = n as u8;
+          id
+        })
+        .collect()
+    };
+    assert_eq!(
+      ShortTree::decode(&wide.encode_short())
+        .unwrap()
+        .resolve(&wide_id, &pairs)
+        .unwrap_err(),
+      "its short references allow 131072 choices, and a tree may need at most 65536"
+    );
+  }
+
+  #[test]
+  fn a_short_record_that_breaks_the_tree_rules_is_refused() {
+    let mut record = hello().encode_short();
+    record.push(0);
+    assert!(ShortTree::decode(&record).is_err());
+    // Two entries out of order.
+    let tree = Tree {
+      entries: vec![
+        Entry {
+          name: b"b".to_vec(),
+          kind: Kind::File,
+          target: Target::Native(content(b"b")),
+        },
+        Entry {
+          name: b"a".to_vec(),
+          kind: Kind::File,
+          target: Target::Native(content(b"a")),
+        },
+      ],
+    };
+    assert!(ShortTree::decode(&tree.encode_short()).is_err());
   }
 
   #[test]

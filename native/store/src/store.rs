@@ -1,15 +1,16 @@
 //! A native repository's store (objects.md §10): writing one, and reading it
-//! back with every object verified by its ID.
+//! back with every object verified by its ID, a tree's short references
+//! resolved through every container's index.
 
 use crate::StoreError;
 use crate::alias::Aliases;
 use crate::chunker;
 use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
 use crate::delta::{self, DEPTH_LIMIT, Delta};
-use crate::id::{GitAlgorithm, NativeId, Type, unhex};
-use crate::objects::{ChunkList, Preserved, RefTarget, Snapshot, Tree};
+use crate::id::{GitAlgorithm, NativeId, Short, Type, unhex};
+use crate::objects::{CHOICES, ChunkList, Preserved, RefTarget, ShortTarget, ShortTree, Snapshot, Target, Tree};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -34,7 +35,9 @@ pub struct StoreWriter {
   staging: PathBuf,
   algorithm: GitAlgorithm,
   container: Option<ContainerWriter>,
-  present: HashSet<NativeId>,
+  /// Every object held present, in order, so a short reference's
+  /// candidates are a range of it.
+  present: BTreeSet<NativeId>,
   /// The depth of each delta this writer stored (storage.md §5.2).
   depths: HashMap<NativeId, usize>,
   aliases: Vec<(Vec<u8>, NativeId)>,
@@ -88,7 +91,7 @@ impl StoreWriter {
       container: Some(ContainerWriter::create(&objects)?),
       staging,
       algorithm,
-      present: HashSet::new(),
+      present: BTreeSet::new(),
       depths: HashMap::new(),
       aliases: Vec::new(),
       existing: None,
@@ -123,7 +126,7 @@ impl StoreWriter {
       container: None,
       staging,
       algorithm,
-      present: HashSet::new(),
+      present: BTreeSet::new(),
       depths: HashMap::new(),
       aliases: Vec::new(),
       existing: None,
@@ -310,8 +313,119 @@ impl StoreWriter {
     }
   }
 
+  /// Stores a tree in short references (objects.md §4.4). A tree whose
+  /// references would need more than 65,536 choices among what the store
+  /// holds is refused, naming it (§1.3), and so is one naming an object the
+  /// store does not hold, which no reader could resolve. `finish` checks the
+  /// bound again, against what the import wrote after the tree.
   pub fn put_tree(&mut self, tree: &Tree) -> Result<NativeId, StoreError> {
-    self.put_metadata(Type::Tree, &tree.encode())
+    let id = NativeId::of(Type::Tree, &tree.encode());
+    if self.present.contains(&id) {
+      return Ok(id);
+    }
+    let shorts = tree.entries.iter().filter_map(|entry| match &entry.target {
+      Target::Native(target) => Some(target.short()),
+      Target::Git(_) => None,
+    });
+    match self.choices(shorts) {
+      None => {
+        return Err(StoreError::Codec(format!(
+          "the tree {id} names an object the store does not hold"
+        )));
+      }
+      Some(choices) => self.within_bound(&id, choices)?,
+    }
+    self.add(&id, Type::Tree, Form::ShortReferences, &tree.encode_short())?;
+    Ok(id)
+  }
+
+  /// The product of each short reference's number of candidates, or `None`
+  /// when one has none.
+  fn choices(&self, shorts: impl Iterator<Item = Short>) -> Option<u64> {
+    let mut choices: u64 = 1;
+    for short in shorts {
+      match self.candidates(&short).len() as u64 {
+        0 => return None,
+        found => choices = choices.saturating_mul(found),
+      }
+    }
+    Some(choices)
+  }
+
+  fn within_bound(&self, id: &NativeId, choices: u64) -> Result<(), StoreError> {
+    if choices > CHOICES {
+      return Err(StoreError::TooLarge(format!(
+        "the tree {id}'s short references would allow {choices} choices, and a tree may need at most {CHOICES}"
+      )));
+    }
+    Ok(())
+  }
+
+  /// Checks the bound again for every tree in the container this import
+  /// wrote, now that every object it wrote is a candidate: an object written
+  /// after a tree may share its references (objects.md §1.3). When no
+  /// reference the container's names begin with has two candidates, no tree
+  /// needs more than one choice, and no tree is read.
+  fn check_bound(&self, path: &Path) -> Result<(), StoreError> {
+    let container = Container::open(path)?;
+    let shared: HashSet<Short> = container
+      .names
+      .iter()
+      .map(|name| NativeId(*name).short())
+      .filter(|short| self.candidates(short).len() > 1)
+      .collect();
+    if shared.is_empty() {
+      return Ok(());
+    }
+    let mut trees: Vec<(&[u8; 32], &Record)> = container
+      .names
+      .iter()
+      .zip(&container.records)
+      .filter(|(_, record)| record.form == Form::ShortReferences)
+      .collect();
+    trees.sort_by_key(|(_, record)| (record.frame, record.offset));
+    let mut frame: Option<(u32, Vec<u8>)> = None;
+    for (name, record) in trees {
+      if frame.as_ref().is_none_or(|(number, _)| *number != record.frame) {
+        frame = Some((record.frame, container.frame(record.frame)?));
+      }
+      let bytes = &frame.as_ref().expect("the frame just read").1;
+      let start = record.offset as usize;
+      let id = NativeId(*name);
+      let short = ShortTree::decode(&bytes[start..start + record.length as usize])
+        .map_err(|what| StoreError::Corrupt(format!("{id}: {what}")))?;
+      if !short.entries.iter().any(|entry| matches!(&entry.target, ShortTarget::Short(at) if shared.contains(at))) {
+        continue;
+      }
+      let shorts = short.entries.iter().filter_map(|entry| match &entry.target {
+        ShortTarget::Short(at) => Some(*at),
+        ShortTarget::Git(_) => None,
+      });
+      if let Some(choices) = self.choices(shorts) {
+        self.within_bound(&id, choices)?;
+      }
+    }
+    Ok(())
+  }
+
+  /// The objects whose digest begins with `short`: what this import has
+  /// written, and every index entry of the store it adds to.
+  fn candidates(&self, short: &Short) -> Vec<NativeId> {
+    let mut low = [0u8; 32];
+    low[..8].copy_from_slice(short);
+    let mut high = [0xffu8; 32];
+    high[..8].copy_from_slice(short);
+    let mut found: Vec<NativeId> = self
+      .present
+      .range(NativeId(low)..=NativeId(high))
+      .copied()
+      .collect();
+    if let Some(store) = &self.existing {
+      found.extend(store.candidates(short));
+      found.sort();
+      found.dedup();
+    }
+    found
   }
 
   pub fn put_preserved(&mut self, preserved: &Preserved) -> Result<NativeId, StoreError> {
@@ -365,7 +479,8 @@ impl StoreWriter {
     let named = self.staging.join("snapshot");
     let snapshot_file = format!("{}\n", id.hex());
     if self.existing.is_none() {
-      container.finish()?;
+      let path = container.finish()?;
+      self.check_bound(&path)?;
       write(&file, &aliases)?;
       write(&named, snapshot_file.as_bytes())?;
       write(&self.staging.join("format"), FORMAT)?;
@@ -378,7 +493,10 @@ impl StoreWriter {
     if container.is_empty() {
       container.abandon();
     } else {
-      self.placed.container = Some(container.finish()?);
+      let path = container.finish()?;
+      // Placed first, so a refusal below takes it back.
+      self.placed.container = Some(path.clone());
+      self.check_bound(&path)?;
       sync_directory(&self.staging.join("objects"));
     }
     let before = match std::fs::read(&file) {
@@ -688,6 +806,27 @@ impl Store {
     found
   }
 
+  /// A short reference's candidates (objects.md §1.3): every object, present
+  /// or absent, whose digest begins with it, in any container, each once and
+  /// in order.
+  pub fn candidates(&self, short: &Short) -> Vec<NativeId> {
+    let mut found: Vec<NativeId> = self
+      .containers
+      .iter()
+      .flat_map(|container| container.starting(short))
+      .map(|name| NativeId(*name))
+      .collect();
+    found.sort();
+    found.dedup();
+    found
+  }
+
+  /// A tree stored in short references, resolved (objects.md §4.4). `Err`
+  /// is its corruption.
+  pub(crate) fn unshorten(&self, id: &NativeId, record: &[u8]) -> Result<Tree, String> {
+    ShortTree::decode(record)?.resolve(id, &|short| self.candidates(short))
+  }
+
   fn record(&self, id: &NativeId) -> Result<(Type, Form, Vec<u8>), StoreError> {
     let (number, record) = self
       .locate(id)
@@ -731,6 +870,13 @@ impl Store {
       Form::ChunkList => self.resolve(id, &record)?,
       // Each version a delta produces is verified as it is produced.
       Form::Delta => return Ok(Object { kind, body: self.undelta(id, &record)? }),
+      // Resolution keeps only the choice whose body hashes to the ID.
+      Form::ShortReferences => {
+        let tree = self
+          .unshorten(id, &record)
+          .map_err(|what| StoreError::Corrupt(format!("{id}: {what}")))?;
+        return Ok(Object { kind, body: tree.encode() });
+      }
     };
     if NativeId::of(kind, &body) != *id {
       return Err(StoreError::Corrupt(format!(
@@ -813,6 +959,7 @@ impl Store {
           base = next;
           continue;
         }
+        Form::ShortReferences => unreachable!("an index admits short references only for a tree"),
       };
       if NativeId::of(Type::Content, &content) != base {
         return Err(corrupt(&base, "its bytes do not hash to its ID".into()));
@@ -930,10 +1077,56 @@ impl Store {
                 &format!("its chunk list names {chunk}, which is stored as a delta"),
               ));
             }
+            Form::ShortReferences => {
+              unreachable!("an index admits short references only for a tree")
+            }
           }
         }
       }
     }
     Ok(out)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::objects::{Entry, Kind};
+
+  #[test]
+  fn objects_written_after_a_tree_that_share_its_references_count_against_its_bound() {
+    let root = std::env::temp_dir().join(format!("causet-store-unit-{}-bound", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+    let targets: Vec<NativeId> = (0..17u8).map(|n| writer.put_content(&[n]).unwrap()).collect();
+    let tree = Tree::from_entries(
+      targets
+        .iter()
+        .enumerate()
+        .map(|(n, target)| Entry {
+          name: format!("f{n:02}").into_bytes(),
+          kind: Kind::File,
+          target: Target::Native(*target),
+        })
+        .collect(),
+    )
+    .unwrap();
+    // One candidate each when the tree is written.
+    let id = writer.put_tree(&tree).unwrap();
+    // Then objects of the same import sharing each target's 8 bytes, as a
+    // history built to collide would hold: 2^17 choices once they are written.
+    for target in &targets {
+      let mut digest = target.0;
+      digest[31] ^= 0xff;
+      writer.present.insert(NativeId(digest));
+    }
+    match writer.finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap()) {
+      Err(StoreError::TooLarge(why)) => assert_eq!(
+        why,
+        format!("the tree {id}'s short references would allow 131072 choices, and a tree may need at most 65536")
+      ),
+      other => panic!("{other:?}"),
+    }
+    std::fs::remove_dir_all(&root).unwrap();
   }
 }

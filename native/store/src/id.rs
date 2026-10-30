@@ -35,6 +35,10 @@ impl Type {
   }
 }
 
+/// A short reference (objects.md §1.3): the first 8 bytes of a native
+/// digest, with no algorithm byte.
+pub type Short = [u8; 8];
+
 /// A native ID: the SHA-256 digest of an object's identity input. Its tag is
 /// implied, since version 1 knows one algorithm.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -53,6 +57,11 @@ impl NativeId {
   /// The text form: 64 lowercase hex digits, without the tag.
   pub fn hex(&self) -> String {
     hex(&self.0)
+  }
+
+  /// Its short reference (objects.md §1.3): the digest's first 8 bytes.
+  pub fn short(&self) -> Short {
+    self.0[..8].try_into().expect("8 bytes")
   }
 
   pub fn from_hex(text: &str) -> Option<NativeId> {

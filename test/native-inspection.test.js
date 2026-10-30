@@ -15,7 +15,7 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, addContainer, aliases, annotation, containers, markAbsent, nativeId, removeEntry, setVersion,
+  TYPES, addAbsent, addContainer, aliases, annotation, containers, markAbsent, nativeId, removeEntry, setVersion, sharingShort,
 } from "../test-support/native-store.js";
 
 const created = [];
@@ -273,6 +273,11 @@ test("content absent by promise or by policy is reported by its state, not as co
   }
 });
 
+/** The native ID of the tree a revision names in the original. */
+function treeOf(history, revision) {
+  return history.rows.get(execFileSync("git", ["rev-parse", revision], { cwd: history.repo, env: testEnv() }).toString().trim());
+}
+
 test("the same content removed and not marked is reported as corruption", () => {
   const history = makeHistory("sha1");
   const { id } = blobOf(history);
@@ -281,13 +286,45 @@ test("the same content removed and not marked is reported as corruption", () => 
   assert.notEqual(checked.status, 0);
   const report = checked.stderr.toString();
   assert.match(report, /the native store is corrupt/);
-  assert.match(report, new RegExp(`its entry top names ${id}, which has no index entry`));
+  // The tree names it by its short reference, which no index entry now has.
+  assert.match(report, new RegExp(`${treeOf(history, "refs/heads/v1^{tree}")}, its copy in [0-9a-f]{64}\\.cstc: its entry top names ${id.slice(0, 16)}, a short reference no index entry's name begins with`));
   assert.match(report, new RegExp(`the sha1 alias row of ${history.file} names ${id}, which has no index entry`));
+});
+
+test("an absent index entry sharing a tree target's short reference changes no read and no verdict", () => {
+  const history = makeHistory("sha1");
+  const { id } = blobOf(history);
+  const shared = sharingShort(id);
+  addAbsent(history.native, [shared]);
+  // The trees naming the content now have two candidates for it, and keep
+  // the one whose rebuilt body verifies.
+  for (const args of [["ls-tree", "-r", "-l", "refs/heads/v1"], ["ls-tree", "refs/heads/v1"], ["ls-tree", "-r", "HEAD"], ["cat-file", "-p", "refs/heads/v1^{tree}"]]) {
+    same(history, args);
+  }
+  const checked = cst(history.native, ["fsck"]);
+  assert.equal(checked.status, 0, checked.stderr.toString());
+  assert.match(checked.stdout.toString(), new RegExp(`^absent by promise: ${shared}\n`));
+  const verified = cst(history.native, ["import", "--verify"]);
+  assert.equal(verified.status, 0, verified.stderr.toString());
+});
+
+test("a tree whose short reference no candidate verifies is corrupt, named by its ID", () => {
+  const history = makeHistory("sha1");
+  const { id } = blobOf(history);
+  const tree = treeOf(history, "refs/heads/v1^{tree}");
+  // The content is gone, and the one object left sharing its 8 bytes is not it.
+  removeEntry(history.native, id);
+  addAbsent(history.native, [sharingShort(id)]);
+  const checked = cst(history.native, ["fsck"]);
+  assert.notEqual(checked.status, 0);
+  // A candidate that does not verify could stand for any entry, so the tree
+  // is named; a reference with no candidate names its entry (above).
+  assert.match(checked.stderr.toString(), new RegExp(`${tree}, its copy in [0-9a-f]{64}\\.cstc: no choice of its short references' candidates hashes to its ID`));
 });
 
 test("metadata is never absent: a tree marked absent is corruption", () => {
   const history = makeHistory("sha1");
-  const tree = history.rows.get(execFileSync("git", ["rev-parse", "HEAD:dir"], { cwd: history.repo, env: testEnv() }).toString().trim());
+  const tree = treeOf(history, "HEAD:dir");
   markAbsent(history.native, tree, 1);
   const checked = cst(history.native, ["fsck"]);
   assert.notEqual(checked.status, 0);
