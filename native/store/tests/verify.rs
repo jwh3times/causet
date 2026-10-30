@@ -37,12 +37,15 @@ fn store(name: &str) -> (PathBuf, NativeId, NativeId, NativeId) {
   let small = writer.put_content(b"hello\n").unwrap();
   let large = writer.put_content(&varied(200_000, 7)).unwrap();
   let tree = writer
-    .put_tree(&Tree {
-      entries: vec![
-        Entry { name: b"large".to_vec(), kind: Kind::File, target: Target::Native(large) },
-        Entry { name: b"small".to_vec(), kind: Kind::File, target: Target::Native(small) },
-      ],
-    })
+    .put_tree(
+      &Tree {
+        entries: vec![
+          Entry { name: b"large".to_vec(), kind: Kind::File, target: Target::Native(large) },
+          Entry { name: b"small".to_vec(), kind: Kind::File, target: Target::Native(small) },
+        ],
+      },
+      b"",
+    )
     .unwrap();
   writer
     .finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap())

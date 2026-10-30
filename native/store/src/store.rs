@@ -8,11 +8,14 @@ use crate::chunker;
 use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
 use crate::delta::{self, DEPTH_LIMIT, Delta};
 use crate::id::{GitAlgorithm, NativeId, Short, Type, hex, unhex};
-use crate::objects::{CHOICES, ChunkList, Preserved, RefTarget, ShortTarget, ShortTree, Snapshot, Target, Tree};
+use crate::objects::{
+  CHOICES, ChunkList, GitKind, Preserved, RefTarget, ShortTarget, ShortTree, Snapshot, Target, Tree,
+};
 use crate::reconstruct;
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::io::Write as _;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
 
 /// The root marker's exact content, naming [`crate::VERSION`].
@@ -23,6 +26,9 @@ const WHOLE: usize = 32 * 1024;
 const STAGING: &str = ".cst-import";
 /// Held under `.cst/` while an import adds to the store (objects.md §10).
 pub const LOCK: &str = "import.lock";
+/// Where an import holds its metadata until the container closes, beside
+/// the lock (objects.md §10).
+pub const HELD: &str = "import.metadata";
 
 /// Writes a store: a new one into an empty destination, or what an import
 /// adds to an existing one. A new store is not a native repository until
@@ -50,6 +56,126 @@ pub struct StoreWriter {
   /// What an import into an existing store has put in place so far, so a
   /// failure can take it back.
   placed: Placed,
+  held: Held,
+}
+
+/// The metadata a writer holds until it closes the container, which it then
+/// writes in path order (storage.md §3.2): trees grouped by path, then
+/// everything else in the order it came. Each record waits in a file beside
+/// the lock, so what a writer keeps in memory is a few bytes an object.
+struct Held {
+  path: PathBuf,
+  file: Option<BufWriter<File>>,
+  written: u64,
+  records: Vec<HeldRecord>,
+  /// Each path's rank, in the order its first tree came.
+  paths: HashMap<Vec<u8>, u32>,
+}
+
+/// Where a held record waits, and what the container's index says of it.
+struct HeldRecord {
+  /// A tree's path's rank; any other record's comes after every tree's.
+  group: u32,
+  /// Where its ID, length and bytes begin in the file.
+  offset: u64,
+  kind: Type,
+  form: Form,
+}
+
+/// What precedes each held record's bytes: its ID, then its length as `u64`.
+const HELD_HEAD: usize = 32 + 8;
+
+impl Held {
+  fn new(staging: &Path) -> Held {
+    Held {
+      path: staging.join(HELD),
+      file: None,
+      written: 0,
+      records: Vec::new(),
+      paths: HashMap::new(),
+    }
+  }
+
+  /// Holds a record: its ID, its length and its bytes go in the file. A
+  /// tree's `path` places it.
+  fn hold(
+    &mut self,
+    id: &NativeId,
+    kind: Type,
+    form: Form,
+    record: &[u8],
+    path: Option<&[u8]>,
+  ) -> Result<(), StoreError> {
+    let group = match path {
+      Some(path) => {
+        let next = self.paths.len() as u32;
+        *self.paths.entry(path.to_vec()).or_insert(next)
+      }
+      None => u32::MAX,
+    };
+    if self.file.is_none() {
+      let file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&self.path)
+        .map_err(|error| StoreError::io(&self.path, error))?;
+      self.file = Some(BufWriter::new(file));
+    }
+    let file = self.file.as_mut().expect("the file just opened");
+    file
+      .write_all(&id.0)
+      .and_then(|()| file.write_all(&(record.len() as u64).to_be_bytes()))
+      .and_then(|()| file.write_all(record))
+      .map_err(|error| StoreError::io(&self.path, error))?;
+    self.records.push(HeldRecord {
+      group,
+      offset: self.written,
+      kind,
+      form,
+    });
+    self.written += (HELD_HEAD + record.len()) as u64;
+    Ok(())
+  }
+
+  /// Adds every held record to `container` in path order, then removes the
+  /// file.
+  fn write(&mut self, container: &mut ContainerWriter) -> Result<(), StoreError> {
+    let Some(file) = self.file.take() else {
+      return Ok(());
+    };
+    let failed = |error: std::io::Error| StoreError::io(&self.path, error);
+    let mut file = BufReader::new(file.into_inner().map_err(|error| failed(error.into_error()))?);
+    file.seek(SeekFrom::Start(0)).map_err(failed)?;
+    let mut records = std::mem::take(&mut self.records);
+    // Stable, so each group keeps the order its records came in.
+    records.sort_by_key(|held| held.group);
+    let mut at: u64 = 0;
+    let mut record = Vec::new();
+    for held in records {
+      // Relative, so a record near the last one is read from the buffer.
+      let mut head = [0u8; HELD_HEAD];
+      file
+        .seek_relative(held.offset as i64 - at as i64)
+        .and_then(|()| file.read_exact(&mut head))
+        .map_err(failed)?;
+      let length = u64::from_be_bytes(head[32..].try_into().expect("8 bytes"));
+      record.resize(length as usize, 0);
+      file.read_exact(&mut record).map_err(failed)?;
+      at = held.offset + (HELD_HEAD as u64) + length;
+      let id = NativeId(head[..32].try_into().expect("32 bytes"));
+      container.add(&id, held.kind, held.form, &record)?;
+    }
+    drop(file);
+    self.discard();
+    Ok(())
+  }
+
+  fn discard(&mut self) {
+    self.file = None;
+    let _ = std::fs::remove_file(&self.path);
+  }
 }
 
 /// The previous version of a file, which a new version may be stored against
@@ -93,6 +219,7 @@ impl StoreWriter {
     Ok(StoreWriter {
       root: root.to_path_buf(),
       container: Some(ContainerWriter::create(&objects)?),
+      held: Held::new(&staging),
       staging,
       algorithm,
       present: BTreeSet::new(),
@@ -129,6 +256,7 @@ impl StoreWriter {
     let mut writer = StoreWriter {
       root: root.to_path_buf(),
       container: None,
+      held: Held::new(&staging),
       staging,
       algorithm,
       present: BTreeSet::new(),
@@ -323,8 +451,10 @@ impl StoreWriter {
   /// references would need more than 65,536 choices among what the store
   /// holds is refused, naming it (§1.3), and so is one naming an object the
   /// store does not hold, which no reader could resolve. `finish` checks the
-  /// bound again, against what the import wrote after the tree.
-  pub fn put_tree(&mut self, tree: &Tree) -> Result<NativeId, StoreError> {
+  /// bound again, against what the import wrote after the tree. `path` is
+  /// where import's walk first reaches the tree, which places it among the
+  /// container's trees (storage.md §3.2).
+  pub fn put_tree(&mut self, tree: &Tree, path: &[u8]) -> Result<NativeId, StoreError> {
     let id = NativeId::of(Type::Tree, &tree.encode());
     if self.present.contains(&id) {
       return Ok(id);
@@ -341,8 +471,23 @@ impl StoreWriter {
       }
       Some(choices) => self.within_bound(&id, choices)?,
     }
-    self.add(&id, Type::Tree, Form::ShortReferences, &tree.encode_short())?;
+    self.hold(&id, Type::Tree, Form::ShortReferences, &tree.encode_short(), Some(path))?;
     Ok(id)
+  }
+
+  /// Holds a metadata record until the container closes (storage.md §3.2).
+  /// It is a candidate for short references from now.
+  fn hold(
+    &mut self,
+    id: &NativeId,
+    kind: Type,
+    form: Form,
+    record: &[u8],
+    path: Option<&[u8]>,
+  ) -> Result<(), StoreError> {
+    self.held.hold(id, kind, form, record, path)?;
+    self.present.insert(*id);
+    Ok(())
   }
 
   /// The product of each short reference's number of candidates, or `None`
@@ -434,14 +579,15 @@ impl StoreWriter {
     found
   }
 
-  pub fn put_preserved(&mut self, preserved: &Preserved) -> Result<NativeId, StoreError> {
-    self.put_metadata(Type::Preserved, &preserved.encode())
-  }
-
-  fn put_metadata(&mut self, kind: Type, body: &[u8]) -> Result<NativeId, StoreError> {
-    let id = NativeId::of(kind, body);
+  /// Stores a commit, tag or tree kept in Git's encoding. `path` is where
+  /// import's walk first reaches it, which places a tree among the
+  /// container's trees (storage.md §3.2).
+  pub fn put_preserved(&mut self, preserved: &Preserved, path: &[u8]) -> Result<NativeId, StoreError> {
+    let body = preserved.encode();
+    let id = NativeId::of(Type::Preserved, &body);
     if !self.present.contains(&id) {
-      self.add(&id, kind, Form::Body, body)?;
+      let tree = (preserved.kind == GitKind::Tree).then_some(path);
+      self.hold(&id, Type::Preserved, Form::Body, &body, tree)?;
     }
     Ok(id)
   }
@@ -496,7 +642,16 @@ impl StoreWriter {
         )));
       }
     }
-    let id = self.put_metadata(Type::Snapshot, &snapshot.encode())?;
+    // The held metadata goes in first, so the snapshot is last (§3.2). The
+    // container stays the writer's until both are in, so a failure abandons
+    // it.
+    let open = self.container.as_mut().expect("an open container");
+    self.held.write(open)?;
+    let body = snapshot.encode();
+    let id = NativeId::of(Type::Snapshot, &body);
+    if !self.present.contains(&id) {
+      open.add(&id, Type::Snapshot, Form::Body, &body)?;
+    }
     let container = self.container.take().expect("an open container");
     let mut rows: Vec<(Vec<u8>, Short)> = rows
       .into_iter()
@@ -551,6 +706,7 @@ impl StoreWriter {
 /// put in place, so the store is as it was, and releases the store.
 impl Drop for StoreWriter {
   fn drop(&mut self) {
+    self.held.discard();
     if self.existing.is_none() {
       return;
     }
@@ -1250,7 +1406,7 @@ mod tests {
     )
     .unwrap();
     // One candidate each when the tree is written.
-    let id = writer.put_tree(&tree).unwrap();
+    let id = writer.put_tree(&tree, b"").unwrap();
     // Then objects of the same import sharing each target's 8 bytes, as a
     // history built to collide would hold: 2^17 choices once they are written.
     for target in &targets {

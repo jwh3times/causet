@@ -162,6 +162,36 @@ test("a path's versions are stored together, oldest first, the paths in the orde
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
+test("a container's trees are grouped by path, oldest first, then come its commits and tags, then its snapshot", () => {
+  const root = scratch();
+  const { git, commit } = makeRepository(root);
+  const commits = [];
+  for (let n = 1; n <= 3; n++) {
+    const files = [["dir/sub/f", `f ${n}\n`], ["dir/g", `g ${n}\n`], ["top", `top ${n}\n`]];
+    commits.push(commit(files, `commit ${n}`, ...commits.slice(-1)));
+  }
+  git(["update-ref", "refs/heads/main", commits[2]]);
+  git(["tag", "-a", "-m", "the first", "v1", commits[0]]);
+  imports(root, "source", "native");
+  const native = path.join(root, "native");
+  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "snapshot"]);
+
+  const [file] = containers(native);
+  const order = readContainer(file).objects
+    .filter((object) => object.type !== TYPES.content)
+    .sort((a, b) => a.frame - b.frame || a.offset - b.offset)
+    .map((object) => object.name.toString("hex"));
+  const rows = aliases(native, "sha1");
+  const nativeOf = (revision) => rows.get(git(["rev-parse", revision]).toString().trim());
+  // The walk leaves each commit's `dir/sub` first, then `dir`, then its root.
+  const trees = (at) => commits.map((id) => nativeOf(`${id}:${at}`));
+  assert.deepEqual(order, [
+    ...trees("dir/sub"), ...trees("dir"), ...trees(""),
+    ...commits.map(nativeOf), nativeOf("v1"),
+    fs.readFileSync(path.join(native, ".cst", "snapshot"), "utf8").trim(),
+  ]);
+});
+
 test("an import into a native repository adds what is new, and then holds what a full import of the final history holds", () => {
   const history = makeHistory();
   const { root, git, commit, merged, one, lone } = history;

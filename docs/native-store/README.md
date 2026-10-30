@@ -17,12 +17,14 @@ A store written by an earlier build may have to be imported again, and a build
 reads only the version it writes, refusing any other by name. The promise
 starts when a later ADR makes it.
 
-**Version 1 is published ahead of its code** (see Authority): until
-[#350](https://github.com/jwh3times/causet/issues/350) is done, `native/store`
-writes version 1's version marks, content under 32 KiB whole, trees in short
-references and the 32-byte alias row, and version 0's other encodings. It
-reproduces version 1's container header, root marker, short-reference tree and
-alias file, and version 0's other worked examples.
+**Version 1 was published ahead of its code** (see Authority). `native/store`
+now writes all of it: version 1's version marks, content under 32 KiB whole,
+trees in short references, the 32-byte alias row and metadata in path order.
+It reproduces version 1's container header, root marker, short-reference tree
+and alias file, and the worked examples version 1 kept from version 0.
+[#350](https://github.com/jwh3times/causet/issues/350) stays open until the
+storage gate measures version 1 on git/git
+([#357](https://github.com/jwh3times/causet/issues/357)).
 
 ## Parts
 

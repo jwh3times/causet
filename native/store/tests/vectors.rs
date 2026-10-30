@@ -198,7 +198,7 @@ fn a_tree_is_stored_as_the_contracts_short_reference_example() {
     target: Target::Native(hello),
   }])
   .unwrap();
-  let id = writer.put_tree(&tree).unwrap();
+  let id = writer.put_tree(&tree, b"").unwrap();
   writer
     .finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap())
     .unwrap();

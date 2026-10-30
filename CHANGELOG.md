@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Metadata is stored in path order** (#356, part of #350). `cst import`
+  writes a container's metadata in the order `docs/native-store/storage.md`
+  §3.2 sets for format version 1. Trees, native and preserved, come first,
+  grouped by the path where import's walk first reaches each, so a
+  directory's versions sit together, oldest first. Commits and tags follow
+  in walk order, then the ref snapshot. Import holds the metadata in
+  `.cst/import.metadata` (`.cst-import/` for a new store) until it writes
+  the container, and removes the file when it finishes or fails. On
+  git/git that file peaks at 1.58 GB of temporary disk; import's memory
+  does not grow. The store falls from 128.9 MB to 110.3 MB. Every N1
+  command answers as before; only the container's bytes change.
+
 - **Alias rows hold a short reference** (#355, part of #350). `cst import`
   writes each alias row as the full Git digest followed by the first 8
   bytes of the native digest, as `docs/native-store/objects.md` §9.1 sets
