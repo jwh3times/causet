@@ -8,10 +8,6 @@ none
 
 `git status --short --branch` and `git worktree list`
 
-## Companion commit policy
-
-none
-
 ## Sync with main
 
 `cst pull --ff-only`
