@@ -7,25 +7,9 @@ cut-on-line — `Unreleased` collects each change's entries. A release is prepar
 maintainer tags `v*`. Releases use bare `## x.y.z` headings, unlike `ship`'s cut, so a major or
 minor evaluation is answered "build" and the release is prepared by hand.
 
-## Skipped tags
-
-none
-
-## Version file
-
-`package.json` (with `package-lock.json` beside it)
-
-## Bump command
-
-`npm version <version> --no-git-tag-version`
-
 ## Ask before bumping
 
 always
-
-## Next-version command
-
-none
 
 ## Changelog check
 
