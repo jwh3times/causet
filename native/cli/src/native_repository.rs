@@ -419,9 +419,7 @@ pub(crate) struct Listed {
 
 /// A Git ID's native object, when the store imported it.
 pub(crate) fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> Option<NativeId> {
-  store
-    .aliases_for(algorithm)
-    .and_then(|aliases| aliases.native(digest))
+  store.native(algorithm, digest)
 }
 
 /// The entries of a tree or of a tree kept in Git's encoding; `None` for any

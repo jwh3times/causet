@@ -246,14 +246,11 @@ fn write(
 /// The Git IDs of the objects an existing store's current refs name.
 fn held_tips(store: &Store, algorithm: GitAlgorithm) -> GitResult<Vec<String>> {
   let snapshot = store.refs().map_err(store_error)?;
-  let Some(aliases) = store.aliases_for(algorithm) else {
-    return Ok(Vec::new());
-  };
   let mut tips: Vec<String> = snapshot
     .refs
     .iter()
     .filter_map(|entry| match &entry.target {
-      RefTarget::Direct(id) => aliases.git(id).map(hex),
+      RefTarget::Direct(id) => store.git(algorithm, id).map(|digest| hex(&digest)),
       RefTarget::Symbolic(_) => None,
     })
     .collect();
@@ -306,8 +303,7 @@ fn below(path: &[u8], name: &[u8]) -> Vec<u8> {
 impl Importer<'_> {
   /// The native object the store held already for a Git ID.
   fn held(&self, id: &str) -> Option<NativeId> {
-    let aliases = self.store.existing()?.aliases_for(self.algorithm)?;
-    aliases.native(&unhex(id)?)
+    self.store.existing()?.native(self.algorithm, &unhex(id)?)
   }
 
   fn native_of(&self, id: &str) -> Option<NativeId> {
@@ -587,10 +583,9 @@ impl Importer<'_> {
     let body = store.read(&native).ok()?.body;
     match store.held(&native)? {
       Type::Tree => {
-        let aliases = store.aliases_for(self.algorithm)?;
         Tree::decode(&body).ok()?.entries.into_iter().map(|entry| {
           let target = match &entry.target {
-            Target::Native(target) => hex(aliases.git(target)?),
+            Target::Native(target) => hex(&store.git(self.algorithm, target)?),
             Target::Git(target) => target.hex(),
           };
           Some((entry.name, git_mode(entry.kind.git_mode()), target))
@@ -742,15 +737,12 @@ impl Importer<'_> {
     }
     let tree = Tree::from_entries(entries).ok()?;
     let git = &self.git;
-    let held = self
-      .store
-      .existing()
-      .and_then(|store| store.aliases_for(self.algorithm));
+    let existing = self.store.existing();
     let git_of = |native: &NativeId| {
       git
         .get(native)
         .cloned()
-        .or_else(|| held.and_then(|aliases| aliases.git(native)).map(<[u8]>::to_vec))
+        .or_else(|| existing.and_then(|store| store.git(self.algorithm, native)))
     };
     (tree.git_encoding(&git_of).as_deref() == Some(payload)).then_some(tree)
   }

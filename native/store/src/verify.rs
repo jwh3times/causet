@@ -10,7 +10,7 @@ use crate::container::{ABSENT_BY_POLICY, ABSENT_BY_PROMISE, Container, Form, PRE
 use crate::delta::Delta;
 use crate::id::{NativeId, Type, hex};
 use crate::objects::{Annotation, ChunkList, GitKind, Kind, Preserved, RefTarget, Snapshot, Target, Tree};
-use crate::store::Store;
+use crate::store::{Store, Unresolved};
 use causet_model::sha256;
 use std::collections::{HashMap, HashSet};
 
@@ -187,14 +187,27 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
       Names::Nothing | Names::Preserved(_) | Names::Snapshot(_) => {}
     }
   }
+  // Each row resolves to one object (objects.md §1.3), and no two rows of a
+  // file to the same one (§9). A row that only an absent candidate could
+  // verify is unverified, not corrupt.
   for aliases in store.aliases() {
-    for (digest, native) in aliases.rows() {
-      if entry(native).is_none() {
-        found.problems.push(format!(
-          "the {} alias row of {} names {native}, which has no index entry",
-          aliases.algorithm.name(),
-          hex(digest)
-        ));
+    let algorithm = aliases.algorithm.name();
+    let mut resolved: HashMap<NativeId, &[u8]> = HashMap::new();
+    for (digest, short) in aliases.rows() {
+      match store.resolve_row(aliases.algorithm, digest, short) {
+        Ok(native) => {
+          if let Some(other) = resolved.insert(native, digest) {
+            found.problems.push(format!(
+              "the {algorithm} alias rows of {} and {} both resolve to {native}",
+              hex(other),
+              hex(digest)
+            ));
+          }
+        }
+        Err(Unresolved::Corrupt(why)) => found
+          .problems
+          .push(format!("the {algorithm} alias row of {} {why}", hex(digest))),
+        Err(Unresolved::Unverified(_)) => {}
       }
     }
   }

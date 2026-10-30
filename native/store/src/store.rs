@@ -7,8 +7,9 @@ use crate::alias::Aliases;
 use crate::chunker;
 use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
 use crate::delta::{self, DEPTH_LIMIT, Delta};
-use crate::id::{GitAlgorithm, NativeId, Short, Type, unhex};
+use crate::id::{GitAlgorithm, NativeId, Short, Type, hex, unhex};
 use crate::objects::{CHOICES, ChunkList, Preserved, RefTarget, ShortTarget, ShortTree, Snapshot, Target, Tree};
+use crate::reconstruct;
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write as _;
@@ -40,7 +41,10 @@ pub struct StoreWriter {
   present: BTreeSet<NativeId>,
   /// The depth of each delta this writer stored (storage.md §5.2).
   depths: HashMap<NativeId, usize>,
+  /// This import's alias rows, whole.
   aliases: Vec<(Vec<u8>, NativeId)>,
+  /// The rows of the store an import adds to, as its alias file holds them.
+  existing_rows: Vec<(Vec<u8>, Short)>,
   /// The store an import adds to, as it was when the import began.
   existing: Option<Store>,
   /// What an import into an existing store has put in place so far, so a
@@ -94,6 +98,7 @@ impl StoreWriter {
       present: BTreeSet::new(),
       depths: HashMap::new(),
       aliases: Vec::new(),
+      existing_rows: Vec::new(),
       existing: None,
       placed: Placed::default(),
     })
@@ -129,6 +134,7 @@ impl StoreWriter {
       present: BTreeSet::new(),
       depths: HashMap::new(),
       aliases: Vec::new(),
+      existing_rows: Vec::new(),
       existing: None,
       placed: Placed::default(),
     };
@@ -152,12 +158,12 @@ impl StoreWriter {
       )));
     }
     writer.present = store.present().into_iter().map(|(id, _, _)| id).collect();
-    writer.aliases = store
+    writer.existing_rows = store
       .aliases_for(algorithm)
       .map(|aliases| {
         aliases
           .rows()
-          .map(|(digest, id)| (digest.to_vec(), *id))
+          .map(|(digest, short)| (digest.to_vec(), *short))
           .collect()
       })
       .unwrap_or_default();
@@ -458,10 +464,31 @@ impl StoreWriter {
         self.algorithm.name()
       )));
     }
-    let aliased: HashSet<NativeId> = self.aliases.iter().map(|(_, id)| *id).collect();
+    let mut rows = std::mem::take(&mut self.aliases);
+    rows.sort();
+    rows.dedup();
+    // Within one Git algorithm the map is one-to-one (objects.md §9). A
+    // stored row holds only a short reference, so this import's rows are
+    // checked here, while they are whole, against each other and against
+    // the rows the store holds already.
+    let mut aliased: Vec<NativeId> = rows.iter().map(|(_, id)| *id).collect();
+    aliased.sort();
+    let existing = self.existing.as_ref();
+    let held_elsewhere = |(digest, id): &(Vec<u8>, NativeId)| {
+      existing
+        .and_then(|store| store.git(self.algorithm, id))
+        .is_some_and(|held| held != *digest)
+    };
+    if aliased.windows(2).any(|pair| pair[0] == pair[1]) || rows.iter().any(held_elsewhere) {
+      return Err(StoreError::Corrupt("two alias rows have the same native ID".into()));
+    }
+    let has_row = |id: &NativeId| {
+      aliased.binary_search(id).is_ok()
+        || existing.is_some_and(|store| store.git(self.algorithm, id).is_some())
+    };
     for entry in &snapshot.refs {
       if let RefTarget::Direct(id) = &entry.target
-        && !(self.present.contains(id) && aliased.contains(id))
+        && !(self.present.contains(id) && has_row(id))
       {
         return Err(StoreError::Codec(format!(
           "the snapshot's ref {} names {id}, which is not an imported object",
@@ -471,7 +498,11 @@ impl StoreWriter {
     }
     let id = self.put_metadata(Type::Snapshot, &snapshot.encode())?;
     let container = self.container.take().expect("an open container");
-    let mut rows = std::mem::take(&mut self.aliases);
+    let mut rows: Vec<(Vec<u8>, Short)> = rows
+      .into_iter()
+      .map(|(digest, id)| (digest, id.short()))
+      .collect();
+    rows.append(&mut self.existing_rows);
     rows.sort();
     rows.dedup();
     let aliases = Aliases::new(self.algorithm, rows).map_err(StoreError::Corrupt)?.encode();
@@ -590,6 +621,27 @@ pub struct Object {
   pub body: Vec<u8>,
 }
 
+/// Why an alias row resolves to no one object (objects.md §1.3). Each says
+/// what the row names, to follow "the row" or "it".
+#[derive(Debug)]
+pub enum Unresolved {
+  /// No candidate; none that verifies, every one present; or more than one
+  /// that verifies.
+  Corrupt(String),
+  /// None verifies, and an absent candidate might: as a chunk list naming
+  /// absent content is (objects.md §8), the row is unverified, not corrupt.
+  Unverified(String),
+}
+
+impl Unresolved {
+  /// What the row names, and why it resolves to no one object.
+  pub fn why(&self) -> &str {
+    match self {
+      Unresolved::Corrupt(why) | Unresolved::Unverified(why) => why,
+    }
+  }
+}
+
 /// A store opened for reading: the marker, the alias files and every
 /// container's index, checked; objects are read and verified on demand.
 pub struct Store {
@@ -705,7 +757,6 @@ impl Store {
     let read = self.read_known(&self.snapshot)?;
     let corrupt = |what: String| StoreError::Corrupt(format!("{}: {what}", self.snapshot));
     let snapshot = Snapshot::decode(&read.body).map_err(corrupt)?;
-    let aliases = self.aliases_for(snapshot.algorithm);
     for entry in &snapshot.refs {
       if let RefTarget::Direct(id) = &entry.target {
         let name = String::from_utf8_lossy(&entry.name);
@@ -714,7 +765,7 @@ impl Store {
             "its ref {name} names {id}, which the store does not hold"
           )));
         }
-        if aliases.and_then(|aliases| aliases.git(id)).is_none() {
+        if self.git(snapshot.algorithm, id).is_none() {
           return Err(corrupt(format!(
             "its ref {name} names {id}, which has no {} alias row",
             snapshot.algorithm.name()
@@ -735,6 +786,93 @@ impl Store {
       .aliases
       .iter()
       .find(|aliases| aliases.algorithm == algorithm)
+  }
+
+  /// The object a Git ID's alias row names, its short reference resolved
+  /// (objects.md §9.1): `None` when the Git ID has no row, or when its row
+  /// resolves to no one object, which `cst fsck` reports.
+  pub fn native(&self, algorithm: GitAlgorithm, git_digest: &[u8]) -> Option<NativeId> {
+    let short = self.aliases_for(algorithm)?.short(git_digest)?;
+    self.resolve_row(algorithm, git_digest, &short).ok()
+  }
+
+  /// An object's Git digest in an algorithm: among the rows holding its
+  /// short reference, the one that is its own, confirmed by its full ID
+  /// (objects.md §9.1). When it is the reference's one candidate and one row
+  /// holds it, that row is its own; otherwise its own row is the one whose
+  /// Git ID its Git encoding has.
+  pub fn git(&self, algorithm: GitAlgorithm, id: &NativeId) -> Option<Vec<u8>> {
+    let aliases = self.aliases_for(algorithm)?;
+    let short = id.short();
+    let mut rows = aliases.sharing(&short);
+    let first = rows.next()?;
+    if rows.next().is_none() && self.sole(&short, id) {
+      return Some(first.to_vec());
+    }
+    let own = reconstruct::git_id_of(self, algorithm, id).ok()?;
+    aliases
+      .sharing(&short)
+      .find(|digest| *digest == own.as_slice())
+      .map(<[u8]>::to_vec)
+  }
+
+  /// An alias row's object (objects.md §1.3): a short reference's one
+  /// candidate, or among several, the one present candidate whose Git
+  /// encoding has the row's Git ID.
+  pub fn resolve_row(
+    &self,
+    algorithm: GitAlgorithm,
+    git_digest: &[u8],
+    short: &Short,
+  ) -> Result<NativeId, Unresolved> {
+    let candidates = self.candidates(short);
+    if let [one] = candidates.as_slice() {
+      return Ok(*one);
+    }
+    let named = hex(short);
+    match candidates.as_slice() {
+      [] => {
+        return Err(Unresolved::Corrupt(format!(
+          "names {named}, a short reference no index entry's name begins with"
+        )));
+      }
+      _ => {}
+    }
+    let mut verified = Vec::new();
+    let mut absent = false;
+    for candidate in candidates {
+      if self.locate(&candidate).is_some_and(|(_, record)| record.state != PRESENT) {
+        absent = true;
+      } else if reconstruct::git_id_of(self, algorithm, &candidate).is_ok_and(|id| id == git_digest) {
+        verified.push(candidate);
+      }
+    }
+    match verified.as_slice() {
+      [one] => Ok(*one),
+      [] if absent => Err(Unresolved::Unverified(format!(
+        "names {named}, and no present candidate's Git encoding has its Git ID"
+      ))),
+      [] => Err(Unresolved::Corrupt(format!(
+        "names {named}, and no candidate's Git encoding has its Git ID"
+      ))),
+      _ => Err(Unresolved::Corrupt(format!(
+        "names {named}, and more than one candidate's Git encoding has its Git ID"
+      ))),
+    }
+  }
+
+  /// Whether `id` is a short reference's one candidate, without collecting
+  /// them: the lookup every row of an unshared store takes.
+  fn sole(&self, short: &Short, id: &NativeId) -> bool {
+    let mut found = false;
+    for container in &self.containers {
+      match container.starting(short) {
+        [] => {}
+        [name] if *name == id.0 => found = true,
+        _ => return false,
+      }
+    }
+    found
   }
 
   /// Every object the store holds present, once, with its type and stored

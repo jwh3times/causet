@@ -1,11 +1,11 @@
 //! The reconstruction check (objects.md §9.2; ADR-0044, item 4): each alias
-//! row's native object, rebuilt in Git's encoding for the row's algorithm,
-//! must hash to the row's Git ID, and every object the store holds from Git
-//! must have a row. It reads the store and its alias files alone, runs no
-//! Git, and writes nothing.
+//! row's short reference is resolved, and its native object, rebuilt in Git's
+//! encoding for the row's algorithm, must hash to the row's Git ID, which the
+//! row holds whole, and every object the store holds from Git must have a
+//! row. It reads the store and its alias files alone, runs no Git, and writes
+//! nothing.
 
 use crate::StoreError;
-use crate::alias::Aliases;
 use crate::container::Form;
 use crate::id::{GitAlgorithm, GitId, NativeId, Type, hex};
 use crate::objects::{Preserved, Target, Tree};
@@ -25,27 +25,29 @@ pub struct Rebuilt {
 }
 
 /// An object that fails the check, and why: a row that does not rebuild to
-/// its Git ID, or an object the store holds that should have a row and has
+/// its Git ID (`native` is `None` when its short reference resolves to no
+/// one object), or an object the store holds that should have a row and has
 /// none (`git` is then `None`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failure {
   pub git: Option<GitId>,
-  pub native: NativeId,
+  pub native: Option<NativeId>,
   pub why: String,
 }
 
 impl fmt::Display for Failure {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match &self.git {
-      Some(git) => write!(
+    match (&self.git, &self.native) {
+      (Some(git), Some(native)) => write!(
         f,
-        "{} {} (native {}): {}",
+        "{} {} (native {native}): {}",
         git.algorithm().name(),
         git.hex(),
-        self.native,
         self.why
       ),
-      None => write!(f, "native {}: {}", self.native, self.why),
+      (Some(git), None) => write!(f, "{} {}: {}", git.algorithm().name(), git.hex(), self.why),
+      (None, Some(native)) => write!(f, "native {native}: {}", self.why),
+      (None, None) => write!(f, "{}", self.why),
     }
   }
 }
@@ -75,12 +77,28 @@ pub fn check(store: &Store) -> Result<Reconstruction, StoreError> {
     .collect();
   let mut found = Reconstruction::default();
   for aliases in store.aliases() {
-    let mut rows: Vec<(&[u8], &NativeId)> = aliases.rows().collect();
-    rows.sort_by_key(|(_, native)| order.get(native).copied().unwrap_or(usize::MAX));
+    let algorithm = aliases.algorithm;
+    let mut rows: Vec<(&[u8], Result<NativeId, String>)> = aliases
+      .rows()
+      .map(|(digest, short)| {
+        let native = store
+          .resolve_row(algorithm, digest, short)
+          .map_err(|unresolved| format!("it {}", unresolved.why()));
+        (digest, native)
+      })
+      .collect();
+    rows.sort_by_key(|(_, native)| {
+      native
+        .as_ref()
+        .ok()
+        .and_then(|native| order.get(native).copied())
+        .unwrap_or(usize::MAX)
+    });
     for (digest, native) in rows {
       found.rows += 1;
-      let rebuilt = rebuild(store, aliases, native).and_then(|(kind, payload)| {
-        let id = git_id(aliases.algorithm, kind, &payload)?;
+      let rebuilt = native.clone().and_then(|native| {
+        let (kind, payload) = rebuild(store, algorithm, &native)?;
+        let id = git_id(algorithm, kind, &payload)?;
         if id != digest {
           return Err(format!("it rebuilds to {}", hex(&id)));
         }
@@ -92,8 +110,8 @@ pub fn check(store: &Store) -> Result<Reconstruction, StoreError> {
         Ok("commit") => found.rebuilt.commits += 1,
         Ok(_) => found.rebuilt.tags += 1,
         Err(why) => found.failures.push(Failure {
-          git: Some(GitId::new(aliases.algorithm, digest.to_vec())),
-          native: *native,
+          git: Some(GitId::new(algorithm, digest.to_vec())),
+          native: native.ok(),
           why,
         }),
       }
@@ -115,7 +133,7 @@ fn unaliased(store: &Store, held: &[(NativeId, Type, Form)], failures: &mut Vec<
         Ok(list) => chunks.extend(list.chunks.into_iter().map(|(chunk, _)| chunk)),
         Err(error) => failures.push(Failure {
           git: None,
-          native: *id,
+          native: Some(*id),
           why: error.message().to_string(),
         }),
       }
@@ -125,7 +143,7 @@ fn unaliased(store: &Store, held: &[(NativeId, Type, Form)], failures: &mut Vec<
     if store
       .aliases()
       .iter()
-      .any(|aliases| aliases.git(id).is_some())
+      .any(|aliases| store.git(aliases.algorithm, id).is_some())
     {
       continue;
     }
@@ -139,23 +157,24 @@ fn unaliased(store: &Store, held: &[(NativeId, Type, Form)], failures: &mut Vec<
     };
     failures.push(Failure {
       git: None,
-      native: *id,
+      native: Some(*id),
       why: why.into(),
     });
   }
 }
 
 /// A native object in Git's encoding for an alias file's algorithm: its Git
-/// type and the payload after Git's header.
+/// type and the payload after Git's header, once every object it names that
+/// Git's parser follows is found to have a row.
 fn rebuild(
   store: &Store,
-  aliases: &Aliases,
+  algorithm: GitAlgorithm,
   native: &NativeId,
 ) -> Result<(&'static str, Vec<u8>), String> {
   let object = store
     .read_known(native)
     .map_err(|error| error.message().to_string())?;
-  let algorithm = aliases.algorithm.name();
+  let named = algorithm.name();
   match object.kind {
     Type::Content => Ok(("blob", object.body)),
     Type::Tree => {
@@ -163,14 +182,14 @@ fn rebuild(
       for entry in &tree.entries {
         let name = String::from_utf8_lossy(&entry.name);
         match &entry.target {
-          Target::Native(id) if aliases.git(id).is_none() => {
+          Target::Native(id) if store.git(algorithm, id).is_none() => {
             return Err(format!(
-              "its entry {name} names {id}, which has no {algorithm} alias row"
+              "its entry {name} names {id}, which has no {named} alias row"
             ));
           }
-          Target::Git(id) if id.algorithm() != aliases.algorithm => {
+          Target::Git(id) if id.algorithm() != algorithm => {
             return Err(format!(
-              "its submodule link {name} is a {} Git ID, not {algorithm}",
+              "its submodule link {name} is a {} Git ID, not {named}",
               id.algorithm().name()
             ));
           }
@@ -178,15 +197,15 @@ fn rebuild(
         }
       }
       let encoding = tree
-        .git_encoding(&|id| aliases.git(id).map(<[u8]>::to_vec))
+        .git_encoding(&|id| store.git(algorithm, id))
         .expect("every native target has a row");
       Ok(("tree", encoding))
     }
     Type::Preserved => {
       let preserved = Preserved::decode(&object.body)?;
-      if preserved.algorithm != aliases.algorithm {
+      if preserved.algorithm != algorithm {
         return Err(format!(
-          "it is a preserved {} object, in the {algorithm} alias file",
+          "it is a preserved {} object, in the {named} alias file",
           preserved.algorithm.name()
         ));
       }
@@ -195,10 +214,10 @@ fn rebuild(
       if let Some(missing) = preserved
         .named()
         .into_iter()
-        .find(|digest| aliases.native(digest).is_none())
+        .find(|digest| store.native(algorithm, digest).is_none())
       {
         return Err(format!(
-          "it names {algorithm} {}, which has no alias row",
+          "it names {named} {}, which has no alias row",
           hex(&missing)
         ));
       }
@@ -207,6 +226,34 @@ fn rebuild(
     Type::Snapshot => Err("it is a ref snapshot, which no Git object becomes".into()),
     Type::Annotation => Err("it is an annotation, which no Git object becomes".into()),
   }
+}
+
+/// A native object's Git ID in an algorithm, from its Git encoding alone:
+/// what a candidate for a shared short reference is checked by (objects.md
+/// §1.3). Unlike the check's, it does not follow what a commit or tag names,
+/// so checking one candidate never walks the history behind it.
+pub(crate) fn git_id_of(store: &Store, algorithm: GitAlgorithm, native: &NativeId) -> Result<Vec<u8>, String> {
+  let object = store
+    .read_known(native)
+    .map_err(|error| error.message().to_string())?;
+  let (kind, payload) = match object.kind {
+    Type::Content => ("blob", object.body),
+    Type::Tree => (
+      "tree",
+      Tree::decode(&object.body)?
+        .git_encoding(&|id| store.git(algorithm, id))
+        .ok_or("an entry has no alias row")?,
+    ),
+    Type::Preserved => {
+      let preserved = Preserved::decode(&object.body)?;
+      if preserved.algorithm != algorithm {
+        return Err("it is a preserved object of another Git algorithm".into());
+      }
+      (preserved.kind.name(), preserved.payload)
+    }
+    Type::Snapshot | Type::Annotation => return Err("no Git object becomes it".into()),
+  };
+  git_id(algorithm, kind, &payload)
 }
 
 /// A Git object's ID: the algorithm's hash of `<type> <size>`, a NUL and the
