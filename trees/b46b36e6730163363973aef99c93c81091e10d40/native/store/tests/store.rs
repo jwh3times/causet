@@ -489,3 +489,36 @@ fn a_tree_needing_more_than_65536_choices_is_refused_naming_it_and_one_needing_6
   assert_eq!(store.read(&kept_id).unwrap().body, kept.encode());
   std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn a_tree_naming_an_object_the_store_does_not_hold_is_refused() {
+  let root = scratch("short-unheld");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let tree = Tree::from_entries(vec![file("gone", NativeId::of(Type::Content, b"never written"))]).unwrap();
+  let id = NativeId::of(Type::Tree, &tree.encode());
+  match writer.put_tree(&tree) {
+    Err(StoreError::Codec(why)) => {
+      assert_eq!(why, format!("the tree {id} names an object the store does not hold"))
+    }
+    other => panic!("{other:?}"),
+  }
+  drop(writer);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_preserved_git_tree_is_stored_as_its_body() {
+  let root = scratch("preserved-body");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let preserved = Preserved {
+    algorithm: GitAlgorithm::Sha1,
+    kind: GitKind::Tree,
+    payload: b"040000 sub\0aaaaaaaaaaaaaaaaaaaa".to_vec(),
+  };
+  let id = writer.put_preserved(&preserved).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let store = Store::open(&root).unwrap();
+  assert_eq!(form(&store, &id), Form::Body);
+  assert_eq!(store.read(&id).unwrap().body, preserved.encode());
+  std::fs::remove_dir_all(&root).unwrap();
+}

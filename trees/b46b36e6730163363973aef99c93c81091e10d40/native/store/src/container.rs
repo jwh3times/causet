@@ -2,7 +2,8 @@
 //! of at most 4 MiB, one class per frame, and each delta in a stored frame of
 //! its own, written back to back into a
 //! container that ends with its index and footer, and read back with every
-//! check the contract lists for a reader that reads the index.
+//! check the contract lists for a reader that reads the index, its names
+//! found by the 8-byte prefix a short reference holds.
 
 use crate::StoreError;
 use crate::id::{NativeId, Short, Type, hex};
