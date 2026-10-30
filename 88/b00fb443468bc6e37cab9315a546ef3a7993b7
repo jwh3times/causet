@@ -1,5 +1,5 @@
 {
-  "schema": "vcs-lab.note/v1",
+  "schema": "causet.note/v1",
   "records": [
     {
       "schema": "vcs-lab.landing/v1",
