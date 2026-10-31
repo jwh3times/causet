@@ -25,7 +25,8 @@ workspace files, and environment variables.
 
 When a skill says "publish to the issue tracker," create an issue.
 When it says "fetch the relevant ticket," read the issue and comments.
-Publishing and commenting require authorization from the active task.
+Publishing and commenting need no approval step of their own: the task or skill that calls for them
+authorizes them.
 
 ## Pull requests as a triage surface
 

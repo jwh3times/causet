@@ -14,7 +14,6 @@ none
   `causet-scale-benchmark-*`, `causet-spec-benchmark-*`, `causet-benchmark-check-*`,
   `vcs-lab-test-*`, `vcs-lab-gate-*` (a leftover `causet-scale-benchmark-*` fails the benchmark
   test's cleanup assertion next session)
-- untracked strays in the checkout, listed with `git clean -nd` first
 
 ## Never-remove paths
 
