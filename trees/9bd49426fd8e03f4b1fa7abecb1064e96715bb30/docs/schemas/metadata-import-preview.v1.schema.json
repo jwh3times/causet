@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.metadata-import-preview/v1",
+  "title": "Metadata import preview",
+  "description": "Exact dry-run record/ref/object actions of vlab metadata import --dry-run --json (CLI output; src/metadata-transfer.js). vcs-lab.metadata-import/v1 extends this shape.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema", "path", "repository", "records", "refs", "objectProblems",
+    "summary", "exclusions", "trust"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.metadata-import-preview/v1" },
+    "path": { "type": "string", "minLength": 1 },
+    "repository": { "$ref": "#/$defs/repository" },
+    "records": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recordAction" }
+    },
+    "refs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/refAction" }
+    },
+    "objectProblems": { "type": "array" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "exclusions": { "type": "array", "items": { "type": "string" } },
+    "trust": {
+      "type": "object",
+      "required": ["cryptographicallySigned", "authorized", "statement"],
+      "properties": {
+        "cryptographicallySigned": { "const": false },
+        "authorized": { "const": false },
+        "statement": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" },
+    "repository": {
+      "type": "object",
+      "required": ["objectFormat", "lineageRelation", "sourceLineage", "destinationLineage"],
+      "properties": {
+        "objectFormat": { "enum": ["sha1", "sha256"] },
+        "lineageRelation": {
+          "type": "string",
+          "description": "'same', 'fork', 'unrelated', or 'incompatible'."
+        },
+        "sourceLineage": { "type": "string", "pattern": "^lineage_[0-9a-f]{64}$" },
+        "destinationLineage": { "type": "string", "pattern": "^lineage_[0-9a-f]{64}$" }
+      }
+    },
+    "recordAction": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "'add', 'noop', or 'conflict'."
+        }
+      }
+    },
+    "refAction": {
+      "type": "object",
+      "required": ["ref", "incoming", "existing", "action"],
+      "properties": {
+        "ref": { "type": "string" },
+        "incoming": { "$ref": "#/$defs/oid" },
+        "existing": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+        },
+        "action": {
+          "type": "string",
+          "description": "'create', 'merge', 'noop', or 'conflict'."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "addRecords", "noopRecords", "createRefs", "mergeRefs", "noopRefs",
+        "conflicts", "applicable"
+      ],
+      "properties": {
+        "addRecords": { "type": "integer", "minimum": 0 },
+        "noopRecords": { "type": "integer", "minimum": 0 },
+        "createRefs": { "type": "integer", "minimum": 0 },
+        "mergeRefs": { "type": "integer", "minimum": 0 },
+        "noopRefs": { "type": "integer", "minimum": 0 },
+        "conflicts": { "type": "integer", "minimum": 0 },
+        "applicable": { "type": "boolean" }
+      }
+    }
+  }
+}

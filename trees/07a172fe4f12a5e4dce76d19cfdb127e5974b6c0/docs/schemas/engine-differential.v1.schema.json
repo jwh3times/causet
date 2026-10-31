@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.engine-differential/v1",
+  "title": "Engine differential report",
+  "description": "Operation-by-operation comparison of the read engines, returned as the differential member of vlab doctor --differential (CLI output; src/engine.js runDifferential). The probes must cover the read-operation catalog exactly.",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "engines", "oracle", "operations", "counts", "equal"],
+  "properties": {
+    "schema": { "const": "vcs-lab.engine-differential/v1" },
+    "engines": {
+      "type": "array",
+      "items": { "enum": ["git", "native"] }
+    },
+    "oracle": {
+      "const": "git",
+      "description": "The first engine; its results are the reference."
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["operation", "status"],
+        "properties": {
+          "operation": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["equal", "different", "skipped"] },
+          "reason": {
+            "type": "string",
+            "description": "Why a probe was skipped; present only for status 'skipped'."
+          },
+          "results": {
+            "type": "object",
+            "description": "Per-engine probe outcome keyed by engine name: digest (or null on error), error, processes, fallbacks, directReads."
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["equal", "different", "skipped"],
+      "properties": {
+        "equal": { "type": "integer", "minimum": 0 },
+        "different": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "equal": { "type": "boolean" }
+  }
+}
