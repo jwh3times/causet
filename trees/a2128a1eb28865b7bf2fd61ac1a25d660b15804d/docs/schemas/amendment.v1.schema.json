@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.amendment/v1",
+  "title": "Interactive amendment",
+  "description": "A recorded divergence between what a logical change contained before an interactive `edit` and what it contains after, under the same identity (shared-portable note record; src/rebase-operations.js completeInteractiveStep). It exists because `edit` is the one operation that changes content while keeping identity: without it, a peer holding a receipt for that identity would go on reporting it covered for content that no longer exists (ADR-0035). A reader that has this record downgrades a bare Change-Id match for the identity from `covered` to `candidate-equivalent`; a receipt naming the specific commit still proves that commit, and ancestry still proves what ancestry proves.",
+  "x-vcs-lab-scope": "note-record",
+  "type": "object",
+  "required": [
+    "schema",
+    "type",
+    "id",
+    "changeId",
+    "commit",
+    "originCommit",
+    "treeBefore",
+    "treeAfter",
+    "rebaseOperation",
+    "createdAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.amendment/v1"
+    },
+    "type": {
+      "const": "amendment"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 4
+    },
+    "changeId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The identity whose content diverged. It is retained, not replaced: an edit is not a fork."
+    },
+    "commit": {
+      "$ref": "#/$defs/oid",
+      "description": "The rewritten commit carrying the edited content. The record is attached to it."
+    },
+    "originCommit": {
+      "$ref": "#/$defs/oid",
+      "description": "The commit the edit was replayed from."
+    },
+    "treeBefore": {
+      "$ref": "#/$defs/oid",
+      "description": "The tree as replayed, before the caller changed anything."
+    },
+    "treeAfter": {
+      "$ref": "#/$defs/oid",
+      "description": "The tree the caller committed. It is never equal to treeBefore: an edit that changed nothing publishes no amendment, because nothing diverged."
+    },
+    "rebaseOperation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "attachedTo": {
+      "$ref": "#/$defs/oid"
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    }
+  }
+}
