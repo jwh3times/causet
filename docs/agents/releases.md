@@ -2,10 +2,7 @@
 
 ## Scheme
 
-cut-on-line — `Unreleased` collects each change's entries. A release is prepared deliberately: a
-`chore: prepare vX.Y.Z` pull request sets the version and cuts the release's section, and a
-maintainer tags `v*`. Releases use bare `## x.y.z` headings, unlike `ship`'s cut, so a major or
-minor evaluation is answered "build" and the release is prepared by hand.
+cut-on-line
 
 ## Ask before bumping
 
@@ -13,4 +10,9 @@ always
 
 ## Changelog check
 
-none
+`node scripts/check-changelog.mjs --source bin --source native`
+
+## Release commit message
+
+`docs: update docs and changelog` for a build, and `chore: prepare v<version>, <headline>` for a
+cut: the development flow exempts that commit, and a maintainer tags `v*` after it merges.
