@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.workspaces/v1",
+  "title": "Workspace registry",
+  "description": "Shared-local workspace registry container, stored at <common Git dir>/vcs-lab/workspaces.json (src/workspaces.js).",
+  "x-vcs-lab-scope": "shared-local",
+  "type": "object",
+  "required": ["schema", "workspaces"],
+  "properties": {
+    "schema": { "const": "vcs-lab.workspaces/v1" },
+    "workspaces": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.workspace/v1" }
+    }
+  }
+}
