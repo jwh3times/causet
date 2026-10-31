@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [Unreleased]
 
 - **Format version 1 meets the storage gate on every real repository**
   (#357, closing #345 and #350). With short references in trees,
@@ -265,7 +265,7 @@
   `cst fetch --json` for a report of the records. `cst --help` says which of
   the four remote commands take `--json`.
 
-## 0.25.1
+## [0.25.1] - 2026-10-16
 
 **Two fixes to 0.25.0.** The more serious one: a value option spelled in
 camel case, such as `--generatedBy agent`, recorded provenance naming an
@@ -285,7 +285,7 @@ actor `true`. It is now refused, with the spelling to use.
   the core answers the reads it is qualified for, and only the rest fall back
   to Git, each fallback recorded in the Git metrics.
 
-## 0.25.0
+## [0.25.0] - 2026-10-16
 
 **`cst` is the one command** (ADR-0040). `cst clone`, `cst pull` and
 `cst push` carry the causal records with Git's own work, every command `cst`
@@ -349,7 +349,7 @@ rather than ignored.
   `git for-each-ref refs/causet/checkpoints refs/causet/checkpoint-history refs/causet/quarantine`
   and compare against its own workspaces and imports before removing any.
 
-## 0.24.0
+## [0.24.0] - 2026-10-15
 
 **`cst` is the Rust executable alone.** This release removes the JavaScript
 CLI (#243): `src/`, `bin/cst.js` and the N-API binding are gone, and the
@@ -414,7 +414,7 @@ published platforms, are unaffected.
   the Rust CLI or its probes; the scale benchmark's analysis cases are Rust
   unit tests.
 
-## 0.23.0
+## [0.23.0] - 2026-10-14
 
 **`cst` is the only command.** This release removes the `vlab` alias, as
 v0.22.1 announced; anything that still runs `vlab` must run `cst`. It also
@@ -433,7 +433,7 @@ with until an issue of its own retires it.
   `cstCommand` and `cstPrefix`. The demos print `cst` in the commands they
   suggest.
 
-## 0.22.1
+## [0.22.1] - 2026-10-14
 
 **The first published release of the 0.22 line.** v0.22.0 was tagged, but
 its release run failed at the npm publish step, so it was never published to
@@ -450,7 +450,7 @@ release, unchanged.
   (npm/cli#9969), so 0.22.1 was published by hand, without provenance, as
   0.21.0 was.
 
-## 0.22.0
+## [0.22.0] - 2026-10-13
 
 **The `vcs-lab` migration window ends with this release,** as v0.21.0
 announced: a repository that has not run `cst migrate` is refused, and
@@ -534,7 +534,7 @@ product prints.
     `causet-benchmark-check-*`, and the fixture identities say causet.
     `npm run demo:clean` still removes fixtures left under the former
     `vcs-lab-` names.
-## 0.21.0
+## [0.21.0] - 2026-10-08
 
 **`cst` is now a native executable.** This release is the cutover of
 ADR-0037: the installed command is the Rust CLI, which answers every command
@@ -1074,7 +1074,7 @@ What follows is the same work in the order it landed.
 - Found by the port: `createdAt` validity follows V8's non-ISO `Date.parse`
   fallback, which no other implementation can reproduce (#173).
 
-## 0.20.0
+## [0.20.0] - 2026-09-30
 
 - The repository is now `jwh3times/causet` and the project board is "causet"
   (#168, ADR-0039 §7 step 5). Links throughout the README, `docs/`, the skills
@@ -1188,7 +1188,7 @@ What follows is the same work in the order it landed.
     `VLAB_CLI` executable exists, which CI's native build provides.
     `.github/workflows/perf.yml` now measures `cst`.
 
-## 0.19.1
+## [0.19.1] - 2026-09-28
 
 - Publish as `@holland-vip/causet` (ADR-0038, second amendment). npm refused
   the unscoped name `causet` as too similar to `case` and `faucet`, so v0.19.0
@@ -1197,7 +1197,7 @@ What follows is the same work in the order it landed.
   `repository`, `homepage` and `bugs`, which npm provenance requires, and
   `publishConfig.access: public`.
 
-## 0.19.0
+## [0.19.0] - 2026-09-28
 
 - Amend ADR-0038 (issue #139): the npm organization name `causet` is
   unavailable, so the platform packages are `@holland-vip/causet-<platform>`,
@@ -1284,7 +1284,7 @@ What follows is the same work in the order it landed.
   stays the byte-for-byte oracle until two minor releases after cutover.
   `docs/product.md` §15 gains the CLI-port track, and GP-12 notes it.
 
-## 0.18.0
+## [0.18.0] - 2026-09-27
 
 - List parked disputes under `refs/vcs-lab/quarantine/` by prefix instead of
   a `*/*` glob, which the native engine refuses. Results are unchanged, since
@@ -1340,7 +1340,7 @@ What follows is the same work in the order it landed.
   source if it remains absent. The README and architecture guide now state
   that an ordinary branch clone does not include either causal namespace.
 
-## 0.17.0
+## [0.17.0] - 2026-09-22
 
 - Add declared interactive rewrite actions to causal rebase (issue #30,
   [ADR-0035](docs/adr/0035-make-interactive-rewrites-declare-what-they-do-to-identity.md)).
@@ -1567,7 +1567,7 @@ What follows is the same work in the order it landed.
   and which also catches any other scratch directory a run leaves behind. No
   product behavior changed.
 
-## 0.16.0
+## [0.16.0] - 2026-09-20
 
 - Allow a checkpoint to be an input to a causal rebase (issue #28; ADR-0028
   decision 5). `--target-checkpoint` on `vlab rebase-forecast` pins one checkpoint
@@ -1638,7 +1638,7 @@ What follows is the same work in the order it landed.
   it; [#111](https://github.com/jwh3times/vcs-lab/issues/111) now carries it,
   gated on selecting a format.
 
-## 0.15.0
+## [0.15.0] - 2026-09-19
 
 - Refresh the `lab-windows-a` benchmark baseline for the conflict-policy ref
   scan. ADR-0030 requires every metadata read to know which records are parked,
@@ -1903,7 +1903,7 @@ What follows is the same work in the order it landed.
   three-scenario walkthrough for the question-5 usability judgement is
   retained on the issue. No behavior changes until the owner decides.
 
-## 0.14.0
+## [0.14.0] - 2026-09-15
 
 - Verify proof bundles against a fork of their repository (issue #89).
   `vlab verify-proof` now applies the lineage relation `vlab metadata import`
@@ -2301,7 +2301,7 @@ What follows is the same work in the order it landed.
   - `test/schema-catalog.test.js` registers its fixture cleanup at module
     scope, as `test/conformance.test.js` already explained it must.
 
-## 0.13.2
+## [0.13.2] - 2026-09-02
 
 - Record one more Git process in the benchmark's `publication` phase for the
   `linux` baseline entry (56 to 57). The reconcile abort guard above reads
@@ -2413,7 +2413,7 @@ What follows is the same work in the order it landed.
     declared and never carried — and the carry is the part Git cannot do. The
     prerequisite is a branch-and-land workflow, not a configuration change.
 
-## 0.13.1
+## [0.13.1] - 2026-09-02
 
 - Make every text file LF in the working tree as well as in the index.
   `.gitattributes` set `text=auto`, which normalises what Git stores but leaves
@@ -2449,7 +2449,7 @@ What follows is the same work in the order it landed.
     the `vcs-lab-` namespace, and one built from a variable the scan cannot
     read.
 
-## 0.13.0
+## [0.13.0] - 2026-09-01
 
 - Add a checkout-hygiene check to the suite and the release gate:
   `test/repository-hygiene.test.js` fails when any file contains a NUL byte, or
@@ -2535,7 +2535,7 @@ What follows is the same work in the order it landed.
     The raise site is shared between "an expression did not resolve" and "Git
     returned an unparsable line"; only the second deserves that code.
 
-## 0.12.0
+## [0.12.0] - 2026-09-01
 
 - Record authorship provenance as a causal fact and carry it across the
   rewrites that destroy ordinary Git attribution (FR-ID-08, FR-TRUST-04;
@@ -2806,7 +2806,7 @@ What follows is the same work in the order it landed.
   establishes cone mode itself. Seven Git processes become five, and a coned
   `workspace create` fell from 457 ms to 379 ms on the Windows host.
 
-## 0.11.0
+## [0.11.0] - 2026-08-31
 
 - Close the merge-tree engine's nested `.gitattributes` equivalence gap
   (issue #9; ADR-0016). The engine falls back to the worktree oracle when a
@@ -2940,7 +2940,7 @@ What follows is the same work in the order it landed.
   `VLAB_ENGINE=native npm test`, which proves that every read it exercises
   goes through the seam.
 
-## 0.10.0
+## [0.10.0] - 2026-08-30
 
 - Make `merge-tree` the default forecast engine on Windows and keep
   `worktree` the default on other platforms, mirroring the object session's
@@ -3040,7 +3040,7 @@ What follows is the same work in the order it landed.
   copy with a generated `.claude/skills/` mirror, `npm run sync:agents` with a
   `--check` mode, and a thin `CLAUDE.md` that imports `AGENTS.md`.
 
-## 0.9.0
+## [0.9.0] - 2026-08-27
 
 - Consolidate maintained product, architecture, testing, and decision records
   under `docs/`; move active implementation briefs to issue tracking and stop
@@ -3137,7 +3137,7 @@ What follows is the same work in the order it landed.
   terminate/fallback paths so Windows invocations do not leave worker or Git
   processes behind.
 
-## 0.8.0
+## [0.8.0] - 2026-08-21
 
 - Add deterministic `metadata status` and `metadata validate` inventory across
   shared-portable notes/resolutions, tracked spec manifests, shared-local
@@ -3166,7 +3166,7 @@ What follows is the same work in the order it landed.
   unrelated-lineage rejection, conflict-safe dry runs, two-clone round trips,
   causal-plan/resolution/spec parity, idempotence, and local/private exclusion.
 
-## 0.7.1
+## [0.7.1] - 2026-08-21
 
 - Add a full product requirements document with predecessor lessons, AI-agent
   and specification use cases, guiding principles, identified functional and
@@ -3187,7 +3187,7 @@ What follows is the same work in the order it landed.
   earlier design notes are historical rationale rather than the sole current
   product contract.
 
-## 0.7.0
+## [0.7.0] - 2026-08-21
 
 - Add a worktree-scoped persistent `git cat-file --batch-command` session for
   immutable object reads during planning, forecasting, and reconciliation.
@@ -3217,7 +3217,7 @@ What follows is the same work in the order it landed.
   ordinary plumbing modes, including forced worker-failure fallback and
   multi-worktree forecast isolation.
 
-## 0.6.0
+## [0.6.0] - 2026-08-20
 
 - Replace expanded v2 specification sidecars with sparse v3 manifests that
   persist only artifact/source identity, entity count, parser identity, Git
@@ -3243,7 +3243,7 @@ What follows is the same work in the order it landed.
   persistence, zero-read unchanged indexing, and subprocess-count regression
   coverage.
 
-## 0.5.0
+## [0.5.0] - 2026-08-20
 
 - Add deterministic three-way reconciliation for indexed Markdown using stable
   preamble and heading-block identities.
@@ -3268,7 +3268,7 @@ What follows is the same work in the order it landed.
 - Add a deterministic spec-merge demo and expand the integration suite to 27
   tests.
 
-## 0.4.0
+## [0.4.0] - 2026-08-20
 
 - Add `vlab forecast <source>` to simulate proven-new changes in a disposable
   detached worktree without changing the caller's HEAD, index, or files.
@@ -3286,7 +3286,7 @@ What follows is the same work in the order it landed.
   elapsed wall time in reconciliation metadata.
 - Add a proactive forecast demo and expand the integration suite to 19 tests.
 
-## 0.3.0
+## [0.3.0] - 2026-08-20
 
 - Fingerprint conflicts with an exact, path-independent three-way signature
   derived from Git's base, ours, and theirs blob identities.
@@ -3306,7 +3306,7 @@ What follows is the same work in the order it landed.
 - Add a reusable-resolution/worktree demo and expand the integration suite to
   15 tests.
 
-## 0.2.1
+## [0.2.1] - 2026-08-20
 
 - Make disposable test and demo repositories deterministic on Windows by
   disabling checkout-time CRLF conversion locally.
@@ -3314,7 +3314,7 @@ What follows is the same work in the order it landed.
   of the behavior under test.
 - Add repository line-ending policy through `.gitattributes`.
 
-## 0.2.0
+## [0.2.0] - 2026-08-20
 
 - Add worktree-local, durable reconciliation operations.
 - Add `vlab reconcile --status`, `--continue`, and `--abort`.
@@ -3326,7 +3326,7 @@ What follows is the same work in the order it landed.
 - Hide Git notes history in `vlab graph` and improve causal edge output.
 - Leave the standard demo worktree clean and add `npm run demo:conflict`.
 
-## 0.1.0
+## [0.1.0] - 2026-08-20
 
 - Initial Git-backed causal source-control laboratory.
 - Stable Change IDs, compact and hard-squash landings, causal merge planning,

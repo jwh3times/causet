@@ -44,7 +44,8 @@ in `native/`, which needs Git only, and it is what the suites run (#243):
 no npm dependencies.
 
 - `npm test` runs the complete Node integration suite.
-- `npm run test:docs` checks local Markdown link targets.
+- `npm run test:docs` checks local Markdown links and anchors, and that the
+  doc map in `docs/agents/docs.md` lists every document.
 - `.github/workflows/ci.yml` runs static checks on every PR and push to `main`.
   Code PRs add the default suite on Ubuntu and Windows; main adds Ubuntu only.
   Known documentation-only changes omit suites. Manual dispatch runs every
@@ -242,8 +243,9 @@ npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s 
 npm run sync:agents
 ```
 
-`scripts/sync-agents.mjs` and `scripts/lint-agent-neutrality.mjs` (and their
-tests) are canonical in `jwh3times/skills`: fix them there, then copy them here.
+`scripts/sync-agents.mjs`, `lint-agent-neutrality.mjs`, `next-version.mjs`,
+`check-changelog.mjs` and `check-docs.mjs` (and their tests) are canonical in
+`jwh3times/skills`: fix them there, then copy them here.
 
 ### Domain docs
 

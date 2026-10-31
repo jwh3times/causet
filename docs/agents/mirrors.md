@@ -34,8 +34,9 @@ write a named or braced variable instead.
 
 The generator, the lint and their tests (`scripts/sync-agents.test.mjs`,
 `scripts/lint-agent-neutrality.test.mjs`) are copies of the canonical ones in
-`jwh3times/skills`. Do not adapt them locally; fix them there, then copy them
-here.
+`jwh3times/skills`, as are `scripts/next-version.mjs`,
+`scripts/check-changelog.mjs`, `scripts/check-docs.mjs` and their tests. Do not
+adapt them locally; fix them there, then copy them here.
 
 ## Agent definitions
 
