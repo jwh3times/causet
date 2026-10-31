@@ -10,6 +10,9 @@
 - `AGENTS.md` — durable rules for working in this repository: structure, commands, style, testing,
   commits, tracking, the development flow. **When:** one of those rules, or a command it quotes,
   changes.
+- `CLAUDE.md` — a thin entry point: only the `@AGENTS.md` import. **When:** only a Claude Code-only
+  note is needed; content goes in `AGENTS.md`.
+- `LICENSE` — `owner-only`.
 - `docs/README.md` — the documentation index and where future work lives. **When:** a document is
   added, moved or removed.
 - `docs/product.md` — product intent, requirements, quality and investment gates, and the trace
