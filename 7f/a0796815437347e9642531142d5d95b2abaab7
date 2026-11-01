@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvy6adwg1233df454ad3",
+      "mode": "compact",
+      "sourceRef": "chore/377-skills-snapshot",
+      "sourceHead": "4cac1bbbc5fb92ccfddf61464660d366ffe676cb",
+      "sourceSubject": "chore: take the pinned skills snapshot",
+      "targetBefore": "fad1e1f94737d9e4e2cfaa3926106ea96831de74",
+      "landingCommit": "7fa0796815437347e9642531142d5d95b2abaab7",
+      "base": "fad1e1f94737d9e4e2cfaa3926106ea96831de74",
+      "absorbedCommits": [
+        "4cac1bbbc5fb92ccfddf61464660d366ffe676cb"
+      ],
+      "absorbedChanges": [
+        "ch_0mvy4e3hg0096b0edd398"
+      ],
+      "resultTree": "2e4275d3e77f4b07bd1662cc434377159408971a",
+      "createdAt": "2026-11-01T18:37:54.847Z"
+    }
+  ]
+}
