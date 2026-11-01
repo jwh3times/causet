@@ -78,6 +78,14 @@ for (const [group, title] of [
   });
 }
 
+test("a repository benchmark that measures keeps a budget no run exceeds (#375)", { skip }, () => {
+  const unbounded = groups.benchmarks.filter(({ args }) =>
+    args[0] === "metadata" && args[args.indexOf("--budget-ms") + 1] !== "60000");
+  for (const { args, env } of unbounded) {
+    assert.notEqual(runRust(args, env).status, 0, `${JSON.stringify(args)} measures, so its verdict depends on timing`);
+  }
+});
+
 test("every usage failure fails, and a camel-case value option is refused by name", { skip }, () => {
   for (const { args } of groups.usage.filter(({ args }) => !args.includes("--json"))) {
     assert.notEqual(runRust(args).status, 0, JSON.stringify(args));
