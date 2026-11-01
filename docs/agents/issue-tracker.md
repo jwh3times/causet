@@ -16,7 +16,17 @@ prerequisite gate recorded. Dated progress belongs on the issue.
 - Comment: `gh issue comment <number> --repo jwh3times/causet --body-file <path>`
 - Label: `gh issue edit <number> --repo jwh3times/causet --add-label "..."`
 - Remove label: `gh issue edit <number> --repo jwh3times/causet --remove-label "..."`
-- Close: `gh issue close <number> --repo jwh3times/causet`
+- Sub-issue: `gh issue create --repo jwh3times/causet --parent <parent> ...`, or
+  `gh issue edit <parent> --repo jwh3times/causet --add-sub-issue <child>`
+- Blocked by: `gh issue edit <child> --repo jwh3times/causet --add-blocked-by <blocker>`
+- Open blockers: `gh api repos/jwh3times/causet/issues/<n> --jq .issue_dependencies_summary.blocked_by`
+  (0 means startable)
+- Close: comment first, then `gh issue close <number> --repo jwh3times/causet`. On an
+  already-closed issue, `gh issue close --comment` drops the comment and still exits 0.
+
+File issues only into this repository, never into `mattpocock/skills`, where these skills come
+from. GitHub shares one number space across issues and PRs, so a bare `#42` may be either: resolve
+with `gh pr view 42` and fall back to `gh issue view 42`.
 
 Use a temporary UTF-8 file for multiline bodies.
 Run authenticated GitHub commands and remote Git operations outside
