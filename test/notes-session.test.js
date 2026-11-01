@@ -187,18 +187,3 @@ test("listing notes and reading their blobs share one Git process", { skip }, t 
   assert.equal(listed.metrics.processes + read.metrics.processes, 1);
   assert.equal(listed.metrics.directReads + read.metrics.directReads, 0);
 });
-
-test("noncanonical tree modes delegate to Git instead of losing numeric precision", { skip }, t => {
-  const f = fixture(t);
-  const target = "a".repeat(f.width);
-  const raw = Buffer.concat([
-    Buffer.from(`10000000000000000000000000100644 ${target}\0`),
-    Buffer.from(f.blob, "hex"),
-  ]);
-  f.publish(f.git(["hash-object", "--literally", "-w", "-t", "tree", "--stdin"], raw));
-  const expected = f.oracle();
-  assert.deepEqual(expected, [{ note: f.blob, target }]);
-  const actual = f.listing();
-  assert.deepEqual(actual.entries, expected);
-  assert.ok(actual.metrics.commands.some(entry => entry.command === "notes"));
-});

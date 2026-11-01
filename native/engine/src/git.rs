@@ -10,6 +10,7 @@ use crate::process::{GitOutput, RunOptions, read_git, read_text};
 use crate::session::{self, Query, SessionObject, parse_header, validate_expressions};
 use crate::text;
 use crate::types::*;
+use causet_model::tree_mode::git_mode;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -926,14 +927,7 @@ fn parse_note_tree(content: &[u8], width: usize, prefix: &str) -> Option<Vec<Not
     if nul + 1 + width > content.len() {
       return None;
     }
-    let mode_text = &content[offset..space];
-    if mode_text.is_empty()
-      || mode_text.len() > 6
-      || !mode_text.iter().all(|byte| (b'0'..=b'7').contains(byte))
-    {
-      return None;
-    }
-    let mode = u32::from_str_radix(std::str::from_utf8(mode_text).ok()?, 8).ok()? & 0o170000;
+    let mode = git_mode(&content[offset..space])? & 0o170000;
     let entry_name = String::from_utf8_lossy(&content[space + 1..nul]).into_owned();
     let oid: String = content[nul + 1..nul + 1 + width]
       .iter()

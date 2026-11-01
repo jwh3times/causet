@@ -6,4 +6,5 @@ license = "MIT"
 publish = false
 
 [dependencies]
+causet-model = { path = "../model" }
 gix = { version = "=0.87.1", default-features = false, features = ["sha1", "revision"] }

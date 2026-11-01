@@ -626,6 +626,11 @@ SHA-1 and SHA-256, mixed flat and deepest legal fanout trees, executable notes,
 uppercase hexadecimal paths, opaque entries, moved refs, and duplicate
 attachments. It checks complete fallback on session failures and traversal
 budgets, and proves that a listing plus its note blobs uses one Git process.
+`test/tree-modes.test.js` holds both Git-side tree readers to Git's rule for
+entry modes on trees written literally. Overlong and zero-padded modes answer
+without a `git notes` process or a recorded fallback, since a fallback would also
+give Git's answer; signed and non-octal modes are still refused and answered by
+Git.
 
 `test/integration.test.js` also pins the object session's response-buffer bound. Overflowing
 the real 64 MiB content buffer needs a blob of roughly 48 MiB, far too large to
