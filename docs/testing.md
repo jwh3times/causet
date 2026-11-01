@@ -461,9 +461,9 @@ themselves or, for a large corpus, a string of 8-digit SHA-256 prefixes of each
 case's expected answer (`test-support/oracle-vectors.js`); a mismatch names the
 case and prints the Rust answer. The inputs live beside the suites, in
 `test-support/model-corpus.js`, `engine-corpus.js` and `cli-corpus.js`, and a
-change to one invalidates its frozen answers. There is no oracle to re-record
-from: changing a corpus or an answer means deciding that the Rust answer is
-right, and saying so in the change.
+change to one invalidates its frozen answers unless it alters only what the
+masks hide. There is no oracle to re-record from: changing a corpus or an answer
+means deciding that the Rust answer is right, and saying so in the change.
 
 - `test/native-cli.test.js` runs the Rust CLI on every invocation the two CLIs
   were compared on outside a repository: help and version, the global flag and
@@ -473,7 +473,9 @@ right, and saying so in the change.
   `doctor` and the record readers outside a repository, the
   build-scoped capability document, and the benchmarks. The version, the
   directory the cases run in, trace timings, the benchmark's environment and
-  timings, and the capability document's hashes are masked. It also checks that
+  timings, and the capability document's hashes are masked. The benchmark's
+  over-budget verdict is not, so a `metadata benchmark` case that measures must
+  pass `--budget-ms 60000`, the most the flag allows (#375). It also checks that
   the runtime describes itself as the Rust CLI (ADR-0037 §5) and that the
   former delegation variables, `CAUSET_DELEGATE` and `CAUSET_JS_CLI`, are
   ignored. The comparisons inside repositories, including that a journal or a
