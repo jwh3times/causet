@@ -13,6 +13,8 @@
 - `CLAUDE.md` — a thin entry point: only the `@AGENTS.md` import. **When:** only a Claude Code-only
   note is needed; content goes in `AGENTS.md`.
 - `LICENSE` — `owner-only`.
+- `THIRD_PARTY_NOTICES.md` — the license notices of third-party files kept here. `owner-only`: report
+  the change when a skill's source changes.
 - `docs/README.md` — the documentation index and where future work lives. **When:** a document is
   added, moved or removed.
 - `docs/product.md` — product intent, requirements, quality and investment gates, and the trace
