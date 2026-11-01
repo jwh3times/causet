@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvycwicse3023598ae3d",
+      "mode": "compact",
+      "sourceRef": "docs/third-party-notices",
+      "sourceHead": "78da40b93fd40aa270c5fe13ae7f37261b6c896b",
+      "sourceSubject": "docs: add the third-party notice for the installed skills",
+      "targetBefore": "7fa0796815437347e9642531142d5d95b2abaab7",
+      "landingCommit": "c881a28ccac7bb553ffaa6bee2c36df683f8ca4f",
+      "base": "7fa0796815437347e9642531142d5d95b2abaab7",
+      "absorbedCommits": [
+        "78da40b93fd40aa270c5fe13ae7f37261b6c896b"
+      ],
+      "absorbedChanges": [
+        "ch_0mvy9g9b3cfbbebf17cc5"
+      ],
+      "resultTree": "f457899cb5927bfcc9b4f2223d369c635eec1de4",
+      "createdAt": "2026-11-01T21:43:04.788Z"
+    }
+  ]
+}
