@@ -65,8 +65,9 @@ questions are §17, each citing the issue that will settle it.
 Engineering skills use the [issue tracker configuration](agents/issue-tracker.md),
 [triage label mapping](agents/triage-labels.md), and
 [domain documentation rules](agents/domain.md). The
-[development flow](agents/dev-flow.md) makes their flow the binding process:
-the ready-issue gate, routing, exemptions, and issue linking.
+[development flow](../.agents/skills/ship/settings/dev-flow.md) makes their flow the binding process:
+the ready-issue gate, routing, exemptions, and issue linking;
+[this repository's additions](agents/dev-flow.md) sit beside the settings.
 The shared skills that install from `jwh3times/skills` read this repository's
 facts from settings files beside them: [workspace](agents/workspace.md),
 [documents](agents/docs.md), [releases](agents/releases.md),
