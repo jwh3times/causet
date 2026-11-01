@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvx5cshr85fe2f065d86",
+      "mode": "compact",
+      "sourceRef": "chore/373-shared-flow-blocks",
+      "sourceHead": "1e4e0ec3164bf4e3cc1074afbb63f8a895cb93f1",
+      "sourceSubject": "chore: take the shared flow and AGENTS.md blocks",
+      "targetBefore": "d9f80f295a66c6d44f0ddf1ab389fae1efa32f75",
+      "landingCommit": "aa8ce26e62a5cad0d2bb5149898ecc0620780d62",
+      "base": "d9f80f295a66c6d44f0ddf1ab389fae1efa32f75",
+      "absorbedCommits": [
+        "1e4e0ec3164bf4e3cc1074afbb63f8a895cb93f1"
+      ],
+      "absorbedChanges": [
+        "ch_0mvx3imr56ad72e1a73cd"
+      ],
+      "resultTree": "c1721f0e907841d8cf9456cb411d3137746f9591",
+      "createdAt": "2026-11-01T01:24:01.260Z"
+    }
+  ]
+}
