@@ -39,8 +39,9 @@
 - `docs/agents/mirrors.md` — how agent and skill sources are mirrored and linted, and which scripts
   are copies of the canonical ones. **When:** `scripts/sync-agents.mjs` or
   `scripts/lint-agent-neutrality.mjs` changes, or a canonical script is added.
-- `docs/agents/dev-flow.md` — the development flow, the code / docs-and-agent-config split and issue
-  linking. **When:** a path's classification, an exemption or the linking rule changes.
+- `docs/agents/dev-flow.md` — what this repository adds to the shared development flow: the
+  published contracts that are code, and its bump, release and linking details. **When:** one of those
+  changes.
 - The public wiki's usage pages (`https://github.com/jwh3times/causet.wiki.git`) — operational
   walkthroughs such as benchmark host baselines and the landing procedure. **When:** the command or
   procedure they walk through changes. Dated audit findings there stay historical; link them to the
