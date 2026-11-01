@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.capabilities/v1",
+  "title": "Capability document",
+  "description": "What a build reads and writes, stated so another party can decide what may be exchanged without asking anything else. Every member except repository and integrity is projected from a runtime registry rather than maintained by hand (advertisement scope; src/capabilities.js; ADR-0033).",
+  "x-vcs-lab-scope": "advertisement",
+  "type": "object",
+  "required": [
+    "schema", "producer", "families", "profiles", "algorithms",
+    "objectFormats", "features", "bounds", "integrity"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.capabilities/v1" },
+    "producer": {
+      "type": "object",
+      "required": ["name", "version"],
+      "description": "The same shape the envelope manifest carries. It identifies the build; it does not imply its contracts, which the members below state.",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "families": {
+      "type": "array",
+      "description": "Every exchanged family: the note-container, note-record, envelope, and advertisement scopes. Private, shared-local, and tracked families are never advertised.",
+      "items": { "$ref": "#/$defs/family" }
+    },
+    "profiles": {
+      "type": "object",
+      "required": ["canonicalJson", "logicalId", "errorEnvelope"],
+      "properties": {
+        "canonicalJson": { "type": "string", "minLength": 1 },
+        "logicalId": { "type": "string", "minLength": 1 },
+        "errorEnvelope": { "type": "string", "minLength": 1 }
+      }
+    },
+    "algorithms": {
+      "type": "object",
+      "required": ["lineage", "resolutionSignature", "integrity"],
+      "properties": {
+        "lineage": { "type": "string", "minLength": 1 },
+        "resolutionSignature": { "type": "string", "minLength": 1 },
+        "integrity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "objectFormats": {
+      "type": "array",
+      "items": { "enum": ["sha1", "sha256"] }
+    },
+    "features": {
+      "type": "array",
+      "description": "Sorted name/vN tokens for behaviors that are not a record version. A token is advertised only when the build both produces and consumes the behavior it names, and tokens are opaque: a reader ignores one it does not know.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "bounds": {
+      "type": "object",
+      "description": "The resource bounds that apply to exchanged families, by name. Bounds are the receiver's: these are what a peer must respect when sending to this build."
+    },
+    "repository": {
+      "type": "object",
+      "required": ["objectFormat", "lineage"],
+      "description": "Present when the document was produced inside a repository, which makes it repository-scoped. A gateway serves this form for the repository it fronts.",
+      "properties": {
+        "objectFormat": { "enum": ["sha1", "sha256"] },
+        "lineage": {
+          "type": "object",
+          "required": ["algorithm", "objectFormat", "rootCommits", "id"],
+          "properties": {
+            "algorithm": { "const": "git-root-commits-sha256/v1" },
+            "objectFormat": { "enum": ["sha1", "sha256"] },
+            "rootCommits": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/oid" }
+            },
+            "id": { "type": "string", "pattern": "^lineage_[0-9a-f]{64}$" }
+          }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "required": ["algorithm", "documentHash"],
+      "description": "Detects alteration of a copy, not a dishonest producer. Signing is #38.",
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "documentHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Canonical-profile bytes of the document without its reserved integrity and signatures members (docs/canonical-json/README.md)."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" },
+    "family": {
+      "type": "object",
+      "required": ["family", "scope", "written", "readable", "unknownVersion"],
+      "properties": {
+        "family": { "type": "string", "minLength": 1 },
+        "scope": { "enum": ["note-container", "note-record", "envelope", "advertisement"] },
+        "written": {
+          "type": "array",
+          "description": "Ascending versions this build emits. A stored record's version is fixed by whoever wrote it; this is what freshly produced documents may use.",
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "readable": {
+          "type": "array",
+          "description": "Ascending versions this build accepts, a superset of written.",
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "unknownVersion": {
+          "enum": ["quarantine", "refuse", "ignore"],
+          "description": "What this build does with a version of the family outside readable. A sender reads it to learn what the receiver would do with a record it cannot read."
+        }
+      }
+    }
+  }
+}
