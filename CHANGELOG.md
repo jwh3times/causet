@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **Long tree modes are read as Git reads them** (#332). Git takes a tree
+  entry's mode as any number of octal digits, wrapping at 32 bits. Listing
+  notes and resolving `<oid>:path` stopped at six digits, so a longer
+  spelling, such as the zero-padded `0100644`, ran `git notes` on a session
+  or fell back to Git on the native engine. Those reads now answer without
+  either. The answers don't change, and a mode Git refuses is still refused
+  and answered by Git.
+
 - **Format version 1 meets the storage gate on every real repository**
   (#357, closing #345 and #350). With short references in trees,
   metadata in path order, content under 32 KiB stored whole and the
