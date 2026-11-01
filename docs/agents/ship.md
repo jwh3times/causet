@@ -15,16 +15,3 @@ The required `static checks` job's steps, all from the repository root:
 CI-only, since each needs a native build or a multi-engine, multi-OS matrix: the `suite` jobs
 (the native build, parser fuzzing, the Rust unit tests and `npm test` under each engine and session
 mode, on Linux and Windows) and the release gates.
-
-## Issue link
-
-- **Branch pattern:** `<type>/<issue#>-<slug>`, with the conventional prefixes `feat`, `fix`,
-  `docs`, `chore`. Exempt work drops the number (`chore/prepare-v0.25.1`).
-- **Link line:** `Closes #N.` when the PR finishes ticket `N`; `Part of #N.` for one slice of spec
-  `N`, which stays open. A ticket's PR may carry both, `Closes` first, each on its own line.
-- **Waiver line:** `Flow waived by the user: <reason>`.
-- **Exempt:**
-  - dependency bumps
-  - changes touching only docs and agent config
-  - release preparation (the `chore: prepare vX.Y.Z` commit)
-- **Defined in:** `docs/agents/dev-flow.md`.
