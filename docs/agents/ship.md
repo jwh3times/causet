@@ -9,6 +9,7 @@ The required `static checks` job's steps, all from the repository root:
 - `npm run test:docs`
 - `node --test test/architecture-tables.test.js`
 - `npm run sync:agents:check`, fixed by `npm run sync:agents`, committing both sides
+- `node scripts/check-skills.mjs`
 - `npm run lint:agents`
 - `git diff --check "$(git mktree </dev/null)" HEAD`
 

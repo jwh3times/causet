@@ -50,6 +50,8 @@ jobs:
         run: node --test test/architecture-tables.test.js
       - name: Agent skill mirrors
         run: npm run sync:agents:check
+      - name: Installed skills match the lock
+        run: node scripts/check-skills.mjs
       - name: Agent and skill sources are tool-neutral
         run: npm run lint:agents
       - name: Whitespace
