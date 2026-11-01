@@ -1,0 +1,154 @@
+{
+  "bin/vlab.js": {
+    "responsibility": "Minimal executable entry point and error/exit boundary",
+    "dependencies": "`src/cli.js`"
+  },
+  "src/cli.js": {
+    "responsibility": "Argument parsing, command dispatch, human and JSON presentation, benchmarks",
+    "dependencies": "All domain modules"
+  },
+  "src/errors.js": {
+    "responsibility": "Expected CLI error type carrying a classification code from the closed `ERROR_CODES` vocabulary of the `vcs-lab.error/v1` failure envelope (ADR-0021)",
+    "dependencies": "None"
+  },
+  "src/ids.js": {
+    "responsibility": "Unique protocol IDs, SHA-256, Git blob hashing, slugs",
+    "dependencies": "Node crypto"
+  },
+  "src/canonical-json.js": {
+    "responsibility": "The frozen `vcs-lab.canonical-json/v1` profile: RFC 8785 restricted to UTF-16-code-unit-sorted members and safe integers, refusing what it cannot serialize byte-identically",
+    "dependencies": "None"
+  },
+  "src/engine.js": {
+    "responsibility": "The read-side engine seam: the catalog of 40 read operations, the read-engine selector, per-operation native execution and fallback, composites, and the differential comparison",
+    "dependencies": "`src/git.js`, `src/native-engine.js`"
+  },
+  "src/native-engine.js": {
+    "responsibility": "Optional in-process Node-API binding loader and conversion for the five bounded resolution-catalog read operations",
+    "dependencies": "Optional `native/prebuilds` binding, Node module and path utilities"
+  },
+  "src/git.js": {
+    "responsibility": "The Git engine: safe synchronous Git adapter, the Git implementation of every read operation, repository context, object and merge-tree sessions, engine selectors, the read-bypass rule, metrics",
+    "dependencies": "Git executable, workers"
+  },
+  "src/git-session-worker.js": {
+    "responsibility": "Owns asynchronous `git cat-file --batch-command` stream for a synchronous caller",
+    "dependencies": "Worker threads, Git"
+  },
+  "src/merge-tree-session-worker.js": {
+    "responsibility": "Owns one asynchronous `git merge-tree --stdin` stream for the synchronous merge-tree forecast engine",
+    "dependencies": "Worker threads, Git"
+  },
+  "src/store.js": {
+    "responsibility": "Common runtime directory and atomic JSON read/write",
+    "dependencies": "`src/git.js`"
+  },
+  "src/notes.js": {
+    "responsibility": "Append/list/read causal records in `refs/notes/vcs-lab`, including one batched read for many targets; every writer of the ref is serialized on the notes lock in the shared runtime directory",
+    "dependencies": "`src/git.js`, `src/store.js`"
+  },
+  "src/provenance.js": {
+    "responsibility": "Declared authorship provenance (`vcs-lab.provenance/v1`): the closed role vocabulary, `VLAB_AGENT`, declaration at commit time, and exact carry onto rewritten commits",
+    "dependencies": "Notes, IDs, schemas"
+  },
+  "src/schemas.js": {
+    "responsibility": "Supported schema registry, structural record validation, object-reference and resolution-signature rules",
+    "dependencies": "IDs"
+  },
+  "src/metadata.js": {
+    "responsibility": "Deterministic inventory, scope classification, integrity diagnostics, lineage, and accepted-record filtering",
+    "dependencies": "Git, schemas, specs"
+  },
+  "src/identity-audit.js": {
+    "responsibility": "Repository-wide logical identity audit (`vcs-lab.identity-audit/v1`): union-find over identity-preserving application edges, multi-trailer, multi-origin, and invariant findings",
+    "dependencies": "Engine, notes"
+  },
+  "src/metadata-envelope.js": {
+    "responsibility": "Canonical envelope manifest, integrity hash, payload bounds, and parser",
+    "dependencies": "Metadata, schemas"
+  },
+  "src/metadata-transfer.js": {
+    "responsibility": "Sanitized bundle export, dry-run inspection, conflict planning, staging, and atomic ref import",
+    "dependencies": "Metadata, envelope, Git"
+  },
+  "src/git-carriers.js": {
+    "responsibility": "Copy-on-write notes trees, typed dependency closure, bounded carrier parents, and checked ref commands",
+    "dependencies": "Engine, Git writes, schemas"
+  },
+  "src/retention.js": {
+    "responsibility": "Read-only retention preview and checked, idempotent historical backfill",
+    "dependencies": "Metadata, carriers, notes lock"
+  },
+  "src/scale-benchmark.js": {
+    "responsibility": "Bounded synthetic repository fixture, scan measurements, raw-Git floors for the phases with a plain-Git equivalent, semantic equality checks, and evidence-based optimization recommendations",
+    "dependencies": "Git, notes, metadata, resolutions, workspaces"
+  },
+  "src/landings.js": {
+    "responsibility": "Compact and hard-squash landing mechanics and receipts",
+    "dependencies": "Git adapter, notes"
+  },
+  "src/merge-plan.js": {
+    "responsibility": "Coverage proof lattice, effective base, patch candidates, plan formatting",
+    "dependencies": "Git adapter, notes"
+  },
+  "src/proof-bundle.js": {
+    "responsibility": "Portable coverage proof bundles and their independent verifier, which applies its own copy of the lattice (`PROOF_RULES`) and compares the evidence with the repository",
+    "dependencies": "Merge plan, canonical JSON, metadata, engine"
+  },
+  "src/rebase-plan.js": {
+    "responsibility": "Read-only rebase selection, actions, linear-history constraints, and deterministic fingerprint",
+    "dependencies": "Merge plan, Git adapter, IDs"
+  },
+  "src/rebase-forecast.js": {
+    "responsibility": "Rebase simulation orchestration, caller invariants, candidate pinning, and private forecast presentation",
+    "dependencies": "Rebase plan, forecast simulator, semantic version guards, Git adapter"
+  },
+  "src/rebase-operations.js": {
+    "responsibility": "Current-branch rebase replay, forecast enforcement, conflict recovery, identity, and final receipts",
+    "dependencies": "Rebase plan/forecast, Git, notes, specs, resolutions"
+  },
+  "src/rebase-state.js": {
+    "responsibility": "Worktree-private rebase journal path and atomic persistence",
+    "dependencies": "Git context, store"
+  },
+  "src/pending-operation.js": {
+    "responsibility": "Safe reconciliation/rebase journal routing for shared conflict tools",
+    "dependencies": "Reconciliation and rebase state"
+  },
+  "src/faults.js": {
+    "responsibility": "Test-only deterministic fault injection: `VLAB_TEST_FAULT` turns one named point on a mutating path into a hard `process.exit`; `VLAB_TEST_GATE` holds a process at a named point until a test releases it",
+    "dependencies": "None"
+  },
+  "src/forecasts.js": {
+    "responsibility": "Plan fingerprint, merge-tree and temporary-worktree simulation engines with recorded fallback, decision pinning, saved forecasts",
+    "dependencies": "Plan, operations helpers, specs, resolutions, Git"
+  },
+  "src/operations.js": {
+    "responsibility": "Commit/cherry-pick and reconciliation start/queue/continue/abort/finalize",
+    "dependencies": "Plan, forecast, notes, resolution/spec modules"
+  },
+  "src/reconcile-state.js": {
+    "responsibility": "Worktree-private reconciliation journal and Git in-progress state probes",
+    "dependencies": "Repo context, filesystem"
+  },
+  "src/resolutions.js": {
+    "responsibility": "Exact three-way conflict signatures, candidate selection, result retention, outcome audit",
+    "dependencies": "Git adapter, notes, reconciliation state"
+  },
+  "src/workspaces.js": {
+    "responsibility": "Workspace registry/lifecycle, linked-worktree materialization, temporary-index checkpoints/history",
+    "dependencies": "Git adapter, store, workspace lock"
+  },
+  "src/workspace-lock.js": {
+    "responsibility": "Exclusive shared-local registry transaction lock, bounded refusal, and ownership-checked release",
+    "dependencies": "Store, errors, fault gates"
+  },
+  "src/specs.js": {
+    "responsibility": "Markdown parsing, sparse manifest migration/indexing, deterministic merge, semantic resolution, benchmark",
+    "dependencies": "Git adapter, IDs, reconciliation state"
+  },
+  "src/version.js": {
+    "responsibility": "Runtime version constant",
+    "dependencies": "None"
+  }
+}

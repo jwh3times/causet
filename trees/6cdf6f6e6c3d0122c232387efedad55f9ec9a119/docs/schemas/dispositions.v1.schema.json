@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.dispositions/v1",
+  "title": "Disposition registry",
+  "description": "Shared-local registry of conflict dispositions, stored at <common Git dir>/vcs-lab/dispositions.json. Local on purpose: two clones may dispose the same conflict differently, and that disagreement is real (src/quarantine.js; ADR-0030).",
+  "x-vcs-lab-scope": "shared-local",
+  "type": "object",
+  "required": ["schema", "dispositions"],
+  "properties": {
+    "schema": { "const": "vcs-lab.dispositions/v1" },
+    "dispositions": {
+      "type": "array",
+      "items": { "$ref": "vcs-lab.disposition/v1" }
+    }
+  }
+}
