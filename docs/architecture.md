@@ -121,7 +121,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | File | Responsibility | Uses |
 | --- | --- | --- |
 | `native/core/src/bin/fuzz-parsers.rs` | Dependency-free, reproducible mutation fuzz target for every native byte parser. | causet-core |
-| `native/core/src/lib.rs` | Bounded, read-only Git acquisition. | None |
+| `native/core/src/lib.rs` | Bounded, read-only Git acquisition. | causet-model |
 | `native/model/src/bin/fuzz-model.rs` | Dependency-free, reproducible mutation fuzz target for the record model: the JSON parser every note, envelope and journal passes through, and every function that then reads the parsed value. | causet-model |
 | `native/model/src/bin/model-probe.rs` | Answers one JSON request per stdin line with one JSON line, so the suites can put this crate to many inputs in a single process and hold its answers to the frozen oracle's (#243). | causet-model |
 | `native/model/src/canonical.rs` | The canonical JSON profile (`docs/canonical-json/`, `src/canonical-json.js`) and the legacy sorted-key serializer that record digests still use (`canonicalJson` in `src/metadata.js`). | `json`, `sha256` |
@@ -134,13 +134,14 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/model/src/registry.rs` | The record-family and resource-bound registries and the error vocabulary, ported from `src/schemas.js` and `src/errors.js`. | None |
 | `native/model/src/schemas.rs` | Record classification, compatibility and structural validation, ported from `src/schemas.js`; the authority since #243. | `dates`, `js`, `json`, `registry`, `sha256` |
 | `native/model/src/sha256.rs` | SHA-256 (FIPS 180-4), the digest every causet identifier and hash uses. | None |
+| `native/model/src/tree_mode.rs` | A Git tree entry's mode, as Git reads it. | None |
 | `native/engine/src/bin/engine-probe.rs` | Answers Git engine requests, one JSON line in and one out, so the suites can hold the engine's values and process counts, operation for operation, to the frozen answers of `src/engine.js` (#243). | causet-engine, causet-model |
 | `native/engine/src/bin/fuzz-engine.rs` | Dependency-free, reproducible mutation fuzz target for the Git engine's parsers of Git output. | causet-engine |
 | `native/engine/src/differential.rs` | The engine differential behind `cst doctor --differential`, as `runDifferential` in `src/engine.js` computes it: every cataloged operation run through each engine over probes derived from the repository itself, compared by the digest of its canonical value. | `engine`, `errors`, `locations`, `metrics`, `types`, causet-model |
 | `native/engine/src/engine.rs` | The read-side engine seam (ADR-0019), as `src/engine.js` defines it. | `environment`, `errors`, `metrics`, `text`, `types`, causet-model |
 | `native/engine/src/environment.rs` | The user-facing environment variables, read as the JavaScript CLI's `src/environment.js` read them (ADR-0039 §5): `CAUSET_<name>` when present, even empty. | None |
 | `native/engine/src/errors.rs` | `CliError` as the Git engine raises it: a message, a published code from the error vocabulary (ADR-0021), details, and the exit code. | causet-model |
-| `native/engine/src/git.rs` | The Git engine: the Git implementation of every operation in the catalog, as `src/git.js` implements it. | `engine`, `errors`, `process`, `session`, `text`, `types` |
+| `native/engine/src/git.rs` | The Git engine: the Git implementation of every operation in the catalog, as `src/git.js` implements it. | `engine`, `errors`, `process`, `session`, `text`, `types`, causet-model |
 | `native/engine/src/lib.rs` | The Git engine the ported commands share (issue #143, ADR-0037), ported from `src/git.js` and `src/engine.js`; the only engine since #243: | None |
 | `native/engine/src/locations.rs` | Where causet keeps what it stores (ADR-0039 §1, §3), decided as `src/locations.js` decides it: from files alone, except in a reftable repository, whose refs cost one listing. | `engine`, `errors`, `text`, `types` |
 | `native/engine/src/merge_tree.rs` | The merge-tree session of ADR-0016: one `git merge-tree --stdin` process reused for every clean step of a forecast. | `environment`, `metrics`, `session`, `text`, causet-model |
@@ -157,7 +158,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/store/src/encoding.rs` | The contract's shared encodings (`docs/native-store/README.md`, Conventions): big-endian fixed-width integers, minimal LEB128 varints, and length-prefixed byte strings, with a reader that refuses anything else. | None |
 | `native/store/src/id.rs` | Native IDs and Git IDs (objects.md §1), and the identity input a native ID is the digest of (§2). | `encoding`, causet-model |
 | `native/store/src/lib.rs` | The native content store of N1 (ADR-0045, #297), built to the contract in `docs/native-store/`: IDs, the object types, the chunker, frames and containers, deltas, the alias map, the store that writes and reads them, the reconstruction check, and the store's verification. | None |
-| `native/store/src/objects.rs` | The bodies of the N1 object types (objects.md §3–§7): chunk lists, native trees with their Git encoding and their short-reference stored form (§4.4), preserved Git objects, ref snapshots (§6) and annotations (§7), each with the rules a reader checks. | `encoding`, `id` |
+| `native/store/src/objects.rs` | The bodies of the N1 object types (objects.md §3–§7): chunk lists, native trees with their Git encoding and their short-reference stored form (§4.4), preserved Git objects, ref snapshots (§6) and annotations (§7), each with the rules a reader checks. | `encoding`, `id`, causet-model |
 | `native/store/src/reconstruct.rs` | The reconstruction check (objects.md §9.2; ADR-0044, item 4): each alias row's short reference is resolved, and its native object, rebuilt in Git's encoding for the row's algorithm, must hash to the row's Git ID, which the row holds whole, and every object the store holds from Git must have a row. | `container`, `id`, `objects`, `store`, causet-model |
 | `native/store/src/store.rs` | A native repository's store (objects.md §10): writing one, and reading it back with every object verified by its ID, a tree's short references resolved through every container's index. | `alias`, `chunker`, `container`, `delta`, `id`, `objects`, `reconstruct` |
 | `native/store/src/verify.rs` | The store's verification (objects.md §8; storage.md §4): what `cst fsck` runs. | `container`, `delta`, `id`, `objects`, `store`, causet-model |

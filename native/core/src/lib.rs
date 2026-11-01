@@ -2,6 +2,7 @@
 //! (`causet-model`); this crate only reads objects.
 #![forbid(unsafe_code)]
 
+use causet_model::tree_mode::git_mode;
 use gix::{ObjectId, Repository, objs::Kind};
 use std::collections::{BTreeMap, VecDeque};
 
@@ -160,11 +161,7 @@ pub fn tree_entries(data: &[u8]) -> Result<Vec<(u32, Vec<u8>, ObjectId)>> {
       .iter()
       .position(|b| *b == b' ')
       .ok_or("missing tree mode")?;
-    if space == 0 || space > 6 || !rest[..space].iter().all(|b| (b'0'..=b'7').contains(b)) {
-      return Err("invalid tree mode".into());
-    }
-    let mode =
-      u32::from_str_radix(std::str::from_utf8(&rest[..space]).map_err(err)?, 8).map_err(err)?;
+    let mode = git_mode(&rest[..space]).ok_or("invalid tree mode")?;
     rest = &rest[space + 1..];
     let nul = rest
       .iter()
