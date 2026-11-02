@@ -1,8 +1,9 @@
 /**
- * Tree entry modes at the Git-side tree readers (#332), held to real Git on
- * trees written literally. Equality alone cannot tell these readers from their
- * fallback, which also answers with Git, so each test also holds what the read
- * cost: no `git notes` process, no fallback recorded.
+ * Tree entry modes at the Git-side tree readers (#332) and the note writer
+ * (#370), held to real Git on trees written literally. Equality alone cannot
+ * tell these readers from their fallback, which also answers with Git, so each
+ * reader test also holds what the read cost: no `git notes` process, no
+ * fallback recorded.
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -10,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import { available, probe, unavailableReason } from "../test-support/engine-probe.js";
 import { testEnv } from "../test-support/git-environment.js";
 
@@ -25,8 +27,8 @@ function fixture(t) {
   const cwd = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "causet-tree-modes-")));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
   const env = testEnv({ CAUSET_GIT_SESSION: "1" });
-  const run = (args, input) => spawnSync("git", args, {
-    cwd, env, input, encoding: "utf8", windowsHide: true,
+  const run = (args, input, encoding = "utf8") => spawnSync("git", args, {
+    cwd, env, input, encoding, windowsHide: true,
   });
   const git = (args, input) => {
     const result = run(args, input);
@@ -56,7 +58,7 @@ function fixture(t) {
   delete probeEnv.GIT_CONFIG_COUNT;
   const call = (engine, op, args, session = false) =>
     probe([{ cwd, engine, session, calls: [{ op, args }] }], probeEnv)[0].results[0];
-  return { blob, git, run, literal, publish, oracle, call };
+  return { cwd, env, blob, git, run, literal, publish, oracle, call };
 }
 
 const answer = ({ value, error }) => (error ? { code: error.code, message: error.message } : { value });
@@ -121,5 +123,101 @@ for (const mode of REFUSED_MODES) {
     const objects = f.call("native", "readGitObjects", [[`${tree}:result`]]);
     assert.deepEqual(objects.metrics.fallbacks, refused("readGitObjects"));
     assert.deepEqual(answer(objects), answer(f.call("git", "readGitObjects", [[`${tree}:result`]])));
+  });
+}
+
+// The note writer rebuilds the notes tree with `git mktree`, which does not read
+// a mode as Git's tree reader does: an overlong one saturates rather than wraps,
+// and a zero-padded directory had to be labelled a tree (#370). Each test starts
+// from a commit causet has not attached to, so the note is the only change.
+function noteWriter(t) {
+  const f = fixture(t);
+  f.git(["commit", "-q", "--allow-empty", "-m", "Attachment"]);
+  const head = f.git(["rev-parse", "HEAD"]);
+  const declare = () => spawnSync(cstCommand, [...cstPrefix(), "provenance", "declare", head, "--authored-by", "human:modes", "--json"], {
+    cwd: f.cwd, env: testEnv(), encoding: "utf8", windowsHide: true,
+  });
+  const notes = () => f.git(["rev-parse", "refs/notes/causet"]);
+  const rawTree = () => f.run(["cat-file", "tree", "refs/notes/causet^{tree}"], undefined, "latin1").stdout;
+  return { ...f, head, declare, notes, rawTree };
+}
+
+function assertRefused(f, before) {
+  const result = f.declare();
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.equal(f.notes(), before, "the notes did not move");
+  return JSON.parse(result.stdout);
+}
+
+for (const [name, modes] of Object.entries(READABLE_MODES)) {
+  test(`${name} mode on a note keeps that note listed when another is written`, (t) => {
+    const f = noteWriter(t);
+    const other = "a".repeat(40);
+    f.publish(f.literal([[modes.file, other, f.blob]]));
+
+    const result = f.declare();
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(f.oracle().map(({ target }) => target).sort(), [other, f.head].sort());
+  });
+
+  test(`${name} mode on a fan-out directory takes the new note inside it`, (t) => {
+    const f = noteWriter(t);
+    const other = `${f.head.slice(0, 2)}${"a".repeat(38)}`;
+    f.publish(f.literal([[modes.directory, f.head.slice(0, 2), f.literal([[modes.file, other.slice(2), f.blob]])]]));
+
+    const result = f.declare();
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(f.oracle().map(({ target }) => target).sort(), [other, f.head].sort());
+    assert.ok(f.git(["rev-parse", `refs/notes/causet:${f.head.slice(0, 2)}/${f.head.slice(2)}`]));
+  });
+
+  test(`${name} mode on a directory at the attachment path is never overwritten`, (t) => {
+    const f = noteWriter(t);
+    const opaque = f.literal([["100644", "opaque.txt", f.blob]]);
+    f.publish(f.literal([[modes.directory, f.head, opaque]]));
+
+    assert.match(assertRefused(f, f.notes()).message, /non-note object occupies/);
+    assert.equal(f.git(["rev-parse", `refs/notes/causet:${f.head}/opaque.txt`]), f.blob);
+  });
+}
+
+test("an overlong gitlink mode at the attachment path is never overwritten", (t) => {
+  const f = noteWriter(t);
+  f.publish(f.literal([["10000000000000000000000000160000", f.head, f.head]]));
+
+  assert.match(assertRefused(f, f.notes()).message, /non-note object occupies/);
+});
+
+// Git takes only a regular file for a note (`load_subtree` in its `notes.c`), so
+// these don't list, and `37777777777` is what the writer left before #370 in
+// place of an overlong note's mode: its records are still in the blob.
+for (const mode of ["37777777777", "170000", "120000", "0"]) {
+  test(`mode ${mode}, not a note to Git, at the attachment path is never overwritten`, (t) => {
+    const f = noteWriter(t);
+    f.publish(f.literal([[mode, f.head, f.blob]]));
+    assert.deepEqual(f.oracle(), []);
+
+    assert.match(assertRefused(f, f.notes()).message, /non-note object occupies/);
+    assert.ok(f.rawTree().includes(`${mode} ${f.head}\0`), "the entry is untouched");
+  });
+}
+
+test("a mode only Git's reader gives a meaning keeps its entry when a note is written", (t) => {
+  const f = noteWriter(t);
+  const damaged = "a".repeat(40);
+  f.publish(f.literal([["37777777777", damaged, f.blob]]));
+
+  const result = f.declare();
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(f.oracle().map(({ target }) => target), [f.head]);
+  assert.ok(f.rawTree().includes(`37777777777 ${damaged}\0`), "the entry is untouched");
+});
+
+for (const mode of REFUSED_MODES) {
+  test(`mode ${mode}, which Git refuses, stops the note writer before it rewrites the tree`, (t) => {
+    const f = noteWriter(t);
+    f.publish(f.literal([[mode, "a".repeat(40), f.blob]]));
+
+    assert.equal(assertRefused(f, f.notes()).code, "git-response-malformed");
   });
 }
