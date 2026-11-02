@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mvz8w63ce36dc875871f",
+      "mode": "compact",
+      "sourceRef": "fix/375-benchmark-budget",
+      "sourceHead": "1935f332f281c0f34c009ac8a95b813d74855e07",
+      "sourceSubject": "Merge remote-tracking branch 'origin/main' into fix/375-benchmark-budget",
+      "targetBefore": "c881a28ccac7bb553ffaa6bee2c36df683f8ca4f",
+      "landingCommit": "ed63adbc4416f449d974762e4b8b943a4aa1e9a6",
+      "base": "7fa0796815437347e9642531142d5d95b2abaab7",
+      "absorbedCommits": [
+        "dd10aefcfe495d7bbc73e70c51dc38d1859b7f81",
+        "1935f332f281c0f34c009ac8a95b813d74855e07"
+      ],
+      "absorbedChanges": [
+        "ch_0mvy8ghpc70b8667931b4",
+        "git:1935f332f281c0f34c009ac8a95b813d74855e07"
+      ],
+      "resultTree": "49dac68c0e47e2cc9147025e4e35967df8bf9eb2",
+      "createdAt": "2026-11-02T12:38:36.546Z"
+    }
+  ]
+}
