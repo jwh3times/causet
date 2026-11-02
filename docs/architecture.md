@@ -1590,8 +1590,14 @@ record reaches the notes ref through a read-modify-write. `append_note`
 a candidate notes tree, preserving flat, fanned, and mixed layouts, and publishes
 notes and retention in one transaction that checks both previous tips. A new
 resolution ref participates in the same transaction. Foreign ref changes cause
-the transaction to refuse. `append_note` and metadata import also hold
-one lock file, `<common-git-dir>/causet/notes.lock`, created exclusively
+the transaction to refuse. The writer reads the tree's modes by Git's rule
+(`native/model/src/tree_mode.rs`) and gives `git mktree` the value it read,
+because `git mktree` reads an overlong mode differently. Nothing is published
+when a tree on the way to the attachment path has a mode Git refuses
+(`git-response-malformed`) or when the attachment path holds anything but a
+regular file (`malformed-input`), the only entry Git takes for a note.
+`append_note` and metadata import also hold one lock file,
+`<common-git-dir>/causet/notes.lock`, created exclusively
 the way Git creates its own lock files and costing no Git process. A lock
 whose holder is on this host and no longer running, or a minute-old lock
 whose holder cannot be checked, is abandoned; a running holder's lock is

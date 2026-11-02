@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- **Writing a note no longer loses another note on a tree with an unusual
+  mode** (#370). Commands that write a note rebuild the notes tree, and they
+  passed each entry's mode to `git mktree` as written. An overlong mode came
+  back as `37777777777`, so a note dropped out of `git notes list` while the
+  command exited 0, and a `040000` or overlong fan-out directory stopped the
+  note from publishing, leaving a commit without its provenance. Modes are now
+  read as Git reads them, so both cases work, on `cst commit`, `merge
+  --compact`, `cherry-pick`, `rebase`, `provenance declare` and `metadata
+  import`. A note an earlier version already dropped is not repaired: its
+  record stays in the note blob and the notes history. At the path a note
+  belongs at, anything Git doesn't read as a note is now refused rather than
+  overwritten, including a zero-padded or overlong directory, a `120000`
+  symlink and an entry an earlier version left as `37777777777`. A notes tree
+  with a mode Git itself refuses, such as `+100644`, now fails with
+  `git-response-malformed`. Either refusal leaves the notes where they were.
+
 - **Long tree modes are read as Git reads them** (#332). Git takes a tree
   entry's mode as any number of octal digits, wrapping at 32 bits. Listing
   notes and resolving `<oid>:path` stopped at six digits, so a longer
