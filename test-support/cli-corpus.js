@@ -55,7 +55,7 @@ const unset = { CAUSET_ENGINE: undefined, CAUSET_FORECAST_ENGINE: undefined };
 // and keeps a budget no run exceeds, since which phases are over budget
 // depends on how long they took.
 const small = ["--history", "6", "--workspaces", "2", "--notes", "8", "--resolutions", "3", "--samples", "2",
-  "--areas", "2", "--files-per-area", "3"];
+  "--areas", "2", "--files-per-area", "3", "--budget-ms", "60000"];
 const benchmark = (args) => ({ args, env: { CAUSET_GIT_SESSION: "1" } });
 
 /** The case groups; `outside` is the directory every case runs in. */
