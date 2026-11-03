@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+- **A note under an uppercase path no longer gets a second entry** (#381).
+  Git reads a note path's hex in either case, so it lists a note stored under
+  an uppercase or mixed-case path, or inside an uppercase fan-out directory.
+  Commands that write a note matched the path in lowercase only, so they
+  missed that note and added a second entry for the same commit while
+  exiting 0. Git then showed the two notes concatenated, which was no longer
+  one JSON document, and `cst provenance` reported no provenance for the
+  commit. Now every spelling of the path is found: the note is written under
+  a lowercase name, every other spelling is removed, and a fan-out directory
+  left empty goes too. No text is lost. The new note is built from what Git
+  showed, which holds every spelling, and is kept as a `legacy-note` record
+  when it isn't one JSON document, as for any note causet can't parse. A
+  fan-out directory keeps its own spelling. A directory or other non-note at
+  another spelling of the path is left beside the note, as Git leaves it.
+  Only the exact path the note is written at refuses one. This covers `cst
+  commit`, `merge --compact`, `cherry-pick`, `rebase`, `provenance declare`
+  and `metadata import`. A tree an earlier version already doubled is left as
+  it is until a command next writes that commit's note. That write leaves one
+  entry, with the two old notes kept together as one `legacy-note` record,
+  not as records of their own.
+
 - **Writing a note no longer loses another note on a tree with an unusual
   mode** (#370). Commands that write a note rebuild the notes tree, and they
   passed each entry's mode to `git mktree` as written. An overlong mode came
