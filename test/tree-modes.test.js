@@ -134,6 +134,7 @@ function noteWriter(t, accept = () => true) {
   const f = fixture(t);
   let head = "";
   for (let attempt = 0; !head || !accept(head); attempt += 1) {
+    assert.ok(attempt < 256, "no commit in 256 attempts had a hex the test accepts");
     f.git(["commit", "-q", "--allow-empty", "-m", `Attachment ${attempt}`]);
     head = f.git(["rev-parse", "HEAD"]);
   }
@@ -219,9 +220,10 @@ test("a mode only Git's reader gives a meaning keeps its entry when a note is wr
 
 // Git reads a note path's hex in either case (`get_oid_hex_segment` in its
 // `notes.c`) and concatenates every note it finds for one commit, so the writer
-// finds a note under any spelling and leaves the commit one entry, in lowercase
-// as Git writes it (#381). Each commit's hex opens with two letters, so its
-// fan-out directory has spellings too.
+// finds a note under any spelling and leaves the commit one entry, named in
+// lowercase as Git writes it (#381). A fan-out directory keeps its name, which
+// Git reads either way. Each commit's hex opens with two letters, so its fan-out
+// directory has spellings too.
 function spelledWriter(t) {
   const f = noteWriter(t, (head) => /^[a-f]{2}/.test(head));
   const upper = (text) => text.toUpperCase();
@@ -245,7 +247,8 @@ function assertOneNote(f, result) {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const paths = f.paths();
   assert.equal(paths.length, 1, `one entry for the commit: ${paths.join(", ")}`);
-  assert.equal(paths[0], paths[0].toLowerCase(), "the entry is spelled in lowercase");
+  const name = paths[0].split("/").pop();
+  assert.equal(name, name.toLowerCase(), "the note is named in lowercase");
   assert.equal(f.provenance().length, 1, "the declared provenance is read back");
   return f.shown().records;
 }
@@ -312,12 +315,34 @@ test("a fan-out directory keeps its other notes when a spelling of the commit's 
   assert.deepEqual(f.oracle().map(({ target }) => target).sort(), [other, f.head].sort());
 });
 
-test("a directory at an uppercase spelling of the attachment path is never overwritten", (t) => {
+// Only a regular file is a note to Git, so a directory at another spelling of the
+// attachment path is no note: Git keeps it and writes the note beside it, and so
+// does the writer. Only the exact name, where the note goes, is refused.
+test("a directory at an uppercase spelling of the attachment path stays beside the new note", (t) => {
   const f = spelledWriter(t);
   const opaque = f.literal([["100644", "opaque.txt", f.blob]]);
   f.publish(f.literal([["40000", f.upper(f.head), opaque]]));
+  assert.deepEqual(f.oracle(), [], "Git lists no note");
 
-  assert.match(assertRefused(f, f.notes()).message, /non-note object occupies/);
+  const records = assertOneNote(f, f.declare());
+  assert.deepEqual(records.map(({ type }) => type), ["provenance"]);
+  assert.equal(f.git(["rev-parse", `refs/notes/causet:${f.upper(f.head)}/opaque.txt`]), f.blob);
+});
+
+// The fan-out directory keeps its spelling, so an entry that already holds the
+// lowercase name can't collide with it.
+test("a fan-out directory spelled in uppercase is never renamed onto an entry of its lowercase name", (t) => {
+  const f = spelledWriter(t);
+  f.publish(f.literal([
+    ["40000", f.upper(f.fanOut), f.literal([["100644", f.leaf, f.note("keep-me")]])],
+    ["100644", f.fanOut, f.blob],
+  ]));
+
+  const records = assertOneNote(f, f.declare());
+  assert.deepEqual(records.map(({ type }) => type), ["keep-me", "provenance"]);
+  assert.equal(f.git(["rev-parse", `refs/notes/causet:${f.fanOut}`]), f.blob, "the file is untouched");
+  const fsck = f.run(["fsck", "--strict", "--no-dangling"]);
+  assert.equal(fsck.status, 0, fsck.stdout + fsck.stderr);
 });
 
 for (const mode of REFUSED_MODES) {
