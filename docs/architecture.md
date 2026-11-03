@@ -1596,6 +1596,16 @@ because `git mktree` reads an overlong mode differently. Nothing is published
 when a tree on the way to the attachment path has a mode Git refuses
 (`git-response-malformed`) or when the attachment path holds anything but a
 regular file (`malformed-input`), the only entry Git takes for a note.
+Git reads a note path's hex in either case and shows every note it finds for
+one commit concatenated, so the writer finds a note, and a fan-out directory,
+under any spelling of its path (#381). It writes the commit's note under the
+lowercase name and removes every other spelling, dropping a fan-out directory
+that leaves empty; a fan-out directory keeps its own name, since an entry may
+already hold the lowercase one. No text is lost: the new note is built from
+what `git notes show` printed, which holds every spelling, and text that is not
+one JSON document is kept as a `legacy-note` record. A non-note at another
+spelling of the attachment path is no note to Git and is left in place; only
+one at the exact name is refused.
 `append_note` and metadata import also hold one lock file,
 `<common-git-dir>/causet/notes.lock`, created exclusively
 the way Git creates its own lock files and costing no Git process. A lock

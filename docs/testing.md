@@ -635,7 +635,14 @@ give Git's answer; signed and non-octal modes are still refused and answered by
 Git. The same suite holds the note writer to that rule (#370): a note or fan-out
 directory with such a mode stays listed or takes the new note, an entry at the
 attachment path that Git does not read as a note is refused and left in place,
-and a mode Git refuses stops the writer with the notes where they were.
+and a mode Git refuses stops the writer with the notes where they were. It also
+holds the writer to Git's reading of a note path's hex in either case (#381): a
+note under an uppercase or mixed-case path, or in an uppercase fan-out
+directory, takes the new record and stays one note; a commit noted under two
+spellings keeps both notes' text in that one note, as a `legacy-note` record;
+a fan-out directory a spelling leaves keeps its other notes, and one spelled in
+uppercase is never renamed onto an entry of its lowercase name; and a directory
+at an uppercase spelling of the attachment path stays beside the new note.
 
 `test/integration.test.js` also pins the object session's response-buffer bound. Overflowing
 the real 64 MiB content buffer needs a blob of roughly 48 MiB, far too large to
