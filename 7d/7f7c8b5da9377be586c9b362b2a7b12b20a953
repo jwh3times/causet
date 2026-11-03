@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw07vmmu0c2d2dcbd023",
+      "mode": "compact",
+      "sourceRef": "chore/end-session-report-template",
+      "sourceHead": "36caa43d4796161492fb9619b5ad81e494cb81b8",
+      "sourceSubject": "chore: take the end-session report template",
+      "targetBefore": "58af4f1a221d11d82a97284bb068bad407008ef1",
+      "landingCommit": "7d7f7c8b5da9377be586c9b362b2a7b12b20a953",
+      "base": "58af4f1a221d11d82a97284bb068bad407008ef1",
+      "absorbedCommits": [
+        "36caa43d4796161492fb9619b5ad81e494cb81b8"
+      ],
+      "absorbedChanges": [
+        "ch_0mw06gppt7d39c3c4d5f5"
+      ],
+      "resultTree": "1c41ba281b8074c5cb5c4098851a4da451bb075c",
+      "createdAt": "2026-11-03T04:57:57.905Z"
+    }
+  ]
+}
