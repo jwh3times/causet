@@ -11,6 +11,7 @@ use causet_model::js::get;
 use causet_model::json::{Object, Value, lossy, parse, string, stringify, stringify_pretty};
 use causet_model::registry::RESOURCE_BOUNDS;
 use causet_model::schemas::{canonical_schema, referenced_objects, validate_note_record, within_bound};
+use causet_model::tree_mode::git_mode;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
@@ -257,7 +258,7 @@ fn classify_note_text(text: &str) -> (Object, Disposition) {
 // ---------------------------------------------------------------------------
 
 struct TreeEntry {
-  mode: String,
+  mode: u32,
   kind: &'static str,
   name: Vec<u8>,
   oid: String,
@@ -274,7 +275,7 @@ fn git(args: &[&str], cwd: &str, input: Option<Vec<u8>>) -> GitResult<String> {
 fn write_tree(entries: &[TreeEntry], cwd: &str) -> GitResult<String> {
   let mut input = Vec::new();
   for entry in entries {
-    input.extend_from_slice(format!("{} {} {}\t", entry.mode, entry.kind, entry.oid).as_bytes());
+    input.extend_from_slice(format!("{:o} {} {}\t", entry.mode, entry.kind, entry.oid).as_bytes());
     input.extend_from_slice(&entry.name);
     input.push(0);
   }
@@ -301,10 +302,14 @@ fn read_tree(oid: &str, cwd: &str, oid_bytes: usize) -> GitResult<Vec<TreeEntry>
     if nul + 1 + oid_bytes > content.len() {
       return Err(GitError::new("git-response-malformed", "Git returned a malformed notes tree."));
     }
-    let mode = String::from_utf8_lossy(&content[offset..space]).into_owned();
-    let kind = match mode.as_str() {
-      "40000" => "tree",
-      "160000" => "commit",
+    let Some(mode) = git_mode(&content[offset..space]) else {
+      return Err(GitError::new("git-response-malformed", "Git returned a malformed notes tree."));
+    };
+    // `git mktree` picks the kind by this rule and saturates a mode too long for
+    // it, so `write_tree` gives it the value Git's tree reader read.
+    let kind = match mode & 0o170000 {
+      0o040000 => "tree",
+      0o160000 => "commit",
       _ => "blob",
     };
     entries.push(TreeEntry {
@@ -332,7 +337,8 @@ fn replace_note(tree: Option<&str>, suffix: &str, blob: &str, cwd: &str, oid_byt
     .iter()
     .position(|entry| String::from_utf8_lossy(&entry.name) == suffix);
   if let Some(index) = exact {
-    if entries[index].kind != "blob" {
+    // Git takes only a regular file for a note (`load_subtree` in its `notes.c`).
+    if entries[index].mode & 0o170000 != 0o100000 {
       return Err(GitError::new(
         "malformed-input",
         "A non-note object occupies the notes attachment path; publication refused.",
@@ -349,14 +355,14 @@ fn replace_note(tree: Option<&str>, suffix: &str, blob: &str, cwd: &str, oid_byt
     let entry = &mut entries[index];
     entry.oid = blob.to_string();
     entry.kind = "blob";
-    entry.mode = "100644".into();
+    entry.mode = 0o100644;
   } else if let Some(index) = directory {
     let name_length = entries[index].name.len();
     let child = entries[index].oid.clone();
     entries[index].oid = replace_note(Some(&child), &suffix[name_length..], blob, cwd, oid_bytes)?;
   } else {
     entries.push(TreeEntry {
-      mode: "100644".into(),
+      mode: 0o100644,
       kind: "blob",
       name: suffix.as_bytes().to_vec(),
       oid: blob.to_string(),
@@ -504,14 +510,14 @@ pub fn build_retention_commit(
     let entries: Vec<TreeEntry> = oids
       .into_iter()
       .map(|oid| TreeEntry {
-        mode: if kind == "tree" { "40000".into() } else { "100644".into() },
+        mode: if kind == "tree" { 0o40000 } else { 0o100644 },
         kind,
         name: oid.as_bytes().to_vec(),
         oid,
       })
       .collect();
     directories.push(TreeEntry {
-      mode: "40000".into(),
+      mode: 0o40000,
       kind: "tree",
       oid: write_tree(&entries, cwd)?,
       name: format!("{kind}s").into_bytes(),

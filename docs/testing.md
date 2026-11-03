@@ -632,7 +632,10 @@ budgets, and proves that a listing plus its note blobs uses one Git process.
 entry modes on trees written literally. Overlong and zero-padded modes answer
 without a `git notes` process or a recorded fallback, since a fallback would also
 give Git's answer; signed and non-octal modes are still refused and answered by
-Git.
+Git. The same suite holds the note writer to that rule (#370): a note or fan-out
+directory with such a mode stays listed or takes the new note, an entry at the
+attachment path that Git does not read as a note is refused and left in place,
+and a mode Git refuses stops the writer with the notes where they were.
 
 `test/integration.test.js` also pins the object session's response-buffer bound. Overflowing
 the real 64 MiB content buffer needs a blob of roughly 48 MiB, far too large to
