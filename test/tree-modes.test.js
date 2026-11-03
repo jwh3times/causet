@@ -130,16 +130,20 @@ for (const mode of REFUSED_MODES) {
 // a mode as Git's tree reader does: an overlong one saturates rather than wraps,
 // and a zero-padded directory had to be labelled a tree (#370). Each test starts
 // from a commit causet has not attached to, so the note is the only change.
-function noteWriter(t) {
+function noteWriter(t, accept = () => true) {
   const f = fixture(t);
-  f.git(["commit", "-q", "--allow-empty", "-m", "Attachment"]);
-  const head = f.git(["rev-parse", "HEAD"]);
-  const declare = () => spawnSync(cstCommand, [...cstPrefix(), "provenance", "declare", head, "--authored-by", "human:modes", "--json"], {
+  let head = "";
+  for (let attempt = 0; !head || !accept(head); attempt += 1) {
+    f.git(["commit", "-q", "--allow-empty", "-m", `Attachment ${attempt}`]);
+    head = f.git(["rev-parse", "HEAD"]);
+  }
+  const cst = (args) => spawnSync(cstCommand, [...cstPrefix(), ...args], {
     cwd: f.cwd, env: testEnv(), encoding: "utf8", windowsHide: true,
   });
+  const declare = () => cst(["provenance", "declare", head, "--authored-by", "human:modes", "--json"]);
   const notes = () => f.git(["rev-parse", "refs/notes/causet"]);
   const rawTree = () => f.run(["cat-file", "tree", "refs/notes/causet^{tree}"], undefined, "latin1").stdout;
-  return { ...f, head, declare, notes, rawTree };
+  return { ...f, head, cst, declare, notes, rawTree };
 }
 
 function assertRefused(f, before) {
@@ -211,6 +215,109 @@ test("a mode only Git's reader gives a meaning keeps its entry when a note is wr
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.deepEqual(f.oracle().map(({ target }) => target), [f.head]);
   assert.ok(f.rawTree().includes(`37777777777 ${damaged}\0`), "the entry is untouched");
+});
+
+// Git reads a note path's hex in either case (`get_oid_hex_segment` in its
+// `notes.c`) and concatenates every note it finds for one commit, so the writer
+// finds a note under any spelling and leaves the commit one entry, in lowercase
+// as Git writes it (#381). Each commit's hex opens with two letters, so its
+// fan-out directory has spellings too.
+function spelledWriter(t) {
+  const f = noteWriter(t, (head) => /^[a-f]{2}/.test(head));
+  const upper = (text) => text.toUpperCase();
+  const fanOut = f.head.slice(0, 2);
+  const leaf = f.head.slice(2);
+  const note = (type) => f.git(["hash-object", "-w", "--stdin"],
+    `{"schema":"causet.note/v1","records":[{"type":"${type}"}]}\n`);
+  /** Every path in the notes tree that names this commit, in any spelling. */
+  const paths = () => f.git(["ls-tree", "-r", "--name-only", "refs/notes/causet"])
+    .split(/\r?\n/).filter((name) => name.replace("/", "").toLowerCase() === f.head);
+  const shown = () => JSON.parse(f.git(["notes", "--ref=causet", "show", f.head]));
+  const provenance = () => {
+    const result = f.cst(["provenance", f.head, "--json"]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    return JSON.parse(result.stdout).entries;
+  };
+  return { ...f, upper, fanOut, leaf, note, paths, shown, provenance };
+}
+
+function assertOneNote(f, result) {
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const paths = f.paths();
+  assert.equal(paths.length, 1, `one entry for the commit: ${paths.join(", ")}`);
+  assert.equal(paths[0], paths[0].toLowerCase(), "the entry is spelled in lowercase");
+  assert.equal(f.provenance().length, 1, "the declared provenance is read back");
+  return f.shown().records;
+}
+
+const ONE_SPELLING = {
+  "a lowercase note path": (f, note) => [["100644", f.head, note]],
+  "an uppercase note path": (f, note) => [["100644", f.upper(f.head), note]],
+  "a mixed-case note path": (f, note) => [["100644", f.head.replace(/[a-f]/g, (c, at) => (at % 2 ? c : f.upper(c))), note]],
+  "an uppercase fan-out directory": (f, note) => [["40000", f.upper(f.fanOut), f.literal([["100644", f.leaf, note]])]],
+  "an uppercase note path in a fan-out directory": (f, note) => [["40000", f.fanOut, f.literal([["100644", f.upper(f.leaf), note]])]],
+};
+
+for (const [name, tree] of Object.entries(ONE_SPELLING)) {
+  test(`a note under ${name} gets the new record, and stays one note`, (t) => {
+    const f = spelledWriter(t);
+    f.publish(f.literal(tree(f, f.note("keep-me"))));
+    assert.equal(f.oracle().length, 1, "Git lists the note");
+
+    const records = assertOneNote(f, f.declare());
+    assert.deepEqual(records.map(({ type }) => type), ["keep-me", "provenance"]);
+  });
+}
+
+// Git shows both notes, concatenated, which is no JSON document: the writer keeps
+// that text as a legacy note, as it keeps any note it cannot parse, so no record
+// is lost when the second spelling goes.
+const TWO_SPELLINGS = {
+  "two spellings of a note path": (f, upper, lower) => [
+    ["100644", f.upper(f.head), upper],
+    ["100644", f.head, lower],
+  ],
+  "a note path and an uppercase fan-out directory": (f, upper, lower) => [
+    ["40000", f.upper(f.fanOut), f.literal([["100644", f.leaf, upper]])],
+    ["100644", f.head, lower],
+  ],
+  "both spellings of a fan-out directory": (f, upper, lower) => [
+    ["40000", f.upper(f.fanOut), f.literal([["100644", f.leaf, upper]])],
+    ["40000", f.fanOut, f.literal([["100644", f.leaf, lower]])],
+  ],
+};
+
+for (const [name, tree] of Object.entries(TWO_SPELLINGS)) {
+  test(`a commit noted under ${name} keeps both notes' text in one note`, (t) => {
+    const f = spelledWriter(t);
+    f.publish(f.literal(tree(f, f.note("upper"), f.note("lower"))));
+    assert.equal(f.oracle().length, 1, "Git lists one note for the commit");
+
+    const records = assertOneNote(f, f.declare());
+    assert.deepEqual(records.map(({ type }) => type), ["legacy-note", "provenance"]);
+    assert.match(records[0].text, /"upper"[\s\S]*"lower"|"lower"[\s\S]*"upper"/);
+  });
+}
+
+test("a fan-out directory keeps its other notes when a spelling of the commit's note leaves it", (t) => {
+  const f = spelledWriter(t);
+  const other = `${f.fanOut}${"0".repeat(38)}`;
+  f.publish(f.literal([
+    ["40000", f.upper(f.fanOut), f.literal([["100644", "0".repeat(38), f.blob], ["100644", f.leaf, f.note("upper")]]
+      .sort(([, left], [, right]) => (left < right ? -1 : 1)))],
+    ["100644", f.head, f.note("lower")],
+  ]));
+
+  assertOneNote(f, f.declare());
+  assert.deepEqual(f.oracle().map(({ target }) => target).sort(), [other, f.head].sort());
+});
+
+test("a directory at an uppercase spelling of the attachment path is never overwritten", (t) => {
+  const f = spelledWriter(t);
+  const opaque = f.literal([["100644", "opaque.txt", f.blob]]);
+  f.publish(f.literal([["40000", f.upper(f.head), opaque]]));
+
+  assert.match(assertRefused(f, f.notes()).message, /non-note object occupies/);
 });
 
 for (const mode of REFUSED_MODES) {

@@ -324,42 +324,83 @@ fn read_tree(oid: &str, cwd: &str, oid_bytes: usize) -> GitResult<Vec<TreeEntry>
 }
 
 fn two_hex(name: &[u8]) -> bool {
-  name.len() == 2 && name.iter().all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+  name.len() == 2 && name.iter().all(u8::is_ascii_hexdigit)
 }
 
-/// `replaceNote(tree, suffix, blob, cwd, oidBytes)`.
+/// Where `suffix`'s note sits in one level of the notes tree. Git reads a note
+/// path's hex in either case (`get_oid_hex_segment` in its `notes.c`) and
+/// concatenates every note it finds for one object, so each spelling counts:
+/// `notes` are the entries named `suffix` in any case, `directories` the fan-out
+/// directories whose name begins it in any case, each in tree order.
+struct Spellings {
+  notes: Vec<usize>,
+  directories: Vec<usize>,
+}
+
+fn spellings(entries: &[TreeEntry], suffix: &str) -> GitResult<Spellings> {
+  let mut found = Spellings { notes: Vec::new(), directories: Vec::new() };
+  for (index, entry) in entries.iter().enumerate() {
+    if entry.name.eq_ignore_ascii_case(suffix.as_bytes()) {
+      // Git takes only a regular file for a note (`load_subtree` in its `notes.c`).
+      if entry.mode & 0o170000 != 0o100000 {
+        return Err(GitError::new(
+          "malformed-input",
+          "A non-note object occupies the notes attachment path; publication refused.",
+        ));
+      }
+      found.notes.push(index);
+    } else if entry.kind == "tree"
+      && two_hex(&entry.name)
+      && entry.name.len() < suffix.len()
+      && suffix.as_bytes()[..entry.name.len()].eq_ignore_ascii_case(&entry.name)
+    {
+      found.directories.push(index);
+    }
+  }
+  Ok(found)
+}
+
+/// The spelling to keep of several: the one already in lowercase, as Git writes
+/// a note path, or else the first.
+fn preferred(entries: &[TreeEntry], candidates: &[usize]) -> Option<usize> {
+  candidates
+    .iter()
+    .copied()
+    .find(|index| !entries[*index].name.iter().any(u8::is_ascii_uppercase))
+    .or_else(|| candidates.first().copied())
+}
+
+/// `replaceNote(tree, suffix, blob, cwd, oidBytes)`: the tree with `suffix`'s
+/// note set to `blob`, at one path spelled in lowercase. Every other spelling of
+/// that note is removed, since Git would show it concatenated with this one; its
+/// text is already in `blob`, which was built from what Git showed (#381).
 fn replace_note(tree: Option<&str>, suffix: &str, blob: &str, cwd: &str, oid_bytes: usize) -> GitResult<String> {
   let mut entries = match tree {
     Some(tree) => read_tree(tree, cwd, oid_bytes)?,
     None => Vec::new(),
   };
-  let exact = entries
-    .iter()
-    .position(|entry| String::from_utf8_lossy(&entry.name) == suffix);
-  if let Some(index) = exact {
-    // Git takes only a regular file for a note (`load_subtree` in its `notes.c`).
-    if entries[index].mode & 0o170000 != 0o100000 {
-      return Err(GitError::new(
-        "malformed-input",
-        "A non-note object occupies the notes attachment path; publication refused.",
-      ));
-    }
-  }
-  let directory = entries.iter().position(|entry| {
-    entry.kind == "tree"
-      && two_hex(&entry.name)
-      && entry.name.len() < suffix.len()
-      && suffix.as_bytes().starts_with(&entry.name)
-  });
-  if let Some(index) = exact {
-    let entry = &mut entries[index];
+  let found = spellings(&entries, suffix)?;
+  let mut removed = vec![false; entries.len()];
+  if let Some(keep) = preferred(&entries, &found.notes) {
+    let entry = &mut entries[keep];
+    entry.name = suffix.as_bytes().to_vec();
     entry.oid = blob.to_string();
     entry.kind = "blob";
     entry.mode = 0o100644;
-  } else if let Some(index) = directory {
-    let name_length = entries[index].name.len();
-    let child = entries[index].oid.clone();
-    entries[index].oid = replace_note(Some(&child), &suffix[name_length..], blob, cwd, oid_bytes)?;
+    for index in found.notes.iter().copied().filter(|index| *index != keep) {
+      removed[index] = true;
+    }
+    for index in found.directories.iter().copied() {
+      removed[index] = remove_from_directory(&mut entries[index], suffix, cwd, oid_bytes)?;
+    }
+  } else if let Some(keep) = preferred(&entries, &found.directories) {
+    for index in found.directories.iter().copied().filter(|index| *index != keep) {
+      removed[index] = remove_from_directory(&mut entries[index], suffix, cwd, oid_bytes)?;
+    }
+    let entry = &mut entries[keep];
+    let child = entry.oid.clone();
+    entry.oid = replace_note(Some(&child), &suffix[entry.name.len()..], blob, cwd, oid_bytes)?;
+    entry.name.make_ascii_lowercase();
   } else {
     entries.push(TreeEntry {
       mode: 0o100644,
@@ -367,8 +408,47 @@ fn replace_note(tree: Option<&str>, suffix: &str, blob: &str, cwd: &str, oid_byt
       name: suffix.as_bytes().to_vec(),
       oid: blob.to_string(),
     });
+    removed.push(false);
   }
+  let mut keep = removed.into_iter().map(|removed| !removed);
+  entries.retain(|_| keep.next().unwrap_or(true));
   write_tree(&entries, cwd)
+}
+
+/// Remove every spelling of `suffix`'s note from the fan-out directory `entry`,
+/// whose name begins `suffix`. True when the directory is left empty and should
+/// go, as Git writes no empty directory into a notes tree.
+fn remove_from_directory(entry: &mut TreeEntry, suffix: &str, cwd: &str, oid_bytes: usize) -> GitResult<bool> {
+  match remove_note(&entry.oid, &suffix[entry.name.len()..], cwd, oid_bytes)? {
+    Some(tree) => {
+      entry.oid = tree;
+      Ok(false)
+    }
+    None => Ok(true),
+  }
+}
+
+/// The tree with every spelling of `suffix`'s note removed, or `None` when
+/// nothing is left in it. A tree holding none is returned unchanged.
+fn remove_note(tree: &str, suffix: &str, cwd: &str, oid_bytes: usize) -> GitResult<Option<String>> {
+  let mut entries = read_tree(tree, cwd, oid_bytes)?;
+  let found = spellings(&entries, suffix)?;
+  if found.notes.is_empty() && found.directories.is_empty() {
+    return Ok(Some(tree.to_string()));
+  }
+  let mut removed = vec![false; entries.len()];
+  for index in found.notes.iter().copied() {
+    removed[index] = true;
+  }
+  for index in found.directories.iter().copied() {
+    removed[index] = remove_from_directory(&mut entries[index], suffix, cwd, oid_bytes)?;
+  }
+  let mut keep = removed.into_iter().map(|removed| !removed);
+  entries.retain(|_| keep.next().unwrap_or(true));
+  if entries.is_empty() {
+    return Ok(None);
+  }
+  write_tree(&entries, cwd).map(Some)
 }
 
 /// `commitWithParents(tree, parents, cwd, { message })`.
