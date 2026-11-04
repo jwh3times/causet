@@ -54,7 +54,9 @@ function restore() {
   created.push(root);
   const repo = path.join(root, "repo");
   fs.mkdirSync(repo);
-  git(repo, "init", "-q", "-b", "main");
+  // The fixture's objects are SHA-1, so the repository it restores into is
+  // too, whatever the run's default (#278).
+  git(repo, "init", "-q", "-b", "main", "--object-format=sha1");
   git(repo, "config", "user.name", "Legacy Fixture");
   git(repo, "config", "user.email", "legacy@example.invalid");
   git(repo, "config", "core.autocrlf", "false");

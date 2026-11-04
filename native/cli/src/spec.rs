@@ -1336,8 +1336,10 @@ pub fn benchmark_spec_index(documents: Option<&str>, blocks: Option<&str>) -> Gi
 fn benchmark_in(temporary: &str, documents: usize, blocks_per_document: usize) -> GitResult<Value> {
   let read = |path: &str| std::fs::read(path).map_err(|error| crate::envelope::io_failure(&error, "open", path));
   let elapsed = |started: std::time::Instant| started.elapsed().as_secs_f64() * 1000.0;
+  // SHA-1 whatever the user's default, so the workload is the one its
+  // baselines were recorded on (#278).
   causet_engine::process::run_git(
-    &["init", "-q", "-b", "main"].map(String::from),
+    &["init", "-q", "-b", "main", "--object-format=sha1"].map(String::from),
     &causet_engine::process::RunOptions::new(temporary),
   )?;
   let root = engine::repo_context(temporary)?.root;

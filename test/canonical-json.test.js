@@ -146,7 +146,8 @@ test("the manifest-hash encoder vector is accepted by the shipped envelope reade
   const directory = path.join(parent, "envelope");
   fs.mkdirSync(repo);
   fs.mkdirSync(directory);
-  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: repo, env: testEnv() });
+  // The vector's object IDs are SHA-1, whatever the run's default (#278).
+  execFileSync("git", ["init", "-q", "-b", "main", "--object-format=sha1"], { cwd: repo, env: testEnv() });
   execFileSync("git", ["-c", "user.name=Vector", "-c", "user.email=vector@example.invalid",
     "commit", "-q", "--allow-empty", "-m", "root"], { cwd: repo, env: testEnv() });
   const manifestPath = path.join(directory, "manifest.json");

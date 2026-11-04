@@ -1290,8 +1290,10 @@ linked-worktree workspaces, 250 causal notes, and 50 retained resolutions. It
 measures history, stock Git worktree discovery, the registry, complete
 workspace status, notes, resolutions, and complete metadata status. Setup cost
 is separate, every sample must return the same semantic result, and JSON omits
-fixture paths, object IDs, file content, and commit messages. Documentation
-volume is covered by `cst spec benchmark`.
+fixture paths, object IDs, file content, and commit messages. The fixture is a
+SHA-1 repository whatever Git's default object format, the workload its
+baselines were recorded on. Documentation volume is covered by
+`cst spec benchmark`.
 
 On the clean-commit Windows host run, registry parsing took a 0.31 ms median
 with no Git processes and the 300-target note catalog took 172.67 ms with two.
@@ -1434,7 +1436,8 @@ current repository:
 cst spec benchmark --documents 25 --blocks 40
 ```
 
-The benchmark creates and removes a disposable repository. It reports cold,
+The benchmark creates and removes a disposable SHA-1 repository, whatever Git's
+default object format. It reports cold,
 unchanged, and one-block-change indexing; Git-blob cache hits and actual content
 reads; semantic entity counts; sparse v4 bytes versus an equivalent expanded v2
 representation; and a deflate-based approximation of Git object compression.

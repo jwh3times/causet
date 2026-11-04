@@ -3276,6 +3276,26 @@ test("doctor and repository-scale benchmarks expose process costs without reposi
   );
 });
 
+test("the benchmarks build SHA-1 fixtures whatever the default object format (#278)", (t) => {
+  // Their workloads are compared with baselines recorded on SHA-1, and a
+  // SHA-256 fixture's longer ref paths crossed Windows' path limit.
+  const { repo, parent } = makeRepo(t);
+  for (const args of [
+    ["metadata", "benchmark", "--history", "2", "--workspaces", "1", "--notes", "1", "--resolutions", "1",
+      "--samples", "1", "--areas", "1", "--files-per-area", "1", "--budget-ms", "60000", "--json"],
+    ["spec", "benchmark", "--documents", "1", "--blocks", "2", "--json"],
+  ]) {
+    const trace = path.join(parent, `${args[0]}-trace.log`);
+    const run = spawnSync(cstCommand, [...cstPrefix(), ...args], {
+      cwd: repo, encoding: "utf8", env: testEnv({ GIT_DEFAULT_HASH: "sha256", GIT_TRACE: trace }),
+    });
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    const inits = fs.readFileSync(trace, "utf8").split(/\r?\n/).filter((line) => / git init\b/.test(line));
+    assert.ok(inits.length > 0, `${args[0]} benchmark creates a repository`);
+    for (const line of inits) assert.match(line, /--object-format=sha1\b/, line);
+  }
+});
+
 test("merge planning batches commit metadata instead of spawning per commit", (t) => {
   const { repo } = makeRepo(t);
   write(repo, "history.txt", "base\n");
@@ -3770,7 +3790,7 @@ test("metadata validation quarantines invalid causal claims from coverage", (t) 
   git(repo, "switch", "main");
   const target = git(repo, "rev-parse", "HEAD");
   const targetTree = git(repo, "rev-parse", "HEAD^{tree}");
-  const missing = "f".repeat(40);
+  const missing = "f".repeat(target.length);
   const invalid = {
     schema: "causet.note/v1",
     records: [

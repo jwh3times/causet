@@ -104,6 +104,10 @@ jobs:
               GIT_DEFAULT_REF_FORMAT=reftable git -c init.defaultBranch=main init -q "$RUNNER_TEMP/reftable-probe"
               test "$(git -C "$RUNNER_TEMP/reftable-probe" rev-parse --show-ref-format)" = reftable
               echo "GIT_DEFAULT_REF_FORMAT=reftable" >> "$GITHUB_ENV" ;;
+            sha256)
+              GIT_DEFAULT_HASH=sha256 git -c init.defaultBranch=main init -q "$RUNNER_TEMP/sha256-probe"
+              test "$(git -C "$RUNNER_TEMP/sha256-probe" rev-parse --show-object-format)" = sha256
+              echo "GIT_DEFAULT_HASH=sha256" >> "$GITHUB_ENV" ;;
             *) echo "unknown mode ${{ matrix.mode }}" >&2; exit 1 ;;
           esac
       - name: Suite
