@@ -166,6 +166,29 @@ test("every native operation answers natively on a supported repository", { skip
   assert.deepEqual([...answered].sort(), frozen.nativeOperations);
 });
 
+test("a ref listing of several patterns lists each ref once, the same on both engines (#277)", { skip }, () => {
+  const { history } = repositories();
+  const patterns = [
+    ["refs/heads/", "refs/tags"],
+    ["refs/tags", "refs/heads/", "refs/heads/main"],
+    ["refs/notes/causet", "refs/causet/", "refs/notes/vcs-lab", "refs/vcs-lab/"],
+    [],
+  ];
+  const calls = patterns.map((args) => ({ op: "listRefs", args }));
+  const answer = ({ value, error }) => (error ? { code: error.code, message: error.message } : { value });
+  const [git, native] = probe(["git", "native"].map((engine) => ({ cwd: history.cwd, engine, warm: true, calls })),
+    probeEnv());
+  for (const [index, args] of patterns.entries()) {
+    const label = JSON.stringify(args);
+    assert.deepEqual(answer(native.results[index]), answer(git.results[index]), label);
+    assert.deepEqual(native.results[index].metrics.fallbacks, [], label);
+    const names = git.results[index].value.map((entry) => entry.ref);
+    assert.deepEqual(names, [...new Set(names)].sort(), `${label} lists each ref once, by name`);
+  }
+  assert.deepEqual(git.results[3].value, [], "no pattern lists nothing");
+  assert.equal(git.results[3].metrics.processes, 0);
+});
+
 const gitVersion = /(\d+)\.(\d+)/.exec(spawnSync("git", ["--version"], { encoding: "utf8" }).stdout ?? "") ?? [];
 const [floorMajor, floorMinor] = MERGE_TREE_ENGINE_MIN_GIT.split(".").map(Number);
 const mergeTreeSkip = skip || (Number(gitVersion[1]) > floorMajor

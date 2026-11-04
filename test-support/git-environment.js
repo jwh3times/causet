@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -43,6 +45,75 @@ export function testEnv(overrides = {}) {
     GIT_CONFIG_GLOBAL: isolatedGitConfig,
     ...overrides,
   };
+}
+
+/**
+ * The override that makes `git init` create a files repository whatever
+ * `GIT_DEFAULT_REF_FORMAT` the run sets (#277). It is for a fixture whose
+ * subject only files storage has: a loose ref file's path, the native read
+ * engine's supported profile, or answers frozen on files storage. A Git
+ * before 2.45 has no other storage and ignores the variable.
+ */
+export const FILES_REFS = { GIT_DEFAULT_REF_FORMAT: "files" };
+
+let reftableSupport;
+
+/**
+ * Why this Git cannot create a reftable repository (Git 2.45 or later can),
+ * or `false` when it can: a test's `skip` value.
+ */
+export function reftableUnsupported() {
+  if (reftableSupport === undefined) {
+    const probe = fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-reftable-probe-"));
+    try {
+      const created = spawnSync("git", ["init", "-q", "--ref-format=reftable", probe], {
+        encoding: "utf8", env: testEnv(),
+      });
+      reftableSupport = created.status === 0
+        ? false
+        : "this Git cannot create a reftable repository (Git 2.45 or later can)";
+    } finally {
+      fs.rmSync(probe, { recursive: true, force: true });
+    }
+  }
+  return reftableSupport;
+}
+
+/**
+ * Hold `ref` locked the way a concurrent Git does, whichever ref storage the
+ * repository uses: a `git update-ref --stdin` transaction is prepared and left
+ * open (#277). With files storage that is the ref's `.lock` file; a reftable
+ * repository locks its whole stack, so every ref write fails while it is held.
+ * Resolves, once the lock is held, to a function that aborts the transaction
+ * and waits for Git to exit.
+ */
+export async function holdRefLock(cwd, ref) {
+  const target = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8", env: testEnv() }).trim();
+  const child = spawn("git", ["update-ref", "--stdin"], { cwd, env: testEnv(), windowsHide: true });
+  const exited = new Promise((resolve) => child.once("close", resolve));
+  let stdout = "";
+  let stderr = "";
+  child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
+  await new Promise((resolve, reject) => {
+    child.stdout.setEncoding("utf8").on("data", (chunk) => {
+      stdout += chunk;
+      if (stdout.includes("prepare: ok")) resolve();
+    });
+    exited.then((code) => reject(new Error(`git update-ref --stdin exited ${code} before holding ${ref}: ${stderr}`)));
+    child.stdin.write(`start\nupdate ${ref} ${target}\nprepare\n`);
+  });
+  return async () => {
+    child.stdin.end("abort\n");
+    assert.equal(await exited, 0, stderr);
+  };
+}
+
+/** Whether the repository at `cwd` keeps its refs in a reftable stack. */
+export function usesReftable(cwd) {
+  const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd, encoding: "utf8", env: testEnv(),
+  }).trim();
+  return fs.existsSync(path.join(commonDir, "reftable"));
 }
 
 /**

@@ -104,7 +104,7 @@ catalog! {
   // Refs and notes
   "refExists" => fn ref_exists(name: &str, cwd: &str) -> bool;
   "refTarget" => fn ref_target(name: &str, cwd: &str) -> Option<String>;
-  "listRefs" => fn list_refs(pattern: &str, cwd: &str) -> Vec<RefEntry>;
+  "listRefs" => fn list_refs_matching(patterns: &[&str], cwd: &str) -> Vec<RefEntry>;
   "symbolicRef" => fn symbolic_ref(name: &str, cwd: &str, short: bool) -> Option<String>;
   "pseudoRefTarget" => fn pseudo_ref_target(name: &str, cwd: &str) -> Option<String>;
   "listNoteEntries" => fn list_note_entries(notes_ref: &str, cwd: &str) -> Vec<NoteEntry>;
@@ -130,8 +130,8 @@ impl ReadBackend for NativeBackend {
     native::repo_context(cwd)
   }
 
-  fn list_refs(&self, pattern: &str, cwd: &str) -> Answer<Vec<RefEntry>> {
-    native::list_refs(pattern, cwd)
+  fn list_refs_matching(&self, patterns: &[&str], cwd: &str) -> Answer<Vec<RefEntry>> {
+    native::list_refs_matching(patterns, cwd)
   }
 
   fn inspect_git_objects(&self, expressions: &[String], cwd: &str) -> Answer<Objects> {
@@ -145,6 +145,11 @@ impl ReadBackend for NativeBackend {
   fn list_note_entries(&self, notes_ref: &str, cwd: &str) -> Answer<Vec<NoteEntry>> {
     native::list_note_entries(notes_ref, cwd)
   }
+}
+
+/// `listRefs` with one pattern, as most callers ask it.
+pub fn list_refs(pattern: &str, cwd: &str) -> GitResult<Vec<RefEntry>> {
+  list_refs_matching(&[pattern], cwd)
 }
 
 // ---------------------------------------------------------------------------

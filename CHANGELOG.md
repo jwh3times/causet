@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **cst is tested on reftable repositories** (#277). Git 3.0 is planned to
+  make reftable the default ref storage for new repositories, and no suite ran
+  on it. cst already answered correctly there: the tests that failed had set
+  up their scenarios by writing files under `.git/refs/`, which a reftable
+  repository doesn't read. They now set them up through Git, and manual CI
+  qualification runs every suite with `GIT_DEFAULT_REF_FORMAT=reftable` on
+  Ubuntu and Windows (Git 2.45 or later). Deciding where a reftable repository
+  keeps its metadata now costs one `git for-each-ref` per command, down from
+  two in an initialised repository and four in a fresh one. A files
+  repository still decides it without starting a process.
+
 - **A note under an uppercase path no longer gets a second entry** (#381).
   Git reads a note path's hex in either case, so it lists a note stored under
   an uppercase or mixed-case path, or inside an uppercase fan-out directory.

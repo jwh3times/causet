@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 const MODES = [
   "default", "session-on", "session-off", "forecast-worktree",
-  "forecast-merge-tree", "engine-native", "kind-native",
+  "forecast-merge-tree", "engine-native", "kind-native", "reftable",
 ];
 
 // The native-kind mode runs on every change to native code (ADR-0044 item 7),

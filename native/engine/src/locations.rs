@@ -1,6 +1,7 @@
-//! Where causet keeps what it stores (ADR-0039 §1, §3), decided as
-//! `src/locations.js` decides it: from files alone, except in a reftable
-//! repository, whose refs cost one listing.
+//! Where causet keeps what it stores (ADR-0039 §1, §3): from files alone, as
+//! `src/locations.js` decided it, except in a reftable repository, whose refs
+//! cost one listing for both sets of names where the JavaScript CLI listed
+//! each (#277).
 
 use crate::engine;
 use crate::errors::{GitError, GitResult};
@@ -76,36 +77,78 @@ pub fn migration_marker_path(context: &RepoContext) -> String {
   )
 }
 
-fn holds_any(context: &RepoContext, set: &Names) -> GitResult<bool> {
-  if under(&context.common_dir, set.runtime).exists()
+/// Whether the set's runtime or specs directory exists.
+fn holds_directory(context: &RepoContext, set: &Names) -> bool {
+  under(&context.common_dir, set.runtime).exists()
     || under(&context.git_dir, set.runtime).exists()
     || under(&context.root, set.specs_dir).exists()
-  {
-    return Ok(true);
+}
+
+/// Whether `name` is one of the set's refs, as `git for-each-ref` matches the
+/// set's notes ref and `<refs root>/`.
+fn is_ref_of(set: &Names, name: &str) -> bool {
+  name
+    .strip_prefix(set.notes_ref)
+    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    || name
+      .strip_prefix(set.refs_root)
+      .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Which of `sets` hold anything. A set with no directory is decided from the
+/// ref files, or in a reftable repository from one listing of every such
+/// set's refs.
+fn held_sets<const N: usize>(context: &RepoContext, sets: [&Names; N]) -> GitResult<[bool; N]> {
+  let mut held = sets.map(|set| holds_directory(context, set));
+  if !Path::new(&context.common_dir).join("reftable").exists() {
+    for (held, set) in held.iter_mut().zip(sets) {
+      *held = *held || holds_file_ref(context, set);
+    }
+    return Ok(held);
   }
-  if Path::new(&context.common_dir).join("reftable").exists() {
-    return Ok(
-      !engine::list_refs(set.notes_ref, &context.root)?.is_empty()
-        || !engine::list_refs(&format!("{}/", set.refs_root), &context.root)?.is_empty(),
-    );
+  let undecided: Vec<&Names> = sets
+    .iter()
+    .zip(held)
+    .filter(|(_, held)| !held)
+    .map(|(set, _)| *set)
+    .collect();
+  if undecided.is_empty() {
+    return Ok(held);
   }
+  let roots: Vec<String> = undecided
+    .iter()
+    .map(|set| format!("{}/", set.refs_root))
+    .collect();
+  let mut patterns = Vec::new();
+  for (set, root) in undecided.iter().zip(&roots) {
+    patterns.extend([set.notes_ref, root.as_str()]);
+  }
+  let refs = engine::list_refs_matching(&patterns, &context.root)?;
+  for (held, set) in held.iter_mut().zip(sets) {
+    *held = *held || refs.iter().any(|entry| is_ref_of(set, &entry.name));
+  }
+  Ok(held)
+}
+
+/// Whether the set has a loose or packed ref.
+fn holds_file_ref(context: &RepoContext, set: &Names) -> bool {
   if [set.notes_ref, set.refs_root]
     .iter()
     .any(|name| holds_loose_ref(&under(&context.common_dir, name)))
   {
-    return Ok(true);
+    return true;
   }
   let Ok(packed) = std::fs::read(Path::new(&context.common_dir).join("packed-refs")) else {
-    return Ok(false);
+    return false;
   };
   let packed = String::from_utf8_lossy(&packed);
   let prefix = format!("{}/", set.refs_root);
-  Ok(packed.split('\n').any(|line| {
+  packed.split('\n').any(|line| {
     line
       .split(' ')
       .nth(1)
       .is_some_and(|name| name == set.notes_ref || name.starts_with(&prefix))
-  }))
+  })
 }
 
 /// `holdsLooseRef`: whether `location` is a loose ref or a directory holding
@@ -130,10 +173,11 @@ pub fn repository_names(cwd: &str) -> GitResult<RepositoryNames> {
   if let Some(cached) = CACHE.with(|cache| cache.borrow().get(&context.common_dir).copied()) {
     return Ok(cached);
   }
+  let [current, legacy] = held_sets(&context, [&CURRENT_NAMES, &LEGACY_NAMES])?;
   let evidence = Evidence {
     marker: Path::new(&migration_marker_path(&context)).exists(),
-    current: holds_any(&context, &CURRENT_NAMES)?,
-    legacy: holds_any(&context, &LEGACY_NAMES)?,
+    current,
+    legacy,
   };
   let state = if evidence.marker {
     "migrated"

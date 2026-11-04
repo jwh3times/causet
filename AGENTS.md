@@ -123,7 +123,9 @@ changes, run `npm test`, `CAUSET_GIT_SESSION=1 npm test`, `CAUSET_GIT_SESSION=0 
 (every read must pass through the engine seam, `native/engine/src/engine.rs`).
 For changes to native code, also run `CAUSET_KIND=native npm test`, which
 imports every test's repositories and holds N1's commands on the copies to
-Git's answers (`test-support/native-kind.js`, ADR-0044).
+Git's answers (`test-support/native-kind.js`, ADR-0044). For changes to how
+cst reads or writes refs, also run `GIT_DEFAULT_REF_FORMAT=reftable npm test`
+on Git 2.45 or later (#277).
 Every CLI launch in the suites goes through `test-support/cst-command.js`,
 which runs the Rust build; never spawn a CLI directly, so that
 `CAUSET_CLI=<executable> npm test` can run the same suites against another

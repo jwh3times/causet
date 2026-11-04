@@ -7,6 +7,7 @@
 use crate::engine::Refusal;
 use crate::text;
 use crate::types::*;
+use std::collections::BTreeMap;
 
 /// The profile `describeReadEngines` reports.
 pub const PROFILE: &str = "files-sha1-resolution-v1";
@@ -69,10 +70,15 @@ pub fn repo_context(cwd: &str) -> Result<RepoContext, Refusal> {
   })
 }
 
-pub fn list_refs(pattern: &str, cwd: &str) -> Result<Vec<RefEntry>, Refusal> {
+/// Every ref any of `patterns` matches, once each and sorted by name, as
+/// `git for-each-ref` lists them.
+pub fn list_refs_matching(patterns: &[&str], cwd: &str) -> Result<Vec<RefEntry>, Refusal> {
+  let mut refs = BTreeMap::new();
+  for pattern in patterns {
+    refs.extend(causet_core::refs(pattern, &directory(cwd)).map_err(refusal)?);
+  }
   Ok(
-    causet_core::refs(pattern, &directory(cwd))
-      .map_err(refusal)?
+    refs
       .into_iter()
       .map(|(name, oid)| RefEntry { name, oid })
       .collect(),

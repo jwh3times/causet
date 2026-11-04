@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { testEnv } from "../test-support/git-environment.js";
+import { holdRefLock, testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 // Until #243 the writer cases below called src/notes.js and src/resolutions.js
@@ -189,7 +189,7 @@ test("large dependency sets bound carrier parent fan-in and retain every commit"
   assert.equal(vlab(repo, "metadata", "validate", "--json").summary.acceptedPortableRecords, 1);
 });
 
-test("import refuses a locked retention ref without publishing notes or resolution refs", (t) => {
+test("import refuses a locked retention ref without publishing notes or resolution refs", async (t) => {
   const { repo, parent } = fixture(t);
   assert.notEqual(publishResolution(repo), "");
   const envelope = path.join(parent, "envelope");
@@ -198,12 +198,14 @@ test("import refuses a locked retention ref without publishing notes or resoluti
   git(parent, "clone", "--no-local", "--single-branch", "--branch", "main", repo, clone);
   configure(clone);
   const before = refs(clone);
-  const lock = path.resolve(clone, git(clone, "rev-parse", "--git-path", `${RETENTION}.lock`));
-  fs.mkdirSync(path.dirname(lock), { recursive: true });
-  fs.writeFileSync(lock, "held");
-  assert.notEqual(run(clone, ["metadata", "import", envelope, "--apply", "--json"]).status, 0);
-  assert.equal(refs(clone), before);
-  fs.unlinkSync(lock);
+  const release = await holdRefLock(clone, RETENTION);
+  try {
+    assert.notEqual(run(clone, ["metadata", "import", envelope, "--apply", "--json"]).status, 0);
+    assert.equal(refs(clone), before);
+  } finally {
+    await release();
+  }
+  assert.equal(refs(clone), before, "aborting the held transaction moves nothing");
   assert.equal(vlab(clone, "metadata", "import", envelope, "--apply", "--json").changed, true);
 });
 
