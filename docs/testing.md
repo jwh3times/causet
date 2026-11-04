@@ -284,7 +284,11 @@ Git's own continuation fails first on a reftable lock), the native read engine's
 profile (`test/tree-modes.test.js`), and the answers frozen on files storage
 (the engine corpus and the benchmark counts). `test/reftable.test.js` and the
 last case of `test/resolution-path.test.js` create reftable repositories
-themselves, so every run covers reftable once.
+themselves, so every run on Git 2.45 or later covers reftable once; an older
+Git skips them. `test/reftable.test.js` holds the decision of which names a
+repository uses (ADR-0039 §1, §3) to one `git for-each-ref` for both sets of
+names, to refusing a repository whose only former-name evidence is a ref, and
+to ignoring a ref that only shares a prefix with a former name.
 
 **The generated-history corpus** (ADR-0044 item 1, ADR-0045 decision 13,
 #308) is Git repositories generated from a seed, each run through every N1
@@ -549,6 +553,9 @@ means deciding that the Rust answer is right, and saying so in the change.
   operation. A clone of this repository, whose history changes with every
   commit, is held to the Rust engine itself: its differential must be equal,
   and every catalog call must answer alike with and without a session.
+  `listRefs` over several patterns, which the oracle never asked, must answer
+  alike on both engines with no fallback, each ref once and sorted by name,
+  and no pattern lists nothing (#277).
 
 A new engine operation needs its Git implementation in
 `native/engine/src/git.rs`, its catalog line in `native/engine/src/engine.rs`,
