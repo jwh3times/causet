@@ -910,7 +910,10 @@ ID, also without Git. Those two, and an import into an existing native
 repository, read the alias files and every container's index whole. The
 reads above check only the parts of the store they touch and verify each
 object they read by its ID, so their cost does not grow with the store's
-object count ([storage.md §4.1](docs/native-store/storage.md#41-the-index)).
+object count. A read that misses, or resolves an abbreviation, first reads
+the files it searched whole, once per command, so damage is reported rather
+than answered as a missing object
+([storage.md §4.1](docs/native-store/storage.md#41-the-index)).
 Every other command in a native repository is refused,
 because it has no Git to pass it to
 ([ADR-0046](docs/adr/0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)).

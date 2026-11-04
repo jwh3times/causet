@@ -4,6 +4,7 @@
 //! reconstruction check's (objects.md §9.1; storage.md §4.1).
 
 use causet_store::StoreError;
+use causet_store::container::{ABSENT_BY_PROMISE, ContainerWriter};
 use causet_store::id::{GitAlgorithm, NativeId, Type};
 use causet_store::objects::Snapshot;
 use causet_store::store::{Store, StoreWriter};
@@ -180,8 +181,15 @@ fn a_damaged_name_or_record_a_lookup_lands_on_is_refused_by_the_read() {
   let store = Store::open(&root).unwrap();
   let why = corrupt(store.read(&NativeId(landed)));
   assert!(why.ends_with("its bytes do not hash to its ID"), "{why}");
-  let why = corrupt(store.read_known(&id));
-  assert!(why.ends_with("is named in the store but not held by it"), "{why}");
+  // A lookup of the name it held misses, so the reader checks every index
+  // whole before it answers, and the damage is found (#389).
+  for why in [
+    corrupt(store.read(&id)),
+    corrupt(store.held(&id)),
+    corrupt(store.read_known(&id)),
+  ] {
+    assert!(why.ends_with(": its index does not match the index's SHA-256"), "{why}");
+  }
   drop(store);
 
   // The record's reserved byte.
@@ -204,21 +212,138 @@ fn a_damaged_name_or_record_a_lookup_lands_on_is_refused_by_the_read() {
 }
 
 #[test]
+fn an_absent_copy_is_not_answered_when_damage_hides_a_present_one() {
+  let root = scratch("absent-copy");
+  let (id, _) = store_of(&root, 50);
+  let container = container_of(&root);
+  // A second container lists the object absent by promise.
+  let objects = root.join(".cst/objects");
+  let mut writer = ContainerWriter::create(&objects).unwrap();
+  writer.add_absent(&id, Type::Content, ABSENT_BY_PROMISE);
+  writer.finish().unwrap();
+  let (names, _, position) = index_layout(&container, &id);
+  flip(&container, names + 32 * position + 31);
+  let store = Store::open(&root).unwrap();
+  let why = corrupt(store.read(&id));
+  assert!(why.ends_with(": its index does not match the index's SHA-256"), "{why}");
+  drop(store);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn a_damaged_alias_row_a_lookup_lands_on_is_corrupt_not_a_missing_row() {
   let root = scratch("alias-row");
   let (_, digest) = store_of(&root, 50);
   // The row's short reference, which follows its 20-byte Git digest. The
   // trailer no longer matches, which only verification reads.
   let aliases = root.join(".cst/aliases/sha1");
-  let bytes = std::fs::read(&aliases).unwrap();
-  let count = u32::from_be_bytes(bytes[12..16].try_into().unwrap()) as usize;
-  let row = (0..count).find(|row| bytes[1040 + 28 * row..1040 + 28 * row + 20] == digest[..]).unwrap();
-  flip(&aliases, 1040 + 28 * row + 20 + 7);
+  let row = alias_row(&std::fs::read(&aliases).unwrap(), &digest);
+  flip(&aliases, ROWS + ROW * row + 20 + 7);
   let store = Store::open(&root).unwrap();
   let why = corrupt(store.native(GitAlgorithm::Sha1, &digest));
   assert!(why.contains("a short reference no index entry's name begins with"), "{why}");
   // A Git ID of no length has no row.
   assert_eq!(store.native(GitAlgorithm::Sha1, &[]).unwrap(), None);
+  drop(store);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// Where a SHA-1 alias file's rows begin, and each row's width: a 20-byte
+/// Git digest and an 8-byte short reference (objects.md §9.1).
+const ROWS: usize = 16 + 1024;
+const ROW: usize = 28;
+
+/// A SHA-1 alias file's row count.
+fn alias_count(bytes: &[u8]) -> usize {
+  u32::from_be_bytes(bytes[12..16].try_into().unwrap()) as usize
+}
+
+/// Where a SHA-1 alias file's native order begins, after its native fan-out.
+fn native_order(bytes: &[u8]) -> usize {
+  ROWS + ROW * alias_count(bytes) + 1024
+}
+
+/// The row of a Git digest in a SHA-1 alias file's bytes.
+fn alias_row(bytes: &[u8], digest: &[u8]) -> usize {
+  (0..alias_count(bytes))
+    .find(|row| bytes[ROWS + ROW * row..ROWS + ROW * row + 20] == digest[..])
+    .unwrap()
+}
+
+#[test]
+fn a_native_id_whose_row_a_damaged_native_order_hides_is_corrupt_not_unimported() {
+  let root = scratch("order-miss");
+  store_of(&root, 300);
+  let aliases = root.join(".cst/aliases/sha1");
+  let mut bytes = std::fs::read(&aliases).unwrap();
+  let count = alias_count(&bytes);
+  let short = |row: usize| bytes[ROWS + ROW * row + 20..ROWS + ROW * row + ROW].to_vec();
+  let order = native_order(&bytes);
+  let entry = |bytes: &[u8], at: usize| u32::from_be_bytes(bytes[order + 4 * at..order + 4 * at + 4].try_into().unwrap()) as usize;
+  // Two neighbouring native-order entries whose rows' short references
+  // share a first byte, so swapping them keeps every entry in its bucket.
+  let at = (0..count - 1)
+    .find(|&at| short(entry(&bytes, at))[0] == short(entry(&bytes, at + 1))[0])
+    .unwrap();
+  let row = entry(&bytes, at + 1);
+  let digest = bytes[ROWS + ROW * row..ROWS + ROW * row + 20].to_vec();
+  let id = Store::open(&root).unwrap().native(GitAlgorithm::Sha1, &digest).unwrap().unwrap();
+  let (first, second) = (bytes[order + 4 * at..order + 4 * at + 4].to_vec(), bytes[order + 4 * at + 4..order + 4 * at + 8].to_vec());
+  bytes[order + 4 * at..order + 4 * at + 4].copy_from_slice(&second);
+  bytes[order + 4 * at + 4..order + 4 * at + 8].copy_from_slice(&first);
+  std::fs::write(&aliases, bytes).unwrap();
+  let store = Store::open(&root).unwrap();
+  let why = corrupt(store.git(GitAlgorithm::Sha1, &id));
+  assert!(why.ends_with("sha1: its trailer does not match its bytes"), "{why}");
+  drop(store);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_miss_on_a_sound_store_checks_each_file_whole_once_then_answers_none() {
+  let root = scratch("sound-miss");
+  store_of(&root, 300);
+  let aliases = size_of(&root.join(".cst/aliases/sha1"));
+  let store = Store::open(&root).unwrap();
+  let opened = store.bytes_read();
+  assert_eq!(store.native(GitAlgorithm::Sha1, &[0x77; 20]).unwrap(), None);
+  let after_alias_miss = store.bytes_read();
+  assert_eq!(store.held(&NativeId([0x77; 32])).unwrap(), None);
+  let after_object_miss = store.bytes_read();
+  // The first miss of each kind read its files whole.
+  assert!(after_alias_miss - opened >= aliases, "{opened} {after_alias_miss}");
+  assert!(after_object_miss - after_alias_miss >= 300 * 48, "{after_alias_miss} {after_object_miss}");
+  // Misses after them, and abbreviations, read only what a lookup reads.
+  assert_eq!(store.native(GitAlgorithm::Sha1, &[0x78; 20]).unwrap(), None);
+  assert_eq!(store.held(&NativeId([0x78; 32])).unwrap(), None);
+  assert_eq!(store.matching("7878", |_| true).unwrap(), Vec::<NativeId>::new());
+  assert!(store.bytes_read() - after_object_miss < BOUND, "{after_object_miss} {}", store.bytes_read());
+  drop(store);
+
+  // An import's writer read the store whole when it opened, so its lookups
+  // of the store check nothing again.
+  let writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  let existing = writer.existing().unwrap();
+  let opened = existing.bytes_read();
+  assert_eq!(existing.native(GitAlgorithm::Sha1, &[0x77; 20]).unwrap(), None);
+  assert_eq!(existing.held(&NativeId([0x77; 32])).unwrap(), None);
+  assert!(existing.bytes_read() - opened < BOUND, "{opened} {}", existing.bytes_read());
+  drop(writer);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_git_id_whose_damaged_row_a_lookup_misses_is_corrupt_not_unimported() {
+  let root = scratch("alias-miss");
+  let (_, digest) = store_of(&root, 50);
+  let aliases = root.join(".cst/aliases/sha1");
+  let row = alias_row(&std::fs::read(&aliases).unwrap(), &digest);
+  // The digest's last byte: the row keeps its place, and a lookup of the Git
+  // ID it held misses it.
+  flip(&aliases, ROWS + ROW * row + 19);
+  let store = Store::open(&root).unwrap();
+  let why = corrupt(store.native(GitAlgorithm::Sha1, &digest));
+  assert!(why.ends_with("sha1: its trailer does not match its bytes"), "{why}");
   drop(store);
   std::fs::remove_dir_all(&root).unwrap();
 }
@@ -239,7 +364,28 @@ fn names_out_of_order_under_an_abbreviation_are_corrupt() {
   std::fs::write(&container, bytes).unwrap();
   let store = Store::open(&root).unwrap();
   let why = corrupt(store.matching("0", |_| true));
-  assert!(why.ends_with(": its name 1 is not in byte order"), "{why}");
+  assert!(why.ends_with(": its index does not match the index's SHA-256"), "{why}");
+  drop(store);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn an_abbreviation_whose_second_match_damage_hides_is_corrupt_not_unique() {
+  let root = scratch("hidden-match");
+  let (id, _) = store_of(&root, 300);
+  let container = container_of(&root);
+  let (names, _, _) = index_layout(&container, &id);
+  let bytes = std::fs::read(&container).unwrap();
+  // The first three names begin with the hex digit 0. Name 1 made to begin
+  // with f stops a scan for 0 there, so name 2 is not found, while every
+  // name the scan reads is in order.
+  assert_eq!((bytes[names] >> 4, bytes[names + 32] >> 4, bytes[names + 64] >> 4), (0, 0, 0));
+  let mut damaged = bytes.clone();
+  damaged[names + 32] = 0xf0;
+  std::fs::write(&container, damaged).unwrap();
+  let store = Store::open(&root).unwrap();
+  let why = corrupt(store.matching("0", |_| true));
+  assert!(why.ends_with(": its index does not match the index's SHA-256"), "{why}");
   drop(store);
   std::fs::remove_dir_all(&root).unwrap();
 }

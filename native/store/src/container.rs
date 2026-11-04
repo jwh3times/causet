@@ -617,10 +617,11 @@ fn decode_frame(
 /// names it probes and scans, the record it finds and that record's frame
 /// entry, and checks each. What no lookup touches whole, the index's SHA-256,
 /// the order of all the names and of the frames, and the annotation table,
-/// is checked by [`Index::read`], which `cst fsck`, the reconstruction check
-/// and import use. A damaged part a lookup does not check can misdirect it:
-/// the object it reads then fails its ID, or the object is not found, which
-/// for an object the store must hold is corruption.
+/// is checked by [`Index::read`]: `cst fsck`, the reconstruction check and
+/// import read every index so, and the store reads them so before it reports
+/// a miss (#389). A damaged part a lookup does not check can misdirect it:
+/// the object it reads then fails its ID, or the object is missed, which the
+/// store's whole-index check then finds.
 pub struct Container {
   pub path: PathBuf,
   file: Positioned,
@@ -810,6 +811,11 @@ impl Index {
       return Err(corrupt("its index does not match the index's SHA-256".into()));
     }
     parse_index(file, &index, layout.index).map_err(corrupt)
+  }
+
+  /// The bytes this index has read from its file.
+  pub fn bytes_read(&self) -> u64 {
+    self.file.bytes_read()
   }
 
   /// An object's record, when the index lists it.

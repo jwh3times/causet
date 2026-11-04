@@ -809,7 +809,11 @@ impl Unresolved {
 /// (objects.md §9.1; storage.md §4.1). Opening it and answering one lookup
 /// read a part of it bounded whatever its object count, and one more for
 /// each container. Objects are read and verified on demand. The whole-file
-/// checks are [`Store::load_aliases`]'s and [`Store::indexes`]'s.
+/// checks are [`Store::load_aliases`]'s and [`Store::indexes`]'s. Before a
+/// lookup reports a miss, and before an abbreviation resolves, the files it
+/// searched are checked whole, at most once each per opened store, which a
+/// command opens once (#389). Damage they find is refused, not answered as a
+/// miss.
 pub struct Store {
   pub root: PathBuf,
   /// The current ref snapshot's ID, which the store holds.
@@ -819,6 +823,19 @@ pub struct Store {
   frame: RefCell<Option<((usize, u32), std::rc::Rc<Vec<u8>>)>>,
   /// The bytes of the marker and `snapshot`.
   opened: u64,
+  /// The files this store has checked whole, so none is checked twice.
+  checked: RefCell<Checked>,
+}
+
+/// The files an opened store has checked whole.
+#[derive(Default)]
+struct Checked {
+  /// Every container's index.
+  indexes: bool,
+  /// The alias files of these algorithms.
+  aliases: Vec<GitAlgorithm>,
+  /// The bytes the whole indexes read, which their own files counted.
+  index_bytes: u64,
 }
 
 /// The version a root marker of another build names: `causet-native-store`,
@@ -906,6 +923,7 @@ impl Store {
       aliases,
       frame: RefCell::new(None),
       opened: (marker.len() + named.len()) as u64,
+      checked: RefCell::new(Checked::default()),
     };
     match store.locate(&snapshot)? {
       Some((_, record)) if record.state == PRESENT && record.kind == Type::Snapshot => Ok(store),
@@ -943,10 +961,11 @@ impl Store {
   }
 
   /// The bytes this store has read from its files: the marker, `snapshot`,
-  /// and what its alias files and containers have read. A test holds a
-  /// lookup's cost to a bound by it (#331).
+  /// what its alias files and containers have read, and the indexes it has
+  /// checked whole. A test holds a lookup's cost to a bound by it (#331).
   pub fn bytes_read(&self) -> u64 {
     self.opened
+      + self.checked.borrow().index_bytes
       + self.aliases.iter().map(AliasFile::bytes_read).sum::<u64>()
       + self.containers.iter().map(Container::bytes_read).sum::<u64>()
   }
@@ -959,18 +978,44 @@ impl Store {
   /// Every alias file whole, with every check (objects.md §9.1): its
   /// trailer, both orders and the native order's permutation.
   pub fn load_aliases(&self) -> Result<Vec<Aliases>, StoreError> {
-    self.aliases.iter().map(AliasFile::full).collect()
+    let files = self.aliases.iter().map(AliasFile::full).collect::<Result<Vec<_>, _>>()?;
+    self.checked.borrow_mut().aliases = self.algorithms();
+    Ok(files)
+  }
+
+  /// An algorithm's alias file checked whole, once per opened store: what a
+  /// lookup by Git ID, or of a native ID's row, runs before it reports a miss
+  /// (#389).
+  fn check_aliases(&self, file: &AliasFile) -> Result<(), StoreError> {
+    if !self.checked.borrow().aliases.contains(&file.algorithm) {
+      file.full()?;
+      self.checked.borrow_mut().aliases.push(file.algorithm);
+    }
+    Ok(())
   }
 
   /// Every container's whole index, in name order, with every check
   /// (storage.md §4.1): the index's SHA-256, the orders of its frames and
   /// names, and its annotation table.
   pub fn indexes(&self) -> Result<Vec<Index>, StoreError> {
-    self
+    let indexes = self
       .containers
       .iter()
       .map(|container| Index::read(&container.path))
-      .collect()
+      .collect::<Result<Vec<_>, _>>()?;
+    let mut checked = self.checked.borrow_mut();
+    checked.indexes = true;
+    checked.index_bytes += indexes.iter().map(Index::bytes_read).sum::<u64>();
+    Ok(indexes)
+  }
+
+  /// Every container's index checked whole, once per opened store: what a
+  /// lookup by native ID runs before it reports a miss (#389).
+  fn check_indexes(&self) -> Result<(), StoreError> {
+    if !self.checked.borrow().indexes {
+      self.indexes()?;
+    }
+    Ok(())
   }
 
   fn alias_file(&self, algorithm: GitAlgorithm) -> Option<&AliasFile> {
@@ -980,17 +1025,23 @@ impl Store {
   /// The object a Git ID's alias row names, its short reference resolved
   /// (objects.md §9.1): `None` when the Git ID has no row, or when only an
   /// absent candidate could verify it. A row that resolves to no object is
-  /// corrupt.
+  /// corrupt. Before it reports no row, the alias file is checked whole.
   pub fn native(&self, algorithm: GitAlgorithm, git_digest: &[u8]) -> Result<Option<NativeId>, StoreError> {
-    let Some(file) = self.alias_file(algorithm) else {
+    // A digest not of the algorithm's length is no Git ID of it.
+    let Some(file) = self.alias_file(algorithm).filter(|_| git_digest.len() == algorithm.length()) else {
       return Ok(None);
     };
     let Some(short) = file.short(git_digest)? else {
+      self.check_aliases(file)?;
       return Ok(None);
     };
     match self.resolve_row(algorithm, git_digest, &short)? {
       Ok(native) => Ok(Some(native)),
-      Err(Unresolved::Unverified(_)) => Ok(None),
+      // Damage could hide the present candidate that verifies.
+      Err(Unresolved::Unverified(_)) => {
+        self.check_indexes()?;
+        Ok(None)
+      }
       Err(Unresolved::Corrupt(why)) => Err(StoreError::Corrupt(format!(
         "the {} alias row of {} {why}",
         algorithm.name(),
@@ -1003,7 +1054,8 @@ impl Store {
   /// short reference, the one that is its own, confirmed by its full ID
   /// (objects.md §9.1). When it is the reference's one candidate and one row
   /// holds it, that row is its own; otherwise its own row is the one whose
-  /// Git ID its Git encoding has.
+  /// Git ID its Git encoding has. Before it reports no row, the alias file
+  /// is checked whole.
   pub fn git(&self, algorithm: GitAlgorithm, id: &NativeId) -> Result<Option<Vec<u8>>, StoreError> {
     let Some(file) = self.alias_file(algorithm) else {
       return Ok(None);
@@ -1011,7 +1063,10 @@ impl Store {
     let short = id.short();
     let rows = file.sharing(&short)?;
     match rows.as_slice() {
-      [] => return Ok(None),
+      [] => {
+        self.check_aliases(file)?;
+        return Ok(None);
+      }
       [one] if self.sole(&short, id)? => return Ok(Some(one.clone())),
       _ => {}
     }
@@ -1019,7 +1074,11 @@ impl Store {
     let Ok(own) = reconstruct::git_id_of(self, algorithm, id)? else {
       return Ok(None);
     };
-    Ok(rows.into_iter().find(|digest| *digest == own))
+    let found = rows.into_iter().find(|digest| *digest == own);
+    if found.is_none() {
+      self.check_aliases(file)?;
+    }
+    Ok(found)
   }
 
   /// An alias row's object (objects.md §1.3): a short reference's one
@@ -1117,7 +1176,9 @@ impl Store {
     }
   }
 
-  /// Where an object is: a present copy if any container has one.
+  /// Where an object is: a present copy if any container has one. Before it
+  /// reports that none does, absent or not held, every index is checked
+  /// whole: damage could hide a present copy.
   pub(crate) fn locate(&self, id: &NativeId) -> Result<Option<(usize, Record)>, StoreError> {
     let mut found = None;
     for (number, container) in self.containers.iter().enumerate() {
@@ -1128,12 +1189,16 @@ impl Store {
         found.get_or_insert((number, record));
       }
     }
+    // Damage a lookup does not check can make it miss (storage.md §4.1).
+    self.check_indexes()?;
     Ok(found)
   }
 
   /// The objects whose text form begins with `prefix`, in lowercase hex,
-  /// and whose type `accept` takes, each once.
+  /// and whose type `accept` takes, each once. Every index is checked whole
+  /// first: names out of order could hide a match, found or not (#389).
   pub fn matching(&self, prefix: &str, accept: impl Fn(Type) -> bool) -> Result<Vec<NativeId>, StoreError> {
+    self.check_indexes()?;
     let mut found: Vec<NativeId> = Vec::new();
     for container in &self.containers {
       for (id, kind) in container.prefixed(prefix)? {
