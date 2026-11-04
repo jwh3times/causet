@@ -662,7 +662,8 @@ repository's algorithm. Each file is two sorted tables over the same rows:
   of the same history writes the same bytes (decision 3).
 
 The checks come in two tiers, so that opening a store and answering one
-lookup read an amount of the file that does not grow with its row count:
+lookup that finds what it looks for read an amount of the file that does
+not grow with its row count:
 
 - **Every reader** checks what is constant-cost to check: the magic, version
   and algorithms, that the file's length is the one its row count gives, and

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- **A native read no longer mistakes damage for a missing object** (#389).
+  Since #331 a read checks only the parts of the store it touches. Damage
+  only the whole-file checks find could therefore make a lookup miss, and
+  the read answered as if the object had never been imported. With one
+  damaged index name, `cst cat-file -t <id>` said `Not a valid object name`.
+  Now, before a read reports a miss, it checks the files it searched whole,
+  and refuses the read as corruption if one fails. Those are every container
+  index for an object ID, and the alias file for a Git ID. A read checks
+  each file at most once, and not at all if the command already read it
+  whole. Resolving an abbreviation always checks the indexes first, since
+  damage could hide a second match. Reads whose lookups all find what they
+  look for cost the same as before. On a 6,540-object store, `cst rev-parse
+  <abbreviation>` and a lookup of an ID the store doesn't hold went from
+  10 ms to 46 ms on Windows, and on a large store they cost what every read
+  cost before #331. `docs/native-store/` states the rule, and the two cases
+  only `cst fsck` finds.
+
 - **A read of a native repository no longer costs more as the repository
   grows** (#331). Before answering, every `cst` read of a native repository
   loaded and checked each alias file and every container index whole. That
