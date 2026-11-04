@@ -154,7 +154,13 @@ fn call(op: &str, args: &[Value], options: Option<&Value>, cwd: &str) -> GitResu
     "remoteRefs" => value(engine::remote_refs(&arg(0), cwd)),
     "refExists" => value(engine::ref_exists(&arg(0), cwd)),
     "refTarget" => value(engine::ref_target(&arg(0), cwd)),
-    "listRefs" => value(engine::list_refs(&arg(0), cwd)),
+    "listRefs" => {
+      let patterns: Vec<String> = (0..args.len()).map(arg).collect();
+      value(engine::list_refs_matching(
+        &patterns.iter().map(String::as_str).collect::<Vec<_>>(),
+        cwd,
+      ))
+    }
     "symbolicRef" => value(engine::symbolic_ref(&arg(0), cwd, flag(options, "short"))),
     "pseudoRefTarget" => value(engine::pseudo_ref_target(&arg(0), cwd)),
     "listNoteEntries" => value(engine::list_note_entries(&arg(0), cwd)),

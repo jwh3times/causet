@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { MERGE_TREE_ENGINE_MIN_GIT } from "../test-support/merge-tree-floor.js";
-import { testEnv } from "../test-support/git-environment.js";
+import { testEnv, usesReftable } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import { hashedSha256, probe as modelProbe, registry } from "../test-support/model-probe.js";
 import { probe as engineProbe } from "../test-support/engine-probe.js";
@@ -105,6 +105,15 @@ function makeRepo(t) {
   git(repo, "config", "user.email", "vcs-lab@example.test");
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   return { repo, parent };
+}
+
+/**
+ * What deciding where `repo` keeps its metadata costs in Git processes
+ * (ADR-0039 §3): nothing with files storage, whose ref files answer it, and
+ * one ref listing with reftable (#277).
+ */
+function locationListing(repo) {
+  return usesReftable(repo) ? ["for-each-ref"] : [];
 }
 
 function writeBlob(repo, content) {
@@ -4151,7 +4160,7 @@ test("workspace listing batches one status query per existing path and preserves
   assert.equal(emptyListing.status, 0, emptyListing.stderr);
   assert.deepEqual(JSON.parse(emptyListing.stdout), []);
   const baselineCommands = traceCommands(emptyListing.stderr);
-  assert.deepEqual(baselineCommands, ["rev-parse"]);
+  assert.deepEqual(baselineCommands, ["rev-parse", ...locationListing(repo)]);
 
   const names = ["clean", "dirty", "detached", "unborn", "archived", "missing", "invalid", "file"];
   const paths = {};
@@ -4449,13 +4458,17 @@ test("batched resolution catalog lists retained records newest-first and quarant
   const treeRef = `refs/causet/resolutions/${resolutionSignature(stagesFor("theirs tree\n"))}/${resultBlob}`;
   git(repo, "update-ref", treeRef, git(repo, "rev-parse", "HEAD^{tree}"));
 
-  // (g2) A dangling retention ref whose object does not exist at all; the
-  // files ref backend is written directly because update-ref refuses it.
-  // The scan must neither abort nor truncate the rest of the catalog.
+  // (g2) A dangling retention ref whose object does not exist at all. Git
+  // refuses to point a ref at a missing object, so the ref is pointed at a
+  // loose object that is then deleted, which works whichever ref storage the
+  // repository uses (#277). The scan must neither abort nor truncate the rest
+  // of the catalog.
   const danglingRef = `refs/causet/resolutions/${resolutionSignature(stagesFor("theirs dangling\n"))}/${resultBlob}`;
-  const danglingOid = "1".repeat(resultBlob.length);
-  fs.mkdirSync(path.join(repo, ".git", path.dirname(danglingRef)), { recursive: true });
-  fs.writeFileSync(path.join(repo, ".git", danglingRef), `${danglingOid}\n`);
+  const danglingOid = writeBlob(repo, "an object that will be lost\n");
+  git(repo, "update-ref", danglingRef, danglingOid);
+  fs.rmSync(path.resolve(repo, git(repo, "rev-parse", "--git-path",
+    `objects/${danglingOid.slice(0, 2)}/${danglingOid.slice(2)}`)));
+  assert.notEqual(spawnSync("git", ["cat-file", "-e", danglingOid], { cwd: repo, env: testEnv() }).status, 0);
   assert.equal(
     git(repo, "for-each-ref", "--format=%(objectname)", danglingRef),
     danglingOid,
@@ -4609,15 +4622,16 @@ test("batched resolution catalog scans use a bounded number of Git processes as 
   assert.deepEqual(JSON.parse(empty.stdout), []);
   // The one context probe is where the repository keeps its metadata
   // (ADR-0039 §3): which refs to scan depends on it.
-  assert.deepEqual(empty.commands, ["rev-parse", "for-each-ref"]);
+  assert.deepEqual(empty.commands, ["rev-parse", ...locationListing(repo), "for-each-ref"]);
   // Asking for a session must not open one here: the ref scan answers that the
   // catalog is empty before any object read is needed, so a repository with no
   // retention refs never pays for a persistent process (issue #42).
   const emptySession = tracedGitCommands(repo, "resolve", "list", "--json", "--git-session");
   assert.deepEqual(JSON.parse(emptySession.stdout), []);
-  assert.deepEqual(emptySession.processes, ["rev-parse", "for-each-ref"]);
+  assert.deepEqual(emptySession.processes, ["rev-parse", ...locationListing(repo), "for-each-ref"]);
   const repositoryContextCalls = 1;
-  const processBound = 6 + repositoryContextCalls;
+  const locationCalls = locationListing(repo).length;
+  const processBound = 6 + repositoryContextCalls + locationCalls;
 
   const baseBlob = writeBlob(repo, "base\n");
   const oursBlob = writeBlob(repo, "ours\n");
@@ -4668,7 +4682,7 @@ test("batched resolution catalog scans use a bounded number of Git processes as 
 
   const session = tracedGitCommands(repo, "resolve", "list", "--json", "--git-session");
   assert.deepEqual(JSON.parse(session.stdout), catalog);
-  assert.equal(session.processes.length, 2 + repositoryContextCalls, session.processes.join(", "));
+  assert.equal(session.processes.length, 2 + repositoryContextCalls + locationCalls, session.processes.join(", "));
 
   // Without a session, every batched object read is its own process; with one,
   // a single persistent `cat-file` serves the ref peel, the notes tree and

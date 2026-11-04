@@ -98,6 +98,12 @@ jobs:
             forecast-merge-tree) echo "CAUSET_FORECAST_ENGINE=merge-tree" >> "$GITHUB_ENV" ;;
             engine-native) echo "CAUSET_ENGINE=native" >> "$GITHUB_ENV" ;;
             kind-native) echo "CAUSET_KIND=native" >> "$GITHUB_ENV" ;;
+            reftable)
+              # A Git older than 2.45 ignores the variable, and the mode would
+              # pass on files storage, so the runner's Git must honour it.
+              GIT_DEFAULT_REF_FORMAT=reftable git -c init.defaultBranch=main init -q "$RUNNER_TEMP/reftable-probe"
+              test "$(git -C "$RUNNER_TEMP/reftable-probe" rev-parse --show-ref-format)" = reftable
+              echo "GIT_DEFAULT_REF_FORMAT=reftable" >> "$GITHUB_ENV" ;;
             *) echo "unknown mode ${{ matrix.mode }}" >&2; exit 1 ;;
           esac
       - name: Suite

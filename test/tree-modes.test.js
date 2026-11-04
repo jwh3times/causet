@@ -13,7 +13,7 @@ import path from "node:path";
 import test from "node:test";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import { available, probe, unavailableReason } from "../test-support/engine-probe.js";
-import { testEnv } from "../test-support/git-environment.js";
+import { FILES_REFS, testEnv } from "../test-support/git-environment.js";
 
 const skip = available ? false : unavailableReason;
 
@@ -26,7 +26,9 @@ const REFUSED_MODES = ["+100644", "-100644", "100648"];
 function fixture(t) {
   const cwd = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "causet-tree-modes-")));
   t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
-  const env = testEnv({ CAUSET_GIT_SESSION: "1" });
+  // Files storage, which the native backend's profile needs: it refuses a
+  // reftable repository, and these readers' tests hold that it answers (#277).
+  const env = testEnv({ CAUSET_GIT_SESSION: "1", ...FILES_REFS });
   const run = (args, input, encoding = "utf8") => spawnSync("git", args, {
     cwd, env, input, encoding, windowsHide: true,
   });

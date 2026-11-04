@@ -51,12 +51,12 @@ test("only known documentation paths omit automatic suites", () => {
 
 test("manual qualification always retains all platform modes and the Node floor", () => {
   const jobs = planCi("workflow_dispatch", ["README.md"]).include;
-  assert.equal(jobs.length, 16);
-  assert.equal(new Set(jobs.map((job) => JSON.stringify(job))).size, 16);
+  assert.equal(jobs.length, 18);
+  assert.equal(new Set(jobs.map((job) => JSON.stringify(job))).size, 18);
   for (const os of ["ubuntu-latest", "windows-latest"]) {
     assert.deepEqual(jobs.filter((job) => job.os === os && job.node === 24).map((job) => job.mode),
       ["default", "session-on", "session-off", "forecast-worktree", "forecast-merge-tree", "engine-native",
-        "kind-native"]);
+        "kind-native", "reftable"]);
   }
   assert.deepEqual(jobs.filter((job) => job.node === 20), [
     { os: "ubuntu-latest", node: 20, mode: "default" },
@@ -114,7 +114,7 @@ test("the CLI writes usable Actions outputs for documentation, code and manual r
   git("commit", "-m", "docs");
   for (const [eventName, event, count] of [["push", { before }, 0],
     ["pull_request", { pull_request: { base: { sha: before } } }, 0],
-    ["pull_request", {}, 4], ["workflow_dispatch", {}, 16]]) {
+    ["pull_request", {}, 4], ["workflow_dispatch", {}, 18]]) {
     const eventPath = path.join(cwd, "event.json");
     const outputPath = path.join(cwd, "output.txt");
     const summaryPath = path.join(cwd, "summary.md");

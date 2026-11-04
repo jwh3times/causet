@@ -1354,9 +1354,26 @@ test("attributed commits hold the notes lock through Git hooks and release it on
 test("a post-commit notes failure identifies the retained commit and permits provenance repair", () => {
   const repo = makeReconcilable();
   const before = git(repo, "rev-parse", "HEAD");
-  const blockedRef = path.join(repo, ".git", "refs", "notes", "causet.lock");
-  fs.mkdirSync(path.dirname(blockedRef), { recursive: true });
-  fs.writeFileSync(blockedRef, "test-held Git ref lock\n");
+  // Git refuses every transaction that would move the notes ref, and only
+  // those, whichever ref storage the repository uses. A held ref lock cannot
+  // do that in a reftable repository, where it holds every ref (#277).
+  const hooks = path.join(path.dirname(repo), "hooks");
+  fs.mkdirSync(hooks);
+  const blocker = path.join(hooks, "reference-transaction");
+  fs.writeFileSync(blocker, [
+    "#!/bin/sh",
+    "blocked=0",
+    "while read -r old new ref; do",
+    "  if [ \"$ref\" = refs/notes/causet ]; then blocked=1; fi",
+    "done",
+    "if [ \"$1\" = prepared ] && [ \"$blocked\" = 1 ]; then",
+    "  echo \"test-held notes ref\" >&2",
+    "  exit 1",
+    "fi",
+    "",
+  ].join("\n"), { mode: 0o755 });
+  git(repo, "config", "core.hooksPath", hooks);
+  const notesBefore = git(repo, "for-each-ref", "refs/notes/causet");
   write(repo, "publication.txt", "committed bytes\n");
   git(repo, "add", "-A");
   const error = refusal(vlabResult(repo,
@@ -1371,9 +1388,9 @@ test("a post-commit notes failure identifies the retained commit and permits pro
   assert.match(error.details, /Do not retry commit/);
   assert.match(error.details, /docs\/identity\/README.md/);
   assert.equal(fs.existsSync(workspaceRuntime(repo, "notes.lock")), false);
-  assert.equal(fs.readFileSync(blockedRef, "utf8"), "test-held Git ref lock\n");
+  assert.equal(git(repo, "for-each-ref", "refs/notes/causet"), notesBefore, "the refused notes ref did not move");
   assert.deepEqual(JSON.parse(vlab(repo, "provenance", commit, "--json")).entries, []);
-  fs.rmSync(blockedRef);
+  git(repo, "config", "--unset", "core.hooksPath");
   // The documented repair (docs/identity/README.md §7): declare the original
   // actors on the retained commit, rather than retry the commit, which is what
   // the details forbid (#246).

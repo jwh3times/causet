@@ -833,20 +833,21 @@ pub fn ref_target(name: &str, cwd: &str) -> GitResult<Option<String>> {
   Ok(result.ok.then_some(result.stdout))
 }
 
-pub fn list_refs(pattern: &str, cwd: &str) -> GitResult<Vec<RefEntry>> {
-  let scan = read_git(
-    &[
-      "for-each-ref",
-      "--format=%(refname)%00%(objectname)",
-      pattern,
-    ],
-    RunOptions::new(cwd).allow_failure(),
-  )?;
+/// One `git for-each-ref` over every pattern: it lists each matching ref once,
+/// sorted by name. No pattern matches nothing, as in the native backend, not
+/// every ref, as a bare `for-each-ref` would.
+pub fn list_refs_matching(patterns: &[&str], cwd: &str) -> GitResult<Vec<RefEntry>> {
+  if patterns.is_empty() {
+    return Ok(Vec::new());
+  }
+  let mut args = vec!["for-each-ref", "--format=%(refname)%00%(objectname)"];
+  args.extend_from_slice(patterns);
+  let scan = read_git(&args, RunOptions::new(cwd).allow_failure())?;
   if !scan.ok {
     return Err(
       GitError::new(
         "git-command-failed",
-        format!("Could not scan refs under '{pattern}'."),
+        format!("Could not scan refs under '{}'.", patterns.join("', '")),
       )
       .details(scan.stderr),
     );

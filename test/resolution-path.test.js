@@ -10,21 +10,35 @@ import test from "node:test";
  * fixtures put that path at 259 or 260 characters. Until #243 the first three
  * cases called the JavaScript publisher directly; they now publish through a
  * conflicted `cst reconcile --continue`, which measures the same path.
+ *
+ * The lock path is a loose ref's, so the fixtures keep files storage whatever
+ * `GIT_DEFAULT_REF_FORMAT` says. A reftable repository writes no file per ref,
+ * and the last case holds that it has no such boundary (#277). A lock on one
+ * ref is files storage's too.
  */
-import { testEnv } from "../test-support/git-environment.js";
+import { FILES_REFS, holdRefLock, reftableUnsupported, testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, env: testEnv(), encoding: "utf8" }).trim();
 }
 
-function fixture(t, rootLength, objectFormat = "sha1") {
+/** `git init` makes a reftable repository, whatever the run's default. */
+const REFTABLE_REFS = { GIT_DEFAULT_REF_FORMAT: "reftable" };
+
+/**
+ * A repository whose root is `rootLength` characters long. `storage` is the
+ * environment `git init` runs in: files storage unless a case says otherwise.
+ */
+function fixture(t, rootLength, { objectFormat = "sha1", storage = FILES_REFS } = {}) {
   const parent = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vlab-path-")));
   t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   assert.ok(parent.length + 2 <= rootLength, "TEMP must leave space for the measured path fixture");
   const repo = path.join(parent, "r".repeat(rootLength - parent.length - 1));
   fs.mkdirSync(repo);
-  git(repo, "init", "-b", "main", `--object-format=${objectFormat}`);
+  execFileSync("git", ["init", "-b", "main", `--object-format=${objectFormat}`], {
+    cwd: repo, env: testEnv(storage), encoding: "utf8",
+  });
   git(repo, "config", "core.longpaths", "false");
   git(repo, "config", "core.autocrlf", "false");
   git(repo, "config", "user.name", "Path Test");
@@ -43,7 +57,13 @@ const cst = (cwd, ...args) => spawnSync(cstCommand, [...cstPrefix(), ...args], {
  * or the file's deletion. Returns the result of `reconcile --continue`, which
  * publishes the resolution, with its parsed stdout.
  */
-function publish(cwd, name, { remove = false } = {}) {
+function publish(cwd, name, options) {
+  stage(cwd, name, options);
+  return resume(cwd);
+}
+
+/** `publish` up to the `reconcile --continue` that publishes the resolution. */
+function stage(cwd, name, { remove = false } = {}) {
   const start = git(cwd, "rev-parse", "HEAD");
   git(cwd, "switch", "-c", name);
   fs.writeFileSync(path.join(cwd, "a.txt"), `${name} source\n`);
@@ -58,6 +78,10 @@ function publish(cwd, name, { remove = false } = {}) {
     fs.writeFileSync(path.join(cwd, "a.txt"), `${name} resolved\n`);
     git(cwd, "add", "a.txt");
   }
+}
+
+/** `reconcile --continue`, with its parsed stdout. */
+function resume(cwd) {
   const result = cst(cwd, "reconcile", "--continue", "--json");
   return { ...result, value: JSON.parse(result.stdout) };
 }
@@ -97,7 +121,7 @@ test("resolution retention diagnoses the Windows lock-path boundary and supports
 });
 
 test("SHA-256 resolution failures measure the longer object ID in the ref path", (t) => {
-  const { repo } = fixture(t, 115, "sha256");
+  const { repo } = fixture(t, 115, { objectFormat: "sha256" });
   const failed = publish(repo, "sha256");
   if (process.platform !== "win32") {
     assert.equal(failed.status, 0, failed.stdout + failed.stderr);
@@ -111,7 +135,7 @@ test("SHA-256 resolution failures measure the longer object ID in the ref path",
   assert.match(failed.value.details, /at least 25 characters/);
 });
 
-test("an existing resolution lock retains the Git error classification", (t) => {
+test("an existing resolution lock retains the Git error classification", async (t) => {
   const length = process.platform === "win32" ? 114 : 160;
   // Identical content gives a twin the same blobs, and so the same resolution
   // ref, which names the lock to hold in the repository under test.
@@ -121,15 +145,21 @@ test("an existing resolution lock retains the Git error classification", (t) => 
   const [ref] = git(twin, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions").split("\n");
   const { repo } = fixture(t, length);
   git(repo, "config", "core.longpaths", "true");
-  const lock = path.join(repo, ".git", ...ref.split("/")) + ".lock";
-  fs.mkdirSync(path.dirname(lock), { recursive: true });
-  fs.writeFileSync(lock, "");
-  const failed = publish(repo, "locked");
-  assert.notEqual(failed.status, 0);
-  assert.equal(failed.status, failed.value.exitCode, "the exit status is the envelope's");
-  assert.equal(failed.value.code, "git-command-failed");
-  assert.match(failed.value.details, /cannot lock ref/);
-  assert.ok(fs.existsSync(lock));
+  stage(repo, "locked");
+  // Held as a concurrent Git holds it. A lock on this one ref is files
+  // storage's: a reftable lock holds every ref, and Git's own continuation
+  // fails on it before cst reaches the resolution ref (#277).
+  const release = await holdRefLock(repo, ref);
+  try {
+    const failed = resume(repo);
+    assert.notEqual(failed.status, 0);
+    assert.equal(failed.status, failed.value.exitCode, "the exit status is the envelope's");
+    assert.equal(failed.value.code, "git-command-failed");
+    assert.match(failed.value.details, /cannot lock ref/);
+    assert.equal(git(repo, "for-each-ref", "refs/causet/resolutions"), "");
+  } finally {
+    await release();
+  }
 });
 
 test("CLI resolution publication reports a path error and reconciliation remains abortable", (t) => {
@@ -164,4 +194,16 @@ test("CLI resolution publication reports a path error and reconciliation remains
   assert.equal(aborted.status, 0, aborted.stdout + aborted.stderr);
   assert.equal(git(repo, "rev-parse", "HEAD"), target);
   assert.equal(git(repo, "status", "--porcelain"), "");
+});
+
+test("a reftable repository's resolution refs have no lock-path boundary", { skip: reftableUnsupported() }, (t) => {
+  // The root that puts a files repository's lock path at 260 characters, past
+  // Windows' limit, in the first case.
+  const { repo, parent } = fixture(t, 115, { storage: REFTABLE_REFS });
+  const linked = path.join(parent, "linked");
+  git(repo, "worktree", "add", "-b", "linked", linked);
+  const published = publish(linked, "long");
+  assert.equal(published.status, 0, published.stdout + published.stderr);
+  const [ref] = git(repo, "for-each-ref", "--format=%(refname)", "refs/causet/resolutions").split("\n");
+  assert.match(ref, /^refs\/causet\/resolutions\/rsig_[0-9a-f]{64}\/[0-9a-f]{40}$/);
 });

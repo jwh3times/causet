@@ -256,6 +256,36 @@ this mode imports like any other. `test/native-kind.test.js` checks the mode
 itself: a copy that answers otherwise, and a refusal it does not list, each
 fail the test that left the repository.
 
+**The reftable mode** (#277) runs every suite with the repositories Git
+creates kept in reftable storage, which Git 3.0 is planned to make the
+default. It needs Git 2.45 or later; an older Git ignores the variable and the
+run proves nothing:
+
+```bash
+GIT_DEFAULT_REF_FORMAT=reftable npm test
+```
+
+```powershell
+$env:GIT_DEFAULT_REF_FORMAT = "reftable"
+npm test
+Remove-Item Env:GIT_DEFAULT_REF_FORMAT -ErrorAction SilentlyContinue
+```
+
+A reftable repository keeps no file per ref, so a test that needs a held ref
+or a missing object makes it through Git, whatever the storage:
+`holdRefLock` in `test-support/git-environment.js` leaves an
+`update-ref --stdin` transaction prepared, and a dangling ref points at a loose
+object that is then deleted. A reftable lock holds every ref, not one, so the
+post-commit notes failure is staged with a `reference-transaction` hook
+instead. Fixtures whose subject only files storage has pass `FILES_REFS` to
+`git init`, and keep it in this mode too: the Windows lock-path boundary of a
+loose ref and a lock that holds one ref (`test/resolution-path.test.js`;
+Git's own continuation fails first on a reftable lock), the native read engine's supported
+profile (`test/tree-modes.test.js`), and the answers frozen on files storage
+(the engine corpus and the benchmark counts). `test/reftable.test.js` and the
+last case of `test/resolution-path.test.js` create reftable repositories
+themselves, so every run covers reftable once.
+
 **The generated-history corpus** (ADR-0044 item 1, ADR-0045 decision 13,
 #308) is Git repositories generated from a seed, each run through every N1
 check. `test/generated-histories.test.js` runs it: one history per case by
@@ -1299,7 +1329,7 @@ start after those checks pass.
 | Code pull request | Default mode on Ubuntu and Windows, Node 24, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
 | Code push to `main` | Default mode on Ubuntu, Node 24, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
 | Known documentation-only PR or main push | None | Static checks still run |
-| Manual `workflow_dispatch` | All seven modes on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
+| Manual `workflow_dispatch` | All eight modes, the reftable mode among them, on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.

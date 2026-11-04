@@ -24,7 +24,7 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
-import { testEnv } from "../test-support/git-environment.js";
+import { FILES_REFS, testEnv } from "../test-support/git-environment.js";
 import { selectedCli, cstPrefix } from "../test-support/cst-command.js";
 import { cliGroups, frozenForm } from "../test-support/cli-corpus.js";
 import { assertFrozenHashes, loadVectors } from "../test-support/oracle-vectors.js";
@@ -43,8 +43,10 @@ const frozen = loadVectors("native-cli");
 const outside = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-native-cli-")));
 after(() => fs.rmSync(outside, { recursive: true, force: true }));
 
-// The suite's mode variables would otherwise decide these cases.
-const neutral = { CAUSET_ENGINE: "", CAUSET_FORECAST_ENGINE: "" };
+// The suite's mode variables would otherwise decide these cases. The
+// benchmarks' repositories keep files storage, on which their frozen process
+// counts were recorded (#277).
+const neutral = { CAUSET_ENGINE: "", CAUSET_FORECAST_ENGINE: "", ...FILES_REFS };
 
 function runRust(args, env = {}, cwd = outside) {
   // Counts the invocation when the Rust CLI is the one under test (#140).
