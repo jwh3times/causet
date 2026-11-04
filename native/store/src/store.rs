@@ -3,9 +3,9 @@
 //! resolved through every container's index.
 
 use crate::StoreError;
-use crate::alias::Aliases;
+use crate::alias::{AliasFile, Aliases};
 use crate::chunker;
-use crate::container::{self, Container, ContainerWriter, Form, PRESENT, Record};
+use crate::container::{self, Container, ContainerWriter, Form, Index, PRESENT, Record};
 use crate::delta::{self, DEPTH_LIMIT, Delta};
 use crate::id::{GitAlgorithm, NativeId, Short, Type, hex, unhex};
 use crate::objects::{
@@ -285,9 +285,13 @@ impl StoreWriter {
         algorithm.name()
       )));
     }
-    writer.present = store.present().into_iter().map(|(id, _, _)| id).collect();
+    // An import rewrites the alias file whole, so it reads the store whole,
+    // with every check: a damaged row is refused, not carried forward under
+    // a new trailer.
     writer.existing_rows = store
-      .aliases_for(algorithm)
+      .load_aliases()?
+      .into_iter()
+      .find(|aliases| aliases.algorithm == algorithm)
       .map(|aliases| {
         aliases
           .rows()
@@ -295,6 +299,7 @@ impl StoreWriter {
           .collect()
       })
       .unwrap_or_default();
+    writer.present = store.present()?.into_iter().map(|(id, _, _)| id).collect();
     writer.container = Some(ContainerWriter::create(&writer.staging.join("objects"))?);
     Ok(writer)
   }
@@ -440,7 +445,7 @@ impl StoreWriter {
       return Ok(*depth);
     }
     match &self.existing {
-      Some(store) if store.locate(id).is_some_and(|(_, record)| record.state == PRESENT) => {
+      Some(store) if store.locate(id)?.is_some_and(|(_, record)| record.state == PRESENT) => {
         store.depth(id)
       }
       _ => Ok(0),
@@ -463,7 +468,7 @@ impl StoreWriter {
       Target::Native(target) => Some(target.short()),
       Target::Git(_) => None,
     });
-    match self.choices(shorts) {
+    match self.choices(shorts)? {
       None => {
         return Err(StoreError::Codec(format!(
           "the tree {id} names an object the store does not hold"
@@ -492,15 +497,15 @@ impl StoreWriter {
 
   /// The product of each short reference's number of candidates, or `None`
   /// when one has none.
-  fn choices(&self, shorts: impl Iterator<Item = Short>) -> Option<u64> {
+  fn choices(&self, shorts: impl Iterator<Item = Short>) -> Result<Option<u64>, StoreError> {
     let mut choices: u64 = 1;
     for short in shorts {
-      match self.candidates(&short).len() as u64 {
-        0 => return None,
+      match self.candidates(&short)?.len() as u64 {
+        0 => return Ok(None),
         found => choices = choices.saturating_mul(found),
       }
     }
-    Some(choices)
+    Ok(Some(choices))
   }
 
   fn within_bound(&self, id: &NativeId, choices: u64) -> Result<(), StoreError> {
@@ -518,13 +523,14 @@ impl StoreWriter {
   /// reference the container's names begin with has two candidates, no tree
   /// needs more than one choice, and no tree is read.
   fn check_bound(&self, path: &Path) -> Result<(), StoreError> {
-    let container = Container::open(path)?;
-    let shared: HashSet<Short> = container
-      .names
-      .iter()
-      .map(|name| NativeId(*name).short())
-      .filter(|short| self.candidates(short).len() > 1)
-      .collect();
+    let container = Index::read(path)?;
+    let mut shared: HashSet<Short> = HashSet::new();
+    for name in &container.names {
+      let short = NativeId(*name).short();
+      if self.candidates(&short)?.len() > 1 {
+        shared.insert(short);
+      }
+    }
     if shared.is_empty() {
       return Ok(());
     }
@@ -552,7 +558,7 @@ impl StoreWriter {
         ShortTarget::Short(at) => Some(*at),
         ShortTarget::Git(_) => None,
       });
-      if let Some(choices) = self.choices(shorts) {
+      if let Some(choices) = self.choices(shorts)? {
         self.within_bound(&id, choices)?;
       }
     }
@@ -561,7 +567,7 @@ impl StoreWriter {
 
   /// The objects whose digest begins with `short`: what this import has
   /// written, and every index entry of the store it adds to.
-  fn candidates(&self, short: &Short) -> Vec<NativeId> {
+  fn candidates(&self, short: &Short) -> Result<Vec<NativeId>, StoreError> {
     let mut low = [0u8; 32];
     low[..8].copy_from_slice(short);
     let mut high = [0xffu8; 32];
@@ -572,11 +578,11 @@ impl StoreWriter {
       .copied()
       .collect();
     if let Some(store) = &self.existing {
-      found.extend(store.candidates(short));
+      found.extend(store.candidates(short)?);
       found.sort();
       found.dedup();
     }
-    found
+    Ok(found)
   }
 
   /// Stores a commit, tag or tree kept in Git's encoding. `path` is where
@@ -620,21 +626,21 @@ impl StoreWriter {
     let mut aliased: Vec<NativeId> = rows.iter().map(|(_, id)| *id).collect();
     aliased.sort();
     let existing = self.existing.as_ref();
-    let held_elsewhere = |(digest, id): &(Vec<u8>, NativeId)| {
-      existing
-        .and_then(|store| store.git(self.algorithm, id))
-        .is_some_and(|held| held != *digest)
+    let existing_git = |id: &NativeId| match existing {
+      Some(store) => store.git(self.algorithm, id),
+      None => Ok(None),
     };
-    if aliased.windows(2).any(|pair| pair[0] == pair[1]) || rows.iter().any(held_elsewhere) {
+    let mut repeated = aliased.windows(2).any(|pair| pair[0] == pair[1]);
+    for (digest, id) in &rows {
+      repeated = repeated || existing_git(id)?.is_some_and(|held| held != *digest);
+    }
+    if repeated {
       return Err(StoreError::Corrupt("two alias rows have the same native ID".into()));
     }
-    let has_row = |id: &NativeId| {
-      aliased.binary_search(id).is_ok()
-        || existing.is_some_and(|store| store.git(self.algorithm, id).is_some())
-    };
     for entry in &snapshot.refs {
       if let RefTarget::Direct(id) = &entry.target
-        && !(self.present.contains(id) && has_row(id))
+        && !(self.present.contains(id)
+          && (aliased.binary_search(id).is_ok() || existing_git(id)?.is_some()))
       {
         return Err(StoreError::Codec(format!(
           "the snapshot's ref {} names {id}, which is not an imported object",
@@ -798,15 +804,21 @@ impl Unresolved {
   }
 }
 
-/// A store opened for reading: the marker, the alias files and every
-/// container's index, checked; objects are read and verified on demand.
+/// A store opened for reading: the marker and `snapshot`, checked, and each
+/// alias file and container opened with the checks of constant cost
+/// (objects.md §9.1; storage.md §4.1). Opening it and answering one lookup
+/// read a part of it bounded whatever its object count, and one more for
+/// each container. Objects are read and verified on demand. The whole-file
+/// checks are [`Store::load_aliases`]'s and [`Store::indexes`]'s.
 pub struct Store {
   pub root: PathBuf,
   /// The current ref snapshot's ID, which the store holds.
   pub snapshot: NativeId,
   containers: Vec<Container>,
-  aliases: Vec<Aliases>,
+  aliases: Vec<AliasFile>,
   frame: RefCell<Option<((usize, u32), std::rc::Rc<Vec<u8>>)>>,
+  /// The bytes of the marker and `snapshot`.
+  opened: u64,
 }
 
 /// The version a root marker of another build names: `causet-native-store`,
@@ -863,13 +875,10 @@ impl Store {
     let mut aliases = Vec::new();
     for algorithm in [GitAlgorithm::Sha1, GitAlgorithm::Sha256] {
       let file = store.join("aliases").join(algorithm.name());
-      match std::fs::read(&file) {
-        Ok(bytes) => aliases.push(
-          Aliases::decode(&bytes, algorithm)
-            .map_err(|what| StoreError::Corrupt(format!("{}: {what}", file.display())))?,
-        ),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(StoreError::io(&file, error)),
+      match AliasFile::open(&file, algorithm) {
+        Ok(opened) => aliases.push(opened),
+        Err(StoreError::Io { errno: "ENOENT", .. }) => {}
+        Err(error) => return Err(error),
       }
     }
     let objects = store.join("objects");
@@ -896,8 +905,9 @@ impl Store {
       containers,
       aliases,
       frame: RefCell::new(None),
+      opened: (marker.len() + named.len()) as u64,
     };
-    match store.locate(&snapshot) {
+    match store.locate(&snapshot)? {
       Some((_, record)) if record.state == PRESENT && record.kind == Type::Snapshot => Ok(store),
       _ => Err(StoreError::Corrupt(format!(
         "{} names {snapshot}, which the store does not hold as a ref snapshot",
@@ -916,12 +926,12 @@ impl Store {
     for entry in &snapshot.refs {
       if let RefTarget::Direct(id) = &entry.target {
         let name = String::from_utf8_lossy(&entry.name);
-        if self.locate(id).is_none() {
+        if self.locate(id)?.is_none() {
           return Err(corrupt(format!(
             "its ref {name} names {id}, which the store does not hold"
           )));
         }
-        if self.git(snapshot.algorithm, id).is_none() {
+        if self.git(snapshot.algorithm, id)?.is_none() {
           return Err(corrupt(format!(
             "its ref {name} names {id}, which has no {} alias row",
             snapshot.algorithm.name()
@@ -932,24 +942,61 @@ impl Store {
     Ok(snapshot)
   }
 
-  pub fn aliases(&self) -> &[Aliases] {
-    &self.aliases
+  /// The bytes this store has read from its files: the marker, `snapshot`,
+  /// and what its alias files and containers have read. A test holds a
+  /// lookup's cost to a bound by it (#331).
+  pub fn bytes_read(&self) -> u64 {
+    self.opened
+      + self.aliases.iter().map(AliasFile::bytes_read).sum::<u64>()
+      + self.containers.iter().map(Container::bytes_read).sum::<u64>()
   }
 
-  /// The alias file of an algorithm, when the store has one.
-  pub fn aliases_for(&self, algorithm: GitAlgorithm) -> Option<&Aliases> {
+  /// The Git algorithms the store has an alias file of.
+  pub fn algorithms(&self) -> Vec<GitAlgorithm> {
+    self.aliases.iter().map(|file| file.algorithm).collect()
+  }
+
+  /// Every alias file whole, with every check (objects.md §9.1): its
+  /// trailer, both orders and the native order's permutation.
+  pub fn load_aliases(&self) -> Result<Vec<Aliases>, StoreError> {
+    self.aliases.iter().map(AliasFile::full).collect()
+  }
+
+  /// Every container's whole index, in name order, with every check
+  /// (storage.md §4.1): the index's SHA-256, the orders of its frames and
+  /// names, and its annotation table.
+  pub fn indexes(&self) -> Result<Vec<Index>, StoreError> {
     self
-      .aliases
+      .containers
       .iter()
-      .find(|aliases| aliases.algorithm == algorithm)
+      .map(|container| Index::read(&container.path))
+      .collect()
+  }
+
+  fn alias_file(&self, algorithm: GitAlgorithm) -> Option<&AliasFile> {
+    self.aliases.iter().find(|file| file.algorithm == algorithm)
   }
 
   /// The object a Git ID's alias row names, its short reference resolved
-  /// (objects.md §9.1): `None` when the Git ID has no row, or when its row
-  /// resolves to no one object, which `cst fsck` reports.
-  pub fn native(&self, algorithm: GitAlgorithm, git_digest: &[u8]) -> Option<NativeId> {
-    let short = self.aliases_for(algorithm)?.short(git_digest)?;
-    self.resolve_row(algorithm, git_digest, &short).ok()
+  /// (objects.md §9.1): `None` when the Git ID has no row, or when only an
+  /// absent candidate could verify it. A row that resolves to no object is
+  /// corrupt.
+  pub fn native(&self, algorithm: GitAlgorithm, git_digest: &[u8]) -> Result<Option<NativeId>, StoreError> {
+    let Some(file) = self.alias_file(algorithm) else {
+      return Ok(None);
+    };
+    let Some(short) = file.short(git_digest)? else {
+      return Ok(None);
+    };
+    match self.resolve_row(algorithm, git_digest, &short)? {
+      Ok(native) => Ok(Some(native)),
+      Err(Unresolved::Unverified(_)) => Ok(None),
+      Err(Unresolved::Corrupt(why)) => Err(StoreError::Corrupt(format!(
+        "the {} alias row of {} {why}",
+        algorithm.name(),
+        hex(git_digest)
+      ))),
+    }
   }
 
   /// An object's Git digest in an algorithm: among the rows holding its
@@ -957,53 +1004,58 @@ impl Store {
   /// (objects.md §9.1). When it is the reference's one candidate and one row
   /// holds it, that row is its own; otherwise its own row is the one whose
   /// Git ID its Git encoding has.
-  pub fn git(&self, algorithm: GitAlgorithm, id: &NativeId) -> Option<Vec<u8>> {
-    let aliases = self.aliases_for(algorithm)?;
+  pub fn git(&self, algorithm: GitAlgorithm, id: &NativeId) -> Result<Option<Vec<u8>>, StoreError> {
+    let Some(file) = self.alias_file(algorithm) else {
+      return Ok(None);
+    };
     let short = id.short();
-    let mut rows = aliases.sharing(&short);
-    let first = rows.next()?;
-    if rows.next().is_none() && self.sole(&short, id) {
-      return Some(first.to_vec());
+    let rows = file.sharing(&short)?;
+    match rows.as_slice() {
+      [] => return Ok(None),
+      [one] if self.sole(&short, id)? => return Ok(Some(one.clone())),
+      _ => {}
     }
-    let own = reconstruct::git_id_of(self, algorithm, id).ok()?;
-    aliases
-      .sharing(&short)
-      .find(|digest| *digest == own.as_slice())
-      .map(<[u8]>::to_vec)
+    // An object with no Git encoding in the algorithm has no row of it.
+    let Ok(own) = reconstruct::git_id_of(self, algorithm, id)? else {
+      return Ok(None);
+    };
+    Ok(rows.into_iter().find(|digest| *digest == own))
   }
 
   /// An alias row's object (objects.md §1.3): a short reference's one
   /// candidate, or among several, the one present candidate whose Git
-  /// encoding has the row's Git ID.
+  /// encoding has the row's Git ID. The outer `Err` is a lookup that could
+  /// not be answered.
   pub fn resolve_row(
     &self,
     algorithm: GitAlgorithm,
     git_digest: &[u8],
     short: &Short,
-  ) -> Result<NativeId, Unresolved> {
-    let candidates = self.candidates(short);
+  ) -> Result<Result<NativeId, Unresolved>, StoreError> {
+    let candidates = self.candidates(short)?;
     if let [one] = candidates.as_slice() {
-      return Ok(*one);
+      return Ok(Ok(*one));
     }
     let named = hex(short);
-    match candidates.as_slice() {
-      [] => {
-        return Err(Unresolved::Corrupt(format!(
-          "names {named}, a short reference no index entry's name begins with"
-        )));
-      }
-      _ => {}
+    if candidates.is_empty() {
+      return Ok(Err(Unresolved::Corrupt(format!(
+        "names {named}, a short reference no index entry's name begins with"
+      ))));
     }
     let mut verified = Vec::new();
     let mut absent = false;
     for candidate in candidates {
-      if self.locate(&candidate).is_some_and(|(_, record)| record.state != PRESENT) {
+      if self.locate(&candidate)?.is_some_and(|(_, record)| record.state != PRESENT) {
         absent = true;
-      } else if reconstruct::git_id_of(self, algorithm, &candidate).is_ok_and(|id| id == git_digest) {
+      } else if reconstruct::git_id_of(self, algorithm, &candidate)
+        .is_ok_and(|own| own.is_ok_and(|id| id == git_digest))
+      {
+        // A candidate that does not read is not this row's: if no other
+        // verifies, the row is corrupt.
         verified.push(candidate);
       }
     }
-    match verified.as_slice() {
+    Ok(match verified.as_slice() {
       [one] => Ok(*one),
       [] if absent => Err(Unresolved::Unverified(format!(
         "names {named}, and no present candidate's Git encoding has its Git ID"
@@ -1014,44 +1066,43 @@ impl Store {
       _ => Err(Unresolved::Corrupt(format!(
         "names {named}, and more than one candidate's Git encoding has its Git ID"
       ))),
-    }
+    })
   }
 
   /// Whether `id` is a short reference's one candidate, without collecting
   /// them: the lookup every row of an unshared store takes.
-  fn sole(&self, short: &Short, id: &NativeId) -> bool {
+  fn sole(&self, short: &Short, id: &NativeId) -> Result<bool, StoreError> {
     let mut found = false;
     for container in &self.containers {
-      match container.starting(short) {
+      match container.starting(short)?.as_slice() {
         [] => {}
         [name] if *name == id.0 => found = true,
-        _ => return false,
+        _ => return Ok(false),
       }
     }
-    found
+    Ok(found)
   }
 
   /// Every object the store holds present, once, with its type and stored
   /// form, in storage order (container, frame, offset): the copy a read uses.
-  pub fn present(&self) -> Vec<(NativeId, Type, Form)> {
+  /// It reads every index whole, with every check.
+  pub fn present(&self) -> Result<Vec<(NativeId, Type, Form)>, StoreError> {
     let mut seen = HashSet::new();
     let mut found = Vec::new();
-    for (number, container) in self.containers.iter().enumerate() {
-      for (name, record) in container.names.iter().zip(&container.records) {
-        if record.state == PRESENT && seen.insert(*name) {
-          found.push((
-            (number, record.frame, record.offset),
-            NativeId(*name),
-            record,
-          ));
+    for (number, index) in self.indexes()?.into_iter().enumerate() {
+      for (name, record) in index.names.into_iter().zip(index.records) {
+        if record.state == PRESENT && seen.insert(name) {
+          found.push(((number, record.frame, record.offset), NativeId(name), record));
         }
       }
     }
     found.sort_by_key(|(at, _, _)| *at);
-    found
-      .into_iter()
-      .map(|(_, id, record)| (id, record.kind, record.form))
-      .collect()
+    Ok(
+      found
+        .into_iter()
+        .map(|(_, id, record)| (id, record.kind, record.form))
+        .collect(),
+    )
   }
 
   /// A content object's chunk list, as stored: what it names, unresolved.
@@ -1066,64 +1117,68 @@ impl Store {
     }
   }
 
-  /// The containers, in name order.
-  pub(crate) fn containers(&self) -> &[Container] {
-    &self.containers
-  }
-
   /// Where an object is: a present copy if any container has one.
-  pub(crate) fn locate(&self, id: &NativeId) -> Option<(usize, Record)> {
+  pub(crate) fn locate(&self, id: &NativeId) -> Result<Option<(usize, Record)>, StoreError> {
     let mut found = None;
     for (number, container) in self.containers.iter().enumerate() {
-      if let Some(record) = container.find(id) {
+      if let Some(record) = container.find(id)? {
         if record.state == PRESENT {
-          return Some((number, *record));
+          return Ok(Some((number, record)));
         }
-        found.get_or_insert((number, *record));
+        found.get_or_insert((number, record));
       }
     }
-    found
+    Ok(found)
   }
 
-  /// The objects whose text form begins with `prefix` and whose type
-  /// `accept` takes, each once.
-  pub fn matching(&self, prefix: &str, accept: impl Fn(Type) -> bool) -> Vec<NativeId> {
+  /// The objects whose text form begins with `prefix`, in lowercase hex,
+  /// and whose type `accept` takes, each once.
+  pub fn matching(&self, prefix: &str, accept: impl Fn(Type) -> bool) -> Result<Vec<NativeId>, StoreError> {
     let mut found: Vec<NativeId> = Vec::new();
     for container in &self.containers {
-      for (name, record) in container.names.iter().zip(&container.records) {
-        let id = NativeId(*name);
-        if accept(record.kind) && id.hex().starts_with(prefix) && !found.contains(&id) {
+      for (id, kind) in container.prefixed(prefix)? {
+        if accept(kind) && !found.contains(&id) {
           found.push(id);
         }
       }
     }
-    found
+    Ok(found)
   }
 
   /// A short reference's candidates (objects.md §1.3): every object, present
   /// or absent, whose digest begins with it, in any container, each once and
   /// in order.
-  pub fn candidates(&self, short: &Short) -> Vec<NativeId> {
-    let mut found: Vec<NativeId> = self
-      .containers
-      .iter()
-      .flat_map(|container| container.starting(short))
-      .map(|name| NativeId(*name))
-      .collect();
+  pub fn candidates(&self, short: &Short) -> Result<Vec<NativeId>, StoreError> {
+    let mut found = Vec::new();
+    for container in &self.containers {
+      found.extend(container.starting(short)?.into_iter().map(NativeId));
+    }
     found.sort();
     found.dedup();
-    found
+    Ok(found)
   }
 
-  /// A tree stored in short references, resolved (objects.md §4.4). `Err`
-  /// is its corruption.
-  pub(crate) fn unshorten(&self, id: &NativeId, record: &[u8]) -> Result<Tree, String> {
-    ShortTree::decode(record)?.resolve(id, &|short| self.candidates(short))
+  /// A tree stored in short references, resolved (objects.md §4.4). The
+  /// inner `Err` is its corruption.
+  pub(crate) fn unshorten(&self, id: &NativeId, record: &[u8]) -> Result<Result<Tree, String>, StoreError> {
+    let failed = RefCell::new(None);
+    let resolved = ShortTree::decode(record).and_then(|short| {
+      short.resolve(id, &|short| {
+        self.candidates(short).unwrap_or_else(|error| {
+          failed.borrow_mut().get_or_insert(error);
+          Vec::new()
+        })
+      })
+    });
+    match failed.into_inner() {
+      Some(error) => Err(error),
+      None => Ok(resolved),
+    }
   }
 
   fn record(&self, id: &NativeId) -> Result<(Type, Form, Vec<u8>), StoreError> {
     let (number, record) = self
-      .locate(id)
+      .locate(id)?
       .ok_or_else(|| StoreError::NotFound(format!("{id} is not in this store")))?;
     if record.state != PRESENT {
       let state = if record.state == 1 {
@@ -1167,7 +1222,7 @@ impl Store {
       // Resolution keeps only the choice whose body hashes to the ID.
       Form::ShortReferences => {
         let tree = self
-          .unshorten(id, &record)
+          .unshorten(id, &record)?
           .map_err(|what| StoreError::Corrupt(format!("{id}: {what}")))?;
         return Ok(Object { kind, body: tree.encode() });
       }
@@ -1192,8 +1247,8 @@ impl Store {
   }
 
   /// An object's type, from the index alone, when any container lists it.
-  pub fn held(&self, id: &NativeId) -> Option<Type> {
-    self.locate(id).map(|(_, record)| record.kind)
+  pub fn held(&self, id: &NativeId) -> Result<Option<Type>, StoreError> {
+    Ok(self.locate(id)?.map(|(_, record)| record.kind))
   }
 
   /// A content object's length, from its record alone: its bytes, or the
@@ -1214,7 +1269,7 @@ impl Store {
   /// The type of a known object, from the index alone.
   pub fn known_kind(&self, id: &NativeId) -> Result<Type, StoreError> {
     self
-      .locate(id)
+      .locate(id)?
       .map(|(_, record)| record.kind)
       .ok_or_else(|| StoreError::Corrupt(format!("{id} is named in the store but not held by it")))
   }

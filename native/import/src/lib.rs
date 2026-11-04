@@ -28,6 +28,7 @@ use causet_store::objects::{
 use causet_store::store::Store;
 use causet_store::store::{Base, StoreWriter};
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -83,6 +84,10 @@ struct Importer<'a> {
   native: HashMap<String, NativeId>,
   git: HashMap<NativeId, Vec<u8>>,
   imported: Imported,
+  /// The first lookup of the existing store that failed. The writer read
+  /// that store whole, with every check, when it opened, so only the file
+  /// system can fail one; the import then fails before it finishes.
+  failed: RefCell<Option<StoreError>>,
 }
 
 /// What import's walk puts in order (storage.md §3.2): the commits, tags and
@@ -187,6 +192,7 @@ fn write(
       algorithm: algorithm.name(),
       ..Imported::default()
     },
+    failed: RefCell::new(None),
   };
   importer.reach(&tips, &except)?;
   let walk = importer.walk(&tips);
@@ -213,6 +219,10 @@ fn write(
         RefTarget::Symbolic(name)
       }
       (None, Some(id)) => RefTarget::Direct(importer.native_of(id).ok_or_else(|| {
+        // A lookup of the existing store that failed is the reason.
+        if let Some(error) = importer.failed.take() {
+          return store_error(error);
+        }
         GitError::new(
           "internal-invariant",
           format!("the ref target {id} was not imported"),
@@ -233,6 +243,9 @@ fn write(
       target,
     });
   }
+  if let Some(error) = importer.failed.take() {
+    return Err(store_error(error));
+  }
   let snapshot = Snapshot::new(algorithm, recorded).map_err(|what| {
     GitError::new(
       "git-response-malformed",
@@ -247,14 +260,14 @@ fn write(
 /// The Git IDs of the objects an existing store's current refs name.
 fn held_tips(store: &Store, algorithm: GitAlgorithm) -> GitResult<Vec<String>> {
   let snapshot = store.refs().map_err(store_error)?;
-  let mut tips: Vec<String> = snapshot
-    .refs
-    .iter()
-    .filter_map(|entry| match &entry.target {
-      RefTarget::Direct(id) => store.git(algorithm, id).map(|digest| hex(&digest)),
-      RefTarget::Symbolic(_) => None,
-    })
-    .collect();
+  let mut tips: Vec<String> = Vec::new();
+  for entry in &snapshot.refs {
+    if let RefTarget::Direct(id) = &entry.target
+      && let Some(digest) = store.git(algorithm, id).map_err(store_error)?
+    {
+      tips.push(hex(&digest));
+    }
+  }
   tips.sort();
   tips.dedup();
   Ok(tips)
@@ -304,7 +317,16 @@ fn below(path: &[u8], name: &[u8]) -> Vec<u8> {
 impl Importer<'_> {
   /// The native object the store held already for a Git ID.
   fn held(&self, id: &str) -> Option<NativeId> {
-    self.store.existing()?.native(self.algorithm, &unhex(id)?)
+    self.found(self.store.existing()?.native(self.algorithm, &unhex(id)?))
+  }
+
+  /// A lookup of the existing store, its failure kept for the import to
+  /// report.
+  fn found<T>(&self, lookup: Result<Option<T>, StoreError>) -> Option<T> {
+    lookup.unwrap_or_else(|error| {
+      self.failed.borrow_mut().get_or_insert(error);
+      None
+    })
   }
 
   fn native_of(&self, id: &str) -> Option<NativeId> {
@@ -319,7 +341,7 @@ impl Importer<'_> {
     }
     let store = self.store.existing()?;
     let native = self.held(id)?;
-    Some(match store.held(&native)? {
+    Some(match self.found(store.held(&native))? {
       Type::Content => "blob",
       Type::Tree => "tree",
       Type::Preserved => {
@@ -583,11 +605,11 @@ impl Importer<'_> {
     let store = self.store.existing()?;
     let native = self.held(id)?;
     let body = store.read(&native).ok()?.body;
-    match store.held(&native)? {
+    match self.found(store.held(&native))? {
       Type::Tree => {
         Tree::decode(&body).ok()?.entries.into_iter().map(|entry| {
           let target = match &entry.target {
-            Target::Native(target) => hex(&store.git(self.algorithm, target)?),
+            Target::Native(target) => hex(&self.found(store.git(self.algorithm, target))?),
             Target::Git(target) => target.hex(),
           };
           Some((entry.name, git_mode(entry.kind.git_mode()), target))
@@ -744,7 +766,7 @@ impl Importer<'_> {
       git
         .get(native)
         .cloned()
-        .or_else(|| existing.and_then(|store| store.git(self.algorithm, native)))
+        .or_else(|| existing.and_then(|store| self.found(store.git(self.algorithm, native))))
     };
     (tree.git_encoding(&git_of).as_deref() == Some(payload)).then_some(tree)
   }

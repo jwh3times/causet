@@ -11,6 +11,7 @@ pub mod delta;
 pub mod encoding;
 pub mod id;
 pub mod objects;
+mod positioned;
 pub mod reconstruct;
 pub mod store;
 pub mod verify;

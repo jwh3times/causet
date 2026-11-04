@@ -3,9 +3,13 @@
 //! sorted tables over the same rows. Resolving a row's short reference to its
 //! object is the store's (§1.3).
 
+use crate::StoreError;
+use crate::container::{bucket, fanout_holds, partition, read_fanout};
 use crate::encoding::Reader;
 use crate::id::{GitAlgorithm, SHA256_TAG, Short};
+use crate::positioned::Positioned;
 use causet_model::sha256;
+use std::path::Path;
 
 const MAGIC: &[u8; 8] = b"CSTALIAS";
 const HEADER: usize = 16;
@@ -122,7 +126,8 @@ impl Aliases {
     out
   }
 
-  /// A file's rows, after every check a reader makes (objects.md §9.1).
+  /// A file's rows, after every check a full reader makes (objects.md §9.1):
+  /// what `cst fsck`, the reconstruction check and import read.
   pub fn decode(file: &[u8], expected: GitAlgorithm) -> Result<Aliases, String> {
     if file.len() < HEADER + 2 * FANOUT + 32 {
       return Err("it is too short to be an alias file".into());
@@ -195,6 +200,158 @@ impl Aliases {
       rows,
       native_order,
     })
+  }
+}
+
+/// An alias file read for lookups (objects.md §9.1). Its header, length and
+/// both fan-outs are checked when it opens. A lookup reads, by position,
+/// only the rows and native-order entries it probes, and checks that each
+/// lies in its fan-out bucket. The trailer, the orders and the native-order
+/// permutation are checked whole by [`AliasFile::full`], which `cst fsck`, the
+/// reconstruction check and import use. A row a lookup does not check can
+/// only misdirect it: the object its short reference resolves to then fails
+/// to have the row's Git ID, or a known object has no row, and both are
+/// corruption.
+pub struct AliasFile {
+  /// The Git algorithm of the file's rows.
+  pub algorithm: GitAlgorithm,
+  file: Positioned,
+  count: u32,
+  git_fanout: [u32; 256],
+  native_fanout: [u32; 256],
+}
+
+impl AliasFile {
+  /// The alias file at `path`, of `expected`'s rows, with the checks of
+  /// constant cost (objects.md §9.1).
+  pub fn open(path: &Path, expected: GitAlgorithm) -> Result<AliasFile, StoreError> {
+    let corrupt = |what: &str| StoreError::Corrupt(format!("{}: {what}", path.display()));
+    let file = Positioned::open(path)?;
+    if file.length < (HEADER + 2 * FANOUT + 32) as u64 {
+      return Err(corrupt("it is too short to be an alias file"));
+    }
+    let header = file.read(0, HEADER)?;
+    if header[..8] != MAGIC[..] {
+      return Err(corrupt("it does not begin with the alias file's magic"));
+    }
+    if header[8..12] != [crate::VERSION, expected.code(), SHA256_TAG, 0x00] {
+      return Err(corrupt(&format!(
+        "its version, algorithms or reserved byte are not version {}'s",
+        crate::VERSION
+      )));
+    }
+    let count = u32::from_be_bytes(header[12..16].try_into().expect("4 bytes"));
+    let width = expected.length() as u64;
+    if file.length != (HEADER + 2 * FANOUT + 32) as u64 + u64::from(count) * (width + 12) {
+      return Err(corrupt("its length does not match its row count"));
+    }
+    let git_fanout = read_fanout(&file, HEADER as u64)?;
+    if !fanout_holds(&git_fanout, count) {
+      return Err(corrupt("its Git fan-out does not count its rows"));
+    }
+    let native_fanout = read_fanout(&file, (HEADER + FANOUT) as u64 + u64::from(count) * (width + 8))?;
+    if !fanout_holds(&native_fanout, count) {
+      return Err(corrupt("its native fan-out does not count its rows"));
+    }
+    Ok(AliasFile {
+      algorithm: expected,
+      file,
+      count,
+      git_fanout,
+      native_fanout,
+    })
+  }
+
+  fn corrupt(&self, what: String) -> StoreError {
+    StoreError::Corrupt(format!("{}: {what}", self.file.path.display()))
+  }
+
+  /// The bytes this file has read.
+  pub fn bytes_read(&self) -> u64 {
+    self.file.bytes_read()
+  }
+
+  fn row_width(&self) -> u64 {
+    self.algorithm.length() as u64 + 8
+  }
+
+  /// A row, as (Git digest, short reference).
+  fn row(&self, row: u32) -> Result<(Vec<u8>, Short), StoreError> {
+    let width = self.algorithm.length();
+    let mut bytes = self
+      .file
+      .read((HEADER + FANOUT) as u64 + u64::from(row) * self.row_width(), width + 8)?;
+    let short: Short = bytes[width..].try_into().expect("8 bytes");
+    bytes.truncate(width);
+    Ok((bytes, short))
+  }
+
+  /// The row a native-order entry names, which must be in the bucket of
+  /// `first` in the native fan-out.
+  fn ordered(&self, entry: u32, first: u8) -> Result<(Vec<u8>, Short), StoreError> {
+    let order = (HEADER + 2 * FANOUT) as u64 + u64::from(self.count) * self.row_width();
+    let row = self.file.u32(order + 4 * u64::from(entry))?;
+    if row >= self.count {
+      return Err(self.corrupt(format!("its native order's entry {entry} names a row it does not have")));
+    }
+    let found = self.row(row)?;
+    if found.1[0] != first {
+      return Err(self.corrupt(format!("its native order's entry {entry} is outside its fan-out bucket")));
+    }
+    Ok(found)
+  }
+
+  /// A row in the bucket of `first` in the Git fan-out, whose digest must
+  /// begin with it.
+  fn bucketed(&self, row: u32, first: u8) -> Result<(Vec<u8>, Short), StoreError> {
+    let found = self.row(row)?;
+    if found.0[0] != first {
+      return Err(self.corrupt(format!("its row {row} is outside its Git fan-out bucket")));
+    }
+    Ok(found)
+  }
+
+  /// The short reference of a Git ID's row, unresolved: a binary search of
+  /// its Git fan-out bucket.
+  pub fn short(&self, git_digest: &[u8]) -> Result<Option<Short>, StoreError> {
+    let Some(&first) = git_digest.first() else {
+      return Ok(None);
+    };
+    let range = bucket(&self.git_fanout, first);
+    let at = partition(range, |row| Ok(self.bucketed(row, first)?.0.as_slice() < git_digest))?;
+    if at == range.1 {
+      return Ok(None);
+    }
+    let (digest, short) = self.bucketed(at, first)?;
+    Ok((digest == git_digest).then_some(short))
+  }
+
+  /// The Git digests of the rows holding a short reference, which sit
+  /// together in the native order, by Git digest.
+  pub fn sharing(&self, short: &Short) -> Result<Vec<Vec<u8>>, StoreError> {
+    let first = short[0];
+    let range = bucket(&self.native_fanout, first);
+    let mut at = partition(range, |entry| Ok(self.ordered(entry, first)?.1 < *short))?;
+    let mut found: Vec<Vec<u8>> = Vec::new();
+    while at < range.1 {
+      let (digest, held) = self.ordered(at, first)?;
+      if held != *short {
+        break;
+      }
+      // Rows sharing a short reference sit together by Git digest.
+      if found.last().is_some_and(|before| *before >= digest) {
+        return Err(self.corrupt(format!("its native order's entry {at} is not in its order")));
+      }
+      found.push(digest);
+      at += 1;
+    }
+    Ok(found)
+  }
+
+  /// The whole file, with every check a full reader makes.
+  pub fn full(&self) -> Result<Aliases, StoreError> {
+    let length = usize::try_from(self.file.length).map_err(|_| self.corrupt("it is too large to read".into()))?;
+    Aliases::decode(&self.file.read(0, length)?, self.algorithm).map_err(|what| self.corrupt(what))
   }
 }
 

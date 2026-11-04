@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+- **A read of a native repository no longer costs more as the repository
+  grows** (#331). Before answering, every `cst` read of a native repository
+  loaded and checked each alias file and every container index whole. That
+  took about 7 ms at 3,000 objects and about 0.9 s on git/git. A read now
+  checks only what costs the same at any size, plus the bytes each lookup
+  touches: it searches one fan-out bucket of an index or alias file, by
+  position, and reads the one record it finds. `cst cat-file -p` on a
+  6,501-object store went from a median of 31.1 ms to 12.0 ms on Windows,
+  against 7.2 ms on a one-commit store. The whole-file checks are now `cst
+  fsck`'s and `cst import --verify`'s alone: the alias file's trailer, each
+  index's SHA-256, the orders, and the native order's permutation. A read
+  therefore answers from a store whose damage it never touches, where it used
+  to refuse the whole store. `cst fsck` still reports that damage, and import
+  still checks the store whole before adding to it. `docs/native-store/`
+  states the two tiers. The store's bytes and every answer are unchanged.
+  When a read lands on an alias row whose short reference no object begins
+  with, it now refuses the row as corruption instead of reporting no row.
+
 - **cst is tested on SHA-256 repositories, and its benchmarks keep SHA-1
   fixtures** (#278). Git 3.0 is also reported to make SHA-256 the default
   object format, and no suite ran on it. On a SHA-256 repository every read
