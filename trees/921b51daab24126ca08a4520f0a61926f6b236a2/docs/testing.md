@@ -484,8 +484,9 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
 - **Cost.** On a 16-core Linux host, causet took about 90 seconds, the
   large-file corpus 16 minutes (each full import about 3.5 minutes) and
   git/git 36 minutes (each full import about 8 minutes, in one thread and up
-  to 6.3 GB of memory). On git/git each `cst` read opens a store of 610,000
-  objects and takes about 0.9 s, which is why its comparison is a sample.
+  to 6.3 GB of memory). The comparison starts one `cst` per object it
+  compares, and git/git's store holds 610,000, which is why its comparison
+  is a sample of 512.
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of

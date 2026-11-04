@@ -906,7 +906,12 @@ container, and content absent by promise or by policy, which it reports by
 state rather than as corruption.
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
-ID, also without Git. Every other command in a native repository is refused,
+ID, also without Git. Those two, and an import into an existing native
+repository, read the alias files and every container's index whole. The
+reads above check only the parts of the store they touch and verify each
+object they read by its ID, so their cost does not grow with the store's
+object count ([storage.md §4.1](docs/native-store/storage.md#41-the-index)).
+Every other command in a native repository is refused,
 because it has no Git to pass it to
 ([ADR-0046](docs/adr/0046-give-a-native-repository-gits-everyday-verbs-and-cst-s-own-commands.md)).
 None of this is a contract yet: the format and the output may change, and a
