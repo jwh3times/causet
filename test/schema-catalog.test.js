@@ -532,6 +532,9 @@ function scenario() {
 
   // Every published note record, and one raw note container.
   captured.noteRecords = vlabJson(repo, "receipts", "--json");
+  // The records are judged in the format of the repository that wrote them,
+  // which is the run's default (#278).
+  captured.objectFormat = git(repo, "rev-parse", "--show-object-format");
   const noteList = git(repo, "notes", "--ref=causet", "list").split(/\r?\n/)[0];
   keep("note-container", JSON.parse(git(repo, "cat-file", "blob", noteList.split(" ")[0])));
 
@@ -604,8 +607,9 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
 test("every published note record satisfies its document and the runtime validator", { timeout: 600_000 }, () => {
   const state = scenario();
   const families = new Set();
-  const verdicts = validateNoteRecords(state.noteRecords);
-  const verdictsSha256 = validateNoteRecords(state.noteRecords, "sha256");
+  const verdicts = validateNoteRecords(state.noteRecords, state.objectFormat);
+  const otherFormat = state.objectFormat === "sha1" ? "sha256" : "sha1";
+  const verdictsOther = validateNoteRecords(state.noteRecords, otherFormat);
   const references = modelProbe(state.noteRecords.map((record) => ({ op: "refs", text: JSON.stringify(record) })));
   for (const [index, record] of state.noteRecords.entries()) {
     const classification = schemaClassification(record.schema);
@@ -616,7 +620,7 @@ test("every published note record satisfies its document and the runtime validat
       `runtime validator rejects published record '${record.id}' (${record.schema})`);
     // Both object formats are judged without a throw, and every referenced
     // object is listed (#172).
-    assert.ok(Array.isArray(verdictsSha256[index]), `sha256 validation of '${record.id}' answers`);
+    assert.ok(Array.isArray(verdictsOther[index]), `${otherFormat} validation of '${record.id}' answers`);
     assert.ok(Array.isArray(references[index].objects), `references of '${record.id}' are listed`);
     assertValid(record.schema, record, `published record '${record.id}'`);
   }
@@ -649,7 +653,7 @@ test("documents are at least as strict as the runtime validator on missing field
       delete mutant[field];
       return [field, mutant];
     });
-    const verdicts = validateNoteRecords(mutants.map(([, mutant]) => mutant));
+    const verdicts = validateNoteRecords(mutants.map(([, mutant]) => mutant), state.objectFormat);
     for (const [index, [field, mutant]] of mutants.entries()) {
       const runtimeErrors = verdicts[index];
       if (runtimeErrors.length === 0) continue;

@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
-import { testEnv } from "../test-support/git-environment.js";
+import { OBJECT_ID, testEnv } from "../test-support/git-environment.js";
 import { builtCli, selectedCli } from "../test-support/cst-command.js";
 
 const created = [];
@@ -112,7 +112,8 @@ test("a native copy that answers otherwise than Git fails the test that left the
   const run = runSuite("plain", { CAUSET_CLI: alteredCli() });
   assert.notEqual(run.status, 0, run.stdout);
   assert.match(run.stdout, /the native copy answers differently from Git/);
-  assert.match(run.stdout, /git cat-file -p [0-9a-f]{40}: git answers "version 2\\n", cst "version 2\\n!"/);
+  assert.match(run.stdout, new RegExp(
+    String.raw`git cat-file -p ${OBJECT_ID.source}: git answers "version 2\\n", cst "version 2\\n!"`));
 });
 
 test("a repository import refuses fails its test unless the mode lists the refusal with its reason", () => {

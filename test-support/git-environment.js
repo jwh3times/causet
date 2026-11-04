@@ -56,6 +56,23 @@ export function testEnv(overrides = {}) {
  */
 export const FILES_REFS = { GIT_DEFAULT_REF_FORMAT: "files" };
 
+/**
+ * The override that makes `git init` create a SHA-1 repository whatever
+ * `GIT_DEFAULT_HASH` the run sets (#278). It is for a fixture whose subject
+ * only SHA-1 has: objects or answers recorded under SHA-1, such as a frozen
+ * bundle or oracle, or a native store, which is SHA-1 only for now.
+ */
+export const SHA1_OBJECTS = { GIT_DEFAULT_HASH: "sha1" };
+
+/** The storage the frozen oracles were recorded on: files refs, SHA-1 objects. */
+export const FROZEN_STORAGE = { ...FILES_REFS, ...SHA1_OBJECTS };
+
+/**
+ * A regular expression matching one object ID of either format, for a test
+ * that reads IDs from whatever repository the run creates.
+ */
+export const OBJECT_ID = /[0-9a-f]{40}(?:[0-9a-f]{24})?/;
+
 let reftableSupport;
 
 /**

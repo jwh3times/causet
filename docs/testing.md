@@ -290,6 +290,31 @@ repository uses (ADR-0039 §1, §3) to one `git for-each-ref` for both sets of
 names, to refusing a repository whose only former-name evidence is a ref, and
 to ignoring a ref that only shares a prefix with a former name.
 
+**The SHA-256 mode** (#278) runs every suite with the repositories Git creates
+kept in SHA-256 objects, which Git 3.0 is also reported to make the default.
+The native read engine refuses that format, so every read goes to Git, and this
+mode is what shows the Git fallback answers there:
+
+```bash
+GIT_DEFAULT_HASH=sha256 npm test
+```
+
+```powershell
+$env:GIT_DEFAULT_HASH = "sha256"
+npm test
+Remove-Item Env:GIT_DEFAULT_HASH -ErrorAction SilentlyContinue
+```
+
+A test that reads object IDs from a repository it made accepts either length
+(`OBJECT_ID` in `test-support/git-environment.js`) and judges records in that
+repository's format. Fixtures whose objects or answers were recorded under
+SHA-1 keep SHA-1 in this mode, with `SHA1_OBJECTS` or `--object-format=sha1`:
+the v0.19.1 legacy bundle, the manifest-hash envelope vector, the engine corpus
+(`FROZEN_STORAGE` is both pins at once), and the native store's cases other
+than those that run in both formats. `cst metadata
+benchmark` and `cst spec benchmark` build SHA-1 fixtures whatever the default,
+because their baselines were recorded on SHA-1.
+
 **The generated-history corpus** (ADR-0044 item 1, ADR-0045 decision 13,
 #308) is Git repositories generated from a seed, each run through every N1
 check. `test/generated-histories.test.js` runs it: one history per case by
@@ -1336,7 +1361,7 @@ start after those checks pass.
 | Code pull request | Default mode on Ubuntu and Windows, Node 24, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
 | Code push to `main` | Default mode on Ubuntu, Node 24, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
 | Known documentation-only PR or main push | None | Static checks still run |
-| Manual `workflow_dispatch` | All eight modes, the reftable mode among them, on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
+| Manual `workflow_dispatch` | All nine modes, the reftable and SHA-256 modes among them, on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.

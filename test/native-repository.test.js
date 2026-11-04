@@ -36,6 +36,13 @@ function scratch() {
 
 const OPT_IN = { CAUSET_EXPERIMENTAL: "native" };
 
+/**
+ * `git init` for a case that is not about the object format: SHA-1 whatever
+ * the run's default, as the native store's cases assume. The format cases
+ * cover SHA-256 (#278).
+ */
+const INIT_SHA1 = ["init", "-q", "-b", "main", "--object-format=sha1"];
+
 function cst(cwd, args, env = OPT_IN) {
   return spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, env: testEnv(env), encoding: "buffer" });
 }
@@ -256,7 +263,7 @@ test("a damaged native object fails the check, which names it and checks the res
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
   const git = gitIn(repo);
-  git(["init", "-q", "-b", "main"]);
+  git(INIT_SHA1);
   fs.writeFileSync(path.join(repo, "only.txt"), "the only file\n");
   git(["add", "only.txt"]);
   git(["commit", "-q", "-m", "one"]);
@@ -395,7 +402,7 @@ function makeMismatched() {
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
   const git = gitIn(repo);
-  git(["init", "-q", "-b", "main"]);
+  git(INIT_SHA1);
   const blob = (bytes) => git(["hash-object", "-w", "--stdin"], bytes).toString().trim();
   const tree = (records) => git(["hash-object", "-t", "tree", "-w", "--literally", "--stdin"],
     Buffer.concat(records.flatMap(([mode, name, id]) => [Buffer.from(`${mode} ${name}\0`), Buffer.from(id, "hex")])))
@@ -459,7 +466,7 @@ test("a replacement ref is recorded, and the object it replaces imports as store
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
   const git = gitIn(repo);
-  git(["init", "-q", "-b", "main"]);
+  git(INIT_SHA1);
   const tree = git(["write-tree"]).toString().trim();
   const stored = git(["commit-tree", tree, "-m", "as stored"]).toString().trim();
   const replacement = git(["commit-tree", tree, "-m", "the replacement"]).toString().trim();
@@ -482,7 +489,7 @@ test("only the header lines Git's parser follows are translated, and a path is l
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
   const git = gitIn(repo);
-  git(["init", "-q", "-b", "main"]);
+  git(INIT_SHA1);
   const tree = (name) => git(["mktree"], Buffer.from(`100644 blob ${git(["hash-object", "-w", "--stdin"], `${name}\n`).toString().trim()}\t${name}\n`)).toString().trim();
   const [here, there] = [tree("here"), tree("there")];
   const base = git(["commit-tree", here, "-m", "base"]).toString().trim();
@@ -521,7 +528,7 @@ test("a tree mode reads as Git reads it: in 32 bits that wrap, and never with a 
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
   const git = gitIn(repo);
-  git(["init", "-q", "-b", "main"]);
+  git(INIT_SHA1);
   const blob = (text) => git(["hash-object", "-w", "--stdin"], text).toString().trim();
   const [wrapped, signed] = [blob("wrapped\n"), blob("signed\n")];
   // Git reads the first mode as a file's 100644, so it follows the entry to

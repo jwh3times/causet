@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { FILES_REFS, testEnv } from "./git-environment.js";
+import { FROZEN_STORAGE, testEnv } from "./git-environment.js";
 
 const DATE = "2026-01-01T00:00:00Z";
 
@@ -17,12 +17,13 @@ const DATE = "2026-01-01T00:00:00Z";
  * The variables both engines read: sessions are allowed (each request decides
  * whether it opens one), the default engine is Git (each request names its
  * engine), nothing the native backend refuses is set, and Git dates every
- * object it writes. The repositories keep files storage, on which the answers
- * were frozen and which the native backend's profile needs, so a reftable run
- * builds them as before (#277).
+ * object it writes. The repositories keep files storage and SHA-1 objects, on
+ * which the answers were frozen and which the native backend's profile needs,
+ * so a reftable or SHA-256 run builds them as before (#277, #278).
+ * `sha256Repository` passes `--object-format=sha256` itself.
  */
 export const overrides = {
-  ...FILES_REFS,
+  ...FROZEN_STORAGE,
   CAUSET_GIT_SESSION: "1",
   CAUSET_ENGINE: "",
   GIT_AUTHOR_DATE: DATE,

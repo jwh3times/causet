@@ -4,8 +4,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { testEnv } from "../test-support/git-environment.js";
+import { OBJECT_ID, testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
+
+/** One object ID of either format, and nothing else (#278). */
+const WHOLE_OBJECT_ID = new RegExp(`^${OBJECT_ID.source}$`);
 
 
 function exec(command, args, cwd, options = {}) {
@@ -159,13 +162,13 @@ test("the plan and the committed prediction are computed as if there were no ove
 
   // The overlay is pinned by the checkpoint commit, not by its ref.
   const overlay = overlaidForecast.targetOverlay;
-  assert.match(overlay.checkpoint, /^[0-9a-f]{40}$/);
-  assert.match(overlay.tree, /^[0-9a-f]{40}$/);
+  assert.match(overlay.checkpoint, WHOLE_OBJECT_ID);
+  assert.match(overlay.tree, WHOLE_OBJECT_ID);
   assert.equal(overlay.baseHead, git(workspace, "rev-parse", "HEAD"));
   assert.match(overlay.draftChangeId, /^draft_[0-9a-f]{64}$/);
 
   // And a second prediction exists: the worktree after re-materialization.
-  assert.match(overlaidForecast.predictedOverlayTree, /^[0-9a-f]{40}$/);
+  assert.match(overlaidForecast.predictedOverlayTree, WHOLE_OBJECT_ID);
   assert.notEqual(overlaidForecast.predictedOverlayTree, overlaidForecast.predictedResultTree,
     "the draft is still in the worktree afterwards, so the trees differ");
 });
@@ -533,7 +536,7 @@ test("a rebase forecast carries a caller checkpoint as an overlay", (t) => {
   assert.equal(forecast.targetOverlay.tree, checkpoint.tree);
   assert.equal(forecast.targetOverlay.baseHead, git(workspace, "rev-parse", "HEAD"));
   assert.equal(forecast.targetOverlay.rematerialized, "uncommitted");
-  assert.match(forecast.predictedOverlayTree, /^[0-9a-f]{40}$/);
+  assert.match(forecast.predictedOverlayTree, WHOLE_OBJECT_ID);
   assert.notEqual(forecast.predictedOverlayTree, forecast.predictedResultTree,
     "the draft is still in the worktree afterwards, so the trees differ");
   // Four distinct trees, which is what keeps this scenario honest: the rebase

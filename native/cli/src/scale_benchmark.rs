@@ -630,7 +630,10 @@ fn benchmark_in(
   let worktree_root = text::join(root, "worktrees");
   let setup_started = Instant::now();
   std::fs::create_dir_all(&repo).map_err(|error| io(&error, "mkdir", &repo))?;
-  git(&["init", "-q", "-b", "main"], &repo)?;
+  // SHA-1 whatever the user's default: the workload is the one its baselines
+  // were recorded on, and a SHA-256 fixture's longer ref paths cross Windows'
+  // path limit under an ordinary temporary directory (#278).
+  git(&["init", "-q", "-b", "main", "--object-format=sha1"], &repo)?;
   git(&["config", "user.name", "causet Scale Fixture"], &repo)?;
   git(&["config", "user.email", "causet-scale@example.invalid"], &repo)?;
   git(&["config", "core.autocrlf", "false"], &repo)?;

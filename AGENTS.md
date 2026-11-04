@@ -125,7 +125,8 @@ For changes to native code, also run `CAUSET_KIND=native npm test`, which
 imports every test's repositories and holds N1's commands on the copies to
 Git's answers (`test-support/native-kind.js`, ADR-0044). For changes to how
 cst reads or writes refs, also run `GIT_DEFAULT_REF_FORMAT=reftable npm test`
-on Git 2.45 or later (#277).
+on Git 2.45 or later (#277), and for changes to how it reads or writes
+objects, `GIT_DEFAULT_HASH=sha256 npm test` (#278).
 Every CLI launch in the suites goes through `test-support/cst-command.js`,
 which runs the Rust build; never spawn a CLI directly, so that
 `CAUSET_CLI=<executable> npm test` can run the same suites against another

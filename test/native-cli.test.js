@@ -45,7 +45,7 @@ after(() => fs.rmSync(outside, { recursive: true, force: true }));
 
 // The suite's mode variables would otherwise decide these cases. The
 // benchmarks' repositories keep files storage, on which their frozen process
-// counts were recorded (#277).
+// counts were recorded (#277); they pin SHA-1 objects themselves (#278).
 const neutral = { CAUSET_ENGINE: "", CAUSET_FORECAST_ENGINE: "", ...FILES_REFS };
 
 function runRust(args, env = {}, cwd = outside) {
