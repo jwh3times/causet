@@ -661,9 +661,31 @@ repository's algorithm. Each file is two sorted tables over the same rows:
   SHA-256. The file can be rewritten whole on each import, so a fresh import
   of the same history writes the same bytes (decision 3).
 
-A reader checks the magic, version, algorithms, trailer, fan-outs and both
-orders, and reports any disagreement as corruption. Resolving each row is the
-reconstruction check's (§9.2) and `cst fsck`'s.
+The checks come in two tiers, so that opening a store and answering one
+lookup read an amount of the file that does not grow with its row count:
+
+- **Every reader** checks what is constant-cost to check: the magic, version
+  and algorithms, that the file's length is the one its row count gives, and
+  that each fan-out never decreases and ends at N. It checks the bytes each
+  lookup touches: every row or native-order entry a lookup reads must lie in
+  the fan-out bucket of its first byte, a native-order entry must name a row
+  the file has, and the rows a lookup collects for one short reference must
+  be in byte order of Git digest. A row whose short reference resolves to no
+  object is corrupt.
+- **`cst fsck` and the reconstruction check** (`cst import --verify`, §9.2)
+  read the file whole. They also check the trailer, that the rows are in byte
+  order of Git ID with none repeated, that each fan-out counts its rows, and
+  that the native order lists every row once, in its order. Import reads the
+  file whole with the same checks, since it rewrites the file.
+
+A damaged part that a reader does not check can misdirect a lookup. The
+row it finds may name a short reference no object begins with, which is
+corrupt. A row may be missed, so that its Git ID reads as having no row,
+which is corrupt where the store must hold one, such as for a ref's target
+(§6). Where nothing says the row must exist, the reader cannot tell the
+damage from a Git ID that was never imported; `cst fsck` finds it. Any
+disagreement either tier finds is corruption. Resolving each row is the
+reconstruction check's and `cst fsck`'s.
 
 The alias file of the example history (SHA-1, 3 rows, 2,192 bytes):
 

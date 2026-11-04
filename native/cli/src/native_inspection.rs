@@ -52,7 +52,7 @@ fn value(arg: &[u8], name: &str, rest: &mut std::slice::Iter<OsString>) -> GitRe
 /// An object's size as Git reports it.
 fn object_size(repository: &Repository, id: &NativeId) -> GitResult<u64> {
   let store = &repository.store;
-  if store.held(id) == Some(Type::Content) {
+  if store.held(id).map_err(store_error)? == Some(Type::Content) {
     return store.content_size(id).map_err(store_error);
   }
   let read = store.read_known(id).map_err(store_error)?;

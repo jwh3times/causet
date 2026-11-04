@@ -6,7 +6,7 @@
 //! state, not as corruption. It reads the store alone and writes nothing.
 
 use crate::StoreError;
-use crate::container::{ABSENT_BY_POLICY, ABSENT_BY_PROMISE, Container, Form, PRESENT};
+use crate::container::{ABSENT_BY_POLICY, ABSENT_BY_PROMISE, Form, Index, PRESENT};
 use crate::delta::Delta;
 use crate::id::{NativeId, Type, hex};
 use crate::objects::{Annotation, ChunkList, GitKind, Kind, Preserved, RefTarget, Snapshot, Target, Tree};
@@ -42,8 +42,12 @@ enum Names {
 }
 
 pub fn verify(store: &Store) -> Result<Verification, StoreError> {
+  // The whole-file checks a reader leaves to verification (objects.md §9.1;
+  // storage.md §4.1): a file that fails one is not read further.
+  let files = store.load_aliases()?;
+  let indexes = store.indexes()?;
   let mut found = Verification {
-    containers: store.containers().len(),
+    containers: indexes.len(),
     ..Verification::default()
   };
   let mut kinds: HashMap<[u8; 32], Type> = HashMap::new();
@@ -52,7 +56,7 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
   let mut named: Vec<(NativeId, Names)> = Vec::new();
   let mut preserved_kinds: HashMap<NativeId, GitKind> = HashMap::new();
   let mut subjects: HashMap<NativeId, NativeId> = HashMap::new();
-  for container in store.containers() {
+  for container in &indexes {
     let at = name(container);
     check_trailer(container, &mut found.problems)?;
     for (digest, record) in container.names.iter().zip(&container.records) {
@@ -119,7 +123,7 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
     }
   }
   // The annotation table must agree with each annotation's own subject.
-  for container in store.containers() {
+  for container in &indexes {
     for (subject, position) in &container.annotations {
       let id = NativeId(container.names[*position as usize]);
       if subjects.get(&id).is_some_and(|own| own.0 != *subject) {
@@ -190,11 +194,11 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
   // Each row resolves to one object (objects.md §1.3), and no two rows of a
   // file to the same one (§9). A row that only an absent candidate could
   // verify is unverified, not corrupt.
-  for aliases in store.aliases() {
+  for aliases in &files {
     let algorithm = aliases.algorithm.name();
     let mut resolved: HashMap<NativeId, &[u8]> = HashMap::new();
     for (digest, short) in aliases.rows() {
-      match store.resolve_row(aliases.algorithm, digest, short) {
+      match store.resolve_row(aliases.algorithm, digest, short)? {
         Ok(native) => {
           if let Some(other) = resolved.insert(native, digest) {
             found.problems.push(format!(
@@ -255,7 +259,7 @@ fn check_copy(
       // where an absent one leaves the list unresolved below. A nested list
       // has its own copies, checked in turn.
       for (chunk, _) in &list.chunks {
-        match store.held(chunk) {
+        match store.held(chunk)? {
           None => return Ok(Err(format!("its chunk list names {chunk}, which has no index entry"))),
           Some(Type::Content) => {}
           Some(_) => return Ok(Err(format!("its chunk list names {chunk}, which is not content"))),
@@ -277,7 +281,7 @@ fn check_copy(
         Ok(delta) => delta,
         Err(why) => return Ok(Err(why)),
       };
-      match store.held(&delta.base) {
+      match store.held(&delta.base)? {
         None => return Ok(Err(format!("its base {} has no index entry", delta.base))),
         Some(Type::Content) => {}
         Some(_) => return Ok(Err(format!("its base {} is not content", delta.base))),
@@ -295,7 +299,7 @@ fn check_copy(
     }
     // Resolution needs only the candidates' IDs, so absent ones take part
     // (objects.md §1.3), and keeps only a choice that hashes to the ID.
-    Form::ShortReferences => return Ok(store.unshorten(id, bytes).map(Names::Tree)),
+    Form::ShortReferences => return Ok(store.unshorten(id, bytes)?.map(Names::Tree)),
   }
   if NativeId::of(kind, bytes) != *id {
     return Ok(Err("its bytes do not hash to its ID".into()));
@@ -313,7 +317,7 @@ fn check_copy(
 
 /// The trailer is the SHA-256 of every byte before it (storage.md §4); the
 /// container's name was checked against it when the store opened.
-fn check_trailer(container: &Container, problems: &mut Vec<String>) -> Result<(), StoreError> {
+fn check_trailer(container: &Index, problems: &mut Vec<String>) -> Result<(), StoreError> {
   let bytes =
     std::fs::read(&container.path).map_err(|error| StoreError::io(&container.path, error))?;
   let (before, trailer) = bytes.split_at(bytes.len() - 32);
@@ -326,7 +330,7 @@ fn check_trailer(container: &Container, problems: &mut Vec<String>) -> Result<()
   Ok(())
 }
 
-fn name(container: &Container) -> String {
+fn name(container: &Index) -> String {
   container
     .path
     .file_name()

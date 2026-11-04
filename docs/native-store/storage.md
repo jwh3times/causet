@@ -371,8 +371,9 @@ rename it. A container named otherwise than by its trailer is corrupt.
 - **The magic** is the 8 ASCII bytes `CSTCNTNR`, `435354434e544e52`.
 - **A version 1 header** is therefore `435354434e544e52 01 01 000000000000`.
 - **Every offset in a container is from the start of the file.**
-- **The index's SHA-256** covers the index alone, so a lazy reader that
-  fetches only the index can verify it.
+- **The index's SHA-256** covers the index alone, so a reader that fetches
+  only the index can verify it. A reader that reads the index whole checks it
+  (§4.1).
 - **The trailer** is the SHA-256 of every byte before it. A reader that reads
   the whole container checks it. A reader that reads only some frames
   verifies each record by its ID.
@@ -410,7 +411,7 @@ footer begins.
 - **What an object costs.** The index takes 48 bytes per object: 32 in the
   names and 16 in the records.
 
-A reader treats any of these as corruption:
+Any of these is corruption:
 
 - a wrong magic, version or algorithm, or an index whose size or SHA-256 does
   not match;
@@ -420,6 +421,40 @@ A reader treats any of these as corruption:
 - a fan-out or an order that does not hold;
 - a present record outside its frame, or in a frame of the wrong class;
 - a form or state that its type does not take (§1; objects.md §8).
+
+Readers find them in two tiers, so that opening a store and answering one
+lookup read an amount of each container that does not grow with its object
+count:
+
+- **Every reader** checks what is constant-cost to check, and the bytes each
+  lookup touches.
+  - When a container opens, it checks the header, that the footer places the
+    index in the file, that the container is named by the footer's trailer,
+    the index's magic and counts, that the index's size is the one its counts
+    give, and that the fan-out never decreases and ends at N.
+  - A lookup is a binary search of the names, within the fan-out bucket of
+    its first byte when it knows that byte: an ID, a short reference, or an
+    abbreviation of two hex digits or more. Every name it probes there must
+    begin with the bucket's byte, and the names it scans past the first must
+    each be greater than the one before. The record it finds is checked for
+    its type, form, state and reserved byte, and, when present, against its
+    frame's entry. That entry is checked for its reserved bytes, class, codec
+    and lengths, and for lying between the header and the index. A frame it
+    reads is checked as one zstd frame of its lengths.
+- **`cst fsck` and the reconstruction check** (`cst import --verify`,
+  objects.md §9.2) read each index whole. They also check the index's
+  SHA-256, that the frames lie back to back from offset 16 to the index, that
+  the names are in byte order with none repeated, that the fan-out counts
+  them, every record, and the annotation table. `cst fsck` also checks the
+  trailer (§4). Import reads each index whole with the same checks.
+
+A damaged part that a reader does not check can misdirect a lookup. The
+object it reads may fail its ID, which is corrupt. An object may be missed,
+which is corrupt where the store must hold it: an object a tree, chunk
+list, delta, ref or alias row names (objects.md §8). An ID that only its
+caller names is then reported as not held, and `cst fsck` finds the damage.
+A store therefore opens in time proportional to its number of containers,
+not its number of objects (§4.2).
 
 The writer's rules of §1, §3.1 and §5.1 are not checked by readers. A store
 that breaks one, say a chunk list for a 1 KiB file, still reads correctly; only

@@ -3,7 +3,7 @@
 
 use causet_store::StoreError;
 use causet_store::id::{GitAlgorithm, NativeId, Type};
-use causet_store::container::{Container, ContainerWriter, Form};
+use causet_store::container::{ContainerWriter, Form, Index};
 use causet_store::objects::{
   ChunkList, Entry, GitKind, Kind, Preserved, Ref, RefTarget, Snapshot, Target, Tree,
 };
@@ -34,6 +34,7 @@ fn varied(length: usize, seed: u32) -> Vec<u8> {
 fn form(store: &Store, id: &NativeId) -> Form {
   store
     .present()
+    .unwrap()
     .into_iter()
     .find(|(found, _, _)| found == id)
     .map(|(_, _, form)| form)
@@ -106,9 +107,9 @@ fn every_object_written_reads_back_verified() {
     Preserved::decode(&store.read(&preserved_id).unwrap().body).unwrap(),
     preserved
   );
-  assert_eq!(store.native(GitAlgorithm::Sha1, &[0xce; 20]), Some(small));
-  assert_eq!(store.git(GitAlgorithm::Sha1, &tree_id), Some(vec![0x11; 20]));
-  assert_eq!(store.matching(&small.hex()[..12], |_| true), [small]);
+  assert_eq!(store.native(GitAlgorithm::Sha1, &[0xce; 20]).unwrap(), Some(small));
+  assert_eq!(store.git(GitAlgorithm::Sha1, &tree_id).unwrap(), Some(vec![0x11; 20]));
+  assert_eq!(store.matching(&small.hex()[..12], |_| true).unwrap(), [small]);
   assert_eq!(store.refs().unwrap(), snapshot);
   assert_eq!(store.read(&store.snapshot).unwrap().kind, Type::Snapshot);
   assert!(matches!(
@@ -134,7 +135,7 @@ fn metadata_order(root: &std::path::Path) -> Vec<NativeId> {
     .map(|entry| entry.unwrap().path())
     .find(|path| path.extension().is_some_and(|extension| extension == "cstc"))
     .unwrap();
-  let container = Container::open(&path).unwrap();
+  let container = Index::read(&path).unwrap();
   let mut held: Vec<(u32, u32, NativeId)> = container
     .names
     .iter()
@@ -311,12 +312,18 @@ fn damage_to_a_container_is_reported_as_corruption() {
     store.read(&id)
   );
 
-  // A byte of the index: it no longer matches its SHA-256.
+  // A byte of the index: it no longer matches its SHA-256, which a reader
+  // leaves to verification (storage.md §4.1).
   let mut index = original.clone();
   let at = index.len() - 100;
   index[at] ^= 0xff;
   std::fs::write(&container, &index).unwrap();
-  assert!(matches!(Store::open(&root), Err(StoreError::Corrupt(_))));
+  let store = Store::open(&root).unwrap();
+  assert!(matches!(
+    causet_store::verify::verify(&store),
+    Err(StoreError::Corrupt(why)) if why.ends_with("its index does not match the index's SHA-256")
+  ));
+  drop(store);
 
   std::fs::remove_dir_all(&root).unwrap();
 }
@@ -560,7 +567,7 @@ fn a_tree_is_stored_in_short_references_and_reads_back_beside_an_entry_sharing_i
   // reader keeps the one that verifies.
   add_absent(&root, &[sharing(&hello)]);
   let store = Store::open(&root).unwrap();
-  assert_eq!(store.candidates(&hello.short()), vec![sharing(&hello), hello], "in order");
+  assert_eq!(store.candidates(&hello.short()).unwrap(), vec![sharing(&hello), hello], "in order");
   assert_eq!(store.read(&outer_id).unwrap().body, outer.encode());
   assert_eq!(store.read(&inner_id).unwrap().body, inner.encode());
   let found = causet_store::verify::verify(&store).unwrap();

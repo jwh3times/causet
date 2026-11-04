@@ -140,7 +140,7 @@ impl Repository {
 
   /// An object's type, or `None` when the store does not hold it.
   pub fn object(&self, id: &NativeId) -> GitResult<Option<Object>> {
-    Ok(Some(match self.store.held(id) {
+    Ok(Some(match self.store.held(id).map_err(store_error)? {
       None => return Ok(None),
       Some(Type::Content) => Object::Blob,
       Some(Type::Tree) => Object::Tree,
@@ -163,12 +163,12 @@ impl Repository {
   /// commit's tree or a tag's object, through the alias map.
   fn built_on(&self, id: &NativeId) -> GitResult<NativeId> {
     let preserved = self.preserved(id)?;
-    preserved
-      .header_ids()
-      .into_iter()
-      .find(|header| header.first)
-      .and_then(|header| alias(&self.store, preserved.algorithm, &header.digest))
-      .ok_or_else(|| {
+    let first = preserved.header_ids().into_iter().find(|header| header.first);
+    let built_on = match first {
+      Some(header) => alias(&self.store, preserved.algorithm, &header.digest)?,
+      None => None,
+    };
+    built_on.ok_or_else(|| {
         GitError::new(
           "not-found",
           format!(
@@ -192,7 +192,7 @@ impl Repository {
       .into_iter()
       .filter(|header| !header.first)
       .map(|header| {
-        alias(&self.store, preserved.algorithm, &header.digest)
+        alias(&self.store, preserved.algorithm, &header.digest)?
           .ok_or_else(|| corrupt(format!("the commit {commit} names a parent that was not imported")))
       })
       .collect()
@@ -414,9 +414,12 @@ impl Repository {
     if prefix.len() < 4 || !prefix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
       return Ok(None);
     }
-    let found = self.store.matching(&prefix.to_ascii_lowercase(), |kind| {
-      !matches!(kind, Type::Snapshot | Type::Annotation)
-    });
+    let found = self
+      .store
+      .matching(&prefix.to_ascii_lowercase(), |kind| {
+        !matches!(kind, Type::Snapshot | Type::Annotation)
+      })
+      .map_err(store_error)?;
     let ambiguous = || {
       GitError::new(
         "ambiguous-match",

@@ -130,7 +130,7 @@ fn recorded(store: &Store) -> Vec<(String, Option<String>, Option<String>)> {
         .find(|entry| entry.name == name)?
         .target
       {
-        RefTarget::Direct(id) => return Some(hex(&store.git(snapshot.algorithm, id).unwrap())),
+        RefTarget::Direct(id) => return Some(hex(&store.git(snapshot.algorithm, id).unwrap().unwrap())),
         RefTarget::Symbolic(target) => name = target.clone(),
       }
     }
@@ -236,6 +236,6 @@ fn an_unborn_or_detached_head_is_recorded_as_it_is() {
     .find(|(name, _, _)| name == "HEAD")
     .unwrap();
   assert_eq!(head, ("HEAD".into(), Some(topic.clone()), None));
-  assert_eq!(hex(&store.git(GitAlgorithm::Sha1, &imported.head.unwrap()).unwrap()), topic);
+  assert_eq!(hex(&store.git(GitAlgorithm::Sha1, &imported.head.unwrap()).unwrap().unwrap()), topic);
   std::fs::remove_dir_all(&root).unwrap();
 }

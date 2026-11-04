@@ -418,8 +418,8 @@ pub(crate) struct Listed {
 }
 
 /// A Git ID's native object, when the store imported it.
-pub(crate) fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> Option<NativeId> {
-  store.native(algorithm, digest)
+pub(crate) fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> GitResult<Option<NativeId>> {
+  store.native(algorithm, digest).map_err(store_error)
 }
 
 /// The entries of a tree or of a tree kept in Git's encoding; `None` for any
@@ -461,7 +461,7 @@ pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Opti
             )
           }
           Target::Git(commit) => {
-            let native = alias(store, commit.algorithm(), &commit.digest);
+            let native = alias(store, commit.algorithm(), &commit.digest)?;
             (
               "commit",
               native,
@@ -496,7 +496,7 @@ pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Opti
       for entry in entries {
         let mode = git_mode(&entry.mode).ok_or_else(malformed)?;
         let (mode, kind) = canonical_mode(mode);
-        let target = alias(store, preserved.algorithm, &entry.digest);
+        let target = alias(store, preserved.algorithm, &entry.digest)?;
         listed.push(Listed {
           mode,
           kind,
@@ -523,8 +523,8 @@ pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
 
 /// The Git algorithm the store's Git encodings are in: its one alias file's.
 fn algorithm(store: &Store) -> GitResult<GitAlgorithm> {
-  match store.aliases() {
-    [aliases] => Ok(aliases.algorithm),
+  match store.algorithms().as_slice() {
+    [algorithm] => Ok(*algorithm),
     _ => Err(GitError::new(
       "unsupported-feature",
       "This store has no single Git algorithm, so its trees have no one Git encoding to measure.",
@@ -556,7 +556,7 @@ fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitRes
     }
   } else if *kind == Type::Preserved {
     let preserved = Preserved::decode(&body).map_err(corrupt)?;
-    out.extend_from_slice(&translated(store, &preserved));
+    out.extend_from_slice(&translated(store, &preserved)?);
   } else {
     out.extend_from_slice(&body);
   }
@@ -569,19 +569,19 @@ fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitRes
 /// imported object. Nothing else changes: not a later `tree`, `parent` or
 /// `object` line, which Git does not follow, nor an ID in a message or a
 /// signature.
-fn translated(store: &Store, preserved: &Preserved) -> Vec<u8> {
+fn translated(store: &Store, preserved: &Preserved) -> GitResult<Vec<u8>> {
   let payload = &preserved.payload;
   let mut out = Vec::with_capacity(payload.len() + 256);
   let mut copied = 0;
   for id in preserved.header_ids() {
-    if let Some(native) = alias(store, preserved.algorithm, &id.digest) {
+    if let Some(native) = alias(store, preserved.algorithm, &id.digest)? {
       out.extend_from_slice(&payload[copied..id.at.start]);
       out.extend_from_slice(native.hex().as_bytes());
       copied = id.at.end;
     }
   }
   out.extend_from_slice(&payload[copied..]);
-  out
+  Ok(out)
 }
 
 /// Git's `canon_mode`, which `ls-tree` and so `cat-file -p` print, with the

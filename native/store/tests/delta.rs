@@ -70,6 +70,7 @@ fn put_chain(writer: &mut StoreWriter, versions: &[Vec<u8>], before: Option<&[u8
 fn form(store: &Store, id: &NativeId) -> Form {
   store
     .present()
+    .unwrap()
     .into_iter()
     .find(|(found, _, _)| found == id)
     .map(|(_, _, form)| form)

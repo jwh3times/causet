@@ -212,14 +212,14 @@ fn a_tree_is_stored_as_the_contracts_short_reference_example() {
     .find(|path| path.extension().is_some_and(|extension| extension == "cstc"))
     .unwrap();
   let container = Container::open(&path).unwrap();
-  let record = container.find(&id).unwrap();
+  let record = container.find(&id).unwrap().unwrap();
   assert_eq!(record.form, Form::ShortReferences);
   let frame = container.frame(record.frame).unwrap();
   let start = record.offset as usize;
   assert_eq!(frame[start..start + record.length as usize], printed[..]);
   // Its one candidate is the content, and the rebuilt body is the tree's.
   let store = Store::open(&root).unwrap();
-  assert_eq!(store.candidates(&hello.short()), vec![hello]);
+  assert_eq!(store.candidates(&hello.short()).unwrap(), vec![hello]);
   let read = store.read(&id).unwrap();
   assert_eq!((read.kind, read.body), (Type::Tree, tree.encode()));
   assert_eq!(NativeId::of(Type::Tree, &tree.encode()), id);
