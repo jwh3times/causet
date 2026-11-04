@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- **cst is tested on SHA-256 repositories, and its benchmarks keep SHA-1
+  fixtures** (#278). Git 3.0 is also reported to make SHA-256 the default
+  object format, and no suite ran on it. On a SHA-256 repository every read
+  goes to Git, and manual CI qualification now runs every suite with
+  `GIT_DEFAULT_HASH=sha256` on Ubuntu and Windows to show those reads answer
+  correctly. One answer was wrong. `cst metadata benchmark` and `cst spec
+  benchmark` made their fixture repositories in the default object format, so
+  on a SHA-256 default their workloads no longer matched the baselines
+  recorded on SHA-1. On Windows the metadata benchmark failed with
+  `path-length-exceeded`, because the longer object IDs pushed its resolution
+  ref paths past 259 characters. Both benchmarks now always build SHA-1
+  fixtures, so they no longer measure SHA-256 repositories.
+
 - **cst is tested on reftable repositories** (#277). Git 3.0 is planned to
   make reftable the default ref storage for new repositories, and no suite ran
   on it. cst already answered correctly there: the tests that failed had set
