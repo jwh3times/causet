@@ -9,7 +9,8 @@
  * - `cst import --verify` rebuilds every imported object to its Git ID, so a
  *   store problem fails as such rather than as some command's mismatch;
  * - `cst for-each-ref` and `cst rev-parse` answer for the refs and HEAD;
- * - `cst cat-file -t`, `-s` and `-p` answer for every imported object;
+ * - `cst cat-file --batch` answers for every imported object, its type, size
+ *   and Git bytes, from one process per group of objects (#346);
  * - `cst ls-tree -r -t -l` answers for everything a ref names.
  *
  * A test's repositories are found by giving each test its own temporary
@@ -17,10 +18,10 @@
  * `os.tmpdir()` and every process the test starts write there. After a
  * suite file's last test, everything it made is looked at again, and any
  * repository whose refs or HEAD changed since it was compared is compared
- * again. A
- * repository import refuses fails the test unless `REFUSALS` lists it with
- * its reason. The comparisons run as many at a time as the host has cores,
- * because each `cst` process opens the store again.
+ * again. A repository import refuses fails the test unless `REFUSALS` lists
+ * it with its reason. The answers about refs and trees run as many at a time
+ * as the host has cores, because each `cst` process opens the store again;
+ * the objects are read a group at a time, one batch process on each side.
  */
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -273,8 +274,8 @@ export function withoutGit(environment) {
  * `cst` reading a native repository without Git, so each comparison also
  * shows that a native read runs no Git process.
  */
-function read(cwd, args, env, limit) {
-  return run(cstCommand, [...cstPrefix(), ...args], { cwd, env: withoutGit(env(OPT_IN)), limit });
+function read(cwd, args, env, limit, input) {
+  return run(cstCommand, [...cstPrefix(), ...args], { cwd, env: withoutGit(env(OPT_IN)), limit, input });
 }
 
 /** Runs `jobs`, each a function returning a promise, `width` at a time. */
@@ -306,12 +307,12 @@ const HELD = 64 * 1024 * 1024;
 /**
  * N1's answers on `destination`, an import of `repository` (`{ path,
  * common }`), against Git's on it: the problems found, each starting with
- * `where`. `width` is how many processes run at a time. `select`, given the
- * Git IDs of every object the alias map names, returns those to compare one
- * by one; by default, all of them. `limit` bounds the reconstruction check,
- * which reads every object. Every `cst` here runs without Git.
+ * `where`. `width` is how many of the ref and tree answers run at a time;
+ * the object groups run one after another. `limit` bounds the
+ * processes that read every object: the reconstruction check, and each
+ * group's `cat-file --batch`. Every `cst` here runs without Git.
  */
-export async function compareCopy(repository, destination, { env, where, width = os.availableParallelism(), select = (ids) => ids, limit }) {
+export async function compareCopy(repository, destination, { env, where, width = os.availableParallelism(), limit }) {
   const verified = await read(destination, ["import", "--verify"], env, limit);
   if (verified.status !== 0) {
     return [`${where}: import --verify failed: ${verified.stderr}`];
@@ -355,9 +356,6 @@ export async function compareCopy(repository, destination, { env, where, width =
     const answer = translate(expected.stdout.toString("latin1"));
     differs(`git ${gitArgs.join(" ")}`, { status: expected.status, stdout: Buffer.from(answer, "latin1") }, answered);
   });
-  const known = (gitArgs, cstArgs, stdout) => jobs.push(async () => {
-    differs(`git ${gitArgs.join(" ")}`, { status: 0, stdout }, await read(destination, cstArgs, env));
-  });
   same(["for-each-ref"], ["for-each-ref"], refs);
   same(["rev-parse", "HEAD"], ["rev-parse", "HEAD"], lines);
   same(["rev-parse", "--symbolic-full-name", "HEAD"], ["rev-parse", "--symbolic-full-name", "HEAD"], (text) => text);
@@ -371,10 +369,11 @@ export async function compareCopy(repository, destination, { env, where, width =
     }
   }
   await pool(jobs.splice(0), width);
-  // Git's side of each object but a tree's listing, its type, size and
-  // bytes, read by as few processes as hold at most `HELD` bytes each, and
-  // compared before the next group is read.
-  const ids = select([...rows.keys()]);
+  // Every object's type, size and Git bytes, read by as few processes on
+  // each side as hold at most `HELD` bytes each: one `git cat-file --batch`
+  // and one `cst cat-file --batch` per group, compared object by object
+  // before the next group is read (#346).
+  const ids = [...rows.keys()];
   const sizes = ids.length === 0 ? { status: 0, stdout: Buffer.alloc(0) }
     : git(neutral, inGit(["cat-file", "--batch-check=%(objectsize)"]), env, Buffer.from(`${ids.join("\n")}\n`));
   const sized = (sizes.stdout ?? "").toString().split("\n").filter(Boolean).map(Number);
@@ -388,57 +387,67 @@ export async function compareCopy(repository, destination, { env, where, width =
       group.push(ids[at]);
       held += sized[at];
     }
-    const listed = git(neutral, inGit(["cat-file", "--batch"]), env, Buffer.from(`${group.join("\n")}\n`));
-    const objects = listed.status === 0 ? batch(listed.stdout) : [];
+    const [listed, answered] = await Promise.all([
+      gitAsync(neutral, inGit(["cat-file", "--batch", "--buffer"]), env, Buffer.from(`${group.join("\n")}\n`)),
+      read(destination, ["cat-file", "--batch", "--buffer"], env, limit, Buffer.from(`${group.map((gitId) => rows.get(gitId)).join("\n")}\n`)),
+    ]);
+    const objects = listed.status === 0 ? parseBatch(listed.stdout) : [];
     if (objects.length !== group.length) {
       problems.push(`${where}: git cat-file --batch read ${objects.length} of ${group.length} objects the alias map names: ${listed.error ?? listed.stderr}`);
       return problems;
     }
-    for (const { git: gitId, type, bytes } of objects) {
-      const native = rows.get(gitId);
-      known(["cat-file", "-t", gitId], ["cat-file", "-t", native], Buffer.from(`${type}\n`));
-      known(["cat-file", "-s", gitId], ["cat-file", "-s", native], Buffer.from(`${bytes.length}\n`));
-      if (type === "tree") {
-        same(["cat-file", "-p", gitId], ["cat-file", "-p", native], entries);
-      } else if (type === "blob") {
-        known(["cat-file", "-p", gitId], ["cat-file", "-p", native], bytes);
-      } else {
-        known(["cat-file", "-p", gitId], ["cat-file", "-p", native], Buffer.from(headers(type, bytes.toString("latin1"), rows), "latin1"));
+    const shown = `cat-file --batch of ${group.length} objects from ${group[0]}`;
+    if (answered.status !== 0) {
+      problems.push(`${where}: ${shown}: cst ended with ${answered.status ?? "a signal"}: ${answered.stderr}`);
+      return problems;
+    }
+    const native = parseBatch(answered.stdout);
+    const quoted = (bytes) => JSON.stringify(bytes.toString("latin1").slice(0, SHOWN_BYTES));
+    let differing = 0;
+    for (let at = 0; at < objects.length && differing < SHOWN_OBJECTS; at++) {
+      const { name: gitId, type, bytes } = objects[at];
+      const got = native[at];
+      if (!got || got.name !== rows.get(gitId) || got.type !== type || !got.bytes?.equals(bytes)) {
+        differing += 1;
+        const answer = got ? `${got.name} ${got.type} ${got.bytes?.length ?? ""} ${got.bytes ? quoted(got.bytes) : ""}`.trim() : "nothing";
+        problems.push(`${where}: ${shown}: git answers ${gitId} as ${rows.get(gitId)} ${type} ${bytes.length} ${quoted(bytes)}, cst ${answer}`);
       }
     }
-    await pool(jobs.splice(0), width);
+    if (differing === 0 && native.length !== objects.length) {
+      problems.push(`${where}: ${shown}: cst answered ${native.length} objects, git ${objects.length}`);
+    }
   }
   return problems;
 }
 
-/** `git cat-file --batch` output: each object's ID, type and bytes. */
-function batch(output) {
-  const objects = [];
+/** How many differing objects a group reports, and how many bytes of each. */
+const SHOWN_OBJECTS = 10;
+const SHOWN_BYTES = 200;
+
+/**
+ * `cat-file --batch` output, Git's or cst's: each entry's name, and either
+ * its type and bytes or `missing` or `ambiguous` as its type, with no bytes.
+ * With `contents` false it reads `--batch-check` output, sizes for bytes.
+ */
+export function parseBatch(output, { contents = true } = {}) {
+  const entries = [];
   let at = 0;
   while (at < output.length) {
     const end = output.indexOf(0x0a, at);
-    const [git, type, size] = output.subarray(at, end).toString().split(" ");
-    if (end < 0 || !/^\d+$/.test(size ?? "")) break;
-    const bytes = output.subarray(end + 1, end + 1 + Number(size));
-    objects.push({ git, type, bytes });
-    at = end + 1 + Number(size) + 1;
+    if (end < 0) break;
+    const [name, type, size] = output.subarray(at, end).toString("latin1").split(" ");
+    at = end + 1;
+    if (type === "missing" || type === "ambiguous") {
+      entries.push({ name, type });
+      continue;
+    }
+    if (!/^\d+$/.test(size ?? "")) break;
+    if (!contents) {
+      entries.push({ name, type, size: Number(size) });
+      continue;
+    }
+    entries.push({ name, type, bytes: output.subarray(at, at + Number(size)) });
+    at += Number(size) + 1;
   }
-  return objects;
-}
-
-/**
- * `cat-file -p` of a commit or tag as a native repository prints it: Git's
- * payload with the IDs of the header lines Git's parser follows translated,
- * the first line (a commit's tree, a tag's object) and a commit's parent
- * lines straight after it (as `test/native-repository.test.js` checks).
- */
-function headers(kind, text, rows) {
-  let followed = true;
-  return text.split("\n").map((line, index) => {
-    const name = index === 0 ? (kind === "commit" ? "tree" : "object") : kind === "commit" ? "parent" : null;
-    // Git reads a header's ID in either case of hex.
-    const id = line.slice(`${name} `.length).toLowerCase();
-    followed &&= name !== null && line.startsWith(`${name} `);
-    return followed && rows.has(id) ? `${name} ${rows.get(id)}` : line;
-  }).join("\n");
+  return entries;
 }

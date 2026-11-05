@@ -82,18 +82,27 @@ test("a test that leaves a repository", (t) => {
 `, env);
 }
 
-/** A CLI that is the real one except that it adds a byte to every blob `cat-file -p` prints. */
+/**
+ * A CLI that is the real one except that, in `cat-file --batch`, every
+ * blob's last byte reads as `!`: each size stays, so the stream still frames,
+ * and only the comparison of bytes can see it.
+ */
 function alteredCli() {
   const wrapper = path.join(scratch(), "altered-cst.mjs");
   const real = JSON.stringify(selectedCli ?? builtCli);
   fs.writeFileSync(wrapper, `
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 const args = process.argv.slice(2);
-const real = spawnSync(${real}, args, { encoding: "buffer" });
-let out = real.stdout;
-if (args[0] === "cat-file" && args[1] === "-p"
-  && spawnSync(${real}, ["cat-file", "-t", args[2]], { encoding: "utf8" }).stdout === "blob\\n") {
-  out = Buffer.concat([out, Buffer.from("!")]);
+const batch = args[0] === "cat-file" && args.includes("--batch");
+const real = spawnSync(${real}, args, { encoding: "buffer", input: batch ? fs.readFileSync(0) : undefined, maxBuffer: 1 << 28 });
+const out = Buffer.from(real.stdout);
+for (let at = 0; batch && at < out.length;) {
+  const end = out.indexOf(0x0a, at);
+  const [, type, size] = out.subarray(at, end).toString("latin1").split(" ");
+  if (size === undefined) { at = end + 1; continue; }
+  if (type === "blob" && Number(size) > 0) out[end + Number(size)] = 0x21;
+  at = end + 1 + Number(size) + 1;
 }
 process.stdout.write(out);
 process.stderr.write(real.stderr);
@@ -113,7 +122,7 @@ test("a native copy that answers otherwise than Git fails the test that left the
   assert.notEqual(run.status, 0, run.stdout);
   assert.match(run.stdout, /the native copy answers differently from Git/);
   assert.match(run.stdout, new RegExp(
-    String.raw`git cat-file -p ${OBJECT_ID.source}: git answers "version 2\\n", cst "version 2\\n!"`));
+    String.raw`cat-file --batch of \d+ objects from ${OBJECT_ID.source}: git answers ${OBJECT_ID.source} as ${OBJECT_ID.source} blob 10 "version 2\\n", cst ${OBJECT_ID.source} blob 10 "version 2!"`));
 });
 
 test("a repository import refuses fails its test unless the mode lists the refusal with its reason", () => {
@@ -152,9 +161,9 @@ test("a later test commits to both", () => {
 `, { CAUSET_CLI: alteredCli() });
   assert.notEqual(run.status, 0, run.stdout);
   for (const text of ["made outside any test", "made by an earlier test"]) {
-    assert.ok(run.stdout.includes(`git answers "${text}\\n", cst "${text}\\n!"`), `${text}: ${run.stdout}`);
+    assert.match(run.stdout, new RegExp(String.raw`blob \d+ "${text}\\n", cst ${OBJECT_ID.source} blob \d+ "${text}!"`), `${text}: ${run.stdout}`);
   }
   // A test's subtest does not leave the test looking at the suite's own
   // directory: what was made outside any test is reported as such.
-  assert.match(run.stdout, /kind\.test\.mjs › \(outside any test\) › [^\n]*ready-[^\n]*: git answers "ready before any test\\n"/);
+  assert.match(run.stdout, /kind\.test\.mjs › \(outside any test\) › [^\n]*ready-[^\n]*: cat-file --batch of \d+ objects from \S+: git answers \S+ as \S+ blob \d+ "ready before any test\\n"/);
 });

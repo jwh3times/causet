@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+- **Experimental: `cst cat-file --batch` and `--batch-check` in a native
+  repository** (#346). They read one object name per line of standard input
+  and answer each from one opened store, in Git's formats.
+  - The header is `<id> <type> <size>`, with the native ID.
+  - With `--batch`, the object's Git bytes follow, the size `cst cat-file
+    -s` gives, so the content equals `git cat-file --batch`'s byte for byte.
+  - A name that names nothing, or content the store holds absent, is
+    `<name> missing`. A short ID of several objects is `<name> ambiguous`.
+  - Each answer is written as its line is read, and flushed unless
+    `--buffer` is given. A reader that stops reading ends the batch quietly.
+  - A name single-object `cst cat-file` refuses, such as a path in an index,
+    stops the batch with that refusal.
+
+  The native-kind test mode now compares every object through one batch on
+  each side per group of objects, not three `cst` processes per object, so
+  the mode adds about 48 s to the suite here, down from about 170 s. The
+  git/git corpus now compares every object rather than a sample of 512.
+
 - **Whole-store native commands are as fast as before #331** (#392). #331
   made each lookup read only the parts of the store it needs. But a command
   that reads the store whole first kept reading the files again for every

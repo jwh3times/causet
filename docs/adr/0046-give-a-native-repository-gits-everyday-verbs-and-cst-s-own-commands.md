@@ -143,3 +143,16 @@ Two facts about the published contracts bear on the ID question:
   whole command set an implicit contract.
 - **A distinct textual form for native IDs.** Rejected: about 30 record families
   would need a new major schema version, for a display concern.
+
+## Amendment 2026-11-04: what `cat-file --batch` translates
+
+Decided by the owner on [#346](https://github.com/jwh3times/causet/issues/346),
+when the batch reader was built. Decision 3 is unchanged otherwise.
+
+- **`cat-file --batch-check` joins the minimal set,** beside `--batch`, with
+  Git's default format and `--buffer`.
+- **A batch answer translates its header's ID only.** `--batch` frames each
+  object's content by its size, and the size is the one `cat-file -s` gives:
+  the object's Git encoding. So the content is Git's bytes, Git IDs included,
+  byte for byte as `git cat-file --batch` prints them. `cat-file -p`, which
+  frames nothing, still translates the IDs it prints.

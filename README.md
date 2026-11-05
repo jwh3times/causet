@@ -899,7 +899,11 @@ or a repository with grafts is refused, since Git reads its history
 differently from what it stores. In a native repository,
 `cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
 `cst for-each-ref --format` print what Git prints on the original, with
-native IDs in place of Git's, and run no Git. Each takes the part of Git's
+native IDs in place of Git's, and run no Git. `cst cat-file --batch` and
+`--batch-check` [`--buffer`] answer each object named on standard input from
+one opened store, in Git's default formats: the header names the native ID,
+and `--batch`'s content is the object's Git bytes, Git IDs included, the size
+`cst cat-file -s` gives. Each takes the part of Git's
 command that N1 implements, listed by `cst --help` there, and refuses the rest
 by name. `cst fsck` verifies the store: every copy of every object in every
 container, and content absent by promise or by policy, which it reports by

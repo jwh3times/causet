@@ -12,10 +12,10 @@
  *   `git fast-import` and pinned by the commit they make.
  *
  * `stage(source, n, env)` brings the bare repository at `source` to stage
- * `n`, 1 or 2; `select`, when given, chooses the objects equality compares
- * one by one (`compareCopy` in `native-kind.js`); `strictly` asks for
- * strictly fewer stored bytes than Git's, not at most as many; and
- * `knownGap` lists a known storage gap (`storage-gate.js`).
+ * `n`, 1 or 2; `strictly` asks for strictly fewer stored bytes than Git's,
+ * not at most as many; and `knownGap` lists a known storage gap
+ * (`storage-gate.js`). Equality compares every object (`compareCopy` in
+ * `native-kind.js`).
  */
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -67,11 +67,9 @@ const causet = {
 // ----- git/git ---------------------------------------------------------------
 
 /**
- * git/git at two release tags. Comparing every object would take a `cst`
- * process for each of three answers on each of 420,000 objects, so equality
- * compares the 512 lowest Git IDs one by one, a mix of every type, besides
- * the refs and each ref's whole tree; the reconstruction check still
- * rebuilds every object. `CAUSET_REAL_GIT_URL` names another copy of it.
+ * git/git at two release tags. Equality compares every object, through one
+ * `cst cat-file --batch` per group (#346). `CAUSET_REAL_GIT_URL` names
+ * another copy of it.
  */
 const gitGit = {
   name: "git",
@@ -81,7 +79,6 @@ const gitGit = {
     fetchRefs(source, url, [`+refs/tags/${tag}:refs/tags/${tag}`], env);
     git(source, ["update-ref", "refs/heads/main", `refs/tags/${tag}^{commit}`], env);
   },
-  select: (ids) => [...ids].sort().slice(0, 512),
 };
 
 // ----- the large-file corpus ---------------------------------------------------

@@ -126,7 +126,7 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     read(full, ["fsck"]);
     report.objects = aliasRows(full, format).size;
     report.problems.push(...await compareCopy({ path: source, common: source }, full, {
-      env, where, select: repository.select, limit: LIMIT,
+      env, where, limit: LIMIT,
     }));
   } catch (error) {
     report.problems.push(`${where}: ${error.message}`);
