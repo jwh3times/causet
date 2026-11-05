@@ -20,6 +20,18 @@
   the mode adds about 48 s to the suite here, down from about 170 s. The
   git/git corpus now compares every object rather than a sample of 512.
 
+- **Whole-store native commands are as fast as before #331** (#392). #331
+  made each lookup read only the parts of the store it needs. But a command
+  that reads the store whole first kept reading the files again for every
+  lookup after: `cst import --verify`, `cst fsck` and an import into an
+  existing native repository. On git/git the corpus job went from 70 to 240
+  minutes, and `cst import --verify` passed its 3-hour limit on Windows. A
+  native command now answers every lookup from what it has read whole. On a
+  6,540-object store, `cst import --verify` takes 1.56 s and `cst fsck`
+  1.35 s, down from 5.75 s and 2.28 s, against 1.55 s and 1.34 s before
+  #331. Commands that read only a few objects still read only what #331
+  bounded, and every answer is unchanged.
+
 - **A native read no longer mistakes damage for a missing object** (#389).
   Since #331 a read checks only the parts of the store it touches. Damage
   only the whole-file checks find could therefore make a lookup miss, and
