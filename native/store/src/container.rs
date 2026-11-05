@@ -748,28 +748,6 @@ impl Container {
     Ok(found.into_iter().map(|(_, name)| name).collect())
   }
 
-  /// The names whose text form begins with `prefix`, in lowercase hex, each
-  /// with its type. With two digits or more, the search is of the first
-  /// byte's fan-out bucket.
-  pub fn prefixed(&self, prefix: &str) -> Result<Vec<(NativeId, Type)>, StoreError> {
-    let mut low = [0u8; 32];
-    for (at, digit) in prefix.bytes().take(64).enumerate() {
-      let value = (digit as char).to_digit(16).unwrap_or(0) as u8;
-      low[at / 2] |= if at % 2 == 0 { value << 4 } else { value };
-    }
-    let (first, range) = if prefix.len() >= 2 {
-      (Some(low[0]), bucket(&self.fanout, low[0]))
-    } else {
-      (None, (0, self.layout.objects))
-    };
-    let at = partition(range, |at| Ok(self.name(at, first)? < low))?;
-    let found = self.scan(at, range.1, first, |name| NativeId(*name).hex().starts_with(prefix))?;
-    found
-      .into_iter()
-      .map(|(at, name)| Ok((NativeId(name), self.record_at(at, &name)?.kind)))
-      .collect()
-  }
-
   /// A frame's uncompressed bytes.
   pub fn frame(&self, number: u32) -> Result<Vec<u8>, StoreError> {
     let frame = self
@@ -821,6 +799,30 @@ impl Index {
   /// An object's record, when the index lists it.
   pub fn find(&self, id: &NativeId) -> Option<&Record> {
     self.names.binary_search(&id.0).ok().map(|at| &self.records[at])
+  }
+
+  /// The names that begin with a short reference (objects.md §1.3).
+  pub fn starting(&self, short: &Short) -> &[[u8; 32]] {
+    let start = self.names.partition_point(|name| name[..8] < short[..]);
+    let end = start + self.names[start..].partition_point(|name| name[..8] == short[..]);
+    &self.names[start..end]
+  }
+
+  /// The names whose text form begins with `prefix`, in lowercase hex, each
+  /// with its type.
+  pub fn prefixed(&self, prefix: &str) -> Vec<(NativeId, Type)> {
+    let mut low = [0u8; 32];
+    for (at, digit) in prefix.bytes().take(64).enumerate() {
+      let value = (digit as char).to_digit(16).unwrap_or(0) as u8;
+      low[at / 2] |= if at % 2 == 0 { value << 4 } else { value };
+    }
+    let start = self.names.partition_point(|name| *name < low);
+    self.names[start..]
+      .iter()
+      .zip(&self.records[start..])
+      .map(|(name, record)| (NativeId(*name), record.kind))
+      .take_while(|(id, _)| id.hex().starts_with(prefix))
+      .collect()
   }
 
   /// A frame's uncompressed bytes.

@@ -389,3 +389,50 @@ fn an_abbreviation_whose_second_match_damage_hides_is_corrupt_not_unique() {
   drop(store);
   std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn a_whole_store_check_reads_each_file_about_once_not_once_per_lookup() {
+  let root = scratch("whole-store");
+  store_of(&root, 6_000);
+  let stored = size_of(&root.join(".cst"));
+  // The reconstruction check and verification read every alias file and
+  // index whole, then look up every object; the lookups answer from what
+  // they read (#392).
+  for (name, run) in [("the reconstruction check", 0), ("verification", 1)] {
+    let store = Store::open(&root).unwrap();
+    let opened = store.bytes_read();
+    if run == 0 {
+      causet_store::reconstruct::check(&store).unwrap();
+    } else {
+      causet_store::verify::verify(&store).unwrap();
+    }
+    let read = store.bytes_read() - opened;
+    assert!(read < 2 * stored, "{name} read {read} bytes of a store of {stored}");
+  }
+  // A command that will look up many objects reads the store whole first,
+  // and its lookups read nothing more.
+  let store = Store::open(&root).unwrap();
+  store.read_whole().unwrap();
+  let loaded = store.bytes_read();
+  for n in 0..1_000 {
+    let id = store.native(GitAlgorithm::Sha1, &git_digest(n)).unwrap().unwrap();
+    assert_eq!(store.candidates(&id.short()).unwrap(), [id]);
+    assert_eq!(store.held(&id).unwrap(), Some(Type::Content));
+    assert_eq!(store.git(GitAlgorithm::Sha1, &id).unwrap(), Some(git_digest(n)));
+  }
+  assert_eq!(store.bytes_read(), loaded);
+  drop(store);
+  // So does an import's writer, which read the store whole when it opened.
+  let writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  let existing = writer.existing().unwrap();
+  let opened = existing.bytes_read();
+  for n in 0..1_000 {
+    let id = existing.native(GitAlgorithm::Sha1, &git_digest(n)).unwrap().unwrap();
+    assert_eq!(existing.candidates(&id.short()).unwrap(), [id]);
+    assert_eq!(existing.depth(&id).unwrap(), 0);
+  }
+  // `depth` reads each record's frame; one content frame holds them all.
+  assert!(existing.bytes_read() - opened < 64 * 1024, "{opened} {}", existing.bytes_read());
+  drop(writer);
+  std::fs::remove_dir_all(&root).unwrap();
+}
