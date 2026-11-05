@@ -423,8 +423,8 @@ Any of these is corruption:
 - a form or state that its type does not take (§1; objects.md §8).
 
 Readers find them in two tiers, so that opening a store and answering one
-lookup read an amount of each container that does not grow with its object
-count:
+lookup that finds what it looks for read an amount of each container that
+does not grow with its object count:
 
 - **Every reader** checks what is constant-cost to check, and the bytes each
   lookup touches.
@@ -448,13 +448,18 @@ count:
   them, every record, and the annotation table. `cst fsck` also checks the
   trailer (§4). Import reads each index whole with the same checks.
 
-A damaged part that a reader does not check can misdirect a lookup. The
-object it reads may fail its ID, which is corrupt. An object may be missed,
-which is corrupt where the store must hold it: an object a tree, chunk
-list, delta, ref or alias row names (objects.md §8). An ID that only its
-caller names is then reported as not held, and `cst fsck` finds the damage.
-A store therefore opens in time proportional to its number of containers,
-not its number of objects (§4.2).
+A damaged part that a reader does not check can misdirect a lookup, but
+never into a wrong answer. The object it reads may fail its ID, which is
+corrupt. Before a reader reports that the store holds no present copy of
+an ID, absent or not held, it reads every container's index whole, with
+the checks `cst fsck` makes of an index. It does the same before it
+resolves an abbreviation, found or not, since names out of order could
+hide a second match. It does this at most once per command, and not at all
+when the command has already read the indexes whole. An index that fails
+is corrupt, and the read is refused. A store therefore opens in time
+proportional to its number of containers, not its number of objects
+(§4.2). A read pays for whole indexes only when it misses or resolves an
+abbreviation.
 
 The writer's rules of §1, §3.1 and §5.1 are not checked by readers. A store
 that breaks one, say a chunk list for a 1 KiB file, still reads correctly; only

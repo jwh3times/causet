@@ -662,7 +662,8 @@ repository's algorithm. Each file is two sorted tables over the same rows:
   of the same history writes the same bytes (decision 3).
 
 The checks come in two tiers, so that opening a store and answering one
-lookup read an amount of the file that does not grow with its row count:
+lookup that finds what it looks for read an amount of the file that does
+not grow with its row count:
 
 - **Every reader** checks what is constant-cost to check: the magic, version
   and algorithms, that the file's length is the one its row count gives, and
@@ -677,14 +678,29 @@ lookup read an amount of the file that does not grow with its row count:
   order of Git ID with none repeated, that each fan-out counts its rows, and
   that the native order lists every row once, in its order. Import reads the
   file whole with the same checks, since it rewrites the file.
+- **A reader that is about to report a miss** reads the file whole with
+  those same checks first. A miss is a Git ID with no row, or a native ID
+  none of whose rows is its own. A reader does this at most once per file
+  per command, and not at all for a file the command has already read
+  whole. A file that fails is corrupt, and the read is refused.
 
 A damaged part that a reader does not check can misdirect a lookup. The
 row it finds may name a short reference no object begins with, which is
-corrupt. A row may be missed, so that its Git ID reads as having no row,
-which is corrupt where the store must hold one, such as for a ref's target
-(§6). Where nothing says the row must exist, the reader cannot tell the
-damage from a Git ID that was never imported; `cst fsck` finds it. Any
-disagreement either tier finds is corruption. Resolving each row is the
+corrupt. A lookup that misses a row reads the file whole before it answers,
+so damage is reported, not mistaken for a Git ID that was never imported. A
+lookup that finds what it looks for still reads only the parts above, so a
+reader's cost grows with the file only when it misses. Two cases are left to
+`cst fsck`, since in each nothing misses:
+
+- **A damaged short reference that exactly matches the first 8 bytes of
+  another object's native ID.** A lookup by the row's Git ID then finds that
+  object.
+- **A damaged Git digest in the one row holding a native ID's short
+  reference.** A lookup of that native ID's Git ID then finds the damaged
+  digest. N1's commands use such an answer only to check that a row exists,
+  or after reading the file whole, so none prints it.
+
+Any disagreement either tier finds is corruption. Resolving each row is the
 reconstruction check's and `cst fsck`'s.
 
 The alias file of the example history (SHA-1, 3 rows, 2,192 bytes):

@@ -253,6 +253,28 @@ test("a damaged copy is reported, though another container holds a good copy tha
   assert.match(report, /its trailer is not the SHA-256 of its bytes/);
 });
 
+test("a read that misses through a damaged index name is refused as corruption, not answered as a missing object", () => {
+  const history = makeHistory("sha1");
+  // Content no ref names directly, so nothing says the store must hold it.
+  const id = cst(history.native, ["rev-parse", "v1:dir/g"]).stdout.toString().trim();
+  const [container] = containers(history.native);
+  const bytes = fs.readFileSync(container);
+  const footer = bytes.length - 72;
+  const index = Number(bytes.readBigUInt64BE(footer));
+  const names = index + 24 + 24 * bytes.readUInt32BE(index + 8) + 1024;
+  const at = [...Array(bytes.readUInt32BE(index + 12)).keys()]
+    .find((position) => bytes.subarray(names + 32 * position, names + 32 * position + 32).toString("hex") === id);
+  assert.notEqual(at, undefined, `the index lists ${id}`);
+  // The name's last byte: it keeps its place, and a lookup of the ID it held
+  // misses it. Before answering, the reader checks every index whole (#389).
+  bytes[names + 32 * at + 31] ^= 0x01;
+  fs.writeFileSync(container, bytes);
+  const read = cst(history.native, ["cat-file", "-t", id]);
+  assert.notEqual(read.status, 0);
+  assert.match(read.stderr.toString(), /the native store is corrupt: .*\.cstc: its index does not match the index's SHA-256/);
+  assert.doesNotMatch(read.stderr.toString(), /Not a valid object name/);
+});
+
 test("content absent by promise or by policy is reported by its state, not as corruption", () => {
   for (const [state, name] of [[1, "promise"], [2, "policy"]]) {
     const history = makeHistory("sha1");
