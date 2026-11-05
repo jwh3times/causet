@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw2tucwu650b45076276",
+      "mode": "compact",
+      "sourceRef": "fix/389-full-check-on-miss",
+      "sourceHead": "c2eaae88183f862eea9eb8c2d58cdd426f2a4173",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "ba752b966b2110e47da1593f6f607e1f21432492",
+      "landingCommit": "41d5abda3cdfb051c77954ab952a1fb96ebf86f1",
+      "base": "ba752b966b2110e47da1593f6f607e1f21432492",
+      "absorbedCommits": [
+        "d3bc50130da060b60235a646b521b8fa68716aa7",
+        "c2eaae88183f862eea9eb8c2d58cdd426f2a4173"
+      ],
+      "absorbedChanges": [
+        "ch_0mw2r3r2k9b2cb0d51b15",
+        "ch_0mw2s1r27e0c9326ab606"
+      ],
+      "resultTree": "bba5a99faa06239a9aed2bf5a1fcdca181814d8a",
+      "createdAt": "2026-11-05T00:48:22.535Z"
+    }
+  ]
+}
