@@ -441,6 +441,9 @@ fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
 fn cat_file_batch(root: &Path, contents: bool, buffer: bool) -> GitResult<()> {
   let repository = Repository::open(root)?;
   let store = &repository.store;
+  // A batch names many objects: the store is read whole once, with every
+  // check, and each lookup then answers from what was read (#392).
+  store.read_whole().map_err(store_error)?;
   let mut input = std::io::stdin().lock();
   let stdout = std::io::stdout();
   let mut out = std::io::BufWriter::new(stdout.lock());
