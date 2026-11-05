@@ -220,7 +220,8 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
     as a mismatch in some command's output;
   - `cst for-each-ref`, `cst rev-parse HEAD`, `--symbolic-full-name HEAD` and
     `--all`;
-  - `cst cat-file -t`, `-s` and `-p` for every imported object;
+  - `cst cat-file --batch` for every imported object: its type, size and Git
+    bytes against `git cat-file --batch` (#346);
   - `cst ls-tree -r -t -l` for everything a ref names.
 
   Only the IDs an answer names objects by are translated: a blob's bytes, a
@@ -229,14 +230,15 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   reads, with replacement refs off, and for the common directory, so `HEAD` is
   the main worktree's. Every `cst` the comparison starts runs with a `PATH`
   that holds no Git, so a native read that started a Git process would fail
-  (ADR-0044 item 2). Git's side of the objects is read a group at a time, at
-  most 64 MiB of them unless one object alone is larger, and the comparison
-  takes an optional selection of the objects it compares one by one (the real
-  repositories use it for git/git). A `cst` or Git process the comparison
-  starts is stopped after 5 minutes (`test-support/bounded-process.js`), which
-  fails it: a `cst` that never ends fails its test rather than holding the
-  run. A caller may give the reconstruction check a longer limit, as the real
-  repositories do.
+  (ADR-0044 item 2). The objects are read a group at a time, at most 64 MiB
+  of them unless one object alone is larger: one `git cat-file --batch` and
+  one `cst cat-file --batch` per group, compared object by object. A `cst` or
+  Git process the comparison starts is stopped after 5 minutes
+  (`test-support/bounded-process.js`), which fails it: a `cst` that never
+  ends fails its test rather than holding the run. A caller may give the
+  processes that read every object, the reconstruction check and each
+  group's `cst cat-file --batch`, a longer limit, as the real repositories
+  do.
 - **Refusals.** A repository that import refuses fails its test, unless
   `REFUSALS` in `test-support/native-kind.js` lists it with the suite file, the
   test, a part of the refusal and the reason. The list holds the suites'
@@ -246,7 +248,8 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   run as many at a time as the host has cores. On a 16-core Linux host the
   whole suite took 150 to 240 s in this mode against 45 s without it, most of
   it for `test/rust-engine.test.js`'s clone of this checkout, about 7,000
-  objects.
+  objects. That was measured while every object still cost three `cst`
+  processes, before `cst cat-file --batch` (#346).
   CI's one-commit checkout makes that clone shallow, so there import refuses
   it, as listed.
 
@@ -453,11 +456,9 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
     what a full import of the second holds, and a fresh import of a copy
     with every object and ref packed is byte-identical to the full import;
   - `cst fsck` and `cst import --verify` on both copies, and the native-kind
-    mode's comparison (`compareCopy`) on the full import. On git/git, a `cst`
-    process for each of three answers on each of 420,000 objects would take
-    hours, so the comparison checks the refs, each ref's whole tree and the
-    512 lowest Git IDs one by one, a mix of every type; the reconstruction
-    check still rebuilds every object to its Git ID;
+    mode's comparison (`compareCopy`) on the full import, every object of
+    every repository, git/git's included, through one `cst cat-file
+    --batch` per group (#346);
   - zero Git processes: every native read runs with no Git on its `PATH`;
   - **the storage gate:** every file of the full import's `.cst/` against
     what `git gc --aggressive --prune=now` leaves in `objects/pack/` of the
@@ -478,15 +479,16 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
 
   Each job's summary reports the gate's verdict and ratio, both byte counts
   with their parts, the number of Git objects, and each import's time. Times are reported, never checked.
-  An import, `cst fsck` or the reconstruction check here may run for 3
-  hours, not the 5 minutes the generated corpus allows; the comparison's
-  other processes keep the 5 minutes.
+  An import, `cst fsck`, the reconstruction check or a group's `cst
+  cat-file --batch` here may run for 3 hours, not the 5 minutes the
+  generated corpus allows; the comparison's other processes keep the 5
+  minutes.
 - **Cost.** On a 16-core Linux host, causet took about 90 seconds, the
   large-file corpus 16 minutes (each full import about 3.5 minutes) and
   git/git 36 minutes (each full import about 8 minutes, in one thread and up
-  to 6.3 GB of memory). The comparison starts one `cst` per object it
-  compares, and git/git's store holds 610,000, which is why its comparison
-  is a sample of 512.
+  to 6.3 GB of memory). These were measured while the comparison still
+  started a `cst` for each answer on each object, and git/git's was a
+  sample of 512 objects.
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of

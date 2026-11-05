@@ -171,7 +171,7 @@ fn unaliased(
 
 /// A tree's Git encoding, each native target's Git digest found by its
 /// alias row: `None` when a target has none.
-fn tree_encoding(store: &Store, algorithm: GitAlgorithm, tree: &Tree) -> Result<Option<Vec<u8>>, StoreError> {
+pub fn tree_encoding(store: &Store, algorithm: GitAlgorithm, tree: &Tree) -> Result<Option<Vec<u8>>, StoreError> {
   let failed = RefCell::new(None);
   let encoding = tree.git_encoding(&|id| {
     store.git(algorithm, id).unwrap_or_else(|error| {

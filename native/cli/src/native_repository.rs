@@ -38,6 +38,9 @@ output may change without notice (ADR-0042).
 
 Usage:
   cst cat-file (-p | -t | -s) <object>      print an object, its type or its size
+  cst cat-file (--batch | --batch-check) [--buffer]
+                                            answer each object named on standard
+                                            input, in Git's formats
   cst ls-tree [-d] [-r] [-t] [-z] [-l | --name-only | --object-only
               | --format=<format>] <tree-ish> [<path>...]
                                             list a tree, as git ls-tree does
@@ -332,25 +335,35 @@ pub(crate) fn bytes_of(arg: &OsString) -> Vec<u8> {
 }
 
 fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
-  let usage = "Usage: cst cat-file (-p | -t | -s) <object>";
+  let usage = "Usage: cst cat-file (-p | -t | -s) <object> | (--batch | --batch-check) [--buffer]";
   let mut mode = None;
   let mut object = None;
+  let mut buffer = false;
   for arg in args {
     let text = arg.to_string_lossy();
     match text.as_ref() {
-      "-p" | "-t" | "-s" => {
+      "-p" | "-t" | "-s" | "--batch" | "--batch-check" => {
         if mode.replace(text.into_owned()).is_some() {
           return Err(GitError::new(
             "usage-conflicting-options",
-            format!("Choose one of -p, -t or -s. {usage}"),
+            format!("Choose one of -p, -t, -s, --batch or --batch-check. {usage}"),
           ));
         }
       }
-      "--batch" | "--batch-check" | "--batch-command" | "-e" => {
+      "--buffer" => buffer = true,
+      flag if flag.starts_with("--batch=") || flag.starts_with("--batch-check=") => {
         return Err(GitError::new(
           "unsupported-feature",
           format!(
-            "cst cat-file {text} is not implemented in a native repository yet; this build answers -p, -t and -s."
+            "cst cat-file {flag}: a format of your own is not implemented in a native repository yet; this build answers Git's default formats."
+          ),
+        ));
+      }
+      "--batch-command" | "--batch-all-objects" | "-e" => {
+        return Err(GitError::new(
+          "unsupported-feature",
+          format!(
+            "cst cat-file {text} is not implemented in a native repository yet; this build answers -p, -t, -s, --batch and --batch-check."
           ),
         ));
       }
@@ -369,6 +382,21 @@ fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
         }
       }
     }
+  }
+  if let Some(batch) = mode.as_deref().filter(|mode| mode.starts_with("--batch")) {
+    if object.is_some() {
+      return Err(GitError::new(
+        "usage-conflicting-options",
+        format!("cst cat-file {batch} reads its objects from standard input, and takes none. {usage}"),
+      ));
+    }
+    return cat_file_batch(root, batch == "--batch", buffer);
+  }
+  if buffer {
+    return Err(GitError::new(
+      "usage-unknown-option",
+      format!("cst cat-file --buffer goes with --batch or --batch-check. {usage}"),
+    ));
   }
   let (Some(mode), Some(object)) = (mode, object) else {
     return Err(GitError::new(
@@ -395,6 +423,145 @@ fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
   }
   let _ = std::io::stdout().lock().write_all(&out);
   Ok(())
+}
+
+/// `cst cat-file --batch` and `--batch-check` (#346): Git's formats, with
+/// each object's name read from a line of standard input and answered from
+/// the one store this command opens. A header is `<id> <type> <size>`, the
+/// ID native; with `--batch`, the object's Git encoding follows it, `size`
+/// bytes and a line feed, which is what `cst cat-file -s` sizes. A name that
+/// names nothing is `<name> missing`, as is content the store holds absent,
+/// which Git cannot read either; a short ID of several objects is `<name>
+/// ambiguous`. Each answer is written as its line is read, and flushed
+/// unless `--buffer` asks otherwise, as Git's are. A name single-object
+/// `cat-file` refuses, such as a path in an index, which a native repository
+/// has none of, ends the batch with that refusal: answering it `missing`
+/// would say what Git, which has an index, does not. A reader that stops
+/// reading ends the batch quietly, as Git ends on SIGPIPE.
+fn cat_file_batch(root: &Path, contents: bool, buffer: bool) -> GitResult<()> {
+  let repository = Repository::open(root)?;
+  let store = &repository.store;
+  let mut input = std::io::stdin().lock();
+  let stdout = std::io::stdout();
+  let mut out = std::io::BufWriter::new(stdout.lock());
+  match batch_answers(&repository, store, &mut input, &mut out, contents, buffer) {
+    Err(Stopped::Reader) => Ok(()),
+    Err(Stopped::Failed(error)) => Err(error),
+    Ok(()) => out.flush().or_else(quiet_on_broken_pipe),
+  }
+}
+
+/// Why a batch ended before its input did.
+enum Stopped {
+  /// Its reader stopped reading.
+  Reader,
+  Failed(GitError),
+}
+
+impl From<GitError> for Stopped {
+  fn from(error: GitError) -> Stopped {
+    Stopped::Failed(error)
+  }
+}
+
+/// A write that failed: the reader stopped reading, or the system refused.
+fn write_failed(error: std::io::Error) -> Stopped {
+  if error.kind() == std::io::ErrorKind::BrokenPipe {
+    return Stopped::Reader;
+  }
+  Stopped::Failed(GitError::node(format!("cst cat-file could not write its answer: {error}"), "EIO"))
+}
+
+fn quiet_on_broken_pipe(error: std::io::Error) -> GitResult<()> {
+  match write_failed(error) {
+    Stopped::Reader => Ok(()),
+    Stopped::Failed(error) => Err(error),
+  }
+}
+
+fn batch_answers(
+  repository: &Repository,
+  store: &Store,
+  input: &mut impl std::io::BufRead,
+  out: &mut impl std::io::Write,
+  contents: bool,
+  buffer: bool,
+) -> Result<(), Stopped> {
+  let mut line = Vec::new();
+  loop {
+    line.clear();
+    let read = input
+      .read_until(b'\n', &mut line)
+      .map_err(|error| GitError::node(format!("cst cat-file could not read its input: {error}"), "EIO"))?;
+    if read == 0 {
+      return Ok(());
+    }
+    // Git's strbuf_getline: the line feed goes, and a carriage return before it.
+    if line.last() == Some(&b'\n') {
+      line.pop();
+      if line.last() == Some(&b'\r') {
+        line.pop();
+      }
+    }
+    match batch_object(repository, &line)? {
+      Batched::Found { id, kind, body } => {
+        let shown = type_name(&kind, &body)?;
+        let bytes = git_bytes(store, &kind, body)?;
+        writeln!(out, "{} {shown} {}", id.hex(), bytes.len()).map_err(write_failed)?;
+        if contents {
+          out.write_all(&bytes).and_then(|()| out.write_all(b"\n")).map_err(write_failed)?;
+        }
+      }
+      Batched::Missing => {
+        out.write_all(&line).and_then(|()| out.write_all(b" missing\n")).map_err(write_failed)?;
+      }
+      Batched::Ambiguous => {
+        out.write_all(&line).and_then(|()| out.write_all(b" ambiguous\n")).map_err(write_failed)?;
+      }
+    }
+    if !buffer {
+      out.flush().map_err(write_failed)?;
+    }
+  }
+}
+
+/// What one line of `cat-file --batch` input names.
+enum Batched {
+  Found { id: NativeId, kind: Type, body: Vec<u8> },
+  Missing,
+  Ambiguous,
+}
+
+fn batch_object(repository: &Repository, name: &[u8]) -> GitResult<Batched> {
+  let id = match repository.resolve(name) {
+    Ok(id) => id,
+    Err(error) if error.code == "not-found" => return Ok(Batched::Missing),
+    Err(error) if error.code == "ambiguous-match" => return Ok(Batched::Ambiguous),
+    Err(error) => return Err(error),
+  };
+  match repository.store.read(&id) {
+    Ok(read) => Ok(Batched::Found { id, kind: read.kind, body: read.body }),
+    // A whole native ID names itself, held or not; content held absent is
+    // what Git cannot read either (objects.md §8).
+    Err(StoreError::NotFound(_) | StoreError::Absent(_)) => Ok(Batched::Missing),
+    Err(other) => Err(store_error(other)),
+  }
+}
+
+/// An object's Git encoding, which `cat-file -s` sizes: a tree's entries
+/// with each target's Git ID, a preserved object's payload, and any other
+/// object's body.
+fn git_bytes(store: &Store, kind: &Type, body: Vec<u8>) -> GitResult<Vec<u8>> {
+  match kind {
+    Type::Tree => {
+      let tree = Tree::decode(&body).map_err(corrupt)?;
+      reconstruct::tree_encoding(store, algorithm(store)?, &tree)
+        .map_err(store_error)?
+        .ok_or_else(|| corrupt("a tree names an object that has no alias row"))
+    }
+    Type::Preserved => Ok(Preserved::decode(&body).map_err(corrupt)?.payload),
+    _ => Ok(body),
+  }
 }
 
 pub(crate) fn corrupt(what: impl std::fmt::Display) -> GitError {

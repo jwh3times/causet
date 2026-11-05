@@ -10,7 +10,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import { aliases } from "../test-support/native-store.js";
+import { parseBatch } from "../test-support/native-kind.js";
 
 const created = [];
 
@@ -43,8 +44,10 @@ const OPT_IN = { CAUSET_EXPERIMENTAL: "native" };
  */
 const INIT_SHA1 = ["init", "-q", "-b", "main", "--object-format=sha1"];
 
-function cst(cwd, args, env = OPT_IN) {
-  return spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, env: testEnv(env), encoding: "buffer" });
+function cst(cwd, args, env = OPT_IN, input = undefined) {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
+    cwd, env: testEnv(env), encoding: "buffer", input, maxBuffer: 64 * 1024 * 1024,
+  });
 }
 
 const IDENTITY = {
@@ -241,6 +244,71 @@ for (const format of ["sha1", "sha256"]) {
     }
   });
 }
+
+/**
+ * `git cat-file --batch` or `--batch-check` output, with each header's
+ * object ID translated through the alias map and the all-zero Git ID read
+ * as the all-zero native ID: what a native repository answers for the same
+ * names. Contents are Git's bytes, untranslated.
+ */
+function translateBatch(output, rows, width, contents) {
+  const zero = "0".repeat(width);
+  return Buffer.concat(parseBatch(output, { contents }).flatMap(({ name, type, size, bytes }) => {
+    if (type === "missing" || type === "ambiguous") {
+      return [Buffer.from(`${name === zero ? "0".repeat(64) : name} ${type}\n`, "latin1")];
+    }
+    const header = Buffer.from(`${rows.get(name) ?? name} ${type} ${size ?? bytes.length}\n`, "latin1");
+    return contents ? [header, bytes, Buffer.from("\n")] : [header];
+  }));
+}
+
+for (const format of ["sha1", "sha256"]) {
+  test(`cat-file --batch and --batch-check answer as Git's do, every name from one process (${format})`, () => {
+    const { git, destination, aliases: rows } = imported(format);
+    const width = format === "sha1" ? 40 : 64;
+    const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]).toString().trim().split("\n");
+    // Every object by its ID, then names a native repository resolves as Git
+    // does, an ID nothing has and a name nothing has.
+    const named = ["main", "HEAD:hello.txt", "blob-tag", "tree-tag^{tree}"];
+    const gitInput = `${[...objects, ...named, "0".repeat(width), "no-such-name"].join("\n")}\n`;
+    const cstInput = `${[...objects.map((id) => rows.get(id)), ...named, "0".repeat(64), "no-such-name"].join("\n")}\n`;
+    for (const mode of ["--batch", "--batch-check"]) {
+      const expected = git(["cat-file", mode], Buffer.from(gitInput));
+      const answered = cst(destination, ["cat-file", mode], OPT_IN, Buffer.from(cstInput));
+      assert.equal(answered.status, 0, answered.stderr.toString());
+      assert.deepEqual(answered.stdout, translateBatch(expected, rows, width, mode === "--batch"), mode);
+    }
+    const refused = cst(destination, ["cat-file", "--batch"], {});
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr.toString(), /CAUSET_EXPERIMENTAL=native/);
+  });
+}
+
+test("cat-file --batch-check answers each name as it reads it, before its input ends", async () => {
+  const { destination, aliases: rows } = imported("sha1");
+  const child = spawn(cstCommand, [...cstPrefix(), "cat-file", "--batch-check"], { cwd: destination, env: testEnv(OPT_IN) });
+  const [first] = rows.values();
+  let output = "";
+  const answered = new Promise((resolve, reject) => {
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+      if (output.includes("\n")) resolve();
+    });
+    child.on("exit", (code) => reject(new Error(`cst exited ${code} before answering: ${output}`)));
+  });
+  child.stdin.write(`${first}\n`);
+  const exited = new Promise((resolve) => child.on("exit", resolve));
+  const timer = setTimeout(() => child.kill(), 30_000);
+  try {
+    await answered;
+  } finally {
+    clearTimeout(timer);
+    child.stdin.end();
+    // On Windows a running cst holds its directory, which cleanup removes.
+    await exited;
+  }
+  assert.match(output, new RegExp(`^${first} (blob|tree|commit|tag) \\d+\\n$`));
+});
 
 for (const format of ["sha1", "sha256"]) {
   test(`every imported object rebuilds to its Git ID, and the check runs no Git (${format})`, () => {
