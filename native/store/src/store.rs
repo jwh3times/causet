@@ -17,6 +17,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 /// The root marker's exact content, naming [`crate::VERSION`].
 pub const FORMAT: &[u8] = b"causet-native-store 1\n";
@@ -813,29 +814,33 @@ impl Unresolved {
 /// lookup reports a miss, and before an abbreviation resolves, the files it
 /// searched are checked whole, at most once each per opened store, which a
 /// command opens once (#389). Damage they find is refused, not answered as a
-/// miss.
+/// miss. Once a file is read whole, every later lookup answers from what was
+/// read, not from the file, so a command that reads the store whole makes no
+/// read per lookup (#392).
 pub struct Store {
   pub root: PathBuf,
   /// The current ref snapshot's ID, which the store holds.
   pub snapshot: NativeId,
   containers: Vec<Container>,
   aliases: Vec<AliasFile>,
-  frame: RefCell<Option<((usize, u32), std::rc::Rc<Vec<u8>>)>>,
+  frame: RefCell<Option<((usize, u32), Rc<Vec<u8>>)>>,
   /// The bytes of the marker and `snapshot`.
   opened: u64,
-  /// The files this store has checked whole, so none is checked twice.
-  checked: RefCell<Checked>,
+  /// What this store has read whole, so none is read twice and later
+  /// lookups answer from it.
+  whole: RefCell<Whole>,
 }
 
-/// The files an opened store has checked whole.
+/// The files an opened store has read whole, with every check (#389), kept
+/// so that every later lookup answers from them, not from the files: a
+/// command that reads the store whole, such as the reconstruction check,
+/// `cst fsck` or an import, then makes no read per lookup (#392).
 #[derive(Default)]
-struct Checked {
-  /// Every container's index.
-  indexes: bool,
-  /// The alias files of these algorithms.
-  aliases: Vec<GitAlgorithm>,
-  /// The bytes the whole indexes read, which their own files counted.
-  index_bytes: u64,
+struct Whole {
+  /// Every container's index, in name order.
+  indexes: Option<Rc<Vec<Index>>>,
+  /// Each alias file read so far.
+  aliases: Vec<Rc<Aliases>>,
 }
 
 /// The version a root marker of another build names: `causet-native-store`,
@@ -923,7 +928,7 @@ impl Store {
       aliases,
       frame: RefCell::new(None),
       opened: (marker.len() + named.len()) as u64,
-      checked: RefCell::new(Checked::default()),
+      whole: RefCell::new(Whole::default()),
     };
     match store.locate(&snapshot)? {
       Some((_, record)) if record.state == PRESENT && record.kind == Type::Snapshot => Ok(store),
@@ -965,7 +970,7 @@ impl Store {
   /// checked whole. A test holds a lookup's cost to a bound by it (#331).
   pub fn bytes_read(&self) -> u64 {
     self.opened
-      + self.checked.borrow().index_bytes
+      + self.loaded_indexes().map_or(0, |indexes| indexes.iter().map(Index::bytes_read).sum::<u64>())
       + self.aliases.iter().map(AliasFile::bytes_read).sum::<u64>()
       + self.containers.iter().map(Container::bytes_read).sum::<u64>()
   }
@@ -976,46 +981,70 @@ impl Store {
   }
 
   /// Every alias file whole, with every check (objects.md §9.1): its
-  /// trailer, both orders and the native order's permutation.
-  pub fn load_aliases(&self) -> Result<Vec<Aliases>, StoreError> {
-    let files = self.aliases.iter().map(AliasFile::full).collect::<Result<Vec<_>, _>>()?;
-    self.checked.borrow_mut().aliases = self.algorithms();
-    Ok(files)
+  /// trailer, both orders and the native order's permutation. Each is read
+  /// once per opened store, and later lookups answer from it.
+  pub fn load_aliases(&self) -> Result<Vec<Rc<Aliases>>, StoreError> {
+    self.aliases.iter().map(|file| self.whole_aliases(file)).collect()
+  }
+
+  /// One alias file whole, read once per opened store.
+  fn whole_aliases(&self, file: &AliasFile) -> Result<Rc<Aliases>, StoreError> {
+    if let Some(loaded) = self.loaded_aliases(file.algorithm) {
+      return Ok(loaded);
+    }
+    let loaded = Rc::new(file.full()?);
+    self.whole.borrow_mut().aliases.push(loaded.clone());
+    Ok(loaded)
+  }
+
+  /// An algorithm's alias file, when this store has read it whole.
+  fn loaded_aliases(&self, algorithm: GitAlgorithm) -> Option<Rc<Aliases>> {
+    let whole = self.whole.borrow();
+    whole.aliases.iter().find(|aliases| aliases.algorithm == algorithm).cloned()
   }
 
   /// An algorithm's alias file checked whole, once per opened store: what a
   /// lookup by Git ID, or of a native ID's row, runs before it reports a miss
   /// (#389).
   fn check_aliases(&self, file: &AliasFile) -> Result<(), StoreError> {
-    if !self.checked.borrow().aliases.contains(&file.algorithm) {
-      file.full()?;
-      self.checked.borrow_mut().aliases.push(file.algorithm);
-    }
-    Ok(())
+    self.whole_aliases(file).map(drop)
   }
 
   /// Every container's whole index, in name order, with every check
   /// (storage.md §4.1): the index's SHA-256, the orders of its frames and
-  /// names, and its annotation table.
-  pub fn indexes(&self) -> Result<Vec<Index>, StoreError> {
+  /// names, and its annotation table. They are read once per opened store,
+  /// and later lookups answer from them.
+  pub fn indexes(&self) -> Result<Rc<Vec<Index>>, StoreError> {
+    if let Some(loaded) = self.loaded_indexes() {
+      return Ok(loaded);
+    }
     let indexes = self
       .containers
       .iter()
       .map(|container| Index::read(&container.path))
       .collect::<Result<Vec<_>, _>>()?;
-    let mut checked = self.checked.borrow_mut();
-    checked.indexes = true;
-    checked.index_bytes += indexes.iter().map(Index::bytes_read).sum::<u64>();
-    Ok(indexes)
+    let loaded = Rc::new(indexes);
+    self.whole.borrow_mut().indexes = Some(loaded.clone());
+    Ok(loaded)
+  }
+
+  /// Every index, when this store has read them whole.
+  fn loaded_indexes(&self) -> Option<Rc<Vec<Index>>> {
+    self.whole.borrow().indexes.clone()
   }
 
   /// Every container's index checked whole, once per opened store: what a
   /// lookup by native ID runs before it reports a miss (#389).
   fn check_indexes(&self) -> Result<(), StoreError> {
-    if !self.checked.borrow().indexes {
-      self.indexes()?;
-    }
-    Ok(())
+    self.indexes().map(drop)
+  }
+
+  /// Reads every index and alias file whole, with every check, for a command
+  /// that will look up many objects: each lookup then answers from what was
+  /// read, at a cost the store's size sets once (#392).
+  pub fn read_whole(&self) -> Result<(), StoreError> {
+    self.indexes()?;
+    self.load_aliases().map(drop)
   }
 
   fn alias_file(&self, algorithm: GitAlgorithm) -> Option<&AliasFile> {
@@ -1031,7 +1060,11 @@ impl Store {
     let Some(file) = self.alias_file(algorithm).filter(|_| git_digest.len() == algorithm.length()) else {
       return Ok(None);
     };
-    let Some(short) = file.short(git_digest)? else {
+    let short = match self.loaded_aliases(algorithm) {
+      Some(whole) => whole.short(git_digest),
+      None => file.short(git_digest)?,
+    };
+    let Some(short) = short else {
       self.check_aliases(file)?;
       return Ok(None);
     };
@@ -1061,7 +1094,10 @@ impl Store {
       return Ok(None);
     };
     let short = id.short();
-    let rows = file.sharing(&short)?;
+    let rows = match self.loaded_aliases(algorithm) {
+      Some(whole) => whole.sharing(&short).map(<[u8]>::to_vec).collect(),
+      None => file.sharing(&short)?,
+    };
     match rows.as_slice() {
       [] => {
         self.check_aliases(file)?;
@@ -1132,8 +1168,17 @@ impl Store {
   /// them: the lookup every row of an unshared store takes.
   fn sole(&self, short: &Short, id: &NativeId) -> Result<bool, StoreError> {
     let mut found = false;
-    for container in &self.containers {
-      match container.starting(short)?.as_slice() {
+    let loaded = self.loaded_indexes();
+    for (number, container) in self.containers.iter().enumerate() {
+      let lazy;
+      let names = match &loaded {
+        Some(indexes) => indexes[number].starting(short),
+        None => {
+          lazy = container.starting(short)?;
+          lazy.as_slice()
+        }
+      };
+      match names {
         [] => {}
         [name] if *name == id.0 => found = true,
         _ => return Ok(false),
@@ -1148,10 +1193,10 @@ impl Store {
   pub fn present(&self) -> Result<Vec<(NativeId, Type, Form)>, StoreError> {
     let mut seen = HashSet::new();
     let mut found = Vec::new();
-    for (number, index) in self.indexes()?.into_iter().enumerate() {
-      for (name, record) in index.names.into_iter().zip(index.records) {
-        if record.state == PRESENT && seen.insert(name) {
-          found.push(((number, record.frame, record.offset), NativeId(name), record));
+    for (number, index) in self.indexes()?.iter().enumerate() {
+      for (name, record) in index.names.iter().zip(&index.records) {
+        if record.state == PRESENT && seen.insert(*name) {
+          found.push(((number, record.frame, record.offset), NativeId(*name), *record));
         }
       }
     }
@@ -1181,6 +1226,17 @@ impl Store {
   /// whole: damage could hide a present copy.
   pub(crate) fn locate(&self, id: &NativeId) -> Result<Option<(usize, Record)>, StoreError> {
     let mut found = None;
+    if let Some(indexes) = self.loaded_indexes() {
+      for (number, index) in indexes.iter().enumerate() {
+        if let Some(record) = index.find(id) {
+          if record.state == PRESENT {
+            return Ok(Some((number, *record)));
+          }
+          found.get_or_insert((number, *record));
+        }
+      }
+      return Ok(found);
+    }
     for (number, container) in self.containers.iter().enumerate() {
       if let Some(record) = container.find(id)? {
         if record.state == PRESENT {
@@ -1198,10 +1254,9 @@ impl Store {
   /// and whose type `accept` takes, each once. Every index is checked whole
   /// first: names out of order could hide a match, found or not (#389).
   pub fn matching(&self, prefix: &str, accept: impl Fn(Type) -> bool) -> Result<Vec<NativeId>, StoreError> {
-    self.check_indexes()?;
     let mut found: Vec<NativeId> = Vec::new();
-    for container in &self.containers {
-      for (id, kind) in container.prefixed(prefix)? {
+    for index in self.indexes()?.iter() {
+      for (id, kind) in index.prefixed(prefix) {
         if accept(kind) && !found.contains(&id) {
           found.push(id);
         }
@@ -1215,8 +1270,17 @@ impl Store {
   /// in order.
   pub fn candidates(&self, short: &Short) -> Result<Vec<NativeId>, StoreError> {
     let mut found = Vec::new();
-    for container in &self.containers {
-      found.extend(container.starting(short)?.into_iter().map(NativeId));
+    match self.loaded_indexes() {
+      Some(indexes) => {
+        for index in indexes.iter() {
+          found.extend(index.starting(short).iter().copied().map(NativeId));
+        }
+      }
+      None => {
+        for container in &self.containers {
+          found.extend(container.starting(short)?.into_iter().map(NativeId));
+        }
+      }
     }
     found.sort();
     found.dedup();
@@ -1263,7 +1327,11 @@ impl Store {
     let frame = match cached {
       Some(frame) => frame,
       None => {
-        let frame = std::rc::Rc::new(self.containers[number].frame(record.frame)?);
+        // A loaded index has every frame's entry already.
+        let frame = Rc::new(match self.loaded_indexes() {
+          Some(indexes) => indexes[number].frame(record.frame)?,
+          None => self.containers[number].frame(record.frame)?,
+        });
         *self.frame.borrow_mut() = Some((key, frame.clone()));
         frame
       }

@@ -56,7 +56,7 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
   let mut named: Vec<(NativeId, Names)> = Vec::new();
   let mut preserved_kinds: HashMap<NativeId, GitKind> = HashMap::new();
   let mut subjects: HashMap<NativeId, NativeId> = HashMap::new();
-  for container in &indexes {
+  for container in indexes.iter() {
     let at = name(container);
     check_trailer(container, &mut found.problems)?;
     for (digest, record) in container.names.iter().zip(&container.records) {
@@ -123,7 +123,7 @@ pub fn verify(store: &Store) -> Result<Verification, StoreError> {
     }
   }
   // The annotation table must agree with each annotation's own subject.
-  for container in &indexes {
+  for container in indexes.iter() {
     for (subject, position) in &container.annotations {
       let id = NativeId(container.names[*position as usize]);
       if subjects.get(&id).is_some_and(|own| own.0 != *subject) {
