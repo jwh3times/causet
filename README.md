@@ -896,7 +896,9 @@ when that is smaller than its chunks. Importing the same history again
 writes the same bytes. Importing into an existing native repository adds only
 what it does not hold, then replaces its snapshot. A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history
-differently from what it stores. In a native repository,
+differently from what it stores, and so is one with a ref, or another
+worktree's `HEAD`, naming an object it does not hold: import names the first
+such ref and writes nothing. In a native repository,
 `cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
 `cst for-each-ref --format` print what Git prints on the original, with
 native IDs in place of Git's, and run no Git. `cst cat-file --batch` and

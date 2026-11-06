@@ -4,6 +4,7 @@
 
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::process::{RunOptions, run_git};
+use std::collections::HashSet;
 
 /// The most object bytes one `cat-file --batch` returns.
 const BATCH_BYTES: u64 = 64 * 1024 * 1024;
@@ -300,19 +301,86 @@ impl Source {
 
   /// The commits Git's `--all` starts from: the refs, and what the snapshot
   /// does not record, other worktrees' `HEAD` and per-worktree refs.
+  ///
+  /// `refuse_unheld` has already refused a ref or worktree `HEAD` that names
+  /// an object the repository does not hold. A start only Git's `--all`
+  /// reaches, such as another worktree's per-worktree ref, is refused here by
+  /// the name Git gives it in its `fatal: bad object` line (#330). That match
+  /// is best-effort: under a locale that translates the line, the failure
+  /// stays Git's.
   pub fn all_tips(&self) -> GitResult<Vec<String>> {
-    let listed = run_git(
-      &args(&["rev-list", "--all", "--no-walk=unsorted"]),
-      &self.options(),
-    )?
-    .stdout;
+    let command = args(&["rev-list", "--all", "--no-walk=unsorted"]);
+    let listed = run_git(&command, &self.options().allow_failure())?;
+    if !listed.ok {
+      if let Some(name) = listed.stderr.lines().find_map(|line| line.strip_prefix("fatal: bad object ")) {
+        return Err(refused(
+          &self.path,
+          &format!("has the ref {name}, which names an object it does not hold"),
+        ));
+      }
+      return Err(
+        GitError::new("git-command-failed", format!("git {} failed", command.join(" ")))
+          .details(listed.output)
+          .exit_code(if listed.status == 0 { 1 } else { listed.status }),
+      );
+    }
     Ok(
       listed
+        .stdout
         .lines()
         .filter(|line| !line.is_empty())
         .map(str::to_string)
         .collect(),
     )
+  }
+
+  /// Refuses the first start of Git's `--all` that names an object the
+  /// repository does not hold, before anything is written: its history
+  /// cannot be imported exactly (#330). The starts are `refs`, in their
+  /// order, then each other worktree's `HEAD`, in Git's order. A symbolic
+  /// ref is its target's, and a `HEAD` on an unborn branch names nothing, so
+  /// neither is refused.
+  pub fn refuse_unheld(&self, refs: &[Listed]) -> GitResult<()> {
+    let mut starts: Vec<(String, String)> = refs
+      .iter()
+      .filter(|entry| entry.symbolic.is_none())
+      .filter_map(|entry| {
+        let id = entry.id.clone()?;
+        Some((format!("the ref {}", String::from_utf8_lossy(&entry.name)), id))
+      })
+      .collect();
+    starts.extend(self.worktree_heads()?);
+    let ids: Vec<String> = starts.iter().map(|(_, id)| id.clone()).collect();
+    let held: HashSet<String> = self.holding(&ids)?.into_iter().collect();
+    match starts.iter().find(|(_, id)| !held.contains(id)) {
+      Some((start, id)) => Err(refused(
+        &self.path,
+        &format!("has {start}, which names {id}, an object it does not hold"),
+      )),
+      None => Ok(()),
+    }
+  }
+
+  /// Each other worktree's `HEAD` that names an object, as "the HEAD of the
+  /// worktree <path>" with its ID: what Git's `--all` starts from beside the
+  /// refs. The first worktree Git lists is the main one, whose `HEAD` is
+  /// among the refs; a `HEAD` on an unborn branch is all zeros.
+  fn worktree_heads(&self) -> GitResult<Vec<(String, String)>> {
+    let listed = run_git(&args(&["worktree", "list", "--porcelain"]), &self.options())?.stdout;
+    let mut heads = Vec::new();
+    for block in listed.split("\n\n").skip(1) {
+      let mut path = None;
+      for line in block.lines() {
+        if let Some(at) = line.strip_prefix("worktree ") {
+          path = Some(at);
+        } else if let (Some(id), Some(at)) = (line.strip_prefix("HEAD "), path)
+          && id.bytes().any(|byte| byte != b'0')
+        {
+          heads.push((format!("the HEAD of the worktree {at}"), id.to_string()));
+        }
+      }
+    }
+    Ok(heads)
   }
 
   /// The commits reachable from these and not from `except`, themselves

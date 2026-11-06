@@ -116,9 +116,14 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
       ),
     )
   })?;
+  // Every ref must name an object the source holds, before anything is
+  // written (#330).
+  let mut refs = source.refs()?;
+  refs.sort_by(|a, b| a.name.cmp(&b.name));
+  source.refuse_unheld(&refs)?;
   if destination.join(".cst").join("format").is_file() {
     let mut store = StoreWriter::open(destination, algorithm).map_err(store_error)?;
-    let (mut imported, snapshot) = write(&source, algorithm, &mut store)?;
+    let (mut imported, snapshot) = write(&source, algorithm, &mut store, refs)?;
     store.finish(&snapshot).map_err(store_error)?;
     imported.added = true;
     imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
@@ -126,7 +131,7 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   }
   let existed = destination.exists();
   let mut store = StoreWriter::create(destination, algorithm).map_err(store_error)?;
-  let result = write(&source, algorithm, &mut store);
+  let result = write(&source, algorithm, &mut store, refs);
   let result = result.and_then(|(mut imported, snapshot)| {
     store.finish(&snapshot).map_err(store_error)?;
     imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
@@ -142,13 +147,14 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   result
 }
 
+/// Writes the history `refs` reach, the source's refs in byte order of
+/// name, into `store`.
 fn write(
   source: &git::Source,
   algorithm: GitAlgorithm,
   store: &mut StoreWriter,
+  refs: Vec<git::Listed>,
 ) -> GitResult<(Imported, Snapshot)> {
-  let mut refs = source.refs()?;
-  refs.sort_by(|a, b| a.name.cmp(&b.name));
   // The walk starts from the objects the refs that are not symbolic name, in
   // byte order of ref name, then from what only other worktrees' `HEAD`
   // names, which the snapshot does not record (objects.md §6, §9), in byte
