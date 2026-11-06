@@ -666,6 +666,36 @@ test("shallow, partial and grafted sources are refused before anything is writte
   assert.equal(commented.status, 0, commented.stderr.toString());
 });
 
+test("a ref naming an object the source does not hold is refused by name before anything is written", () => {
+  const { root, repo, git, second } = makeSource("sha1");
+  // A shallow clone's refusal, for its exit status. It is removed at once:
+  // the native-kind mode would import it.
+  execFileSync("git", ["clone", "-q", "--no-checkout", "--depth", "1", pathToFileURL(repo).href, "shallow"],
+    { cwd: root, env: testEnv(IDENTITY) });
+  const shallow = cst(root, ["import", "shallow", "shallow-native"]);
+  fs.rmSync(path.join(root, "shallow"), { recursive: true, force: true });
+  // A commit written loose, named by a ref, then lost: the ref names an
+  // object the repository does not hold, whatever its ref storage.
+  const lost = git(["commit-tree", `${second}^{tree}`, "-m", "lost"]).toString().trim();
+  git(["update-ref", "refs/heads/broken", lost]);
+  const objects = path.resolve(repo, git(["rev-parse", "--git-path", "objects"]).toString().trim());
+  fs.rmSync(path.join(objects, lost.slice(0, 2), lost.slice(2)));
+  const refused = cst(root, ["import", "source", "broken-native"]);
+  assert.equal(refused.status, 1, refused.stderr.toString());
+  assert.equal(refused.status, shallow.status, "the exit status of the other named refusals");
+  assert.match(refused.stderr.toString(),
+    new RegExp(`has the ref refs/heads/broken, which names ${lost}, an object it does not hold, so its history cannot be imported exactly \\(ADR-0045, decision 1\\)\\.`));
+  assert.equal(fs.existsSync(path.join(root, "broken-native")), false, "nothing is written");
+  git(["update-ref", "-d", "refs/heads/broken"]);
+});
+
+test("a HEAD on an unborn branch, beside branches with commits, names nothing to refuse", () => {
+  const { root, git } = makeSource("sha1");
+  git(["symbolic-ref", "HEAD", "refs/heads/unborn"]);
+  const unborn = cst(root, ["import", "source", "unborn-native"]);
+  assert.equal(unborn.status, 0, unborn.stderr.toString());
+});
+
 test("import reads the repository it names: a linked worktree's main refs, whatever Git variables the caller set", () => {
   const { root, repo, git, first, second } = makeSource("sha1");
   git(["worktree", "add", "-q", "--no-checkout", "-b", "elsewhere", path.join(root, "linked"), first]);

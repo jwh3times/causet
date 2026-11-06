@@ -67,13 +67,13 @@ export const REFUSALS = [
   {
     file: "integration.test.js",
     test: "batched resolution catalog lists retained records newest-first and quarantines mismatched retention state",
-    refusal: "fatal: bad object refs/",
+    refusal: "an object it does not hold, so its history cannot be imported exactly",
     reason: "the test leaves a ref naming an object the repository does not hold",
   },
   {
     file: "rust-engine.test.js",
     test: "(outside any test)",
-    refusal: "fatal: bad object refs/",
+    refusal: "an object it does not hold, so its history cannot be imported exactly",
     reason: "the suite's shared repository has a ref naming an object it does not hold",
   },
   {

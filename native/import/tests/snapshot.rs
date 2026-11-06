@@ -239,3 +239,47 @@ fn an_unborn_or_detached_head_is_recorded_as_it_is() {
   assert_eq!(hex(&store.git(GitAlgorithm::Sha1, &imported.head.unwrap()).unwrap().unwrap()), topic);
   std::fs::remove_dir_all(&root).unwrap();
 }
+
+/// Makes `name` name a commit the repository then loses: the commit is
+/// written loose and its file removed, so the ref is left naming an object
+/// the repository does not hold, whatever the ref storage.
+fn break_ref(repo: &Path, name: &str) -> String {
+  let tree = git(repo, &["rev-parse", "HEAD^{tree}"], None);
+  let lost = git(repo, &["commit-tree", &tree, "-m", "lost"], None);
+  git(repo, &["update-ref", name, &lost], None);
+  let objects = PathBuf::from(git(repo, &["rev-parse", "--git-path", "objects"], None));
+  let objects = if objects.is_absolute() { objects } else { repo.join(objects) };
+  std::fs::remove_file(objects.join(&lost[..2]).join(&lost[2..])).unwrap();
+  lost
+}
+
+#[test]
+fn a_ref_naming_an_object_the_source_does_not_hold_is_refused_by_name() {
+  let root = scratch("broken-ref");
+  let repo = source(&root, "sha1");
+  let lost = break_ref(&repo, "refs/heads/broken");
+  let destination = root.join("native");
+  let refused = causet_import::import(repo.to_str().unwrap(), &destination).unwrap_err();
+  assert_eq!(refused.code, "unsupported-repository-shape", "{}", refused.message);
+  assert!(refused.message.contains("refs/heads/broken"), "{}", refused.message);
+  assert!(refused.message.contains(&lost), "{}", refused.message);
+  assert!(refused.message.ends_with("cannot be imported exactly (ADR-0045, decision 1)."), "{}", refused.message);
+  assert!(!destination.exists(), "nothing is written");
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn another_worktrees_head_naming_an_object_the_source_does_not_hold_is_refused_by_name() {
+  let root = scratch("broken-worktree-head");
+  let repo = source(&root, "sha1");
+  let linked = root.join("linked");
+  git(&repo, &["worktree", "add", "-q", "--detach", linked.to_str().unwrap(), "HEAD"], None);
+  let lost = break_ref(&linked, "HEAD");
+  let destination = root.join("native");
+  let refused = causet_import::import(repo.to_str().unwrap(), &destination).unwrap_err();
+  assert_eq!(refused.code, "unsupported-repository-shape", "{}", refused.message);
+  assert!(refused.message.contains("the HEAD of the worktree"), "{}", refused.message);
+  assert!(refused.message.contains(&lost), "{}", refused.message);
+  assert!(!destination.exists(), "nothing is written");
+  std::fs::remove_dir_all(&root).unwrap();
+}
