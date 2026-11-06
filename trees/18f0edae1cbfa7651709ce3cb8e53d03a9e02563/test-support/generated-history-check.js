@@ -27,7 +27,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { cstCommand, cstPrefix } from "./cst-command.js";
 import { PROCESS_LIMIT, bounded } from "./bounded-process.js";
-import { history } from "./generated-histories.js";
+import { history, skipReason } from "./generated-histories.js";
 import { compareCopy, withoutGit } from "./native-kind.js";
 import { sameAsFull, sameStores, storeState } from "./import-checks.js";
 
@@ -51,11 +51,19 @@ function run(command, args, { cwd, env }) {
 /**
  * Checks history `index` of corpus `seed` in a new directory under `base`,
  * removed when it ends. `env` makes the environment of each process.
- * Resolves to the history's cases and format and the problems found.
+ * Resolves to the history's cases, format and ref storage and the problems
+ * found, or, for a reftable history this host's Git cannot make, to the
+ * reason it is skipped.
  */
 export async function checkHistory({ seed, index, env, base = os.tmpdir() }) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(base, "cg")));
   const made = history({ directory: path.join(root, "source"), seed, index, env });
+  const { format, refStorage } = made;
+  const skipped = await skipReason({ seed, index, env });
+  if (skipped) {
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+    return { index, format, refStorage, cases: [], problems: [], skipped };
+  }
   const problems = [];
   const where = (stage) => `history ${index} of seed ${seed} (${stage})`;
   // Import reads Git; every other `cst` here reads the store, without Git.
@@ -99,7 +107,7 @@ export async function checkHistory({ seed, index, env, base = os.tmpdir() }) {
   } finally {
     fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 });
   }
-  return { index, format: made.format, cases: [...made.cases], problems };
+  return { index, format, refStorage, cases: [...made.cases], problems };
 }
 
 /** The script: a shard of a corpus, one JSON line per history. */

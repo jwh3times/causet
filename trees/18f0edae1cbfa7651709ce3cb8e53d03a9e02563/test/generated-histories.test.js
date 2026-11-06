@@ -9,7 +9,8 @@
  * By default the suite checks one history per case. `CAUSET_GENERATED_HISTORIES=<n>`
  * checks `n`, as the weekly run does with 1,000 (`.github/workflows/corpora.yml`);
  * `CAUSET_GENERATED_SEED` chooses another seed, and `CAUSET_GENERATED_ONLY=<index>`
- * checks one history, to reproduce a failure.
+ * checks one history, to reproduce a failure. A reftable history needs Git
+ * 2.46 or later; on an older Git it is skipped with that reason (#334).
  */
 
 import assert from "node:assert/strict";
@@ -22,7 +23,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstPrefix } from "../test-support/cst-command.js";
-import { CASES, MALFORMED, history } from "../test-support/generated-histories.js";
+import {
+  CASES, MALFORMED, REF_CASES, REFTABLE_CASES, history, reftableReason, reftableUnsupported, refStorageOf, skipReason,
+} from "../test-support/generated-histories.js";
 
 const SEED = process.env.CAUSET_GENERATED_SEED || "causet-n1";
 const COUNT = Number(process.env.CAUSET_GENERATED_HISTORIES || CASES.length);
@@ -30,6 +33,9 @@ const ONLY = process.env.CAUSET_GENERATED_ONLY;
 if (!Number.isSafeInteger(COUNT) || COUNT < 1) {
   throw new Error(`CAUSET_GENERATED_HISTORIES must be a positive integer, not ${process.env.CAUSET_GENERATED_HISTORIES}`);
 }
+
+/** Why this host skips the reftable histories, or null when it makes them. */
+const REFTABLE_SKIP = await reftableUnsupported(testEnv);
 
 // Every repository here, and every one a shard makes, is removed before its
 // test ends: the checks here already include the native-kind mode's
@@ -53,21 +59,37 @@ function git(cwd, args) {
   });
 }
 
-/** What a history is, as Git reads it: its refs, HEAD and objects. */
+/**
+ * What a history is, as Git reads it: its refs, HEAD and objects. HEAD is
+ * Git's answer, since a reftable repository's HEAD file is only a stub.
+ */
 function shape(repository) {
   const read = (args) => {
     const result = git(repository, args);
     assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
     return result.stdout.toString("latin1");
   };
+  const symbolic = git(repository, ["symbolic-ref", "--quiet", "HEAD"]);
   return {
     refs: read(["for-each-ref", "--format=%(refname) %(objectname) %(symref)"]),
-    head: fs.readFileSync(path.join(repository, "HEAD"), "latin1"),
+    head: symbolic.status === 0 ? `ref: ${symbolic.stdout.toString("latin1")}` : read(["rev-parse", "--verify", "HEAD"]),
     objects: read(["cat-file", "--batch-all-objects", "--batch-check"]),
   };
 }
 
-test("a seed generates the same histories every time, and another seed others", () => inScratch(async (root) => {
+test("a reftable history needs Git 2.46 or later, and an older Git says why it skips one", () => {
+  for (const answer of ["git version 2.46.0", "git version 2.55.0.windows.3\n", "git version 3.0.0"]) {
+    assert.equal(reftableReason(answer), null, answer);
+  }
+  assert.equal(reftableReason("git version 2.45.2\n"),
+    "the reftable histories need Git 2.46 or later, and this is git version 2.45.2");
+  assert.equal(reftableReason("git version 2.40.1"),
+    "the reftable histories need Git 2.46 or later, and this is git version 2.40.1");
+  assert.equal(reftableReason("git: command not found"),
+    "the reftable histories need Git 2.46 or later, and `git version` answered \"git: command not found\"");
+});
+
+test("a seed generates the same histories every time, and another seed others", (t) => inScratch(async (root) => {
   const generated = async (seed, index, name) => {
     const made = history({ directory: path.join(root, name), seed, index, env: testEnv });
     await made.generate();
@@ -75,45 +97,72 @@ test("a seed generates the same histories every time, and another seed others", 
     await made.advance();
     return { first, second: shape(made.path) };
   };
-  // A few histories: the digest below holds the corpus to every host's.
-  for (let index = 0; index < 6; index++) {
-    const one = await generated(SEED, index, `${index}-one`);
-    const again = await generated(SEED, index, `${index}-again`);
-    const other = await generated(`${SEED}-other`, index, `${index}-other`);
-    assert.deepEqual(again, one, `history ${index} of ${SEED}`);
-    assert.notDeepEqual(other.first.objects, one.first.objects, `history ${index} of another seed`);
+  // A few histories, and those of the cases of refs: the digests below hold
+  // the corpus to every host's.
+  for (const index of [0, 1, 2, 3, 4, 5, ...REF_CASES.map((each) => CASES.indexOf(each))]) {
+    const skip = await skipReason({ seed: SEED, index, env: testEnv });
+    await t.test(`history ${index}`, { skip: skip ?? false }, async () => {
+      const one = await generated(SEED, index, `${index}-one`);
+      const again = await generated(SEED, index, `${index}-again`);
+      const other = await generated(`${SEED}-other`, index, `${index}-other`);
+      assert.deepEqual(again, one, `history ${index} of ${SEED}`);
+      assert.notDeepEqual(other.first.objects, one.first.objects, `history ${index} of another seed`);
+    });
   }
 }));
 
 /**
- * The digest of what the first `CASES.length` histories of `causet-n1`, the
+ * The digests of what the first `CASES.length` histories of `causet-n1`, the
  * corpus CI checks, are after each stage: their refs, HEAD and objects as
- * Git lists them. Every host must generate the same corpus, so a change to
- * the generator that changes it changes this, deliberately.
+ * Git lists them, one digest for the files histories and one for the
+ * reftable ones. Every host must generate the same corpus, so a change to
+ * the generator that changes it changes these, deliberately. A host whose
+ * Git skips the reftable histories still checks the files histories' digest.
  */
-const CORPUS_DIGEST = "721f766a1fc72d416d8fa49e6295459888afd0ee5b072654e52b921ce0b10ece";
+const CORPUS_DIGESTS = {
+  files: "c37b6e2bbb5ab010c4b01ad36080b40557e639aad016ef44630f932b5728c917",
+  reftable: "e44531b261fd976ea2e186d8eaf23a7d4ee55e1d8ad660872c68aabf92e44698",
+};
 
-test("the corpus CI checks is the same on every host", () => inScratch(async (root) => {
-  const digest = crypto.createHash("sha256");
-  for (let index = 0; index < CASES.length; index++) {
-    const made = history({ directory: path.join(root, String(index)), seed: "causet-n1", index, env: testEnv });
-    await made.generate();
-    digest.update(JSON.stringify(shape(made.path)));
-    await made.advance();
-    digest.update(JSON.stringify(shape(made.path)));
-  }
-  assert.equal(digest.digest("hex"), CORPUS_DIGEST);
-}));
+for (const refStorage of ["files", "reftable"]) {
+  const skip = refStorage === "reftable" ? REFTABLE_SKIP ?? false : false;
+  test(`the corpus CI checks is the same on every host (its ${refStorage} histories)`, { skip }, () => inScratch(async (root) => {
+    const digest = crypto.createHash("sha256");
+    let histories = 0;
+    for (let index = 0; index < CASES.length; index++) {
+      if (refStorageOf({ seed: "causet-n1", index }) !== refStorage) continue;
+      const made = history({ directory: path.join(root, String(index)), seed: "causet-n1", index, env: testEnv });
+      histories++;
+      await made.generate();
+      digest.update(JSON.stringify(shape(made.path)));
+      await made.advance();
+      digest.update(JSON.stringify(shape(made.path)));
+    }
+    assert.ok(histories > 0, `the corpus has no ${refStorage} history`);
+    assert.equal(digest.digest("hex"), CORPUS_DIGESTS[refStorage]);
+  }));
+}
 
-test("history n holds case n of the list, so a corpus of one history per case holds them all", () => inScratch(async (root) => {
+test("history n holds case n of the list, so a corpus of one history per case holds them all", (t) => inScratch(async (root) => {
   const held = new Set();
+  const unmade = [];
   for (let index = 0; index < CASES.length; index++) {
+    if (await skipReason({ seed: SEED, index, env: testEnv })) {
+      unmade.push(CASES[index]);
+      continue;
+    }
     const made = history({ directory: path.join(root, String(index)), seed: SEED, index, env: testEnv });
     await made.generate();
     assert.ok(made.cases.has(CASES[index]), `history ${index} lacks ${CASES[index]}: ${[...made.cases]}`);
     for (const each of made.cases) held.add(each);
   }
-  assert.deepEqual(CASES.filter((each) => !held.has(each)), []);
+  // Only a case's own reftable history goes unmade, and only on an older Git.
+  if (unmade.length > 0) t.diagnostic(`not made, as ${REFTABLE_SKIP}: ${unmade.join(", ")}`);
+  assert.deepEqual(unmade, REFTABLE_SKIP ? REFTABLE_CASES : []);
+  if (!REFTABLE_SKIP) {
+    for (const each of ["non-utf8-symbolic-ref", "non-utf8-symbolic-chain"]) assert.ok(held.has(each), `no history holds ${each}`);
+  }
+  assert.deepEqual(CASES.filter((each) => !held.has(each) && !unmade.includes(each)), []);
   assert.ok(MALFORMED.every((kind) => held.has(`malformed:${kind}`)));
 }));
 
@@ -150,8 +199,12 @@ test(`every generated history passes every N1 check (seed ${SEED})`, async (t) =
   results.sort((a, b) => a.index - b.index);
   const expected = ONLY !== undefined ? [Number(ONLY)] : Array.from({ length: COUNT }, (_, index) => index);
   assert.deepEqual(results.map((result) => result.index), expected, "every history is checked once");
-  for (const { index, format, cases, problems } of results) {
-    await t.test(`history ${index} (${format}: ${cases.join(", ")})`, () => {
+  for (const { index, format, refStorage, cases, problems, skipped } of results) {
+    if (skipped) {
+      await t.test(`history ${index} (${format}, ${refStorage})`, { skip: skipped }, () => {});
+      continue;
+    }
+    await t.test(`history ${index} (${format}, ${refStorage}: ${cases.join(", ")})`, () => {
       // The history's shard ran the CLI on it: counted here for the report
       // of tests that never invoke a selected CLI (`git-environment.js`).
       cstPrefix();
