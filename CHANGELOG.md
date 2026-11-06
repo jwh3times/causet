@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+- **The generated-history corpus holds reftable repositories and refs named
+  outside ASCII** (#334). Three cases join N1's list, and every N1 check runs
+  on them:
+  - **Reftable repositories.** `git init --ref-format=reftable` makes them,
+    and `git update-ref --stdin` writes their refs. They need Git 2.46 or
+    later, since symbolic refs are written with `symref-update`. On an
+    older Git each one is skipped with that reason, never passed. The
+    suites' own floor stays Git 2.40.
+  - **Refs named in UTF-8,** in either storage: branches with a multi-byte
+    character and with a combining sequence, a lightweight tag and an
+    annotated one.
+  - **Refs named in bytes that are not UTF-8,** in reftable histories only:
+    a branch, two tags, a symbolic ref so named, and a chain of symbolic
+    refs. Such a name reaches Git only on standard input, because Git for
+    Windows would store it as a loose file under another name.
+
+  As each stage ends, every ref of a reftable history and every name
+  outside ASCII is read back from `git for-each-ref` byte for byte. How a
+  history stores and names its refs comes from streams of its own, so the
+  rest of each history is unchanged. The pinned digest is now two digests,
+  one for the files histories and one for the reftable histories, so a Git
+  that skips the reftable ones still checks the rest. The chain case found
+  #398: import records a non-UTF-8 symbolic ref in a chain at the chain's
+  end, which no N1 check can see.
+
 - **Contributor workflow: the board says what to pick up next.**
   `docs/agents/triage-labels.md` adds a `blocked` label. It sits beside the
   state label: the issue can't move until a named blocker clears, and the
