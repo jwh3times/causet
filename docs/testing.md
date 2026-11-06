@@ -422,7 +422,9 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   No check here sees a symbolic ref's one-step target: `for-each-ref`'s
   `%(symref)`, Git's and cst's, gives where a chain ends, and no N1 command
   answers the step. A chain whose name is not UTF-8 is imported to where it
-  ends, since import cannot pass that name back to Git as an argument.
+  ends, since import cannot pass that name back to Git as an argument: a
+  defect against the snapshot's verbatim rule, which these checks pass
+  (#398).
 
   The suite also generates the first histories of `causet-n1`, one per case,
   and compares a digest of their refs, `HEAD` and objects after each stage
