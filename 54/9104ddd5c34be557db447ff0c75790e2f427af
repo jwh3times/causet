@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw57975tdf7de81126ce",
+      "mode": "compact",
+      "sourceRef": "docs/board-priority-and-blocked",
+      "sourceHead": "9eb7cc186996e00d2f831cf8fa96e6f217553ee2",
+      "sourceSubject": "docs: record the blocked label, the Priority field and board order",
+      "targetBefore": "a68ad88a66ccbe6dd1fff9b910e69f9b49f110c5",
+      "landingCommit": "549104ddd5c34be557db447ff0c75790e2f427af",
+      "base": "a68ad88a66ccbe6dd1fff9b910e69f9b49f110c5",
+      "absorbedCommits": [
+        "9eb7cc186996e00d2f831cf8fa96e6f217553ee2"
+      ],
+      "absorbedChanges": [
+        "ch_0mw56c5b37b4ff6403bfc"
+      ],
+      "resultTree": "2cc1337f0ade209e4737d7e6eb9f5b4e98d5b627",
+      "createdAt": "2026-11-06T16:39:22.313Z"
+    }
+  ]
+}
