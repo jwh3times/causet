@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **The docs name `cst cat-file --batch` among the commands that read a
+  native store whole** (#396). Since #346, `--batch` and `--batch-check`
+  read every container's index and alias file whole, with every check,
+  before they answer: a batch names many objects, so it pays for the store's
+  size once rather than for a read per lookup. `README.md`, the index tiers
+  of `docs/native-store/storage.md` §4.1 and the alias-file tiers of
+  `docs/native-store/objects.md` §9.1 listed only `cst fsck`,
+  `cst import --verify` and an import. They now list the batch reader too,
+  and their claim that a read pays for whole files only when it misses now
+  covers reads of one object. No behavior changes.
+
 - **The generated-history corpus holds reftable repositories and refs named
   outside ASCII** (#334). Three cases join N1's list, and every N1 check runs
   on them:
