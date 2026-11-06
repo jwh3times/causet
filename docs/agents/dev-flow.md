@@ -9,6 +9,10 @@ A ready issue lives in `jwh3times/causet`. Read it with
 `gh issue view <N> --repo jwh3times/causet --comments`. Filing a `bug` issue
 needs the user's go-ahead.
 
+An issue labelled `blocked` is not ready, even with `ready-for-agent`: its blocker hasn't
+cleared ([triage labels](triage-labels.md)). With several ready issues, take them in the
+board's order, which is priority order ([board fields](issue-tracker.md#board-fields)).
+
 ## Published contracts are code
 
 The published contracts the suites check are code, Markdown included:

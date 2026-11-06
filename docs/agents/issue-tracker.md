@@ -21,6 +21,8 @@ prerequisite gate recorded. Dated progress belongs on the issue.
 - Blocked by: `gh issue edit <child> --repo jwh3times/causet --add-blocked-by <blocker>`
 - Open blockers: `gh api repos/jwh3times/causet/issues/<n> --jq .issue_dependencies_summary.blocked_by`
   (0 means startable)
+- Next work for an agent: the first open `ready-for-agent` issue without `blocked`, in board
+  order (see "Board fields").
 - Close: comment first, then `gh issue close <number> --repo jwh3times/causet`. On an
   already-closed issue, `gh issue close --comment` drops the comment and still exits 0.
 
@@ -74,10 +76,21 @@ jwh3times 7
 
 ## Board fields
 
-- `Status`: `Todo` / `In Progress` / `Blocked` / `Parked` / `Done`.
+- `Status`: `Todo` / `In Progress` / `Blocked` / `Parked` / `Done`. `Blocked` exactly
+  when the issue carries the `blocked` label ([triage labels](triage-labels.md)). `Parked`
+  when the owner has set it aside on purpose and nothing blocks it.
 - `Gate`: what must clear before the item can start — `Nothing — ready to work`,
   `Contract needed`, `Evidence needed`, `Depends on another item`, `Owner decision`,
-  `Upstream Git`, `Gate A (native engine)`, `Gate B (native store/protocol)`.
+  `Upstream Git`, `Gate A (native engine)`, `Gate B (native store/protocol)`. An upstream
+  project other than Git is `Depends on another item`, with the upstream issue linked in a
+  comment.
+- `Priority`: `P0 — now` / `P1 — next` / `P2 — later` / `P3 — someday`. Every open issue
+  has one, whether or not it is blocked: priority says how much the work matters, and
+  `blocked` says whether it can move. Clear it when the issue closes. A new issue gets its
+  priority at triage.
+- **Board order is priority order.** Open items sit at the top, P0 first, and within a
+  priority in the order they should be taken. Place a new or re-prioritized item with
+  GraphQL's `updateProjectV2ItemPosition` (`afterId` the item it follows).
 - `Area`: `Rebase and workspaces`, `Structured documents`, `Identity and provenance`,
   `Proof and verification`, `Trust and protocol`, `Native core and performance`,
   `Docs and process`, `Defect`.

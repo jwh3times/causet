@@ -50,9 +50,9 @@ the versioned record of delivered behavior.
 Future work is tracked on the
 [causet project board](https://github.com/users/jwh3times/projects/7), one
 issue per increment, each with a Status, the Gate that must clear before it can
-start, and an Area. The board replaced `docs/roadmap.md` on 2026-09-04 and the
-continuation brief `docs/handoff.md` with it, so there is no Markdown backlog to
-keep in sync with the tracker.
+start, an Area and a Priority, in priority order. The board replaced
+`docs/roadmap.md` on 2026-09-04 and the continuation brief `docs/handoff.md`
+with it, so there is no Markdown backlog to keep in sync with the tracker.
 
 What did *not* move: the investment criteria the board's gates refer to. The two
 native implementation gates, the evidence rows that permit a next step, the
