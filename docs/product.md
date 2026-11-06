@@ -728,9 +728,9 @@ is accepted in an issue, plan, or ADR.
 Future work is tracked on the
 [causet project board](https://github.com/users/jwh3times/projects/7): one
 issue per increment, each carrying a Status, the Gate that must clear before it
-can start, and an Area. The board replaced `docs/roadmap.md` on 2026-09-04, so
-there is no parallel Markdown backlog to keep in sync, and the changelog stays
-the one dated narrative of what shipped.
+can start, an Area and a Priority, in priority order. The board replaced
+`docs/roadmap.md` on 2026-09-04, so there is no parallel Markdown backlog to
+keep in sync, and the changelog stays the one dated narrative of what shipped.
 
 This section remains authoritative for the investment criteria the board's
 gates refer to: the two native implementation gates, the evidence rows that
