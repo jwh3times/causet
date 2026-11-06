@@ -330,7 +330,11 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
 - **What a history holds.** `test-support/generated-histories.js` writes each
   one as a bare repository of loose objects and ref files, without Git, so a
   seed gives the same objects and refs whatever Git version is installed. Git
-  runs only to pack a history or prune it. Its `CASES` are ADR-0045's list:
+  runs only to pack a history or prune it. A reftable history is the
+  exception: `git init --ref-format=reftable` makes it, and `git update-ref
+  --stdin` writes its refs, symbolic ones included, which needs Git 2.46 or
+  later. On an older Git each reftable history is skipped with that reason,
+  never passed (#334). Its `CASES` are ADR-0045's list, then the refs':
   - merges and octopus merges;
   - renames, mode changes, symbolic links and submodule links;
   - empty trees, as a subtree and as a commit's root, and empty files;
@@ -353,20 +357,39 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
       commit-graph `git gc` writes compute generation numbers forever;
     - a tag without a tagger;
   - versions of a binary of at least the 1 MiB delta threshold, which import
-    stores as deltas.
+    stores as deltas;
+  - refs stored in the reftable format (#334);
+  - refs named in UTF-8, in either storage: branches with a multi-byte
+    character and with a combining sequence (`e` and U+0301), a lightweight
+    tag and an annotated one;
+  - refs named in bytes that are not UTF-8, in reftable histories only: a
+    branch, a lightweight and an annotated tag, a symbolic ref so named that
+    points at a branch, an ASCII symbolic ref that points at the branch so
+    named, and a chain, a symbolic ref so named that points at another
+    symbolic ref. Such a name reaches Git only on standard input: Windows
+    argv cannot carry its bytes, and Git for Windows stores it as a loose
+    file under another name, so a files history never holds one.
 
-  Signatures are random bytes in the shape of PGP and SSH signatures: Git
-  parses them as signatures, and none verifies.
+  As each stage ends, after any pack or prune, every ref named outside ASCII
+  and every ref of a reftable history is read back from `git for-each-ref`,
+  byte for byte, so a name Git stored as another fails the history, as does
+  a ref a write left dangling. Signatures are random bytes in the shape of PGP and SSH
+  signatures: Git parses them as signatures, and none verifies.
 
   History *n* always holds case *n* of the list, counting round it, so any
   corpus of at least one history per case holds every case. The rest is
   chosen from the seed: tags of commits, trees, blobs and tags, notes,
   replacement and remote-tracking refs, a symbolic ref, a detached or unborn
   `HEAD`, packed objects and refs, file names in Latin-1, and SHA-256 for
-  about a quarter. Each history has two stages. The second adds commits and
-  rewrites a branch from an earlier commit, so what its old tip reached may be
-  reached no more; it may also delete a ref, add a tag, and prune what no ref
-  reaches.
+  about a quarter. Beyond the first history per case, about a tenth are
+  reftable; refs named in UTF-8 come in about one history in seven, and half
+  the reftable histories have names that are not UTF-8. How a history stores
+  and names its refs is drawn from a stream of its own, so the rest of the
+  history is what it would be without them. Each history has two stages. The
+  second adds commits and rewrites a branch from an earlier commit, so what
+  its old tip reached may be reached no more; it may also delete a ref, add a
+  tag, move a branch or delete a tag named outside ASCII, and prune what no
+  ref reaches.
 - **What is checked** (`test-support/generated-history-check.js`), for each
   history:
   - Git reads it whole: `git rev-list --objects --all`;
@@ -396,17 +419,25 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   incremental import holds must also be one its earlier store or the full
   import holds. This is ADR-0045's decision 3 as amended on 2026-10-26.
 
-  The suite also generates the first 24 histories of `causet-n1` and compares
-  a digest of their refs, `HEAD` and objects after each stage with one pinned
-  in the test. Each runner thus shows that it generates the corpus every
-  other runner does, and a change to the generator that changes the corpus
-  updates the digest deliberately.
+  No check here sees a symbolic ref's one-step target: `for-each-ref`'s
+  `%(symref)`, Git's and cst's, gives where a chain ends, and no N1 command
+  answers the step. A chain whose name is not UTF-8 is imported to where it
+  ends, since import cannot pass that name back to Git as an argument.
+
+  The suite also generates the first histories of `causet-n1`, one per case,
+  and compares a digest of their refs, `HEAD` and objects after each stage
+  with one pinned in the test: one digest for the files histories, one for
+  the reftable histories, which an older Git skips without changing the
+  other. Each runner thus shows that it generates the corpus every other
+  runner does, and a change to the generator that changes the corpus updates
+  the digests deliberately.
 - **Shards.** One Node process starts only about a thousand processes a
   second, so the suite checks the histories in shards, one Node process per
   core, each running `generated-history-check.js` as a script on every
   history whose index is its own modulo the shard count.
 - **Reproducing a failure.** Each history is a subtest named with its index,
-  format and cases. `CAUSET_GENERATED_ONLY=<index>` checks that one, and
+  format, ref storage and cases, and a skipped one with the reason.
+  `CAUSET_GENERATED_ONLY=<index>` checks that one, and
   `CAUSET_GENERATED_SEED` chooses the seed (by default `causet-n1`, the one
   CI runs). Any Git or `cst` process the generator or a check starts, the
   comparison's included, is stopped after 5 minutes
@@ -414,8 +445,8 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   holding the corpus. The suite removes every repository it makes before its test ends, so the
   native-kind mode has none of them to import again.
 - **Cost.** On a 16-core Linux host, 1,000 histories took 4 to 6 minutes, and
-  the default 24 about 10 seconds. On GitHub's hosted runners, 1,000 took 22
-  minutes on Ubuntu and 44 on Windows (#333).
+  the default set, then 24 histories, about 10 seconds. On GitHub's hosted
+  runners, 1,000 took 22 minutes on Ubuntu and 44 on Windows (#333).
 
 **The real repositories** (ADR-0044 items 1 and 2, ADR-0045 decision 13,
 #309) are three Git repositories imported and checked whole, each with the

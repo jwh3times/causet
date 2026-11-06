@@ -18,13 +18,27 @@
  * an import into the first stage's copy keeps what the new history no longer
  * reaches; it may also delete a ref, add a tag and prune what no ref reaches.
  *
- * The objects are written as loose objects and the refs as files, without
- * Git, so a seed gives the same bytes whatever Git version is installed; Git
- * runs only to pack a history or prune it. History `index` of a corpus
+ * Refs are named in ASCII, in UTF-8 and in bytes that are not UTF-8, and a
+ * history's refs are stored as files or in the reftable format (#334). Names
+ * that are not UTF-8 go only to reftable histories, through `git update-ref
+ * --stdin`: Git for Windows stores such a name as a loose file under another
+ * name. As each stage ends, every name outside ASCII and every ref of a
+ * reftable history is read back from `git for-each-ref`, so a name Git
+ * stored otherwise fails the history, as does a ref left dangling.
+ *
+ * The objects are written as loose objects and the refs of a files history as
+ * files, without Git, so a seed gives the same bytes whatever Git version is
+ * installed; Git runs only to pack a history or prune it. A reftable history
+ * needs Git 2.46 or later, whose `git init` makes it and whose `update-ref
+ * --stdin` writes its refs, symbolic ones included; on an older Git it is
+ * skipped with the reason `reftableUnsupported` gives. How a history stores
+ * and names its refs is drawn from a stream of its own, so the rest of the
+ * history is what it would be without them. History `index` of a corpus
  * always holds case `CASES[index % CASES.length]`, so any corpus of at least
  * `CASES.length` histories holds every case; the rest is chosen from the
  * seed. This module has no `node:test` dependency.
  */
+import { isUtf8 } from "node:buffer";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -58,7 +72,19 @@ export const MALFORMED = [
   "no-tagger",
 ];
 
-/** The cases a corpus covers: ADR-0045 decision 13's, one per malformed kind. */
+/**
+ * The cases of how a history stores and names its refs (#334). The
+ * constructor and `nameRefs` make them, not `ensure`.
+ */
+export const REF_CASES = ["reftable", "utf8-ref-name", "non-utf8-ref-name"];
+
+/** The cases whose history is always reftable. */
+export const REFTABLE_CASES = ["reftable", "non-utf8-ref-name"];
+
+/**
+ * The cases a corpus covers: ADR-0045 decision 13's, one per malformed kind,
+ * then the refs'.
+ */
 export const CASES = [
   "merge",
   "octopus-merge",
@@ -74,6 +100,9 @@ export const CASES = [
   "extra-headers",
   ...MALFORMED.map((kind) => `malformed:${kind}`),
   "large-binary",
+  // These come last, so the histories before them hold the case they held
+  // before.
+  ...REF_CASES,
 ];
 
 /** The large-binary threshold of storage.md §5.1. */
@@ -122,20 +151,92 @@ export function stream(seed) {
   return random;
 }
 
-/** Runs a process to its end, as a promise of its status and output. */
-function run(command, args, { cwd, env }) {
+/**
+ * Runs a process to its end, as a promise of its status and output, `stdout`
+ * as bytes. `input`, when given, is its standard input.
+ */
+function run(command, args, { cwd, env, input }) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], timeout: PROCESS_LIMIT });
+    const stdin = input === undefined ? "ignore" : "pipe";
+    const child = spawn(command, args, { cwd, env, stdio: [stdin, "pipe", "pipe"], timeout: PROCESS_LIMIT });
     const ending = bounded(child);
     const [stdout, stderr] = [[], []];
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.on("error", (error) => resolve({ status: null, stdout: "", stderr: String(error) }));
+    child.on("error", (error) => resolve({ status: null, stdout: Buffer.alloc(0), stderr: String(error) }));
     child.on("close", (status, signal) => resolve({
-      status, stdout: Buffer.concat(stdout).toString(), stderr: `${Buffer.concat(stderr)}${ending(signal)}`,
+      status, stdout: Buffer.concat(stdout), stderr: `${Buffer.concat(stderr)}${ending(signal)}`,
     }));
+    if (input !== undefined) {
+      // A Git that refuses early closes its input: its status says why.
+      child.stdin.on("error", () => {});
+      child.stdin.end(input);
+    }
   });
 }
+
+/** Runs Git, and throws with its error output unless it succeeds. */
+async function git(args, { cwd, env, input }) {
+  const result = await run("git", args, { cwd, env, input });
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${result.stderr}`);
+  return result.stdout;
+}
+
+/** The Git a reftable history needs: `update-ref --stdin` writes symbolic refs from 2.46. */
+const REFTABLE_GIT = [2, 46];
+
+/**
+ * Why a Git whose `git version` printed `answer` cannot make a reftable
+ * history, or null when it can.
+ */
+export function reftableReason(answer) {
+  const text = answer.trim();
+  const version = /^git version (\d+)\.(\d+)/.exec(text);
+  const needed = `the reftable histories need Git ${REFTABLE_GIT.join(".")} or later`;
+  if (!version) return `${needed}, and \`git version\` answered ${JSON.stringify(text)}`;
+  const [major, minor] = [Number(version[1]), Number(version[2])];
+  const enough = major > REFTABLE_GIT[0] || (major === REFTABLE_GIT[0] && minor >= REFTABLE_GIT[1]);
+  return enough ? null : `${needed}, and this is ${text}`;
+}
+
+let reftableAnswer;
+
+/**
+ * Why this host's Git cannot make a reftable history, or null when it can:
+ * `reftableReason` of its `git version`. `env` makes the environment Git
+ * runs in. The answer is asked once per process, so a later `env` is not
+ * used: every caller runs the same Git.
+ */
+export function reftableUnsupported(env) {
+  reftableAnswer ??= run("git", ["version"], { env: env() })
+    .then(({ status, stdout, stderr }) => reftableReason(status === 0 ? stdout.toString() : `${stdout}${stderr}`));
+  return reftableAnswer;
+}
+
+/**
+ * How history `index` of corpus `seed` stores its refs, `files` or
+ * `reftable`, from a stream of its own. A history of the first
+ * `CASES.length` is reftable only for its case, so an older Git skips no
+ * other case's history there.
+ */
+export function refStorageOf({ seed, index }) {
+  if (index < CASES.length) return REFTABLE_CASES.includes(CASES[index]) ? "reftable" : "files";
+  return stream(`${seed}/${index}/storage`).chance(0.1) ? "reftable" : "files";
+}
+
+/**
+ * Why this host skips history `index` of corpus `seed`, or null when it
+ * makes it: a reftable history needs Git 2.46 or later.
+ */
+export async function skipReason({ seed, index, env }) {
+  return refStorageOf({ seed, index }) === "reftable" ? reftableUnsupported(env) : null;
+}
+
+/** A ref name as bytes, from a string (UTF-8) or a buffer. */
+const bytesOf = (name) => (Buffer.isBuffer(name) ? name : Buffer.from(name));
+
+/** Whether every byte of `name` is ASCII. */
+const isAscii = (name) => name.every((byte) => byte < 0x80);
 
 /** Git's order of tree entries: by name, a tree's as though it ended in `/`. */
 function gitOrder(a, b) {
@@ -143,21 +244,51 @@ function gitOrder(a, b) {
   return Buffer.compare(key(a), key(b));
 }
 
-/** A bare Git repository, written object by object and ref by ref. */
+/**
+ * A bare Git repository, written object by object and ref by ref. A files
+ * repository's refs are files, written as they are made; a reftable
+ * repository's wait for `flush()`, which writes them through Git.
+ */
 class Repository {
-  constructor(directory, format) {
+  constructor(directory, format, refStorage) {
     this.path = directory;
     this.format = format;
+    this.refStorage = refStorage;
     this.width = format === "sha1" ? 20 : 32;
+    // A reftable repository's refs not yet written, by name, and HEAD's.
+    this.pending = new Map();
+    this.pendingHead = null;
+    // The refs `readBack` checks, by name: whether Git should list each.
+    this.expected = new Map();
     fs.mkdirSync(path.join(directory, "objects", "info"), { recursive: true });
     fs.mkdirSync(path.join(directory, "objects", "pack"), { recursive: true });
+    if (refStorage === "reftable") return;
     fs.mkdirSync(path.join(directory, "refs", "heads"), { recursive: true });
     fs.mkdirSync(path.join(directory, "refs", "tags"), { recursive: true });
-    const config = format === "sha1"
-      ? "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n"
-      : "[core]\n\trepositoryformatversion = 1\n\tfilemode = true\n\tbare = true\n[extensions]\n\tobjectformat = sha256\n";
-    fs.writeFileSync(path.join(directory, "config"), config);
+    fs.writeFileSync(path.join(directory, "config"), this.config());
     fs.writeFileSync(path.join(directory, "HEAD"), "ref: refs/heads/main\n");
+  }
+
+  /** The repository's configuration: the same on every host. */
+  config() {
+    const extensions = [
+      ...(this.format === "sha256" ? ["\tobjectformat = sha256\n"] : []),
+      ...(this.refStorage === "reftable" ? ["\trefstorage = reftable\n"] : []),
+    ];
+    return extensions.length === 0
+      ? "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n"
+      : `[core]\n\trepositoryformatversion = 1\n\tfilemode = true\n\tbare = true\n[extensions]\n${extensions.join("")}`;
+  }
+
+  /**
+   * Makes a reftable repository, with Git: its ref storage is Git's to lay
+   * out. Its configuration is then replaced by the one every host writes.
+   */
+  async create(env) {
+    if (this.refStorage !== "reftable") return;
+    await git(["init", "--quiet", "--bare", "--template=", "--ref-format=reftable", `--object-format=${this.format}`,
+      "--initial-branch=main", this.path], { cwd: path.dirname(this.path), env });
+    fs.writeFileSync(path.join(this.path, "config"), this.config());
   }
 
   /** Writes an object of `type` holding `body`, and returns its ID. */
@@ -191,15 +322,100 @@ class Repository {
     return this.write("tree", Buffer.concat(parts));
   }
 
-  /** Points `name` at `value`, an ID or `ref: <name>`, as a loose ref. */
+  /**
+   * Points `name` at `value`, an ID or `ref: <name>`. Each is a string, read
+   * as UTF-8, or the name's bytes. A files repository gets a loose ref, and
+   * refuses a name that is not UTF-8: Git for Windows would store it under
+   * another name.
+   */
   ref(name, value) {
-    const file = path.join(this.path, ...name.split("/"));
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, `${value}\n`);
+    this.set(bytesOf(name), bytesOf(value));
   }
 
   deleteRef(name) {
-    fs.rmSync(path.join(this.path, ...name.split("/")), { force: true });
+    this.set(bytesOf(name), null);
+  }
+
+  /**
+   * Writes or, for a null `value`, deletes the ref `name`. Every ref Git
+   * writes, a reftable history's, and every name outside ASCII is read back.
+   */
+  set(name, value) {
+    const key = name.toString("hex");
+    if (this.refStorage === "reftable" || !isAscii(name)) this.expected.set(key, { name, listed: value !== null });
+    if (this.refStorage === "reftable") {
+      this.pending.set(key, { name, value });
+      return;
+    }
+    const file = path.join(this.path, ...this.fileName(name).split("/"));
+    if (value === null) {
+      fs.rmSync(file, { force: true });
+      return;
+    }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, Buffer.concat([value, Buffer.from("\n")]));
+  }
+
+  /** A files repository's ref name, which must be UTF-8. */
+  fileName(bytes) {
+    if (!isUtf8(bytes)) throw new Error(`a files repository cannot hold the ref ${bytes.toString("hex")}: it is not UTF-8`);
+    return bytes.toString();
+  }
+
+  /** Points HEAD at `value`, an ID or `ref: <name>`. */
+  head(value) {
+    if (this.refStorage === "reftable") this.pendingHead = bytesOf(value);
+    else fs.writeFileSync(path.join(this.path, "HEAD"), `${value}\n`);
+  }
+
+  /**
+   * Writes a reftable repository's pending refs through `git update-ref
+   * --stdin`, then HEAD, which cannot share a transaction with the branch it
+   * points at. A ref is written as it is named, never through a symbolic
+   * ref; a name reaches Git only on standard input, never as an argument.
+   */
+  async flush(env) {
+    if (this.refStorage !== "reftable") return;
+    // Each command is `no-deref`: `symref-update HEAD` without it would
+    // follow HEAD and make the branch it points at symbolic instead.
+    const command = (name, value) => {
+      const verb = value === null ? "delete" : value.subarray(0, 5).toString() === "ref: " ? "symref-update" : "update";
+      const operand = value === null ? [] : [Buffer.from(" "), verb === "update" ? value : value.subarray(5)];
+      return [Buffer.from(`option no-deref\n${verb} `), name, ...operand, Buffer.from("\n")];
+    };
+    if (this.pending.size > 0) {
+      const input = Buffer.concat([...this.pending.values()].flatMap(({ name, value }) => command(name, value)));
+      await git(["update-ref", "--stdin"], { cwd: this.path, env, input });
+      this.pending.clear();
+    }
+    if (this.pendingHead) {
+      await git(["update-ref", "--stdin"], { cwd: this.path, env, input: Buffer.concat(command(Buffer.from("HEAD"), this.pendingHead)) });
+      this.pendingHead = null;
+    }
+  }
+
+  /**
+   * Checks that `git for-each-ref` lists every ref the repository expects,
+   * byte for byte, and none deleted: a name Git stored as another fails, and
+   * so does a ref a symbolic ref's write left dangling, which Git no longer
+   * lists. It runs as a stage ends, after any pack or prune.
+   */
+  async readBack(env) {
+    if (this.expected.size === 0) return;
+    const listed = await git(["for-each-ref", "--format=%(refname)"], { cwd: this.path, env });
+    const lines = new Set();
+    let start = 0;
+    for (let at = 0; at <= listed.length; at++) {
+      if (at === listed.length || listed[at] === 0x0a) {
+        if (at > start) lines.add(listed.subarray(start, at).toString("hex"));
+        start = at + 1;
+      }
+    }
+    for (const [hex, { name, listed }] of this.expected) {
+      if (lines.has(hex) !== listed) {
+        throw new Error(`git for-each-ref in ${this.path} ${listed ? "does not list" : "still lists"} the ref ${name.toString("hex")} (${name.toString("latin1")}) byte for byte`);
+      }
+    }
   }
 }
 
@@ -229,8 +445,16 @@ class History {
     this.cases = new Set();
     this.forced = CASES[index % CASES.length];
     const format = this.random.chance(0.25) ? "sha256" : "sha1";
-    this.repo = new Repository(directory, format);
+    // How refs are stored and named comes from streams of their own (#334),
+    // so the rest of the history is what it would be without them.
+    this.naming = stream(`${seed}/${index}/refs`);
+    const reftable = refStorageOf({ seed, index }) === "reftable";
+    this.repo = new Repository(directory, format, reftable ? "reftable" : "files");
+    // The refs named outside ASCII, `{ name, kind }`, which the second
+    // stage may move or delete.
+    this.named = [];
     if (format === "sha256") this.cases.add("sha256");
+    if (reftable) this.cases.add("reftable");
     this.time = BASE_TIME + this.random.int(1_000_000);
     this.names = 0;
     // Each branch's tip, and each commit's files: path → { mode, id }.
@@ -576,6 +800,8 @@ class History {
   /** Makes sure the history holds `kind`, with a commit or tag of its own. */
   ensure(kind) {
     if (this.cases.has(kind)) return;
+    // How refs are stored and named is the constructor's and `nameRefs`'s.
+    if (REF_CASES.includes(kind)) return;
     const main = "main";
     if (kind === "merge") {
       const side = this.branch(this.branches.get(main));
@@ -643,6 +869,7 @@ class History {
   /** The first stage: a history, its tags and other refs, and its HEAD. */
   async generate() {
     const random = this.random;
+    await this.repo.create(this.git);
     this.extend("main");
     if (random.chance(0.04)) this.largeCommits();
     if (random.chance(0.05)) this.emptyRoot();
@@ -715,13 +942,64 @@ class History {
     }
     const head = random.int(20);
     if (head === 0) {
-      fs.writeFileSync(path.join(this.repo.path, "HEAD"), `${random.pick(this.commits).id}\n`);
+      this.repo.head(random.pick(this.commits).id);
       this.cases.add("detached-head");
     } else if (head === 1) {
-      fs.writeFileSync(path.join(this.repo.path, "HEAD"), "ref: refs/heads/unborn\n");
+      this.repo.head("ref: refs/heads/unborn");
       this.cases.add("unborn-head");
     }
+    this.nameRefs();
+    await this.repo.flush(this.git);
     if (random.chance(0.2)) await this.pack();
+    await this.repo.readBack(this.git);
+  }
+
+  /**
+   * Refs named outside ASCII, from the naming stream (#334). UTF-8 names in
+   * either storage: branches with a multi-byte character and with a
+   * combining sequence, a lightweight tag and an annotated one. Names that
+   * are not UTF-8 only in a reftable history: a branch, a lightweight and an
+   * annotated tag, a symbolic ref pointing at a branch, one pointing at a
+   * branch so named, and one pointing at another symbolic ref, the chain
+   * whose one-step target `%(symref)` does not give.
+   */
+  nameRefs() {
+    const naming = this.naming;
+    const commit = () => naming.pick(this.commits).id;
+    const add = (name, value, kind) => {
+      this.repo.ref(name, value);
+      this.named.push({ name, kind });
+    };
+    if (["utf8-ref-name", "reftable"].includes(this.forced) || naming.chance(0.15)) {
+      add("refs/heads/café-日本", commit(), "branch");
+      add("refs/heads/café", commit(), "branch");
+      add("refs/tags/версия-1", commit(), "tag");
+      add("refs/tags/✓-release", this.namedTag(commit(), Buffer.from("✓-release")), "tag");
+      this.cases.add("utf8-ref-name");
+    }
+    if (this.repo.refStorage === "reftable" && (this.forced === "non-utf8-ref-name" || naming.chance(0.5))) {
+      // Latin-1's é, and 0xFF 0xFE, which no encoding of text begins a name with.
+      const latin = (prefix, suffix = "") => Buffer.concat([Buffer.from(prefix), Buffer.from([0xe9]), Buffer.from(suffix)]);
+      const branch = latin("refs/heads/caf");
+      add(branch, commit(), "branch");
+      add(Buffer.concat([Buffer.from("refs/tags/v"), Buffer.from([0xff, 0xfe])]), commit(), "tag");
+      add(latin("refs/tags/r", "sum"), this.namedTag(commit(), latin("r", "sum")), "tag");
+      this.cases.add("non-utf8-ref-name");
+      add(latin("refs/heads/", "-current"), "ref: refs/heads/main", "symbolic");
+      this.repo.ref("refs/heads/to-latin", Buffer.concat([Buffer.from("ref: "), branch]));
+      this.cases.add("non-utf8-symbolic-ref");
+      this.repo.ref("refs/heads/alias", "ref: refs/heads/main");
+      add(latin("refs/heads/", "-chain"), "ref: refs/heads/alias", "symbolic");
+      this.cases.add("non-utf8-symbolic-chain");
+    }
+  }
+
+  /** An annotated tag of `object`, a commit, whose name is `name`'s bytes. */
+  namedTag(object, name) {
+    return this.repo.write("tag", Buffer.concat([
+      Buffer.from(`object ${object}\ntype commit\ntag `), name,
+      Buffer.from(`\ntagger Tagger Name <tagger@example.com> ${BASE_TIME} +0000\n\nnamed outside ASCII\n`),
+    ]));
   }
 
   /** A notes ref whose notes name some of the history's commits. */
@@ -737,10 +1015,7 @@ class History {
 
   /** Packs the objects and refs with Git, as a gc leaves a repository. */
   async pack() {
-    for (const args of [["repack", "-adq"], ["pack-refs", "--all"]]) {
-      const result = await run("git", args, { cwd: this.repo.path, env: this.git });
-      if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${this.repo.path}: ${result.stderr}`);
-    }
+    for (const args of [["repack", "-adq"], ["pack-refs", "--all"]]) await git(args, { cwd: this.repo.path, env: this.git });
     this.cases.add("packed");
   }
 
@@ -772,21 +1047,37 @@ class History {
       const name = this.name("v");
       this.repo.ref(`refs/tags/${name}`, this.tag(this.branches.get("main"), "commit", name));
     }
+    // A branch named outside ASCII may move to main's tip, and such a tag be
+    // deleted. No symbolic ref points at a tag, so none is left dangling.
+    for (const ref of this.named) {
+      if (ref.kind === "branch" && this.naming.chance(0.5)) {
+        this.repo.ref(ref.name, this.branches.get("main"));
+        this.cases.add("moved-named-ref");
+      } else if (ref.kind === "tag" && this.naming.chance(0.3)) {
+        this.repo.deleteRef(ref.name);
+        await this.deletePacked(ref.name);
+        ref.kind = "deleted";
+        this.cases.add("deleted-named-ref");
+      }
+    }
     this.writeRefs();
+    await this.repo.flush(this.git);
     if (random.chance(0.3)) {
       for (const args of [["reflog", "expire", "--expire=now", "--all"], ["gc", "-q", "--prune=now"]]) {
-        const result = await run("git", args, { cwd: this.repo.path, env: this.git });
-        if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${this.repo.path}: ${result.stderr}`);
+        await git(args, { cwd: this.repo.path, env: this.git });
       }
       this.cases.add("pruned");
     }
+    await this.repo.readBack(this.git);
   }
 
-  /** Removes `ref` from `packed-refs`, where a pack may have put it. */
+  /**
+   * Removes `ref` from `packed-refs`, where a pack may have put it. Only a
+   * files repository has one, so `ref` is UTF-8, which an argument carries.
+   */
   async deletePacked(ref) {
     if (!fs.existsSync(path.join(this.repo.path, "packed-refs"))) return;
-    const result = await run("git", ["update-ref", "-d", ref], { cwd: this.repo.path, env: this.git });
-    if (result.status !== 0) throw new Error(`git update-ref -d ${ref} failed in ${this.repo.path}: ${result.stderr}`);
+    await git(["update-ref", "-d", this.repo.fileName(bytesOf(ref))], { cwd: this.repo.path, env: this.git });
   }
 }
 
@@ -801,6 +1092,10 @@ export function history({ directory, seed, index, env }) {
     path: directory,
     get format() {
       return made.repo.format;
+    },
+    /** `files` or `reftable`, known before `generate()`. */
+    get refStorage() {
+      return made.repo.refStorage;
     },
     cases: made.cases,
     generate: () => made.generate(),
