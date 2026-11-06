@@ -10,7 +10,9 @@ run history-changing manual experiments in a valuable repository.
 - Rust (the toolchain `native/rust-toolchain.toml` pins), to build the `cst` the suites run with `npm run build:native`
 - Git 2.40 or newer (Git 2.49 or newer to exercise the merge-tree forecast
   engine; the merge-tree scenarios skip on older Git, where one scenario
-  verifies the immediate `git-too-old` fallback instead)
+  verifies the immediate `git-too-old` fallback instead; Git 2.46 or newer
+  for the generated-history corpus's reftable histories, which skip on older
+  Git)
 - a clean source checkout for release qualification
 - enough system temporary space for disposable repositories
 
