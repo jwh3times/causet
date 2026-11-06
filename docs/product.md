@@ -816,8 +816,9 @@ Each links to the issue that carries it; the board is where its status lives.
 - Rerun the accepted repository-scale schema on larger fixtures and real
   repositories now that workspace-status and resolution-catalog scans are
   batched (the Windows rerun is recorded in ADR-0013); consider incremental
-  catalogs only if already-batched scans remain over a representative budget
-  ([#42](https://github.com/jwh3times/causet/issues/42)).
+  catalogs only if already-batched scans remain over a representative budget.
+  [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md) stops this performance work for Git-backed repositories, so
+  [#42](https://github.com/jwh3times/causet/issues/42), which held it, closed on 2026-11-06.
 - A repository-local service only if cross-command process and scan costs remain
   material after batching — see the decision rows below.
 - Protocol capability negotiation and optional remote gateway
@@ -1017,8 +1018,10 @@ a catalog or a service.
 | A native subsystem's ADR names its contract, its equality test against the Git-backed answer, and its migration, and is accepted (restated Gate B, ADR-0041) | Begin that subsystem behind the existing observable contracts, with Git as oracle while a Git-backed answer exists. |
 
 The bounded Gate A budget in ADR-0027 is accepted; broader representative
-budgets have not been ratified. Ratifying those budgets remains part of
-[issue #42](https://github.com/jwh3times/causet/issues/42).
+budgets have not been ratified, and won't be: [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md) stops the planned
+performance work for Git-backed repositories, and
+[issue #42](https://github.com/jwh3times/causet/issues/42), which held the
+ratification, closed on 2026-11-06.
 
 Efficiency claims follow ADR-0014's definition: elapsed time per operation and
 bytes stored and transferred, per host, against plain Git's best mode and any
@@ -1043,9 +1046,9 @@ acceptance signals.
 | FR-PLAN-08 | Delivered; the remote half landed in v0.15.0 | [ADR-0031](adr/0031-carry-a-bound-source-inventory-for-portable-verification.md) is built in [#36](https://github.com/jwh3times/causet/issues/36). What remains unavailable to a remote verifier is absence — that a change is genuinely new, and that a candidate's patch really matches — which needs objects the bundle deliberately does not carry |
 | FR-RES-07 | Planned; contract accepted | [#35](https://github.com/jwh3times/causet/issues/35); [ADR-0036](adr/0036-keep-suggested-resolutions-outside-the-resolution-family.md) is accepted as the shape the tier must take — a private family the exact-reuse path cannot read — but whether to build it at all is deliberately still open, so the requirement stays Planned |
 | FR-WS-08 | Deferred | [#40](https://github.com/jwh3times/causet/issues/40), under Gate B |
-| FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded | Real-repository evidence is [#42](https://github.com/jwh3times/causet/issues/42); wider zero-process status remains gated beyond ADR-0027 ([#18](https://github.com/jwh3times/causet/issues/18)) |
+| FR-WS-09 | Batched status implemented; Linux and Windows synthetic evidence recorded; further work stopped for Git-backed repositories | [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md) stops performance work for Git-backed repositories, so [#42](https://github.com/jwh3times/causet/issues/42), which held the real-repository evidence, closed on 2026-11-06. Native repositories get their own workspaces in N3 ([#312](https://github.com/jwh3times/causet/issues/312)) |
 | FR-SPEC-13 | Gated; no additional format selected | [#111](https://github.com/jwh3times/causet/issues/111), whose first deliverable is the selection and the argument for it. The groundwork is delivered: [#31](https://github.com/jwh3times/causet/issues/31) built the shared conformance suite and [#33](https://github.com/jwh3times/causet/issues/33) the adapter contract, and [#32](https://github.com/jwh3times/causet/issues/32) recorded why requirement-level merge stayed out. [ADR-0026](adr/0026-version-fence-aware-markdown-boundaries.md) corrects fenced boundaries with versioned migration; it does not deliver another format. |
-| FR-PERF-09 | Evidence gate | [#42](https://github.com/jwh3times/causet/issues/42); bounded native read scope accepted in ADR-0027 ([#18](https://github.com/jwh3times/causet/issues/18)) |
+| FR-PERF-09 | Stopped for Git-backed repositories | [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md) stops the performance program for Git-backed repositories, and ADR-0044 reports native timings without gating them, so [#42](https://github.com/jwh3times/causet/issues/42) closed on 2026-11-06. The bounded native read scope accepted in ADR-0027 ([#18](https://github.com/jwh3times/causet/issues/18)) stands |
 | FR-PROTO-06 | Offline half implemented; gateway deferred | [#37](https://github.com/jwh3times/causet/issues/37); [ADR-0033](adr/0033-advertise-capabilities-as-a-document-negotiated-offline.md) is accepted and built. What is deferred is the server, not the contract: `cst capabilities --against` already reaches every conclusion negotiation defines |
 | FR-TRUST-02, FR-TRUST-03 | Deferred | [#38](https://github.com/jwh3times/causet/issues/38) and [#39](https://github.com/jwh3times/causet/issues/39) |
 
@@ -1128,8 +1131,11 @@ recorded in an ADR when it changes a durable decision.
    unless the rejection is reopened.
 7. At what measured thresholds does a long-lived repository service outperform
    invocation-scoped Git plumbing enough to justify lifecycle and security
-   costs? (§15 decision rows;
-   [#42](https://github.com/jwh3times/causet/issues/42))
+   costs? (§15 decision rows.) Nothing is scheduled to answer it:
+   [ADR-0043](adr/0043-order-the-native-transition-by-dependency-starting-with-n1.md)
+   stops the performance work for Git-backed repositories that would have,
+   and [#42](https://github.com/jwh3times/causet/issues/42), which held it,
+   closed on 2026-11-06.
 8. Should portable spec identity remain a tracked sidecar, move into Git object
    metadata, or become a native structured object after the experiment?
    ([#33](https://github.com/jwh3times/causet/issues/33))

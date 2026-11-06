@@ -1090,8 +1090,9 @@ moves and the committed deterministic baseline stays comparable; the phases that
 create worktrees would otherwise change what a later floor sees, so the status
 floor is given the worktree set its phase actually measured.
 
-The ratio is **reported, not enforced**. The 110% criterion is not ratified yet
-(issue #42) and several phases exceed it today, so `compare()` is unchanged and
+The ratio is **reported, not enforced**. The 110% criterion was never ratified
+(ADR-0043 stopped the performance program for Git-backed repositories, and
+issue #42 closed on 2026-11-06) and several phases exceed it today, so `compare()` is unchanged and
 no run fails on a ratio. The report exists so the decision has numbers.
 
 A process count above the baseline, a median above twice the
@@ -1169,8 +1170,11 @@ The baseline holds two kinds of identified entry:
   limits apply only to matching hardware and settings, and only when that
   label is passed. This is evidence for performance work, not a release gate.
 
-Real-repository, multi-host evidence and budget ratification remain in
-[issue #42](https://github.com/jwh3times/causet/issues/42).
+Real-repository evidence now comes from the native corpora, which
+`corpora.yml` runs on hosted Linux and Windows runners. Budget ratification
+for Git-backed repositories stopped with ADR-0043, and
+[issue #42](https://github.com/jwh3times/causet/issues/42) closed on
+2026-11-06.
 
 ## Release gate
 
@@ -1224,9 +1228,10 @@ compares latency with that machine's entry, and a regression there is worth an
 issue. It no longer blocks a release, and
 [issue #68](https://github.com/jwh3times/causet/issues/68)'s Windows-only
 latency qualification is superseded as a gate. The separate multi-host workload
-evidence and budget ratification in
-[issue #42](https://github.com/jwh3times/causet/issues/42) are investment
-gates, not release gates, and are unchanged.
+evidence and budget ratification that
+[issue #42](https://github.com/jwh3times/causet/issues/42) held were investment
+gates, not release gates; ADR-0043 stopped them for Git-backed repositories,
+and #42 closed on 2026-11-06.
 
 Item 2 is enforced by `test/repository-hygiene.test.js`, so item 3 already
 covers it; it is named separately because it is a property of the checkout
@@ -1464,8 +1469,9 @@ page, and each checkpoint is recorded there.
 
 ### Measuring a real repository
 
-Use `scripts/measure-real-repository.mjs` for the read-only part of
-[#42](https://github.com/jwh3times/causet/issues/42). From a checkout with
+Use `scripts/measure-real-repository.mjs` for a read-only measurement of a
+real repository, as [#42](https://github.com/jwh3times/causet/issues/42) did
+(closed 2026-11-06). From a checkout with
 `cst` built (`npm run build:native`), run:
 
 ```sh
@@ -1509,7 +1515,9 @@ execution. Keep real-environment and controlled-profile results separate.
 Retain outputs on the issue or as CI artifacts after checking paths and other
 private data. Choose another output filename for another run. This measures
 one host/repository snapshot; wider workload selection, user consequences,
-budgets, and POSIX participation remain explicit decisions on #42 and #19.
+budgets, and POSIX participation were explicit decisions on #42 and #19, both
+closed on 2026-11-06. Workload evidence a native phase needs goes on that
+phase's issue.
 
 Record the tested commit, platform and tool versions, command outcome, and any
 material exception in the pull request or release summary. Store raw logs and
