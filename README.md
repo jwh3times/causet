@@ -1440,8 +1440,10 @@ on its matching machine. Latency on an identified machine is evidence for
 performance work. It does not gate a release: every release gate runs on
 GitHub-hosted runners, and the benchmark's part in them is the deterministic
 counts, compared with the `github-<runner>` entries.
-Real-repository, multi-host evidence and budget ratification remain in
-[issue #42](https://github.com/jwh3times/causet/issues/42).
+Real-repository evidence now comes from the native corpora (`corpora.yml`);
+budget ratification for Git-backed repositories stopped with ADR-0043, and
+[issue #42](https://github.com/jwh3times/causet/issues/42) closed on
+2026-11-06.
 
 Measure indexing and raw/estimated-compressed metadata size without changing the
 current repository:
