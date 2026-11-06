@@ -446,7 +446,10 @@ does not grow with its object count:
   SHA-256, that the frames lie back to back from offset 16 to the index, that
   the names are in byte order with none repeated, that the fan-out counts
   them, every record, and the annotation table. `cst fsck` also checks the
-  trailer (§4). Import reads each index whole with the same checks.
+  trailer (§4). Import reads each index whole with the same checks, and so
+  do `cst cat-file --batch` and `--batch-check` before they answer: a batch
+  names many objects, so it pays for the store's size once rather than for a
+  read per lookup.
 
 A damaged part that a reader does not check can misdirect a lookup, but
 never into a wrong answer. The object it reads may fail its ID, which is
@@ -458,8 +461,8 @@ hide a second match. It does this at most once per command, and not at all
 when the command has already read the indexes whole. An index that fails
 is corrupt, and the read is refused. A store therefore opens in time
 proportional to its number of containers, not its number of objects
-(§4.2). A read pays for whole indexes only when it misses or resolves an
-abbreviation.
+(§4.2). A read of one object pays for whole indexes only when it misses or
+resolves an abbreviation.
 
 The writer's rules of §1, §3.1 and §5.1 are not checked by readers. A store
 that breaks one, say a chunk list for a 1 KiB file, still reads correctly; only

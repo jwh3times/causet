@@ -677,7 +677,10 @@ not grow with its row count:
   read the file whole. They also check the trailer, that the rows are in byte
   order of Git ID with none repeated, that each fan-out counts its rows, and
   that the native order lists every row once, in its order. Import reads the
-  file whole with the same checks, since it rewrites the file.
+  file whole with the same checks, since it rewrites the file, and so do
+  `cst cat-file --batch` and `--batch-check` before they answer: a batch
+  names many objects, so it pays for the file's size once rather than for a
+  read per lookup.
 - **A reader that is about to report a miss** reads the file whole with
   those same checks first. A miss is a Git ID with no row, or a native ID
   none of whose rows is its own. A reader does this at most once per file
@@ -689,8 +692,8 @@ row it finds may name a short reference no object begins with, which is
 corrupt. A lookup that misses a row reads the file whole before it answers,
 so damage is reported, not mistaken for a Git ID that was never imported. A
 lookup that finds what it looks for still reads only the parts above, so a
-reader's cost grows with the file only when it misses. Two cases are left to
-`cst fsck`, since in each nothing misses:
+reader of one object pays for the file's size only when it misses. Two cases
+are left to `cst fsck`, since in each nothing misses:
 
 - **A damaged short reference that exactly matches the first 8 bytes of
   another object's native ID.** A lookup by the row's Git ID then finds that
