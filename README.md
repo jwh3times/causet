@@ -34,8 +34,8 @@ This is a laboratory, not a production VCS. Its purpose is to make the semantics
   implementation gates, and the trace from every incomplete requirement to the
   issue that carries it.
 - The [project board](https://github.com/users/jwh3times/projects/7) tracks
-  future work, one issue per increment, with the gate each is waiting on. It
-  replaced `docs/roadmap.md` on 2026-09-04.
+  future work, one issue per increment, in priority order, with the gate each
+  is waiting on. It replaced `docs/roadmap.md` on 2026-09-04.
 - [Architecture](docs/architecture.md) maps the current implementation, schemas,
   runtime flows, safety boundaries, and known debt.
 - [Schema catalog](docs/schemas/README.md) publishes one JSON Schema document

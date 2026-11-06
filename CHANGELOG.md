@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- **Contributor workflow: the board says what to pick up next.**
+  `docs/agents/triage-labels.md` adds a `blocked` label. It sits beside the
+  state label: the issue can't move until a named blocker clears, and the
+  state label says who acts once it does. The blocker is a GitHub dependency
+  link when it is an issue here. `docs/agents/issue-tracker.md` adds the
+  board's `Priority` field, `P0 — now` to `P3 — someday`. Every open issue has
+  a priority whether or not it is blocked, and the board is kept in priority
+  order. Status `Blocked` now means exactly the `blocked` label. An agent's
+  next work is the first open `ready-for-agent` issue without `blocked`, in
+  board order (`docs/agents/dev-flow.md`).
+
 - **Experimental: `cst import` refuses a ref that names a missing object by
   name** (#330). When a ref of the source named an object it doesn't hold,
   import passed Git's own failure on and exited 128: `git rev-list --all
