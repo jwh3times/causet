@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- **Experimental: `cst import` refuses a ref that names a missing object by
+  name** (#330). When a ref of the source named an object it doesn't hold,
+  import passed Git's own failure on and exited 128: `git rev-list --all
+  --no-walk=unsorted failed / fatal: bad object refs/…`. Import now checks
+  every ref, and every other worktree's `HEAD`, before it writes anything.
+  It refuses the first that names a missing object with
+  `unsupported-repository-shape` and exit 1, as it refuses a shallow clone,
+  naming the ref and the object: `<source> has the ref refs/heads/broken,
+  which names <id>, an object it does not hold, so its history cannot be
+  imported exactly (ADR-0045, decision 1).` A symbolic ref, and a `HEAD` on
+  a branch with no commits, name nothing and are still imported.
+
 - **Experimental: `cst cat-file --batch` and `--batch-check` in a native
   repository** (#346). They read one object name per line of standard input
   and answer each from one opened store, in Git's formats.
