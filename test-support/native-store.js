@@ -26,6 +26,35 @@ export function nativeId(type, body) {
   return sha256(Buffer.concat([Buffer.from("cst"), Buffer.from([type]), body]));
 }
 
+/**
+ * The entries of a ref snapshot's body (objects.md §6), as hex of each name
+ * to `{ kind, target }`: `direct` with the native ID's 33 bytes, or
+ * `symbolic` with the target ref name's bytes.
+ */
+export function snapshotEntries(body) {
+  let at = 1;
+  const varint = () => {
+    let value = 0;
+    for (let shift = 0; ; shift += 7) {
+      const byte = body[at++];
+      value += (byte & 0x7f) * 2 ** shift;
+      if (byte < 0x80) return value;
+    }
+  };
+  const take = (length) => {
+    at += length;
+    return body.subarray(at - length, at);
+  };
+  const entries = new Map();
+  for (let count = varint(); count > 0; count--) {
+    const name = take(varint());
+    const kind = body[at++] === 1 ? "direct" : "symbolic";
+    entries.set(name.toString("hex"), { kind, target: kind === "direct" ? take(33) : take(varint()) });
+  }
+  if (at !== body.length) throw new Error(`a snapshot body of ${body.length} bytes ends at ${at}`);
+  return entries;
+}
+
 const ALIAS_HEADER = 16;
 const FANOUT = 1024;
 const gitWidth = (format) => (format === "sha1" ? 20 : 32);

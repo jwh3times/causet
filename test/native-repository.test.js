@@ -18,8 +18,12 @@ import test, { after } from "node:test";
 import { pathToFileURL } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-import { aliases } from "../test-support/native-store.js";
+import { aliases, snapshotEntries } from "../test-support/native-store.js";
 import { parseBatch } from "../test-support/native-kind.js";
+import { latin, reftableUnsupported, writeRefs } from "../test-support/generated-histories.js";
+
+/** Why this host cannot write a reftable ref whose name is not UTF-8, or null. */
+const NON_UTF8_REFS = await reftableUnsupported(testEnv);
 
 const created = [];
 
@@ -687,6 +691,66 @@ test("a ref naming an object the source does not hold is refused by name before 
     new RegExp(`has the ref refs/heads/broken, which names ${lost}, an object it does not hold, so its history cannot be imported exactly \\(ADR-0045, decision 1\\)\\.`));
   assert.equal(fs.existsSync(path.join(root, "broken-native")), false, "nothing is written");
   git(["update-ref", "-d", "refs/heads/broken"]);
+});
+
+/**
+ * A reftable source with one commit, on `main`, and the refs `refs(commit)`
+ * lists, each `[name, value]`: a commit ID or `ref: <name>`, as strings or
+ * bytes. A name reaches Git only on standard input: an argument cannot
+ * carry bytes that are not UTF-8 on Windows.
+ */
+async function reftableSource(refs) {
+  const root = scratch();
+  const repo = path.join(root, "source");
+  const git = gitIn(repo);
+  execFileSync("git", [...INIT_SHA1, "--ref-format=reftable", repo], { env: testEnv() });
+  const tree = git(["mktree"], Buffer.alloc(0)).toString().trim();
+  const commit = git(["commit-tree", tree, "-m", "one"]).toString().trim();
+  git(["update-ref", "refs/heads/main", commit]);
+  const bytes = (value) => (Buffer.isBuffer(value) ? value : Buffer.from(value));
+  await writeRefs(repo, testEnv(IDENTITY), refs(commit).map(([name, value]) => [bytes(name), bytes(value)]));
+  return root;
+}
+
+test("a symbolic ref whose name is not UTF-8 is refused by name before anything is written, whether or not it points at another symbolic ref", { skip: NON_UTF8_REFS ?? false }, async () => {
+  // Git cannot be asked, by a name it cannot be given, which ref it points
+  // to, and `%(symref)` gives only where its chain ends. A ref it points at
+  // may be one no listing shows, such as a root ref (#398).
+  for (const [suffix, refs] of [
+    ["-current", (commit) => [["refs/heads/side", commit], [latin("refs/heads/", "-current"), "ref: refs/heads/side"]]],
+    ["-chain", () => [["refs/heads/alias", "ref: refs/heads/main"], [latin("refs/heads/", "-chain"), "ref: refs/heads/alias"]]],
+  ]) {
+    const root = await reftableSource(refs);
+    const refused = cst(root, ["import", "source", "native"]);
+    assert.equal(refused.status, 1, refused.stderr.toString());
+    assert.match(refused.stderr.toString(), new RegExp(`has the symbolic ref refs/heads/�${suffix}, whose name is not UTF-8: `
+      + "Git cannot be given that name to say which ref it points to, so its history cannot be imported exactly \\(ADR-0045, decision 1\\)\\."));
+    assert.equal(fs.existsSync(path.join(root, "native")), false, `${suffix}: nothing is written`);
+  }
+});
+
+test("a symbolic ref named in UTF-8 is recorded one step, not where its chain ends, whatever bytes its target holds", { skip: NON_UTF8_REFS ?? false }, async () => {
+  const branch = latin("refs/heads/caf");
+  const root = await reftableSource((commit) => [
+    [branch, commit],
+    ["refs/heads/to-latin", Buffer.concat([Buffer.from("ref: "), branch])],
+    ["refs/heads/alias", "ref: refs/heads/main"],
+    ["refs/heads/chain", "ref: refs/heads/alias"],
+  ]);
+  const imported = cst(root, ["import", "source", "native"]);
+  assert.equal(imported.status, 0, imported.stderr.toString());
+  const native = path.join(root, "native");
+  const snapshot = fs.readFileSync(path.join(native, ".cst", "snapshot"), "latin1").trim();
+  const entries = snapshotEntries(cst(native, ["cat-file", "-p", snapshot]).stdout);
+  const target = (name) => {
+    const entry = entries.get(Buffer.from(name).toString("hex"));
+    assert.equal(entry?.kind, "symbolic", `${name} is recorded as symbolic`);
+    return entry.target;
+  };
+  assert.deepEqual(target("refs/heads/chain"), Buffer.from("refs/heads/alias"), "one step, not the chain's end");
+  assert.deepEqual(target("refs/heads/alias"), Buffer.from("refs/heads/main"));
+  assert.deepEqual(target("refs/heads/to-latin"), branch, "the target's bytes, verbatim");
+  assert.deepEqual(target("HEAD"), Buffer.from("refs/heads/main"));
 });
 
 test("a HEAD on an unborn branch, beside branches with commits, names nothing to refuse", () => {

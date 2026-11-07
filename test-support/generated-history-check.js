@@ -102,6 +102,20 @@ export async function checkHistory({ seed, index, env, base = os.tmpdir() }) {
     await cst(first, ["fsck"]);
     await cst(first, ["import", "--verify"]);
     problems.push(...await compareCopy(repository, full, { env, where: where("stage 2"), width: 4 }));
+
+    // A copy given a symbolic ref whose name is not UTF-8, which Git cannot
+    // be asked the one-step target of, is refused by that name, and nothing
+    // is written (#398). The name prints as import prints it, lossily.
+    for (const [k, refusal] of made.refusals.entries()) {
+      const copy = path.join(root, `refused-${k}`);
+      fs.cpSync(made.path, copy, { recursive: true });
+      await refusal.write(copy);
+      const result = await run(cstCommand, [...cstPrefix(), "import", copy, `refused-${k}-native`], { cwd: root, env: env(OPT_IN) });
+      const name = refusal.name.toString();
+      assert.ok(result.status === 1 && result.stderr.includes(`has the symbolic ref ${name}, whose name is not UTF-8`),
+        `cst import of the history given the symbolic ref ${name} exited ${result.status}, not refusing it by name: ${result.stderr}`);
+      assert.equal(fs.existsSync(path.join(root, `refused-${k}-native`)), false, `the import refusing ${name} wrote nothing`);
+    }
   } catch (error) {
     problems.push(`${where("checks")}: ${error.message}`);
   } finally {

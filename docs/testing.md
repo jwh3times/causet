@@ -368,9 +368,12 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
     branch, a lightweight and an annotated tag, a symbolic ref so named that
     points at a branch, an ASCII symbolic ref that points at the branch so
     named, and a chain, a symbolic ref so named that points at another
-    symbolic ref. Such a name reaches Git only on standard input: Windows
-    argv cannot carry its bytes, and Git for Windows stores it as a loose
-    file under another name, so a files history never holds one.
+    symbolic ref. Import refuses a symbolic ref whose name is not UTF-8
+    (#398), so those two are each written only into their own copy of the
+    final stage, whose import must be refused by that name, with nothing
+    written. Such a name reaches Git only on standard input: Windows argv
+    cannot carry its bytes, and Git for Windows stores it as a loose file
+    under another name, so a files history never holds one.
 
   As each stage ends, after any pack or prune, every ref named outside ASCII
   and every ref of a reftable history is read back from `git for-each-ref`,
@@ -423,10 +426,10 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
 
   No check here sees a symbolic ref's one-step target: `for-each-ref`'s
   `%(symref)`, Git's and cst's, gives where a chain ends, and no N1 command
-  answers the step. A chain whose name is not UTF-8 is imported to where it
-  ends, since import cannot pass that name back to Git as an argument: a
-  defect against the snapshot's verbatim rule, which these checks pass
-  (#398).
+  answers the step. Import asks Git for it by the ref's name, and refuses a
+  symbolic ref whose name it cannot pass to Git, one that is not UTF-8
+  (#398). The native-repository suite reads the recorded steps from the
+  snapshot itself.
 
   The suite also generates the first histories of `causet-n1`, one per case,
   and compares a digest of their refs, `HEAD` and objects after each stage

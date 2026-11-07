@@ -261,9 +261,20 @@ impl Source {
             .symbolic(name)?
             .ok_or_else(|| malformed("a symbolic ref"))?,
         ),
-        // A name that is not UTF-8 cannot be passed back to git, so it keeps
-        // the end of its chain, which is its target unless it is a chain.
-        (false, Err(_)) => Some(symbolic.to_vec()),
+        // A name that is not UTF-8 cannot be passed back to git, so its
+        // one-step target cannot be asked. `%(symref)` is where its chain
+        // ends, and it may point at a symbolic ref no listing shows, such as
+        // a root ref or another worktree's HEAD, so no check of the refs
+        // listed here can say that is its target (#398).
+        (false, Err(_)) => {
+          return Err(refused(
+            &self.path,
+            &format!(
+              "has the symbolic ref {}, whose name is not UTF-8: Git cannot be given that name to say which ref it points to",
+              String::from_utf8_lossy(name)
+            ),
+          ));
+        }
       };
       refs.push(Listed {
         name: name.to_vec(),

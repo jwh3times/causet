@@ -121,7 +121,7 @@ test("a seed generates the same histories every time, and another seed others", 
  */
 const CORPUS_DIGESTS = {
   files: "c37b6e2bbb5ab010c4b01ad36080b40557e639aad016ef44630f932b5728c917",
-  reftable: "e44531b261fd976ea2e186d8eaf23a7d4ee55e1d8ad660872c68aabf92e44698",
+  reftable: "623398907eed384b1bd717aa5b1086e5f10abb11318b081a13bb7c6ffec3bdb5",
 };
 
 for (const refStorage of ["files", "reftable"]) {
