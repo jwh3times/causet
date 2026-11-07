@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw6lz23o3cbc7df18cfd",
+      "mode": "compact",
+      "sourceRef": "fix/398-non-utf8-symbolic-chain",
+      "sourceHead": "03a4897e2af4afa6c054ab9df16768706a4eb2e8",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "5863f396420f29b599104478c55f6649526007f1",
+      "landingCommit": "82370b7df0fa9b54907e01a4c72445fe4526a033",
+      "base": "5863f396420f29b599104478c55f6649526007f1",
+      "absorbedCommits": [
+        "ce18cc79dc9a13ff09b49808d339efa7e0537a06",
+        "03a4897e2af4afa6c054ab9df16768706a4eb2e8"
+      ],
+      "absorbedChanges": [
+        "ch_0mw5urf2m823154e21a82",
+        "ch_0mw6h84sr8edb8c8c1bc3"
+      ],
+      "resultTree": "8c0f8e08ab1393d7bb2ced3f87a54d4ad346aec7",
+      "createdAt": "2026-11-07T16:19:09.582Z"
+    }
+  ]
+}
