@@ -912,10 +912,12 @@ container, and content absent by promise or by policy, which it reports by
 state rather than as corruption.
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
-ID, also without Git. Those two, and an import into an existing native
-repository, read the alias files and every container's index whole. The
-reads above check only the parts of the store they touch and verify each
-object they read by its ID, so their cost does not grow with the store's
+ID, also without Git. Those two, `cst cat-file --batch` and
+`--batch-check`, and an import into an existing native repository, read the
+alias files and every container's index whole: a batch names many objects,
+so it pays for the store's size once rather than for a read per lookup. The
+other reads above check only the parts of the store they touch and verify
+each object they read by its ID, so their cost does not grow with the store's
 object count. A read that misses, or resolves an abbreviation, first reads
 the files it searched whole, once per command, so damage is reported rather
 than answered as a missing object
