@@ -31,6 +31,7 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 /// A store failure as a published error.
 pub fn store_error(error: StoreError) -> GitError {
@@ -66,6 +67,78 @@ pub struct Imported {
   pub snapshot: Option<NativeId>,
   /// The object `HEAD` resolves to through the snapshot, unless it is unborn.
   pub head: Option<NativeId>,
+  /// What the import cost, reported and never checked (#347).
+  pub cost: Cost,
+}
+
+/// What an import cost, reported and never checked (#347).
+#[derive(Debug, Default)]
+pub struct Cost {
+  /// Each phase, in order.
+  pub phases: Vec<Phase>,
+  /// The peak size on disk of the held metadata file (`import.metadata`).
+  pub held_metadata: u64,
+}
+
+/// A phase of an import: `source` (opening the source and checking its
+/// refs), `open` (opening or creating the store, and asking Git which
+/// history it holds already), `reach`, `walk`, `content` (writing blobs),
+/// `metadata` (encoding trees, commits and tags into the held file) and
+/// `finish` (writing the held records in path order, the snapshot, the alias
+/// file and the index, and putting the store in place).
+#[derive(Debug)]
+pub struct Phase {
+  pub name: &'static str,
+  pub took: Duration,
+  /// The process's peak memory when the phase ended (`peak_memory`): the
+  /// first phase whose figure reaches the import's peak is the one that set
+  /// it.
+  pub peak_memory: Option<u64>,
+}
+
+/// This process's peak resident memory in bytes, where the system tells it
+/// without unsafe code: Linux's high-water mark, `VmHWM` in
+/// `/proc/self/status`. Elsewhere `None`.
+pub fn peak_memory() -> Option<u64> {
+  if !cfg!(target_os = "linux") {
+    return None;
+  }
+  let status = std::fs::read_to_string("/proc/self/status").ok()?;
+  let line = status.lines().find_map(|line| line.strip_prefix("VmHWM:"))?;
+  let kilobytes: u64 = line.trim().strip_suffix("kB")?.trim().parse().ok()?;
+  Some(kilobytes * 1024)
+}
+
+/// The phases of an import, timed in order.
+struct Phases {
+  started: Instant,
+  done: Vec<Phase>,
+}
+
+impl Phases {
+  fn start() -> Phases {
+    Phases {
+      started: Instant::now(),
+      done: Vec::new(),
+    }
+  }
+
+  /// Ends the phase `name`, which began when the one before it ended.
+  fn end(&mut self, name: &'static str) {
+    let now = Instant::now();
+    self.done.push(Phase {
+      name,
+      took: now - self.started,
+      peak_memory: peak_memory(),
+    });
+    self.started = now;
+  }
+
+  /// Ends the last phase, and gives every phase to what was imported.
+  fn close(mut self, imported: &mut Imported) {
+    self.end("finish");
+    imported.cost.phases = self.done;
+  }
 }
 
 struct Importer<'a> {
@@ -106,6 +179,7 @@ struct Walk {
 /// any later failure nothing is left that import created, and an existing
 /// repository is as it was.
 pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
+  let mut phases = Phases::start();
   let source = git::Source::open(source)?;
   let algorithm = GitAlgorithm::from_name(&source.format).ok_or_else(|| {
     GitError::new(
@@ -121,22 +195,19 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   let mut refs = source.refs()?;
   refs.sort_by(|a, b| a.name.cmp(&b.name));
   source.refuse_unheld(&refs)?;
+  phases.end("source");
   if destination.join(".cst").join("format").is_file() {
     let mut store = StoreWriter::open(destination, algorithm).map_err(store_error)?;
-    let (mut imported, snapshot) = write(&source, algorithm, &mut store, refs)?;
-    store.finish(&snapshot).map_err(store_error)?;
+    let (imported, snapshot) = write(&source, algorithm, &mut store, refs, &mut phases)?;
+    let mut imported = finish(store, imported, &snapshot)?;
     imported.added = true;
-    imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
+    phases.close(&mut imported);
     return Ok(imported);
   }
   let existed = destination.exists();
   let mut store = StoreWriter::create(destination, algorithm).map_err(store_error)?;
-  let result = write(&source, algorithm, &mut store, refs);
-  let result = result.and_then(|(mut imported, snapshot)| {
-    store.finish(&snapshot).map_err(store_error)?;
-    imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
-    Ok(imported)
-  });
+  let result = write(&source, algorithm, &mut store, refs, &mut phases)
+    .and_then(|(imported, snapshot)| finish(store, imported, &snapshot));
   if result.is_err() {
     let _ = if existed {
       std::fs::remove_dir_all(destination.join(".cst-import"))
@@ -144,7 +215,19 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
       std::fs::remove_dir_all(destination)
     };
   }
-  result
+  result.map(|mut imported| {
+    phases.close(&mut imported);
+    imported
+  })
+}
+
+/// Finishes `store` with `snapshot`. The held metadata file's size is read
+/// first: it has only grown until now, and finishing writes and removes it.
+fn finish(store: StoreWriter, mut imported: Imported, snapshot: &Snapshot) -> GitResult<Imported> {
+  imported.cost.held_metadata = store.held_metadata();
+  store.finish(snapshot).map_err(store_error)?;
+  imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
+  Ok(imported)
 }
 
 /// Writes the history `refs` reach, the source's refs in byte order of
@@ -154,6 +237,7 @@ fn write(
   algorithm: GitAlgorithm,
   store: &mut StoreWriter,
   refs: Vec<git::Listed>,
+  phases: &mut Phases,
 ) -> GitResult<(Imported, Snapshot)> {
   // The walk starts from the objects the refs that are not symbolic name, in
   // byte order of ref name, then from what only other worktrees' `HEAD`
@@ -200,9 +284,12 @@ fn write(
     },
     failed: RefCell::new(None),
   };
+  phases.end("open");
   importer.reach(&tips, &except)?;
+  phases.end("reach");
   let walk = importer.walk(&tips);
   let bases = importer.bases(&walk);
+  phases.end("walk");
   if walk.metadata.len() + walk.content.len() != importer.types.len() {
     return Err(GitError::new(
       "internal-invariant",
@@ -214,9 +301,11 @@ fn write(
     ));
   }
   importer.content(&walk.content, &bases)?;
+  phases.end("content");
   for (id, path) in &walk.metadata {
     importer.metadata(id, path)?;
   }
+  phases.end("metadata");
   let mut recorded = Vec::with_capacity(refs.len());
   for listed in refs {
     let target = match (listed.symbolic, &listed.id) {
@@ -413,7 +502,15 @@ impl Importer<'_> {
         self.sizes.insert(id.clone(), size);
         self.types.insert(id, kind);
       }
+      // Only what no earlier object named: a round's trees name tens of
+      // millions of entries on a large history, most of them seen (#347).
+      // Whether the store holds one already is asked once the round is read.
       let mut named = Vec::new();
+      let mut name = |id: String| {
+        if seen.insert(id.clone()) {
+          named.push(id);
+        }
+      };
       let algorithm = self.algorithm;
       let raw = &mut self.raw;
       source.contents(&ids, &sizes, &mut |id, kind, body| {
@@ -421,12 +518,12 @@ impl Importer<'_> {
           "tree" => {
             for entry in parse_git_tree(&body, algorithm).unwrap_or_default() {
               if followed(&entry.mode) {
-                named.push(hex(&entry.digest));
+                name(hex(&entry.digest));
               }
             }
           }
-          "commit" => named.extend(built_on(algorithm, GitKind::Commit, &body)),
-          "tag" => named.extend(built_on(algorithm, GitKind::Tag, &body)),
+          "commit" => built_on(algorithm, GitKind::Commit, &body).into_iter().for_each(&mut name),
+          "tag" => built_on(algorithm, GitKind::Tag, &body).into_iter().for_each(&mut name),
           _ => {
             return Err(GitError::new(
               "git-response-malformed",
@@ -437,10 +534,7 @@ impl Importer<'_> {
         raw.insert(id.to_string(), body);
         Ok(())
       })?;
-      pending = named
-        .into_iter()
-        .filter(|id| seen.insert(id.clone()) && self.held(id).is_none())
-        .collect();
+      pending = named.into_iter().filter(|id| self.held(id).is_none()).collect();
     }
     Ok(())
   }
@@ -775,5 +869,15 @@ impl Importer<'_> {
         .or_else(|| existing.and_then(|store| self.found(store.git(self.algorithm, native))))
     };
     (tree.git_encoding(&git_of).as_deref() == Some(payload)).then_some(tree)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn peak_memory_is_told_exactly_where_linux_tells_it() {
+    assert_eq!(peak_memory().is_some(), cfg!(target_os = "linux"));
   }
 }

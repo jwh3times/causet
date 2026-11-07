@@ -310,6 +310,13 @@ impl StoreWriter {
     self.existing.as_ref()
   }
 
+  /// The bytes the held metadata file has grown to (`import.metadata`). It
+  /// only grows until the container closes, so before `finish` this is its
+  /// peak size on disk.
+  pub fn held_metadata(&self) -> u64 {
+    self.held.written
+  }
+
   fn add(
     &mut self,
     id: &NativeId,

@@ -192,7 +192,11 @@ fn import(args: &[String]) -> GitResult<()> {
   if root.join(".cst").join("format").is_file() && root.join(".git").exists() {
     return Err(ambiguous(root));
   }
+  let started = std::time::Instant::now();
   let imported = causet_import::import(source, root)?;
+  if let Some(file) = causet_engine::environment::test_hook("CAUSET_TEST_IMPORT_REPORT") {
+    write_cost(&file, started.elapsed(), &imported.cost)?;
+  }
   let mut out = std::io::stdout().lock();
   let preserved = if imported.preserved_trees > 0 {
     format!(", {} kept in Git's encoding", imported.preserved_trees)
@@ -230,6 +234,33 @@ fn import(args: &[String]) -> GitResult<()> {
     imported.symbolic
   );
   Ok(())
+}
+
+/// What an import cost, as JSON in `file`, for the corpora's reports (#347):
+/// its seconds in all; each phase's seconds and the process's peak memory as
+/// it ended; the process's peak memory; and the held metadata file's peak
+/// size. Memory is `null` where the system does not tell it. The
+/// `CAUSET_TEST_IMPORT_REPORT` test hook asks for it, and nothing checks it.
+/// It is written before the import's summary, so a file that cannot be
+/// written fails the command although the repository was imported.
+fn write_cost(file: &str, elapsed: std::time::Duration, cost: &causet_import::Cost) -> GitResult<()> {
+  use causet_model::json::{Object, Value, stringify};
+  let bytes = |bytes: Option<u64>| bytes.map_or(Value::Null, |bytes| Value::Number(bytes as f64));
+  let seconds = |took: std::time::Duration| Value::Number((took.as_secs_f64() * 1000.0).round() / 1000.0);
+  let mut phases = Object::new();
+  for phase in &cost.phases {
+    let mut entry = Object::new();
+    entry.set("seconds", seconds(phase.took));
+    entry.set("peakMemory", bytes(phase.peak_memory));
+    phases.set(phase.name, Value::Object(entry));
+  }
+  let mut report = Object::new();
+  report.set("seconds", seconds(elapsed));
+  report.set("phases", Value::Object(phases));
+  report.set("peakMemory", bytes(causet_import::peak_memory()));
+  report.set("heldMetadata", bytes(Some(cost.held_metadata)));
+  std::fs::write(file, format!("{}\n", stringify(&Value::Object(report))))
+    .map_err(|error| crate::envelope::io_failure(&error, "open", file))
 }
 
 /// The reconstruction check (objects.md §9.2) on the native repository
