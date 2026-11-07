@@ -244,8 +244,9 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
 - **Refusals.** A repository that import refuses fails its test, unless
   `REFUSALS` in `test-support/native-kind.js` lists it with the suite file, the
   test, a part of the refusal and the reason. The list holds the suites'
-  shallow and partial clones, sources that name objects they do not hold, and
-  the shallow clone of this checkout that CI's one-commit fetch makes.
+  shallow and partial clones, sources that name objects they do not hold,
+  sources with a symbolic ref whose name is not UTF-8 (#398), and the shallow
+  clone of this checkout that CI's one-commit fetch makes.
 - **Cost.** Each `cst` invocation opens the store again, so the comparisons
   run as many at a time as the host has cores. On a 16-core Linux host the
   whole suite took 150 to 240 s in this mode against 45 s without it, most of
