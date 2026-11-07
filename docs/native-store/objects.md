@@ -481,7 +481,13 @@ count × (
   a tree, or a preserved Git object. The Git ID comes back through the alias
   file of the snapshot's Git algorithm (§9).
 - **A symbolic ref** targets a ref name. That ref need not exist, as with
-  `HEAD` on an unborn branch.
+  `HEAD` on an unborn branch. The target is one step, the ref it points to,
+  even when that ref is symbolic too, not where the chain ends. Import asks
+  Git for the step by the ref's name. A name that is not UTF-8 cannot be
+  given to Git, and where its chain ends is not the step when it points at
+  another symbolic ref, which may be one no listing of refs shows, such as a
+  root ref or another worktree's `HEAD`. So import refuses a repository
+  holding such a symbolic ref, naming the first, and writes nothing (#398).
 
 **The rules:**
 

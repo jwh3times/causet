@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+- **Experimental: `cst import` refuses a symbolic ref whose name is not
+  UTF-8** (#398). Import records each symbolic ref one step: the ref it
+  points to, which may itself be symbolic. It asks Git for that target by
+  the ref's name, but a name that is not UTF-8 cannot be given to Git, so
+  import fell back to where the ref's chain ends. A ref pointing at another
+  symbolic ref was then recorded pointing at the chain's last ref: a wrong
+  ref snapshot that no N1 check sees. The ref it points to may be one Git's
+  ref listing never shows, such as a root ref or another worktree's `HEAD`,
+  so no check of the listed refs can say which it is. Import now refuses such
+  a repository with `unsupported-repository-shape` and exit 1, before it
+  writes anything, naming the first such ref as it prints names, with each
+  invalid byte shown as `�`: `<source> has the symbolic ref refs/heads/caf�,
+  whose name is not UTF-8: Git cannot be given that name to say which ref it
+  points to, so its history cannot be imported exactly (ADR-0045, decision
+  1).` Symbolic refs named in UTF-8 are recorded as before, one
+  step, with their target's bytes exact, whatever those bytes are. In the
+  generated-history corpus, each non-UTF-8 symbolic ref is now written into a
+  copy of its history of its own, whose import must be refused by that name,
+  so the pinned reftable digest changes; the files digest does not.
+
 - **The docs name `cst cat-file --batch` among the commands that read a
   native store whole** (#396). Since #346, `--batch` and `--batch-check`
   read every container's index and alias file whole, with every check,
@@ -25,9 +45,11 @@
     character and with a combining sequence, a lightweight tag and an
     annotated one.
   - **Refs named in bytes that are not UTF-8,** in reftable histories only:
-    a branch, two tags, a symbolic ref so named, and a chain of symbolic
-    refs. Such a name reaches Git only on standard input, because Git for
-    Windows would store it as a loose file under another name.
+    a branch, two tags, and a symbolic ref named in UTF-8 that points at the
+    branch. Such a name reaches Git only on standard input, because Git for
+    Windows would store it as a loose file under another name. A symbolic
+    ref whose own name is not UTF-8, alone or in a chain, is written into a
+    copy of the history, whose import must refuse it (#398).
 
   As each stage ends, every ref of a reftable history and every name
   outside ASCII is read back from `git for-each-ref` byte for byte. How a
@@ -35,8 +57,8 @@
   rest of each history is unchanged. The pinned digest is now two digests,
   one for the files histories and one for the reftable histories, so a Git
   that skips the reftable ones still checks the rest. The chain case found
-  #398: import records a non-UTF-8 symbolic ref in a chain at the chain's
-  end, which no N1 check can see.
+  #398: import recorded a non-UTF-8 symbolic ref in a chain at the chain's
+  end, which no N1 check can see. Import now refuses such a ref.
 
 - **Contributor workflow: the board says what to pick up next.**
   `docs/agents/triage-labels.md` adds a `blocked` label. It sits beside the

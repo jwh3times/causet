@@ -182,6 +182,21 @@ async function git(args, { cwd, env, input }) {
   return result.stdout;
 }
 
+/**
+ * Writes `refs`, each `[name, value]` in bytes with a null value deleting,
+ * to the reftable repository at `cwd` in one `git update-ref --stdin`. Each
+ * command is `no-deref`: `symref-update HEAD` without it would follow HEAD
+ * and make the branch it points at symbolic instead.
+ */
+export async function writeRefs(cwd, env, refs) {
+  const command = (name, value) => {
+    const verb = value === null ? "delete" : value.subarray(0, 5).toString() === "ref: " ? "symref-update" : "update";
+    const operand = value === null ? [] : [Buffer.from(" "), verb === "update" ? value : value.subarray(5)];
+    return [Buffer.from(`option no-deref\n${verb} `), name, ...operand, Buffer.from("\n")];
+  };
+  await git(["update-ref", "--stdin"], { cwd, env, input: Buffer.concat(refs.flatMap(([name, value]) => command(name, value))) });
+}
+
 /** The Git a reftable history needs: `update-ref --stdin` writes symbolic refs from 2.46. */
 const REFTABLE_GIT = [2, 46];
 
@@ -231,6 +246,9 @@ export function refStorageOf({ seed, index }) {
 export async function skipReason({ seed, index, env }) {
   return refStorageOf({ seed, index }) === "reftable" ? reftableUnsupported(env) : null;
 }
+
+/** `prefix`, Latin-1's é, then `suffix`, as bytes: a name that is not UTF-8. */
+export const latin = (prefix, suffix = "") => Buffer.concat([Buffer.from(prefix), Buffer.from([0xe9]), Buffer.from(suffix)]);
 
 /** A ref name as bytes, from a string (UTF-8) or a buffer. */
 const bytesOf = (name) => (Buffer.isBuffer(name) ? name : Buffer.from(name));
@@ -376,20 +394,12 @@ class Repository {
    */
   async flush(env) {
     if (this.refStorage !== "reftable") return;
-    // Each command is `no-deref`: `symref-update HEAD` without it would
-    // follow HEAD and make the branch it points at symbolic instead.
-    const command = (name, value) => {
-      const verb = value === null ? "delete" : value.subarray(0, 5).toString() === "ref: " ? "symref-update" : "update";
-      const operand = value === null ? [] : [Buffer.from(" "), verb === "update" ? value : value.subarray(5)];
-      return [Buffer.from(`option no-deref\n${verb} `), name, ...operand, Buffer.from("\n")];
-    };
     if (this.pending.size > 0) {
-      const input = Buffer.concat([...this.pending.values()].flatMap(({ name, value }) => command(name, value)));
-      await git(["update-ref", "--stdin"], { cwd: this.path, env, input });
+      await writeRefs(this.path, env, [...this.pending.values()].map(({ name, value }) => [name, value]));
       this.pending.clear();
     }
     if (this.pendingHead) {
-      await git(["update-ref", "--stdin"], { cwd: this.path, env, input: Buffer.concat(command(Buffer.from("HEAD"), this.pendingHead)) });
+      await writeRefs(this.path, env, [[Buffer.from("HEAD"), this.pendingHead]]);
       this.pendingHead = null;
     }
   }
@@ -453,6 +463,9 @@ class History {
     // The refs named outside ASCII, `{ name, kind }`, which the second
     // stage may move or delete.
     this.named = [];
+    // Refs import must refuse, each `{ name, refs }`: the bytes of the ref
+    // it names, and the refs to write, each `[name, value]` in bytes (#398).
+    this.refusals = [];
     if (format === "sha256") this.cases.add("sha256");
     if (reftable) this.cases.add("reftable");
     this.time = BASE_TIME + this.random.int(1_000_000);
@@ -958,10 +971,11 @@ class History {
    * Refs named outside ASCII, from the naming stream (#334). UTF-8 names in
    * either storage: branches with a multi-byte character and with a
    * combining sequence, a lightweight tag and an annotated one. Names that
-   * are not UTF-8 only in a reftable history: a branch, a lightweight and an
-   * annotated tag, a symbolic ref pointing at a branch, one pointing at a
-   * branch so named, and one pointing at another symbolic ref, the chain
-   * whose one-step target `%(symref)` does not give.
+   * are not UTF-8 only in a reftable history: branches, a lightweight and an
+   * annotated tag, and a symbolic ref in UTF-8 pointing at a branch so named.
+   * Import refuses any symbolic ref whose name is not UTF-8 (#398), so the
+   * two such refs, one pointing at a branch and a chain pointing at another
+   * symbolic ref, are left as `refusals`, each written into a copy of its own.
    */
   nameRefs() {
     const naming = this.naming;
@@ -979,17 +993,20 @@ class History {
     }
     if (this.repo.refStorage === "reftable" && (this.forced === "non-utf8-ref-name" || naming.chance(0.5))) {
       // Latin-1's é, and 0xFF 0xFE, which no encoding of text begins a name with.
-      const latin = (prefix, suffix = "") => Buffer.concat([Buffer.from(prefix), Buffer.from([0xe9]), Buffer.from(suffix)]);
       const branch = latin("refs/heads/caf");
       add(branch, commit(), "branch");
       add(Buffer.concat([Buffer.from("refs/tags/v"), Buffer.from([0xff, 0xfe])]), commit(), "tag");
       add(latin("refs/tags/r", "sum"), this.namedTag(commit(), latin("r", "sum")), "tag");
       this.cases.add("non-utf8-ref-name");
-      add(latin("refs/heads/", "-current"), "ref: refs/heads/main", "symbolic");
       this.repo.ref("refs/heads/to-latin", Buffer.concat([Buffer.from("ref: "), branch]));
+      const current = latin("refs/heads/", "-current");
+      this.refusals.push({ name: current, refs: [[current, Buffer.from("ref: refs/heads/main")]] });
       this.cases.add("non-utf8-symbolic-ref");
-      this.repo.ref("refs/heads/alias", "ref: refs/heads/main");
-      add(latin("refs/heads/", "-chain"), "ref: refs/heads/alias", "symbolic");
+      const chain = latin("refs/heads/", "-chain");
+      this.refusals.push({
+        name: chain,
+        refs: [[Buffer.from("refs/heads/alias"), Buffer.from("ref: refs/heads/main")], [chain, Buffer.from("ref: refs/heads/alias")]],
+      });
       this.cases.add("non-utf8-symbolic-chain");
     }
   }
@@ -1098,6 +1115,14 @@ export function history({ directory, seed, index, env }) {
       return made.repo.refStorage;
     },
     cases: made.cases,
+    /**
+     * After `generate()`, the refs import must refuse, each `{ name, write }`:
+     * the bytes of the ref the refusal names, and `write(directory)`, which
+     * writes its refs into a copy of the history at `directory`.
+     */
+    get refusals() {
+      return made.refusals.map(({ name, refs }) => ({ name, write: (copy) => writeRefs(copy, made.git, refs) }));
+    },
     generate: () => made.generate(),
     advance: () => made.advance(),
   };

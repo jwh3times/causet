@@ -53,6 +53,12 @@ export const REFUSALS = [
     reason: "a partial clone may lack objects its history names (ADR-0045, decision 1); the test makes three",
   },
   {
+    file: "native-repository.test.js",
+    test: "a symbolic ref whose name is not UTF-8 is refused by name before anything is written, whether or not it points at another symbolic ref",
+    refusal: "whose name is not UTF-8: Git cannot be given that name to say which ref it points to",
+    reason: "a symbolic ref so named has a one-step target Git cannot be asked (ADR-0045, decision 1; #398); the test makes two",
+  },
+  {
     file: "native-import.test.js",
     test: "an import into a native repository that fails leaves it as it was",
     refusal: "but does not hold it",
