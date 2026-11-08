@@ -819,6 +819,12 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
     for an existing one, and it is removed when the import ends, whether it
     succeeds or fails. One left by an import that was killed is replaced by
     the next import, or removed by hand. A reader ignores it.
+  - **`import.objects`** is where an import holds the Git bytes of the
+    commits, tags and trees it has read, until it has stored them. It is in
+    `.cst-import/` for a new store and beside `import.lock` for an existing
+    one, and it is removed when the import ends, whether it succeeds or
+    fails. One left by an import that was killed is replaced by the next
+    import, or removed by hand. A reader ignores it.
 - **Other names under `.cst/` are reserved** for later parts of the contract
   and later phases. A version 1 reader ignores the names it does not know.
 - **`.cst/` holds only the store.** There is no working copy in N1: a native

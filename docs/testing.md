@@ -535,6 +535,8 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
   - its time, in all and by phase;
   - the peak size of the metadata it held on disk until its container
     closed (`import.metadata`, storage.md §3.2);
+  - the peak size of the Git bytes of the commits, tags and trees it held
+    on disk until it stored them (`import.objects`, #405);
   - the `cst import` process's peak memory, in all and as each phase ended.
     This is Linux's high-water mark, and unavailable on Windows, where a
     process cannot read its own without unsafe code.
@@ -821,6 +823,10 @@ the real-repository check reports each import's cost (#347):
 - `peakMemory`: the process's peak in bytes. It and each phase's figure are
   `null` off Linux.
 - `heldMetadata`: the held metadata file's peak size in bytes.
+- `heldObjects`: the peak size in bytes of the file holding the Git bytes of
+  the commits, tags and trees import read, until it stored them
+  (`import.objects`, #405).
+
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan the Rust CLI, engine and model for every
 `GitError::new` and front-end failure, and fail if one names a code outside

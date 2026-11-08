@@ -11,6 +11,7 @@ use crate::id::{GitAlgorithm, NativeId, Short, Type, hex, unhex};
 use crate::objects::{
   CHOICES, ChunkList, GitKind, Preserved, RefTarget, ShortTarget, ShortTree, Snapshot, Target, Tree,
 };
+use crate::positioned::read_exact_at;
 use crate::reconstruct;
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -30,6 +31,9 @@ pub const LOCK: &str = "import.lock";
 /// Where an import holds its metadata until the container closes, beside
 /// the lock (objects.md §10).
 pub const HELD: &str = "import.metadata";
+/// Where an import holds the Git bytes of the commits, tags and trees it has
+/// read until it has stored them, beside the lock (objects.md §10).
+pub const HELD_OBJECTS: &str = "import.objects";
 
 /// Writes a store: a new one into an empty destination, or what an import
 /// adds to an existing one. A new store is not a native repository until
@@ -58,6 +62,7 @@ pub struct StoreWriter {
   /// failure can take it back.
   placed: Placed,
   held: Held,
+  held_objects: HeldObjects,
 }
 
 /// The metadata a writer holds until it closes the container, which it then
@@ -179,6 +184,82 @@ impl Held {
   }
 }
 
+/// The Git bytes of the commits, tags and trees an import has read, which it
+/// holds in a file beside the lock until it has stored them, so that what it
+/// keeps in memory is where each one sits (#405).
+struct HeldObjects {
+  path: PathBuf,
+  /// Opened for appending when the first object is held, so a read by
+  /// position never moves where the next one is written. A read writes out
+  /// what is buffered first, so it takes `&self`.
+  file: RefCell<Option<BufWriter<File>>>,
+  written: u64,
+}
+
+/// Where an object's bytes sit in the file an import holds them in.
+#[derive(Clone, Copy, Debug)]
+pub struct HeldObject {
+  offset: u64,
+  length: u64,
+}
+
+impl HeldObjects {
+  fn new(staging: &Path) -> HeldObjects {
+    HeldObjects {
+      path: staging.join(HELD_OBJECTS),
+      file: RefCell::new(None),
+      written: 0,
+    }
+  }
+
+  /// Appends an object's bytes to the file, and says where they are.
+  fn hold(&mut self, bytes: &[u8]) -> Result<HeldObject, StoreError> {
+    let failed = |error: std::io::Error| StoreError::io(&self.path, error);
+    let file = self.file.get_mut();
+    if file.is_none() {
+      // Created empty first, replacing what a killed import left: a file
+      // opened for appending cannot be truncated.
+      File::create(&self.path).map_err(failed)?;
+      let opened = File::options().read(true).append(true).open(&self.path).map_err(failed)?;
+      *file = Some(BufWriter::new(opened));
+    }
+    file.as_mut().expect("the file just opened").write_all(bytes).map_err(failed)?;
+    let held = HeldObject {
+      offset: self.written,
+      length: bytes.len() as u64,
+    };
+    self.written += held.length;
+    Ok(held)
+  }
+
+  /// The bytes `hold` put at `held`, read by position once what is
+  /// buffered is written out. A place this file does not hold is refused.
+  fn read(&self, held: HeldObject) -> Result<Vec<u8>, StoreError> {
+    let failed = |error: std::io::Error| StoreError::io(&self.path, error);
+    let mut file = self.file.borrow_mut();
+    let file = match file.as_mut() {
+      Some(file) if held.offset.checked_add(held.length).is_some_and(|end| end <= self.written) => file,
+      _ => {
+        return Err(StoreError::Codec(format!(
+          "{} holds no {} bytes at {}",
+          self.path.display(),
+          held.length,
+          held.offset
+        )));
+      }
+    };
+    file.flush().map_err(failed)?;
+    let mut bytes = vec![0u8; held.length as usize];
+    read_exact_at(file.get_ref(), held.offset, &mut bytes).map_err(failed)?;
+    Ok(bytes)
+  }
+
+  fn discard(&mut self) {
+    *self.file.get_mut() = None;
+    let _ = std::fs::remove_file(&self.path);
+  }
+}
+
 /// The previous version of a file, which a new version may be stored against
 /// (storage.md §5.1): content the store holds present, and its bytes.
 pub struct Base<'a> {
@@ -221,6 +302,7 @@ impl StoreWriter {
       root: root.to_path_buf(),
       container: Some(ContainerWriter::create(&objects)?),
       held: Held::new(&staging),
+      held_objects: HeldObjects::new(&staging),
       staging,
       algorithm,
       present: BTreeSet::new(),
@@ -258,6 +340,7 @@ impl StoreWriter {
       root: root.to_path_buf(),
       container: None,
       held: Held::new(&staging),
+      held_objects: HeldObjects::new(&staging),
       staging,
       algorithm,
       present: BTreeSet::new(),
@@ -315,6 +398,23 @@ impl StoreWriter {
   /// peak size on disk.
   pub fn held_metadata(&self) -> u64 {
     self.held.written
+  }
+
+  /// Holds a Git object's bytes until the import has stored it, in
+  /// `import.objects` beside the held metadata, and says where they are.
+  pub fn hold_object(&mut self, bytes: &[u8]) -> Result<HeldObject, StoreError> {
+    self.held_objects.hold(bytes)
+  }
+
+  /// The bytes of an object `hold_object` held.
+  pub fn read_held_object(&self, held: HeldObject) -> Result<Vec<u8>, StoreError> {
+    self.held_objects.read(held)
+  }
+
+  /// The bytes the held objects file has grown to (`import.objects`): its
+  /// peak size on disk, since it only grows until the import ends.
+  pub fn held_objects(&self) -> u64 {
+    self.held_objects.written
   }
 
   fn add(
@@ -617,6 +717,9 @@ impl StoreWriter {
   /// replacing an existing one's `snapshot`. Each direct ref must name a
   /// stored object with an alias row (objects.md §6).
   pub fn finish(mut self, snapshot: &Snapshot) -> Result<PathBuf, StoreError> {
+    // Every object it held is stored by now, and a new store must not take
+    // the file into place.
+    self.held_objects.discard();
     if snapshot.algorithm != self.algorithm {
       return Err(StoreError::Codec(format!(
         "a {} snapshot cannot finish a {} store",
@@ -721,6 +824,7 @@ impl StoreWriter {
 impl Drop for StoreWriter {
   fn drop(&mut self) {
     self.held.discard();
+    self.held_objects.discard();
     if self.existing.is_none() {
       return;
     }

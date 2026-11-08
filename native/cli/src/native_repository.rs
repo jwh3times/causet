@@ -238,8 +238,8 @@ fn import(args: &[String]) -> GitResult<()> {
 
 /// What an import cost, as JSON in `file`, for the corpora's reports (#347):
 /// its seconds in all; each phase's seconds and the process's peak memory as
-/// it ended; the process's peak memory; and the held metadata file's peak
-/// size. Memory is `null` where the system does not tell it. The
+/// it ended; the process's peak memory; and the held metadata and objects
+/// files' peak sizes. Memory is `null` where the system does not tell it. The
 /// `CAUSET_TEST_IMPORT_REPORT` test hook asks for it, and nothing checks it.
 /// It is written before the import's summary, so a file that cannot be
 /// written fails the command although the repository was imported.
@@ -259,6 +259,7 @@ fn write_cost(file: &str, elapsed: std::time::Duration, cost: &causet_import::Co
   report.set("phases", Value::Object(phases));
   report.set("peakMemory", bytes(causet_import::peak_memory()));
   report.set("heldMetadata", bytes(Some(cost.held_metadata)));
+  report.set("heldObjects", bytes(Some(cost.held_objects)));
   std::fs::write(file, format!("{}\n", stringify(&Value::Object(report))))
     .map_err(|error| crate::envelope::io_failure(&error, "open", file))
 }

@@ -21,10 +21,11 @@
  * What each import cost is reported, never checked (#347), from import's own
  * report (`CAUSET_TEST_IMPORT_REPORT`): its time, in all and by phase, the
  * `cst import` process's peak memory where the system reports it (Linux),
- * in all and as each phase ended, and the peak size of the metadata it held
- * on disk until its container closed. After every check, one more commit is
- * imported into the full import's copy, which `cst fsck` then checks: what a
- * small incremental import costs a store that size (#324).
+ * in all and as each phase ended, and the peak sizes of the metadata and
+ * of the commits', tags' and trees' Git bytes it held on disk (#405). After
+ * every check, one more commit is imported into the full import's copy,
+ * which `cst fsck` then checks: what a small incremental import costs a
+ * store that size (#324).
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

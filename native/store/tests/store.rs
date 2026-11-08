@@ -255,6 +255,63 @@ fn an_import_that_does_not_finish_leaves_no_held_metadata() {
 }
 
 #[test]
+fn an_import_holds_the_git_bytes_it_reads_beside_its_metadata_until_it_ends() {
+  let hold_two = |writer: &mut StoreWriter| {
+    let tree = writer.hold_object(b"a tree's bytes").unwrap();
+    let commit = writer.hold_object(b"a commit's bytes, longer").unwrap();
+    assert_eq!(writer.read_held_object(commit).unwrap(), b"a commit's bytes, longer");
+    assert_eq!(writer.read_held_object(tree).unwrap(), b"a tree's bytes");
+    // Its peak size: the file only grows until the import ends.
+    assert_eq!(writer.held_objects(), 14 + 24);
+  };
+  // A new store holds them in its staging directory, and puts none in place.
+  let root = scratch("held-objects");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  assert_eq!(writer.held_objects(), 0);
+  hold_two(&mut writer);
+  assert!(root.join(".cst-import/import.objects").is_file(), "held in the staging");
+  writer.finish(&no_refs()).unwrap();
+  assert_eq!(
+    listing(&root.join(".cst")),
+    ["aliases", "format", "objects", "snapshot"].map(String::from).into()
+  );
+  std::fs::remove_dir_all(&root).unwrap();
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  hold_two(&mut writer);
+  drop(writer);
+  assert!(!root.join(".cst-import/import.objects").exists());
+  std::fs::remove_dir_all(&root).unwrap();
+
+  // An existing store holds them beside the lock, whether the import
+  // finishes or not.
+  let writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  writer.finish(&no_refs()).unwrap();
+  let before = listing(&root.join(".cst"));
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  hold_two(&mut writer);
+  assert!(root.join(".cst/import.objects").is_file(), "held beside the lock");
+  writer.finish(&no_refs()).unwrap();
+  assert_eq!(listing(&root.join(".cst")), before);
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  hold_two(&mut writer);
+  drop(writer);
+  assert_eq!(listing(&root.join(".cst")), before);
+
+  // One left by an import that was killed is replaced by the next, which
+  // removes it when it ends, holding nothing or not.
+  let leftover = root.join(".cst/import.objects");
+  std::fs::write(&leftover, b"what a killed import held").unwrap();
+  let mut writer = StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap();
+  hold_two(&mut writer);
+  writer.finish(&no_refs()).unwrap();
+  assert_eq!(listing(&root.join(".cst")), before);
+  std::fs::write(&leftover, b"what a killed import held").unwrap();
+  StoreWriter::open(&root, GitAlgorithm::Sha1).unwrap().finish(&no_refs()).unwrap();
+  assert_eq!(listing(&root.join(".cst")), before);
+  std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn a_destination_that_is_not_empty_is_refused() {
   let root = scratch("not-empty");
   std::fs::create_dir_all(&root).unwrap();

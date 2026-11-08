@@ -41,7 +41,7 @@ function costs(imports) {
     const memory = cost.peakMemory === null ? "unavailable" : size(cost.peakMemory);
     const phases = Object.entries(cost.phases).map(([name, phase]) =>
       `${name} ${phase.seconds.toFixed(1)}${phase.peakMemory === null ? "" : ` (${size(phase.peakMemory)})`}`).join(", ");
-    return `| ${label} | ${cost.seconds.toFixed(1)} s | ${memory} | ${size(cost.heldMetadata)} | ${phases} |`;
+    return `| ${label} | ${cost.seconds.toFixed(1)} s | ${memory} | ${size(cost.heldMetadata)} | ${size(cost.heldObjects)} | ${phases} |`;
   });
 }
 
@@ -58,8 +58,8 @@ function summary(report) {
     "",
     `${report.objects} Git objects. The incremental import check compared ${report.deltas} ${report.deltas === 1 ? "delta" : "deltas"} both imports store. What each import cost, never checked:`,
     "",
-    "| Import | Time | Peak memory | Held metadata | Seconds by phase (peak memory as it ended) |",
-    "| --- | ---: | ---: | ---: | --- |",
+    "| Import | Time | Peak memory | Held metadata | Held objects | Seconds by phase (peak memory as it ended) |",
+    "| --- | ---: | ---: | ---: | ---: | --- |",
     ...costs(report.imports),
     "",
   ];
