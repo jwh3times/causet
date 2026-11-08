@@ -517,7 +517,19 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
     holds these rules in `npm test`.
 
   Each job's summary reports the gate's verdict and ratio, both byte counts
-  with their parts, the number of Git objects, and each import's time. Times are reported, never checked.
+  with their parts, the number of Git objects, and what each import cost
+  (#347). Import reports these numbers itself (`CAUSET_TEST_IMPORT_REPORT`):
+  - its time, in all and by phase;
+  - the peak size of the metadata it held on disk until its container
+    closed (`import.metadata`, storage.md §3.2);
+  - the `cst import` process's peak memory, in all and as each phase ended.
+    This is Linux's high-water mark, and unavailable on Windows, where a
+    process cannot read its own without unsafe code.
+
+  After every check, one more commit, a new file at the top of the tree, is
+  imported into the full import's copy, and `cst fsck` checks the copy
+  again. The summary therefore also shows what a small incremental import
+  costs a store that size (#324). These numbers are reported, never checked.
   An import, `cst fsck`, the reconstruction check or a group's `cst
   cat-file --batch` here may run for 3 hours, not the 5 minutes the
   generated corpus allows; the comparison's other processes keep the 5
@@ -527,7 +539,10 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
   git/git 36 minutes (each full import about 8 minutes, in one thread and up
   to 6.3 GB of memory). These were measured while the comparison still
   started a `cst` for each answer on each object, and git/git's was a
-  sample of 512 objects.
+  sample of 512 objects. Since #347, a full import of git/git on format
+  version 1 peaks at about 3.1 GB of memory on Linux, down from 6.3 GB, and
+  spills 1.58 GB of held metadata to disk. #347's comments break down where
+  its time and memory go.
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of
@@ -775,6 +790,24 @@ build its fixture in that directory, answer with the fixture's description, and
 leave it there instead of measuring, which is how `scripts/perf-checkpoint.mjs`
 gets its scale fixture. Like `CAUSET_TEST_FAULT` and `CAUSET_TEST_GATE`, each is
 inert unless it is set exactly.
+`CAUSET_TEST_IMPORT_REPORT=<file>`, inert when unset or empty, makes a
+successful `cst import` write what it cost to that file as JSON, which is how
+the real-repository check reports each import's cost (#347):
+
+- `seconds`, and `phases`: for each phase in order, its `seconds` and the
+  process's `peakMemory` as it ended. The phases are:
+  - `source`: opening the source and checking its refs;
+  - `open`: opening or creating the store, and asking Git which history it
+    holds already;
+  - `reach` and `walk`;
+  - `content`: writing the blobs;
+  - `metadata`: encoding trees, commits and tags into the held file;
+  - `finish`: writing the held records into the container in path order,
+    then the snapshot, the alias file and the index, and putting the store
+    in place.
+- `peakMemory`: the process's peak in bytes. It and each phase's figure are
+  `null` off Linux.
+- `heldMetadata`: the held metadata file's peak size in bytes.
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan the Rust CLI, engine and model for every
 `GitError::new` and front-end failure, and fail if one names a code outside

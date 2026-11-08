@@ -86,8 +86,9 @@ jobs:
   real:
     name: real repository ${{ matrix.repository }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # git/git imports in about 9 minutes on a 16-core Linux host and is
-    # imported three times; each import's time is in the job's summary.
+    # git/git imports in about 10 minutes on a 16-core Linux host, and its
+    # stages are imported four times plus one commit; what each import cost
+    # is in the job's summary (#347).
     timeout-minutes: ${{ matrix.repository == 'git' && 300 || 90 }}
     strategy:
       fail-fast: false

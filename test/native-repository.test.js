@@ -402,6 +402,40 @@ test("import reports what it wrote and keeps a tree that is not canonical in Git
   assert.equal(cst(destination, ["cat-file", "-t", snapshot.trim()]).stdout.toString(), "snapshot\n");
 });
 
+test("an import told where writes what it cost there, and holds no metadata when it adds nothing", () => {
+  const { root } = makeSource("sha1");
+  const report = path.join(root, "cost.json");
+  const told = { ...OPT_IN, CAUSET_TEST_IMPORT_REPORT: report };
+  const cost = () => JSON.parse(fs.readFileSync(report, "utf8"));
+
+  const first = cst(root, ["import", "source", "native"], told);
+  assert.equal(first.status, 0, first.stderr.toString());
+  const full = cost();
+  // Times and memory are reported, never checked (#347): only their kinds
+  // are. Only Linux tells a process its peak memory without unsafe code.
+  const memory = (bytes) => (process.platform === "linux" ? Number.isInteger(bytes) : bytes === null);
+  assert.deepEqual(Object.keys(full.phases), ["source", "open", "reach", "walk", "content", "metadata", "finish"]);
+  assert.equal(typeof full.seconds, "number");
+  assert.ok(memory(full.peakMemory), `peak memory ${full.peakMemory}`);
+  for (const [name, phase] of Object.entries(full.phases)) {
+    assert.equal(typeof phase.seconds, "number", name);
+    assert.ok(memory(phase.peakMemory), `${name}: peak memory ${phase.peakMemory}`);
+  }
+  // Its trees, commits and tags wait in the held file until the container
+  // closes (storage.md §3.2).
+  assert.ok(Number.isInteger(full.heldMetadata) && full.heldMetadata > 0, `held ${full.heldMetadata} bytes`);
+
+  fs.rmSync(report);
+  const again = cst(root, ["import", "source", "native"], told);
+  assert.equal(again.status, 0, again.stderr.toString());
+  assert.equal(cost().heldMetadata, 0);
+
+  fs.rmSync(report);
+  const untold = cst(root, ["import", "source", "elsewhere"]);
+  assert.equal(untold.status, 0, untold.stderr.toString());
+  assert.equal(fs.existsSync(report), false);
+});
+
 test("reading a native repository runs no Git", () => {
   const { destination, aliases: rows, git } = imported("sha1");
   const tree = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());

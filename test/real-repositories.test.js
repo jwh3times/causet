@@ -29,6 +29,22 @@ for (const name of chosen) {
 
 const megabytes = (bytes) => `${(bytes / 1e6).toFixed(2)} MB`;
 
+/**
+ * What each import cost, as Markdown table rows: reported, never checked
+ * (#347). Peak memory is unavailable where the system does not tell a
+ * process its own without unsafe code; where it does, each phase shows the
+ * peak as it ended, so the first to reach the import's peak set it.
+ */
+function costs(imports) {
+  const size = (bytes) => (bytes < 1e3 ? `${bytes} B` : bytes < 1e6 ? `${(bytes / 1e3).toFixed(1)} kB` : megabytes(bytes));
+  return Object.entries(imports).map(([label, cost]) => {
+    const memory = cost.peakMemory === null ? "unavailable" : size(cost.peakMemory);
+    const phases = Object.entries(cost.phases).map(([name, phase]) =>
+      `${name} ${phase.seconds.toFixed(1)}${phase.peakMemory === null ? "" : ` (${size(phase.peakMemory)})`}`).join(", ");
+    return `| ${label} | ${cost.seconds.toFixed(1)} s | ${memory} | ${size(cost.heldMetadata)} | ${phases} |`;
+  });
+}
+
 /** The report of one repository as Markdown, for the workflow's summary. */
 function summary(report) {
   const parts = (side) => Object.entries(side.parts).sort().map(([part, bytes]) => `${part} ${bytes}`).join(", ");
@@ -40,7 +56,11 @@ function summary(report) {
     `| cst store | ${report.native.total} (${megabytes(report.native.total)}) | ${parts(report.native)} |`,
     `| git gc --aggressive | ${report.git.total} (${megabytes(report.git.total)}) | ${parts(report.git)} |`,
     "",
-    `${report.objects} Git objects. Import times, never checked: ${Object.entries(report.seconds).map(([label, seconds]) => `${label} ${seconds} s`).join("; ")}.`,
+    `${report.objects} Git objects. What each import cost, never checked:`,
+    "",
+    "| Import | Time | Peak memory | Held metadata | Seconds by phase (peak memory as it ended) |",
+    "| --- | ---: | ---: | ---: | --- |",
+    ...costs(report.imports),
     "",
   ];
   return `${lines.join("\n")}\n`;
@@ -56,7 +76,7 @@ for (const name of chosen) {
       t.diagnostic(`${name}: cst store ${report.native.total} bytes, git gc --aggressive ${report.git.total} bytes, storage gate ${report.gate}`);
       if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(report));
     }
-    t.diagnostic(`${name}: import times ${JSON.stringify(report.seconds)}`);
+    t.diagnostic(`${name}: import costs ${JSON.stringify(report.imports)}`);
     assert.deepEqual(report.problems, []);
   });
 }

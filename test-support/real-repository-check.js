@@ -17,14 +17,19 @@
  *   on the large-file corpus strictly fewer, unless the repository carries a
  *   known-gap entry (`storage-gate.js`).
  *
- * Each import's time is reported, never checked.
+ * What each import cost is reported, never checked (#347), from import's own
+ * report (`CAUSET_TEST_IMPORT_REPORT`): its time, in all and by phase, the
+ * `cst import` process's peak memory where the system reports it (Linux),
+ * in all and as each phase ended, and the peak size of the metadata it held
+ * on disk until its container closed. After every check, one more commit is
+ * imported into the full import's copy, which `cst fsck` then checks: what a
+ * small incremental import costs a store that size (#324).
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { performance } from "node:perf_hooks";
 import { cstCommand, cstPrefix } from "./cst-command.js";
 import { sameAsFull, sameStores, storeState } from "./import-checks.js";
 import { compareCopy, withoutGit } from "./native-kind.js";
@@ -62,30 +67,37 @@ function bytesUnder(directory, name) {
   return { total, parts };
 }
 
+/** The identity and date of the one commit added after the checks. */
+const ONE_COMMIT = {
+  GIT_AUTHOR_NAME: "A U Thor", GIT_AUTHOR_EMAIL: "author@example.com", GIT_AUTHOR_DATE: "1112911993 -0700",
+  GIT_COMMITTER_NAME: "C O Mitter", GIT_COMMITTER_EMAIL: "committer@example.com", GIT_COMMITTER_DATE: "1112911993 -0700",
+};
+
 /**
  * Checks the real repository `name`, in a new directory under `base`. `env`
  * makes the environment of each process. Resolves to its report: the
  * repository's object count, both byte counts with their parts, the storage
- * gate's verdict, each import's time, and the problems found.
+ * gate's verdict, what each import cost by its label (the report import
+ * wrote), and the problems found.
  */
 export async function checkRepository({ name, env, base = os.tmpdir() }) {
   const repository = REAL_REPOSITORIES[name];
   assert.ok(repository, `no real repository is named ${name}`);
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(base, "cr")));
   const where = `the real repository ${name}`;
-  const report = { name, objects: 0, native: null, git: null, gate: null, seconds: {}, problems: [] };
-  const run = (command, args, cwd, environment) => {
-    const result = spawnSync(command, args, { cwd, env: environment, encoding: "buffer", timeout: LIMIT, maxBuffer: 64 * 1024 * 1024 });
+  const report = { name, objects: 0, native: null, git: null, gate: null, imports: {}, problems: [] };
+  const run = (command, args, cwd, environment, input = undefined) => {
+    const result = spawnSync(command, args, { cwd, env: environment, input, encoding: "buffer", timeout: LIMIT, maxBuffer: 64 * 1024 * 1024 });
     assert.equal(result.status, 0, `${path.basename(command)} ${args.join(" ")}: ${result.error ?? result.stderr}`);
     return result.stdout.toString();
   };
-  const git = (cwd, args) => run("git", args, cwd, env({ GIT_NO_REPLACE_OBJECTS: "1" }));
-  const cst = (cwd, args) => run(cstCommand, [...cstPrefix(), ...args], cwd, env(OPT_IN));
+  const git = (cwd, args, more = {}, input = undefined) => run("git", args, cwd, env({ GIT_NO_REPLACE_OBJECTS: "1", ...more }), input);
   const read = (cwd, args) => run(cstCommand, [...cstPrefix(), ...args], cwd, withoutGit(env(OPT_IN)));
+  const cost = path.join(root, "cost.json");
   const imported = (label, from, into) => {
-    const started = performance.now();
-    cst(root, ["import", from, into]);
-    report.seconds[label] = Math.round((performance.now() - started) / 100) / 10;
+    fs.rmSync(cost, { force: true });
+    run(cstCommand, [...cstPrefix(), "import", from, into], root, env({ ...OPT_IN, CAUSET_TEST_IMPORT_REPORT: cost }));
+    report.imports[label] = JSON.parse(fs.readFileSync(cost, "utf8"));
   };
   try {
     const source = path.join(root, "source");
@@ -128,6 +140,18 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     report.problems.push(...await compareCopy({ path: source, common: source }, full, {
       env, where, limit: LIMIT,
     }));
+
+    // One more commit, a new file at the top, on the history the full import
+    // holds: what a small incremental import costs a store this size (#324).
+    const index = { ...ONE_COMMIT, GIT_INDEX_FILE: path.join(root, "one-commit-index") };
+    git(source, ["read-tree", "refs/heads/main"], index);
+    const blob = git(source, ["hash-object", "-w", "--stdin"], index, Buffer.from("one more commit\n")).trim();
+    git(source, ["update-index", "--add", "--cacheinfo", `100644,${blob},causet-one-more-commit.txt`], index);
+    const tree = git(source, ["write-tree"], index).trim();
+    const commit = git(source, ["commit-tree", tree, "-p", "refs/heads/main", "-m", "One more commit"], index).trim();
+    git(source, ["update-ref", "refs/heads/main", commit]);
+    imported("one more commit, incrementally", "source", "full");
+    read(full, ["fsck"]);
   } catch (error) {
     report.problems.push(`${where}: ${error.message}`);
   } finally {

@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+- **Experimental: importing git/git peaks at half the memory, and each real
+  repository's job summary says what its imports cost** (#347). A full
+  import of git/git on Linux peaked at 6.3 GB, nearly all of it while import
+  read every commit, tag and tree: it held one name for every tree entry Git
+  follows, across a whole round, before it dropped the duplicates, and most
+  entries name objects already read. Import now drops each duplicate as it
+  reads it, so the peak is 3.1 GB, set now by the trees' and commits' bytes
+  held until they are encoded. Import asks Git for the same objects in the
+  same order as before, and the store it writes is byte-identical. Set
+  `CAUSET_TEST_IMPORT_REPORT` to a file and `cst import` writes there what
+  it cost, as JSON:
+  - seconds in all and for each of its seven phases;
+  - the process's peak memory in all and as each phase ends, on Linux only,
+    and `null` elsewhere, since every crate forbids unsafe code;
+  - the peak size of the held metadata it spills to disk while it writes.
+
+  The variable is a test hook, inert when unset or empty
+  (`docs/testing.md`). The real-repository check uses it: each repository's
+  job summary in `corpora.yml` now has a row per import, on Ubuntu and on
+  Windows, and never fails on one of those numbers. After every other check,
+  it commits one more file in the source, imports that commit into the full
+  import's store, and runs `cst fsck` on the store. On git/git that import
+  takes about 1.8 s, of which 1.6 s is opening the store, the cost #324
+  asks about. #347's comments break down where a git/git import spends its
+  time and memory.
+
 - **Experimental: `cst import` refuses a symbolic ref whose name is not
   UTF-8** (#398). Import records each symbolic ref one step: the ref it
   points to, which may itself be symbolic. It asks Git for that target by
