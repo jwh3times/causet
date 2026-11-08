@@ -3,7 +3,8 @@
  * ADR-0044 items 1, 2, 4 and 5), in a new directory removed when it ends:
  *
  * - the import checks: an import of the first stage, then of the second into
- *   the same copy, holds what a full import of the second holds; and a fresh
+ *   the same copy, holds what a full import of the second holds, with the
+ *   same record for each version both store as a delta; and a fresh
  *   import of a copy with every object and ref packed writes a store
  *   byte-identical to the full import's;
  * - `cst fsck` on both copies, the reconstruction check (`cst import
@@ -85,7 +86,7 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
   assert.ok(repository, `no real repository is named ${name}`);
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(base, "cr")));
   const where = `the real repository ${name}`;
-  const report = { name, objects: 0, native: null, git: null, gate: null, imports: {}, problems: [] };
+  const report = { name, objects: 0, native: null, git: null, gate: null, imports: {}, deltas: 0, problems: [] };
   const run = (command, args, cwd, environment, input = undefined) => {
     const result = spawnSync(command, args, { cwd, env: environment, input, encoding: "buffer", timeout: LIMIT, maxBuffer: 64 * 1024 * 1024 });
     assert.equal(result.status, 0, `${path.basename(command)} ${args.join(" ")}: ${result.error ?? result.stderr}`);
@@ -127,7 +128,7 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     report.gate = verdict.gate;
     if (verdict.problem) report.problems.push(verdict.problem);
 
-    sameAsFull({ before, incremental, full, format });
+    report.deltas = sameAsFull({ before, incremental, full, format });
     read(incremental, ["fsck"]);
     read(incremental, ["import", "--verify"]);
     fs.rmSync(incremental, { recursive: true, force: true });

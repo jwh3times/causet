@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- **The incremental import check compares every delta both imports store**
+  (#338). The import checks hold an incremental import to what a full import
+  of the same history holds, and since ADR-0045's amendment of 2026-10-26
+  they let a large version be a delta in one and a chunk list in the other.
+  When both stored a version as a delta, nothing compared the two records.
+  Now the check requires the same record in both, byte for byte. Its base is
+  fixed by history, the same path in the introducing commit's first parent
+  (storage.md §5.1), and its data by the contract's parameters and the pinned
+  zstd (§7). A delta is alone in a stored frame, so the check reads both
+  records with no decompression, on every Node the suites support, and never
+  skips. It fails on a delta in any other frame, and on a difference, naming
+  the version and both bases, or its base and the first byte where the
+  records differ. The generated-history corpus and each real repository's
+  job summary say how many deltas it compared: 223 across the 1,000
+  generated histories. No behavior of `cst` changes.
+
 - **Experimental: importing git/git peaks at half the memory, and each real
   repository's job summary says what its imports cost** (#347). A full
   import of git/git on Linux peaked at 6.3 GB, nearly all of it while import

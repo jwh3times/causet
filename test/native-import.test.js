@@ -17,8 +17,9 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, aliases, containers, nativeId, readContainer, storeFiles as files, storeObjects as objects,
+  TYPES, aliases, changeFrame, containers, nativeId, readContainer, storeFiles as files, storeObjects as objects,
 } from "../test-support/native-store.js";
+import { sameAsFull, storeState } from "../test-support/import-checks.js";
 
 const created = [];
 
@@ -579,4 +580,53 @@ test("a base is looked up by the first entry of its name, whatever that entry's 
   imports(root, "source", "native");
   const stored = forms(path.join(root, "native"));
   assert.equal(stored.get(nativeId(TYPES.content, second).toString("hex")).form, 1);
+});
+
+test("the import checks compare each delta both imports store, and name the version whose base or bytes differ", () => {
+  const root = scratch();
+  const { git, commit } = makeRepository(root);
+  const versions = largeVersions(6, "shared deltas");
+  let parent;
+  for (const [n, bytes] of versions.slice(0, 3).entries()) parent = commit([["big.bin", bytes]], `v${n}`, ...(parent ? [parent] : []));
+  git(["update-ref", "refs/heads/main", parent]);
+  imports(root, "source", "native");
+  const native = path.join(root, "native");
+  const before = storeState(native, "sha1");
+  for (const [n, bytes] of versions.slice(3).entries()) parent = commit([["big.bin", bytes]], `v${n + 3}`, parent);
+  git(["update-ref", "refs/heads/main", parent]);
+  imports(root, "source", "native");
+  imports(root, "source", "full");
+  const full = path.join(root, "full");
+  // Every version but the first is a delta in both stores.
+  assert.equal(sameAsFull({ before, incremental: native, full, format: "sha1" }), 5);
+
+  const id = nativeId(TYPES.content, versions[4]).toString("hex");
+  const copy = (name) => {
+    const store = path.join(root, name);
+    fs.cpSync(full, store, { recursive: true });
+    return store;
+  };
+  // Against another base: the first version's, with the same bytes after it.
+  const rebased = copy("rebased");
+  changeFrame(rebased, id, (frame) => {
+    frame.bytes = Buffer.concat([Buffer.from([1]), nativeId(TYPES.content, versions[0]), frame.bytes.subarray(33)]);
+  });
+  assert.throws(() => sameAsFull({ before, incremental: native, full: rebased, format: "sha1" }),
+    new RegExp(`the delta ${id} is against ${nativeId(TYPES.content, versions[3]).toString("hex")} in the incremental import and ${nativeId(TYPES.content, versions[0]).toString("hex")} in the full import`));
+  // One byte of its data flipped.
+  const flipped = copy("flipped");
+  let last;
+  changeFrame(flipped, id, (frame) => {
+    last = frame.bytes.length - 1;
+    frame.bytes[last] ^= 0xff;
+  });
+  assert.throws(() => sameAsFull({ before, incremental: native, full: flipped, format: "sha1" }),
+    new RegExp(`the delta ${id} against ${nativeId(TYPES.content, versions[3]).toString("hex")} differs between the incremental and the full import from byte ${last} of its record`));
+  // In a frame of codec 01, the contract's compressed frames.
+  const compressed = copy("compressed");
+  changeFrame(compressed, id, (frame) => {
+    frame.codec = 1;
+  });
+  assert.throws(() => sameAsFull({ before, incremental: native, full: compressed, format: "sha1" }),
+    new RegExp(`holds the delta ${id} in a frame of codec 1, not a stored frame`));
 });

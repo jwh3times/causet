@@ -10,11 +10,13 @@
  * - both import checks: two fresh imports write byte-identical stores, one
  *   from the history and one from a packed copy of it, and an import of the
  *   second stage into the first stage's copy holds what a full import of the
- *   final history holds, with its own earlier objects and alias rows.
+ *   final history holds, with its own earlier objects and alias rows, and
+ *   the same record for each version both store as a delta.
  *
  * Run as a script, it checks a shard of a corpus and prints one JSON line per
- * history: `--seed <seed> --count <n> --shard <k> --of <shards>` checks the
- * histories whose index is `k` modulo `shards`. Each `cst` and `git` a check
+ * history, with the number of deltas the incremental import check compared.
+ * `--seed <seed> --count <n> --shard <k> --of <shards>` checks the histories
+ * whose index is `k` modulo `shards`. Each `cst` and `git` a check
  * starts is a process, and one Node process starts only about a thousand a
  * second whatever its concurrency, so a corpus is checked by several. The
  * environment it is given is the one every process it starts runs in.
@@ -65,6 +67,7 @@ export async function checkHistory({ seed, index, env, base = os.tmpdir() }) {
     return { index, format, refStorage, cases: [], problems: [], skipped };
   }
   const problems = [];
+  let deltas = 0;
   const where = (stage) => `history ${index} of seed ${seed} (${stage})`;
   // Import reads Git; every other `cst` here reads the store, without Git.
   const cst = async (cwd, args) => {
@@ -98,7 +101,7 @@ export async function checkHistory({ seed, index, env, base = os.tmpdir() }) {
     await made.advance();
     await cst(root, ["import", made.path, "first"]);
     await cst(root, ["import", made.path, "full"]);
-    sameAsFull({ before, incremental: first, full, format: made.format });
+    deltas = sameAsFull({ before, incremental: first, full, format: made.format });
     await cst(first, ["fsck"]);
     await cst(first, ["import", "--verify"]);
     problems.push(...await compareCopy(repository, full, { env, where: where("stage 2"), width: 4 }));
@@ -121,7 +124,7 @@ export async function checkHistory({ seed, index, env, base = os.tmpdir() }) {
   } finally {
     fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 });
   }
-  return { index, format, refStorage, cases: [...made.cases], problems };
+  return { index, format, refStorage, cases: [...made.cases], problems, deltas };
 }
 
 /** The script: a shard of a corpus, one JSON line per history. */
