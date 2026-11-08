@@ -313,6 +313,54 @@ test("an import into a native repository that fails leaves it as it was", () => 
   for (const [name, bytes] of before) assert.ok(now.get(name).equals(bytes), name);
 });
 
+test("import holds the objects it reads in import.objects only while it runs, and replaces one a killed import left", () => {
+  const { root, git, commit, merged } = makeHistory();
+  const held = (store) => [path.join(store, ".cst", "import.objects"), path.join(store, ".cst-import", "import.objects")]
+    .filter((file) => fs.existsSync(file));
+  // A blob the source names but no longer holds fails the import once its
+  // commits and trees are held, as reach reads the blob's type.
+  const breaking = (name) => {
+    const broken = commit([[name, `${name} is about to go\n`]], name, merged);
+    const blob = git(["rev-parse", `${broken}:${name}`]).toString().trim();
+    fs.rmSync(path.join(root, "source", ".git", "objects", blob.slice(0, 2), blob.slice(2)));
+    return broken;
+  };
+
+  // A new store: after an import that succeeds, and after one that fails
+  // into an empty directory, which it leaves as it found it.
+  imports(root, "source", "native");
+  assert.deepEqual(held(path.join(root, "native")), []);
+  git(["update-ref", "refs/heads/broken", breaking("gone.txt")]);
+  fs.mkdirSync(path.join(root, "empty"));
+  const failedNew = cst(root, ["import", "source", "empty"]);
+  assert.equal(failedNew.status, 1);
+  assert.match(failedNew.stderr.toString(), /but does not hold it/);
+  assert.deepEqual(fs.readdirSync(path.join(root, "empty")), []);
+  git(["update-ref", "-d", "refs/heads/broken"]);
+
+  // An existing store: after an import that fails and one that succeeds.
+  const native = path.join(root, "native");
+  git(["update-ref", "refs/heads/main", breaking("lost.txt")]);
+  const failed = cst(root, ["import", "source", "native"]);
+  assert.equal(failed.status, 1);
+  assert.match(failed.stderr.toString(), /but does not hold it/);
+  assert.deepEqual(held(native), []);
+  git(["update-ref", "refs/heads/main", commit([["late.txt", "late\n"]], "late", merged)]);
+
+  // One a killed import left is ignored by a reader, and replaced by the
+  // next import, which removes it when it ends.
+  fs.writeFileSync(path.join(native, ".cst", "import.objects"), "what a killed import held");
+  const checked = cst(native, ["fsck"]);
+  assert.equal(checked.status, 0, checked.stderr.toString());
+  assert.match(imports(root, "source", "native"), /adding 1 blob, 1 tree, 1 commit, 0 tags to what it held/);
+  assert.deepEqual(held(native), []);
+  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "snapshot"]);
+  for (const check of [["fsck"], ["import", "--verify"]]) {
+    const result = cst(native, check);
+    assert.equal(result.status, 0, `${check.join(" ")}: ${result.stderr}`);
+  }
+});
+
 test("a failure after the container is in place takes it back, and the alias file with it", () => {
   const { root, git, commit, merged } = makeHistory();
   imports(root, "source", "native");

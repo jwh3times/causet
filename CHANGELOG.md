@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- **Experimental: import holds the commits, tags and trees it reads on disk,
+  not in memory** (#405). Since #347, git/git's import peaked at 3.1 GB,
+  most of it the Git bytes of every commit, tag and tree import reads before
+  it encodes them. Import now writes each object's bytes to a file named
+  `import.objects` as it reads them, keeps only where each one sits, and
+  reads them back from that file, never from Git again. The file follows
+  `import.metadata`: it sits in `.cst-import/` for a new store and beside
+  `import.lock` for an existing one, and is removed before the store is put
+  in place and on every failure. The next import replaces one a killed import
+  left, and no command reads it. An import therefore needs more temporary
+  disk while it runs: on git/git about 2.6 GB more, about 4.2 GB with the
+  held metadata. The store it writes is byte-identical to before, and the
+  format is unchanged. The import report (`CAUSET_TEST_IMPORT_REPORT`) gains
+  `heldObjects`, the file's peak size, and each real repository's job summary
+  in `corpora.yml` gains a column for it. Both are reported, never checked.
+
 - **The incremental import check compares every delta both imports store**
   (#338). The import checks hold an incremental import to what a full import
   of the same history holds, and since ADR-0045's amendment of 2026-10-26

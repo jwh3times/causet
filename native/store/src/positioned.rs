@@ -51,12 +51,12 @@ impl Positioned {
 }
 
 #[cfg(unix)]
-fn read_exact_at(file: &File, offset: u64, bytes: &mut [u8]) -> std::io::Result<()> {
+pub(crate) fn read_exact_at(file: &File, offset: u64, bytes: &mut [u8]) -> std::io::Result<()> {
   std::os::unix::fs::FileExt::read_exact_at(file, bytes, offset)
 }
 
 #[cfg(windows)]
-fn read_exact_at(file: &File, mut offset: u64, mut bytes: &mut [u8]) -> std::io::Result<()> {
+pub(crate) fn read_exact_at(file: &File, mut offset: u64, mut bytes: &mut [u8]) -> std::io::Result<()> {
   while !bytes.is_empty() {
     match std::os::windows::fs::FileExt::seek_read(file, bytes, offset) {
       Ok(0) => return Err(std::io::ErrorKind::UnexpectedEof.into()),
@@ -72,7 +72,7 @@ fn read_exact_at(file: &File, mut offset: u64, mut bytes: &mut [u8]) -> std::io:
 }
 
 #[cfg(not(any(unix, windows)))]
-fn read_exact_at(mut file: &File, offset: u64, bytes: &mut [u8]) -> std::io::Result<()> {
+pub(crate) fn read_exact_at(mut file: &File, offset: u64, bytes: &mut [u8]) -> std::io::Result<()> {
   use std::io::{Read as _, Seek as _};
   file.seek(std::io::SeekFrom::Start(offset))?;
   file.read_exact(bytes)

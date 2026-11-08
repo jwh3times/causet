@@ -422,13 +422,16 @@ test("an import told where writes what it cost there, and holds no metadata when
     assert.ok(memory(phase.peakMemory), `${name}: peak memory ${phase.peakMemory}`);
   }
   // Its trees, commits and tags wait in the held file until the container
-  // closes (storage.md §3.2).
+  // closes (storage.md §3.2), and their Git bytes in another until they are
+  // stored (#405), whose size is reported, never checked.
   assert.ok(Number.isInteger(full.heldMetadata) && full.heldMetadata > 0, `held ${full.heldMetadata} bytes`);
+  assert.ok(Number.isInteger(full.heldObjects), `held ${full.heldObjects} bytes of objects`);
 
   fs.rmSync(report);
   const again = cst(root, ["import", "source", "native"], told);
   assert.equal(again.status, 0, again.stderr.toString());
   assert.equal(cost().heldMetadata, 0);
+  assert.ok(Number.isInteger(cost().heldObjects));
 
   fs.rmSync(report);
   const untold = cst(root, ["import", "source", "elsewhere"]);

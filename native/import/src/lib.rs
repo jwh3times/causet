@@ -12,7 +12,9 @@
 //! a large file may be stored as a delta against the content its path held in
 //! the first parent of the commit that introduced it (§5.1). An import
 //! into an existing native repository reads and writes only what its store
-//! does not hold already.
+//! does not hold already. The commits, tags and trees import reads wait in a
+//! held file until it stores them, so its memory does not grow with their
+//! bytes (#405).
 #![forbid(unsafe_code)]
 
 mod git;
@@ -26,7 +28,7 @@ use causet_store::objects::{
   header_ids, parse_git_tree,
 };
 use causet_store::store::Store;
-use causet_store::store::{Base, StoreWriter};
+use causet_store::store::{Base, HeldObject, StoreWriter};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -78,6 +80,8 @@ pub struct Cost {
   pub phases: Vec<Phase>,
   /// The peak size on disk of the held metadata file (`import.metadata`).
   pub held_metadata: u64,
+  /// The peak size on disk of the held objects file (`import.objects`).
+  pub held_objects: u64,
 }
 
 /// A phase of an import: `source` (opening the source and checking its
@@ -149,9 +153,10 @@ struct Importer<'a> {
   /// and size.
   types: HashMap<String, String>,
   sizes: HashMap<String, u64>,
-  /// The bytes of every commit, tag and tree reached. Blobs are read once the
-  /// walk has put them in order.
-  raw: HashMap<String, Vec<u8>>,
+  /// Where the store's writer holds the Git bytes of every commit, tag and
+  /// tree reached, until it stores them (`import.objects`). Blobs are read
+  /// once the walk has put them in order.
+  held_at: HashMap<String, HeldObject>,
   /// Each commit's parents, as Git parses them: the ancestry reach followed.
   parents: HashMap<String, Vec<String>>,
   native: HashMap<String, NativeId>,
@@ -221,10 +226,11 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   })
 }
 
-/// Finishes `store` with `snapshot`. The held metadata file's size is read
-/// first: it has only grown until now, and finishing writes and removes it.
+/// Finishes `store` with `snapshot`. The held files' sizes are read first:
+/// they have only grown until now, and finishing removes them.
 fn finish(store: StoreWriter, mut imported: Imported, snapshot: &Snapshot) -> GitResult<Imported> {
   imported.cost.held_metadata = store.held_metadata();
+  imported.cost.held_objects = store.held_objects();
   store.finish(snapshot).map_err(store_error)?;
   imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
   Ok(imported)
@@ -274,7 +280,7 @@ fn write(
     store,
     types: HashMap::new(),
     sizes: HashMap::new(),
-    raw: HashMap::new(),
+    held_at: HashMap::new(),
     parents: HashMap::new(),
     native: HashMap::new(),
     git: HashMap::new(),
@@ -290,6 +296,11 @@ fn write(
   let walk = importer.walk(&tips);
   let bases = importer.bases(&walk);
   phases.end("walk");
+  // An object the walk could not read back is the reason, not the objects
+  // it then left out.
+  if let Some(error) = importer.failed.take() {
+    return Err(store_error(error));
+  }
   if walk.metadata.len() + walk.content.len() != importer.types.len() {
     return Err(GitError::new(
       "internal-invariant",
@@ -415,8 +426,16 @@ impl Importer<'_> {
     self.found(self.store.existing()?.native(self.algorithm, &unhex(id)?))
   }
 
-  /// A lookup of the existing store, its failure kept for the import to
+  /// The Git bytes of a commit, tag or tree this import read, from the file
+  /// they are held in. A failure to read them back is kept for the import to
   /// report.
+  fn body(&self, id: &str) -> Option<Vec<u8>> {
+    let held = *self.held_at.get(id)?;
+    self.found(self.store.read_held_object(held).map(Some))
+  }
+
+  /// A lookup of the existing store, or of what it holds for this import,
+  /// its failure kept for the import to report.
   fn found<T>(&self, lookup: Result<Option<T>, StoreError>) -> Option<T> {
     lookup.unwrap_or_else(|error| {
       self.failed.borrow_mut().get_or_insert(error);
@@ -454,7 +473,8 @@ impl Importer<'_> {
   /// Reads every object the tips reach that the store does not hold
   /// already, in rounds: each round reads the objects named so far and not
   /// yet read, with the ancestry of each new commit, and names what those
-  /// objects name. A blob's bytes are not read here.
+  /// objects name. A blob's bytes are not read here; every other object's
+  /// are held in the store writer's file as they are read.
   fn reach(&mut self, tips: &[String], except: &[String]) -> GitResult<()> {
     let source = self.source;
     let mut seen: HashSet<String> = HashSet::new();
@@ -512,7 +532,8 @@ impl Importer<'_> {
         }
       };
       let algorithm = self.algorithm;
-      let raw = &mut self.raw;
+      let store = &mut *self.store;
+      let held_at = &mut self.held_at;
       source.contents(&ids, &sizes, &mut |id, kind, body| {
         match kind {
           "tree" => {
@@ -531,7 +552,7 @@ impl Importer<'_> {
             ));
           }
         }
-        raw.insert(id.to_string(), body);
+        held_at.insert(id.to_string(), store.hold_object(&body).map_err(store_error)?);
         Ok(())
       })?;
       pending = named.into_iter().filter(|id| self.held(id).is_none()).collect();
@@ -544,7 +565,9 @@ impl Importer<'_> {
   /// commit's parents, as Git parses them, then its tree; a tag's object; a
   /// tree's entries Git follows, as stored. Only what this import reads.
   fn names(&self, id: &str, path: &[u8], commit: Option<&str>) -> Vec<(String, Vec<u8>, Option<String>)> {
-    let raw = self.raw.get(id).map(Vec::as_slice).unwrap_or_default();
+    // A blob is not held, so it has no body here.
+    let body = self.body(id);
+    let raw = body.as_deref().unwrap_or_default();
     let named: Vec<(String, Vec<u8>, Option<String>)> = match self.types[id].as_str() {
       "commit" => self
         .parents
@@ -679,8 +702,8 @@ impl Importer<'_> {
 
   /// What a commit or tag this import read, or the store held, is built on.
   fn built_on_of(&self, id: &str, kind: GitKind) -> Option<String> {
-    if let Some(raw) = self.raw.get(id) {
-      return built_on(self.algorithm, kind, raw);
+    if self.held_at.contains_key(id) {
+      return built_on(self.algorithm, kind, &self.body(id)?);
     }
     let store = self.store.existing()?;
     let preserved = Preserved::decode(&store.read(&self.held(id)?).ok()?.body).ok()?;
@@ -699,8 +722,8 @@ impl Importer<'_> {
           .collect()
       })
     };
-    if let Some(raw) = self.raw.get(id) {
-      return git(raw);
+    if self.held_at.contains_key(id) {
+      return git(&self.body(id)?);
     }
     let store = self.store.existing()?;
     let native = self.held(id)?;
@@ -791,12 +814,13 @@ impl Importer<'_> {
   /// Stores a commit, tag or tree reached at `path`. Everything a tree names
   /// is stored already, since the walk leaves an object after what it names.
   fn metadata(&mut self, id: &str, path: &[u8]) -> GitResult<()> {
-    let payload = self.raw.remove(id).ok_or_else(|| {
+    let held = self.held_at.remove(id).ok_or_else(|| {
       GitError::new(
         "git-response-malformed",
         format!("git did not print the object {id}"),
       )
     })?;
+    let payload = self.store.read_held_object(held).map_err(store_error)?;
     let native = match self.types[id].as_str() {
       "tree" => match self.canonical(&payload) {
         Some(tree) => {
