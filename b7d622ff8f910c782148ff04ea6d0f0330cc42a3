@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw7dmaqv6166599ccd8b",
+      "mode": "compact",
+      "sourceRef": "feat/338-compare-delta-records",
+      "sourceHead": "1486c6c7e4ce7a91eda6cb2b7e3bde3dd34547cc",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "8dc80d33c4fe43592f16385e42ddf2f0b1bf7c92",
+      "landingCommit": "b7d622ff8f910c782148ff04ea6d0f0330cc42a3",
+      "base": "8dc80d33c4fe43592f16385e42ddf2f0b1bf7c92",
+      "absorbedCommits": [
+        "27529aa582041c8ac6d09dd40401d64edbab99b3",
+        "1486c6c7e4ce7a91eda6cb2b7e3bde3dd34547cc"
+      ],
+      "absorbedChanges": [
+        "ch_0mw78e20g23e385ee91bc",
+        "ch_0mw78hr20ed0a1e9c577c"
+      ],
+      "resultTree": "dec10b078132ec2a95a20712de6e4e462681fe33",
+      "createdAt": "2026-11-08T05:13:03.504Z"
+    }
+  ]
+}
