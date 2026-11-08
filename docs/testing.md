@@ -425,6 +425,17 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   incremental import holds must also be one its earlier store or the full
   import holds. This is ADR-0045's decision 3 as amended on 2026-10-26.
 
+  A version both imports store as a delta must have the same record in both,
+  byte for byte (#338). Its base is fixed by history: the content its path
+  held in the first parent of the commit that introduced it (storage.md
+  §5.1). Its data is fixed by the contract's parameters and the pinned zstd
+  (§7). A delta is alone in a stored frame (§5), so the check reads both
+  records from the containers with no decompression, on every Node the
+  suites support, and never skips. It fails on a delta in any other frame. It
+  fails on a difference too, naming the version and both bases when they
+  differ, or its base and the first byte where the records differ. The corpus test's diagnostics, and
+  each real repository's job summary, say how many deltas it compared.
+
   No check here sees a symbolic ref's one-step target: `for-each-ref`'s
   `%(symref)`, Git's and cst's, gives where a chain ends, and no N1 command
   answers the step. Import asks Git for it by the ref's name, and refuses a

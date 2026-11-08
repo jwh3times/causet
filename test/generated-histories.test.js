@@ -211,6 +211,9 @@ test(`every generated history passes every N1 check (seed ${SEED})`, async (t) =
       assert.deepEqual(problems, [], `reproduce with CAUSET_GENERATED_SEED=${SEED} CAUSET_GENERATED_ONLY=${index}`);
     });
   }
+  // How many versions the incremental import check found stored as a delta
+  // by both imports, and compared.
+  t.diagnostic(`deltas both imports store, compared: ${results.reduce((sum, result) => sum + (result.deltas ?? 0), 0)}`);
   // Each subtest's count is reset as it ends, and the shards ran the CLI for
   // this test too.
   cstPrefix();

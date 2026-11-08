@@ -199,6 +199,23 @@ export function readContainer(file) {
 }
 
 /**
+ * A delta's record (storage.md §5): `base`, the 33-byte native ID of the
+ * content it is against; `size`, the length of the content it produces; and
+ * `data`, its zstd frame.
+ */
+export function readDelta(record) {
+  let at = 33;
+  let size = 0;
+  for (let shift = 0; ; shift += 7) {
+    if (at >= record.length) throw new Error(`a delta record of ${record.length} bytes ends before its size does`);
+    const byte = record[at++];
+    size += (byte & 0x7f) * 2 ** shift;
+    if (byte < 0x80) break;
+  }
+  return { base: record.subarray(0, 33), size, data: record.subarray(at) };
+}
+
+/**
  * Writes a container into `objects`, named by its trailer, and returns its
  * path. Objects are sorted by name; each annotation names its subject, and
  * its position is computed. Its header says `version`.
@@ -286,6 +303,23 @@ function rewrite(store, id, change) {
 export function markAbsent(store, id, state) {
   return rewrite(store, id, (container, at) => {
     Object.assign(container.objects[at], { form: 0, state, frame: NO_FRAME, offset: 0, length: 0 });
+  });
+}
+
+/**
+ * Rewrites the frame that holds `id` alone, as a delta's stored frame does
+ * (storage.md §5), with `change` applied to it: its `bytes` or its `codec`.
+ * The object's location follows the frame's new length.
+ */
+export function changeFrame(store, id, change) {
+  return rewrite(store, id, (container, at) => {
+    const object = container.objects[at];
+    const frame = container.frames[object.frame];
+    if (object.offset !== 0 || object.length !== frame.bytes.length) throw new Error(`${id} is not alone in its frame`);
+    frame.bytes = Buffer.from(frame.bytes);
+    change(frame);
+    frame.uncompressed = frame.bytes.length;
+    object.length = frame.bytes.length;
   });
 }
 

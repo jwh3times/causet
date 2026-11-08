@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { TYPES, aliases, containers, readContainer, storeFiles } from "./native-store.js";
+import { TYPES, aliases, containers, readContainer, readDelta, storeFiles } from "./native-store.js";
 
 const sorted = (items) => [...items].sort();
 
@@ -23,22 +23,36 @@ export function sameStores(first, second, what) {
   }
 }
 
+// A chunk list and a delta (objects.md §3), the forms one large version may
+// take in one store and not another.
+const CHUNKED = 1;
+const DELTA = 2;
+// A stored frame, which holds its records as they are (storage.md §4).
+const STORED = 0;
+
 /**
  * A store's objects, as hex: `named`, those the history names, with each
- * one's stored form, and `chunks`, content no alias row names. That content
- * is a chunk of a larger file, a storage detail (ADR-0045, decision 4) whose
- * presence depends on the forms import chose. A store holds each object
- * once (storage.md §4.2).
+ * one's stored form; `chunks`, content no alias row names; and `deltas`,
+ * each delta's record. Content no row names is a chunk of a larger file, a
+ * storage detail (ADR-0045, decision 4) whose presence depends on the forms
+ * import chose. A store holds each object once (storage.md §4.2), and each
+ * delta alone in a stored frame (§5).
  */
 export function storeObjects(store, format) {
   const rows = new Set(aliases(store, format).values());
-  const found = { named: new Map(), chunks: new Set() };
+  const found = { named: new Map(), chunks: new Set(), deltas: new Map() };
   for (const file of containers(store)) {
-    for (const object of readContainer(file).objects) {
+    const { frames, objects } = readContainer(file);
+    for (const object of objects) {
       const id = object.name.toString("hex");
       assert.ok(!found.named.has(id) && !found.chunks.has(id), `${store} holds ${id} twice`);
       if (object.type !== TYPES.content || rows.has(id)) found.named.set(id, object.form);
       else found.chunks.add(id);
+      if (object.type === TYPES.content && object.form === DELTA) {
+        const { codec, bytes } = frames[object.frame];
+        assert.equal(codec, STORED, `${store} holds the delta ${id} in a frame of codec ${codec}, not a stored frame (storage.md §5)`);
+        found.deltas.set(id, bytes.subarray(object.offset, object.offset + object.length));
+      }
     }
   }
   return found;
@@ -49,16 +63,16 @@ export function storeState(store, format) {
   return { objects: storeObjects(store, format), aliases: aliases(store, format) };
 }
 
-// A chunk list and a delta (objects.md §3), the forms one large version may
-// take in one store and not another.
-const CHUNKED = 1;
-const DELTA = 2;
+/** A native ID's text form: the hex of its digest, after the algorithm tag (objects.md §1.1). */
+const idText = (id) => (id[0] === 1 ? "" : `tag ${id[0]} `) + id.subarray(1).toString("hex");
 
 /**
  * Asserts that `incremental`, a store that held `before` (`storeState`) and
  * then imported the final history, holds what `full`, a fresh import of that
  * history, holds: the same ref snapshot, its own and the full import's alias
  * rows and objects, and each object it held already in the form it had.
+ * Each version both store as a delta has the same record in both. Returns
+ * how many such deltas it compared.
  */
 export function sameAsFull({ before, incremental, full, format }) {
   assert.ok(fs.readFileSync(path.join(incremental, ".cst", "snapshot")).equals(fs.readFileSync(path.join(full, ".cst", "snapshot"))),
@@ -97,4 +111,24 @@ export function sameAsFull({ before, incremental, full, format }) {
   for (const [gitId, id] of [...before.aliases, ...fullRows]) {
     assert.equal(rows.get(gitId), id, `the incremental import's alias for ${gitId}`);
   }
+  // A version both store as a delta has the same record in both: its base
+  // is fixed by history, the same path in the first parent of the commit
+  // that introduced it (storage.md §5.1), and its data by the contract's
+  // parameters and the pinned zstd (§7).
+  let compared = 0;
+  for (const [id, fullRecord] of whole.deltas) {
+    const incrementalRecord = after.deltas.get(id);
+    if (!incrementalRecord) continue;
+    const [incrementalBase, fullBase] = [incrementalRecord, fullRecord].map((record) => readDelta(record).base);
+    assert.ok(incrementalBase.equals(fullBase),
+      `the delta ${id} is against ${idText(incrementalBase)} in the incremental import and ${idText(fullBase)} in the full import`);
+    if (!incrementalRecord.equals(fullRecord)) {
+      let at = 0;
+      while (at < incrementalRecord.length && at < fullRecord.length && incrementalRecord[at] === fullRecord[at]) at++;
+      assert.fail(`the delta ${id} against ${idText(fullBase)} differs between the incremental and the full import `
+        + `from byte ${at} of its record, ${incrementalRecord.length} bytes in the incremental import and ${fullRecord.length} in the full import`);
+    }
+    compared++;
+  }
+  return compared;
 }

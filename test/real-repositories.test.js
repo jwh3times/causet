@@ -56,7 +56,7 @@ function summary(report) {
     `| cst store | ${report.native.total} (${megabytes(report.native.total)}) | ${parts(report.native)} |`,
     `| git gc --aggressive | ${report.git.total} (${megabytes(report.git.total)}) | ${parts(report.git)} |`,
     "",
-    `${report.objects} Git objects. What each import cost, never checked:`,
+    `${report.objects} Git objects. The incremental import check compared ${report.deltas} ${report.deltas === 1 ? "delta" : "deltas"} both imports store. What each import cost, never checked:`,
     "",
     "| Import | Time | Peak memory | Held metadata | Seconds by phase (peak memory as it ended) |",
     "| --- | ---: | ---: | ---: | --- |",
@@ -77,6 +77,7 @@ for (const name of chosen) {
       if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(report));
     }
     t.diagnostic(`${name}: import costs ${JSON.stringify(report.imports)}`);
+    t.diagnostic(`${name}: deltas both imports store, compared: ${report.deltas}`);
     assert.deepEqual(report.problems, []);
   });
 }
