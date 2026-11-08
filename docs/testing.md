@@ -433,8 +433,9 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   records from the containers with no decompression, on every Node the
   suites support, and never skips. It fails on a delta in any other frame. It
   fails on a difference too, naming the version and both bases when they
-  differ, or its base and the first byte where the records differ. The corpus test's diagnostics, and
-  each real repository's job summary, say how many deltas it compared.
+  differ, or its base and the first byte where the records differ. The corpus
+  test's diagnostics, and each real repository's job summary, say how many
+  deltas it compared.
 
   No check here sees a symbolic ref's one-step target: `for-each-ref`'s
   `%(symref)`, Git's and cst's, gives where a chain ends, and no N1 command
@@ -528,7 +529,8 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
     holds these rules in `npm test`.
 
   Each job's summary reports the gate's verdict and ratio, both byte counts
-  with their parts, the number of Git objects, and what each import cost
+  with their parts, the number of Git objects, how many shared deltas the
+  incremental import check compared (#338), and what each import cost
   (#347). Import reports these numbers itself (`CAUSET_TEST_IMPORT_REPORT`):
   - its time, in all and by phase;
   - the peak size of the metadata it held on disk until its container
