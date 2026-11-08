@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw75oe2v89452a03c0b8",
+      "mode": "compact",
+      "sourceRef": "feat/347-import-cost-report",
+      "sourceHead": "60523b61ff356d1ebbc4c79b96fc3aab2ce062be",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "82370b7df0fa9b54907e01a4c72445fe4526a033",
+      "landingCommit": "8dc80d33c4fe43592f16385e42ddf2f0b1bf7c92",
+      "base": "82370b7df0fa9b54907e01a4c72445fe4526a033",
+      "absorbedCommits": [
+        "57feec701717e58782e7894a57f4bbbe193f7b44",
+        "60523b61ff356d1ebbc4c79b96fc3aab2ce062be"
+      ],
+      "absorbedChanges": [
+        "ch_0mw6sn56ee57cfc5ff7d4",
+        "ch_0mw734qyt52805389a8f1"
+      ],
+      "resultTree": "0f73e9d3be577a949615acac590ee0407c06ce3e",
+      "createdAt": "2026-11-08T01:30:44.210Z"
+    }
+  ]
+}
