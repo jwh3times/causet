@@ -554,12 +554,13 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
   git/git 36 minutes (each full import about 8 minutes, in one thread and up
   to 6.3 GB of memory). These were measured while the comparison still
   started a `cst` for each answer on each object, and git/git's was a
-  sample of 512 objects. After #347, a full import of git/git on format
-  version 1 peaked at about 3.1 GB of memory on Linux, down from 6.3 GB, and
-  spilled 1.58 GB of held metadata to disk. #347's comments break down where
-  its time and memory went: 2.6 GB of that peak was the Git bytes of the
-  trees and commits import held in memory, which #405 holds on disk instead
-  (`import.objects`).
+  sample of 512 objects. #347 brought a full import of git/git on format
+  version 1 down from 6.3 GB to about 3.1 GB of memory on Linux. #405 then
+  moved the Git bytes of the commits, tags and trees import reads, 2.6 GB
+  of that peak, to disk. Since #405, on the hosted Ubuntu runner, that import
+  takes about 8.5 minutes and peaks at about 480 MB. While it runs it holds
+  about 4.2 GB on disk: 1.58 GB of metadata and 2.6 GB of objects. The
+  comments on #347 and #405 break down where its time and memory go.
 
 **The CLI the suites run.** Every CLI launch in the suites, the demos,
 `scripts/benchmark-regression.mjs`, and the whole-command part of
