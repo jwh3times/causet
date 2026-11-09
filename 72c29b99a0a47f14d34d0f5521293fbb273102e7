@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mw8ypxgs6eeda5ba478c",
+      "mode": "compact",
+      "sourceRef": "docs/import-cost-after-405",
+      "sourceHead": "084d9934937e17dedc71889f88fb6031d4ea280c",
+      "sourceSubject": "docs: give git/git's import cost after #405 in testing.md",
+      "targetBefore": "6e554587f64f57c60814101de23df839a51029c2",
+      "landingCommit": "72c29b99a0a47f14d34d0f5521293fbb273102e7",
+      "base": "6e554587f64f57c60814101de23df839a51029c2",
+      "absorbedCommits": [
+        "084d9934937e17dedc71889f88fb6031d4ea280c"
+      ],
+      "absorbedChanges": [
+        "ch_0mw8t8agef88349d0c4cb"
+      ],
+      "resultTree": "2423f9abc7da73b0259c52969dc63cf13243a49a",
+      "createdAt": "2026-11-09T07:51:31.046Z"
+    }
+  ]
+}
