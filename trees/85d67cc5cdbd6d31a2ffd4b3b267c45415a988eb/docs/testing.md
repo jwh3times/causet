@@ -494,7 +494,9 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
     same seed comments on that seed's issue instead of opening another, and
     reopens it if triage had closed it. A pass files and comments nothing.
     The board's auto-add puts a new issue on project 7, and triage gives it
-    its fields.
+    its fields. `test/rotating-corpus.test.js`, in the default suite, holds
+    the seed choice, the report and the issue's opening, commenting and
+    reopening, with `gh` replaced by a stub.
   - Through normal triage, a failing seed's histories become either a fix
     or a fixed regression case. The rotating seed is never the regression
     case itself: next week's run checks another.
