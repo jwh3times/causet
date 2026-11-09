@@ -247,6 +247,24 @@ export async function skipReason({ seed, index, env }) {
   return refStorageOf({ seed, index }) === "reftable" ? reftableUnsupported(env) : null;
 }
 
+/**
+ * What the corpus test reports of a run when `CAUSET_GENERATED_REPORT` names
+ * a file: its seed, how many histories it was asked for, checked and
+ * skipped, and each history that failed. The weekly run on a rotating seed
+ * files its issue from it (`scripts/rotating-corpus.mjs`, #336).
+ */
+export function corpusReport(results, { seed, histories }) {
+  const checked = results.filter((result) => !result.skipped);
+  return {
+    seed,
+    histories,
+    checked: checked.length,
+    skipped: results.length - checked.length,
+    failures: checked.filter((result) => result.problems.length > 0)
+      .map(({ index, format, refStorage, cases, problems }) => ({ index, format, refStorage, cases, problems })),
+  };
+}
+
 /** `prefix`, Latin-1's é, then `suffix`, as bytes: a name that is not UTF-8. */
 export const latin = (prefix, suffix = "") => Buffer.concat([Buffer.from(prefix), Buffer.from([0xe9]), Buffer.from(suffix)]);
 

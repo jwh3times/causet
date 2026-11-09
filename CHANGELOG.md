@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+- **The generated-history corpus runs weekly on a new seed, without
+  blocking anything** (#336). `corpora.yml` checks only the seed
+  `causet-n1`, kept fixed so release gate 11 fails the same way twice, and a
+  fixed seed finds nothing new once it passes. A new workflow,
+  `rotating-corpus.yml`, checks 1,000 histories of the ISO week's seed
+  (`weekly-<year>-W<week>`) on Ubuntu and Windows every Thursday, and on
+  manual dispatch with an optional seed. It gates nothing, and `corpora.yml`,
+  its seed and gate 11 are unchanged. A failure turns the run red, and its
+  last job, the only one allowed to write issues, opens one `needs-triage`
+  issue per seed. The issue lists each failing host and history with its
+  problems, the command that reproduces it, and the run's link. A later
+  failure of that seed comments on the seed's issue instead, reopening it if
+  it was closed. To file it, the corpus test writes a JSON report when
+  `CAUSET_GENERATED_REPORT` names a file. No behavior of `cst` changes.
+
 - **Experimental: import holds the commits, tags and trees it reads on disk,
   not in memory** (#405). Since #347, git/git's import peaked at 3.1 GB,
   most of it the Git bytes of every commit, tag and tree import reads before

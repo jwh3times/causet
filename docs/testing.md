@@ -464,6 +464,42 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   (`test-support/bounded-process.js`), which fails its history rather than
   holding the corpus. The suite removes every repository it makes before its test ends, so the
   native-kind mode has none of them to import again.
+- **The rotating seed** (#336). `corpora.yml` checks only `causet-n1`, and
+  that seed stays fixed so the gate fails the same way twice; once it passes,
+  it finds nothing new. `.github/workflows/rotating-corpus.yml` checks 1,000
+  histories of another seed each week, on Ubuntu and Windows, on Thursdays
+  and on manual dispatch. It gates nothing, and `release-gates.yml` never
+  calls it.
+  - Its seed is the ISO week's, `weekly-<year>-W<week>` (for example
+    `weekly-2026-W46`), so every run in one week checks the same histories.
+    A dispatch may name another seed: letters, digits, `.`, `_` and `-`.
+    A dispatch with a seed shows it in the run's name; every run shows it in
+    its job names and summaries.
+  - With `CAUSET_GENERATED_REPORT=<file>`, the corpus test writes what it
+    found there as JSON (`corpusReport` in
+    `test-support/generated-histories.js`): the seed, the histories checked
+    and skipped, and each failing history with its problems.
+  - A failure turns the run red, and its last job
+    (`scripts/rotating-corpus.mjs`, the only one allowed to write issues)
+    opens one issue titled `Generated-history corpus fails on seed <seed>`,
+    labeled `needs-triage`. It lists each failing host and history, with
+    the problems, the run's link and the command that reproduces it:
+
+    ```bash
+    CAUSET_GENERATED_SEED=<seed> CAUSET_GENERATED_ONLY=<index> node --test test/generated-histories.test.js
+    ```
+
+    A host that failed without a failing history, from the build, a crashed
+    shard or the timeout, is listed with that reason. A later failure of the
+    same seed comments on that seed's issue instead of opening another, and
+    reopens it if triage had closed it. A pass files and comments nothing.
+    The board's auto-add puts a new issue on project 7, and triage gives it
+    its fields. `test/rotating-corpus.test.js`, in the default suite, holds
+    the seed choice, the report and the issue's opening, commenting and
+    reopening, with `gh` replaced by a stub.
+  - Through normal triage, a failing seed's histories become either a fix
+    or a fixed regression case. The rotating seed is never the regression
+    case itself: next week's run checks another.
 - **Cost.** On a 16-core Linux host, 1,000 histories took 4 to 6 minutes, and
   the default set, then 24 histories, about 10 seconds. On GitHub's hosted
   runners, 1,000 took 22 minutes on Ubuntu and 44 on Windows (#333).
@@ -1480,6 +1516,11 @@ Windows: weekly on `main`, on manual dispatch, from `release-gates.yml` when a
 release is qualified, and for a pull request that changes a corpus or the
 workflow. Its jobs have a 90-minute timeout, about twice the slowest run
 measured, except git/git's, which has 300 minutes.
+`.github/workflows/rotating-corpus.yml` runs the generated-history corpus on
+the ISO week's seed every Thursday and on manual dispatch, with the same
+build and timeout. It gates nothing. Its only write is a `needs-triage` issue
+per failing seed, or a comment on that issue (reopening it if closed), from
+its last job, which is the only job given `issues: write`. See "The generated-history corpus".
 `ci.yml` has no automatic full-matrix schedule. Superseded runs cancel within
 the same event and ref; manual qualification is independent of automatic runs.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
