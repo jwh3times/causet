@@ -65,6 +65,11 @@ no npm dependencies.
   `CAUSET_REAL_REPOSITORIES=<name>`), on hosted Windows and Ubuntu runners:
   weekly on `main`, on manual dispatch, as release gate 11 from
   `release-gates.yml`, and for PRs touching the corpora.
+- `.github/workflows/rotating-corpus.yml` runs the generated-history corpus
+  on a new seed each week, the ISO week's (`weekly-<year>-W<week>`), on hosted
+  Windows and Ubuntu runners, and on manual dispatch with an optional seed. It
+  gates nothing; a failure opens or updates one `needs-triage` issue per seed
+  (`scripts/rotating-corpus.mjs`).
 - `.github/workflows/release.yml` builds the `cst` executable per platform,
   packs the ADR-0038 package set with `scripts/pack-release.mjs`, and installs
   it on each runner, by npm and by `scripts/install.sh` or

@@ -9,8 +9,11 @@
  * By default the suite checks one history per case. `CAUSET_GENERATED_HISTORIES=<n>`
  * checks `n`, as the weekly run does with 1,000 (`.github/workflows/corpora.yml`);
  * `CAUSET_GENERATED_SEED` chooses another seed, and `CAUSET_GENERATED_ONLY=<index>`
- * checks one history, to reproduce a failure. A reftable history needs Git
- * 2.46 or later; on an older Git it is skipped with that reason (#334).
+ * checks one history, to reproduce a failure. `CAUSET_GENERATED_REPORT=<file>`
+ * writes what the corpus test found to that file as JSON, which the weekly
+ * run on a rotating seed files an issue from (`scripts/rotating-corpus.mjs`,
+ * #336). A reftable history needs Git 2.46 or later; on an older Git it is
+ * skipped with that reason (#334).
  */
 
 import assert from "node:assert/strict";
@@ -24,7 +27,8 @@ import test from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstPrefix } from "../test-support/cst-command.js";
 import {
-  CASES, MALFORMED, REF_CASES, REFTABLE_CASES, history, reftableReason, reftableUnsupported, refStorageOf, skipReason,
+  CASES, MALFORMED, REF_CASES, REFTABLE_CASES, corpusReport, history, reftableReason, reftableUnsupported, refStorageOf,
+  skipReason,
 } from "../test-support/generated-histories.js";
 
 const SEED = process.env.CAUSET_GENERATED_SEED || "causet-n1";
@@ -198,6 +202,10 @@ test(`every generated history passes every N1 check (seed ${SEED})`, async (t) =
     : ["--count", String(COUNT), "--shard", String(k), "--of", String(shards)])))).flat();
   results.sort((a, b) => a.index - b.index);
   const expected = ONLY !== undefined ? [Number(ONLY)] : Array.from({ length: COUNT }, (_, index) => index);
+  if (process.env.CAUSET_GENERATED_REPORT) {
+    fs.writeFileSync(process.env.CAUSET_GENERATED_REPORT,
+      `${JSON.stringify(corpusReport(results, { seed: SEED, histories: ONLY !== undefined ? 1 : COUNT }), null, 2)}\n`);
+  }
   assert.deepEqual(results.map((result) => result.index), expected, "every history is checked once");
   for (const { index, format, refStorage, cases, problems, skipped } of results) {
     if (skipped) {
