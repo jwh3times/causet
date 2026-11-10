@@ -18,7 +18,7 @@ reads only the version it writes, refusing any other by name. The promise
 starts when a later ADR makes it.
 
 **Version 1 was published ahead of its code** (see Authority). `native/store`
-now writes all of it: version 1's version marks, content under 32 KiB whole,
+now writes all of N1's part of it: version 1's version marks, content under 32 KiB whole,
 trees in short references, the 32-byte alias row and metadata in path order.
 It reproduces version 1's container header, root marker, short-reference tree
 and alias file, and the worked examples version 1 kept from version 0. On version 1
@@ -47,7 +47,9 @@ the text says in that change why the code's answer is right. Neither may drift
 silently.
 
 The one exception is a new format version, which this text publishes before
-the code writes it (ADR-0045, decision 10). Until the code writes the new
+the code writes it (ADR-0045, decision 10). Object types another contract adds,
+such as [native history's](../native-history/README.md), follow that contract's
+Authority instead. Until the code writes the new
 version, it reproduces the previous version's worked examples, as this text's
 history holds them, and the issue that builds the version tracks the gap.
 

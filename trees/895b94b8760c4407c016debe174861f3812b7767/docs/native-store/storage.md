@@ -331,6 +331,8 @@ or loose.
      directly is at the root.
   2. **Commits and tags,** and any other metadata but the snapshot, in the
      order the walk leaves them.
+     A native commit or tag goes straight after the preserved commit or tag
+     it derives from ([native history §1](../native-history/commits.md#1-object-types)).
   3. **The ref snapshot,** last.
 
   **The reason.** A history's versions of one directory then sit together in

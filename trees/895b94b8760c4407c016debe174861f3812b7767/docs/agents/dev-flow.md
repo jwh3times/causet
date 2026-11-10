@@ -17,7 +17,8 @@ board's order, which is priority order ([board fields](issue-tracker.md#board-fi
 
 The published contracts the suites check are code, Markdown included:
 `docs/schemas/`, `docs/conformance/`, `docs/canonical-json/`,
-`docs/identity/`, `docs/semantic-conformance/` and `docs/native-store/`.
+`docs/identity/`, `docs/semantic-conformance/`, `docs/native-store/` and
+`docs/native-history/`.
 
 ## Exemption details
 

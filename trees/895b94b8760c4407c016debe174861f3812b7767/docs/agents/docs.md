@@ -34,8 +34,9 @@
   `domain-modeling` skill. `frozen` for this skill: point at them, and report a contradiction
   between an accepted ADR and the code instead of editing either.
 - `docs/schemas/`, `docs/conformance/`, `docs/canonical-json/`, `docs/identity/`,
-  `docs/semantic-conformance/`, `docs/native-store/` — published contracts the suites check, which
-  the development flow counts as code. `owner-only`: report drift; a change goes through an issue.
+  `docs/semantic-conformance/`, `docs/native-store/`, `docs/native-history/` — published contracts
+  the suites check, which the development flow counts as code. `owner-only`: report drift; a change
+  goes through an issue.
 - `docs/agents/*.md` — conventions and settings the installed skills read. **When:** a convention or
   setting changes.
 - `docs/agents/mirrors.md` — how agent and skill sources are mirrored and linted, and which scripts
