@@ -104,11 +104,17 @@ An object's **identity input** is the byte string its digest is computed over:
 | `03` | preserved Git object | §5 |
 | `04` | ref snapshot | §6 |
 | `05` | annotation | §7 |
+| `06` | native commit | [native history](../native-history/commits.md#3-native-commits) |
+| `07` | native tag | [native history](../native-history/commits.md#4-native-tags) |
 
-- **Codes `00` and `06`–`ff` are reserved.** A reader refuses an object of a
+- **Codes `00` and `08`–`ff` are reserved.** A reader refuses an object of a
   type it does not know, because the store came from a build that writes a
   format it cannot read. Annotations (§7) are the extension point that a reader
   may ignore.
+- **Native history's types,** `06` and `07`, are defined by the
+  [native history contract](../native-history/README.md). They joined version 1
+  without a new version: a build that does not know them refuses them by this
+  rule.
 - **A body's encoding never changes within a type.** A new encoding of an
   object takes a new type code.
 - **The prefix is not stored.** A store keeps an object's body, and the
@@ -367,7 +373,9 @@ ID.
 
 A **preserved Git object** keeps a Git object's exact bytes for the bridge.
 Commits and tags are always preserved, and N2 reinterprets them as native
-history (decision 2). Trees that are not canonical are preserved too (§4.3).
+history (decision 2): as the native commits and tags imported from them
+([native history](../native-history/commits.md)). Trees that are
+not canonical are preserved too (§4.3).
 Its body:
 
 ```
@@ -554,7 +562,7 @@ No build knows the type `example`, so every reader ignores it.
 Every clone holds all metadata, and content may be absent (decision 8).
 
 - **Metadata** is trees, preserved Git objects, ref snapshots and annotations
-  (types `02`–`05`).
+  (types `02`–`05`), and native commits and tags (types `06` and `07`).
 - **Content** is type `01`, chunk lists included.
 
 An ID is **known** to a store when a present object, a stored chunk list or a
@@ -579,8 +587,8 @@ half defines where they sit.
   that state. A read reports the state by name. It is not an error of the
   store, and it is not corruption. A chunked content object whose list is
   present can still be read in the byte ranges of its present chunks.
-- **Only content may be absent.** A tree, preserved object, snapshot or
-  annotation in either absent state is corrupt.
+- **Only content may be absent.** A metadata object in either absent state
+  is corrupt.
 
 **The index lists every known ID,** absent content included: that is what
 resolves a short reference (§1.3) whatever state its object is in.
@@ -746,10 +754,13 @@ For every row of every alias file, the check:
 3. compares the result with the row's Git ID, which the row holds whole.
 
 Every row must match: a row for which no candidate matches fails the check.
-In N1, where import is the only writer, every object the store holds came
-from Git and must have a row; a phase that writes
-objects of its own changes this rule (ADR-0044, item 4). The check shows it
-from the store alone:
+Every object the store holds that came from Git must have a row. In N1, where
+import is the only writer, that is every object; a phase that writes objects
+of its own changes this rule (ADR-0044, item 4). Native commits and tags are
+the first that are not Git objects: they have no row, and their preserved
+objects have
+([native history §1](../native-history/commits.md#1-object-types)). The
+check shows it from the store alone:
 
 - each tree and preserved object has a row, and so does all content but the
   chunks of other content (§3.3);
