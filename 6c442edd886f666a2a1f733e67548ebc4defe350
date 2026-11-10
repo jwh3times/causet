@@ -1,0 +1,29 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwa4qmbw1d7ab98255ef",
+      "mode": "compact",
+      "sourceRef": "docs/311-n2-adr",
+      "sourceHead": "223b15b2f3f473a7015374e768bdfffaa346ca9d",
+      "sourceSubject": "docs: accept ADR-0047",
+      "targetBefore": "322436a922bdc233cd4654767c5c29540c3b6b83",
+      "landingCommit": "6c442edd886f666a2a1f733e67548ebc4defe350",
+      "base": "322436a922bdc233cd4654767c5c29540c3b6b83",
+      "absorbedCommits": [
+        "cffbd68a8b864b6503b5dbaf5c47852cadd5e4bd",
+        "e00ed743e7499cdf0117215cf68423e60616e303",
+        "223b15b2f3f473a7015374e768bdfffaa346ca9d"
+      ],
+      "absorbedChanges": [
+        "ch_0mwa18vgq594a6a21777b",
+        "ch_0mwa1bogi54ffca33e7da",
+        "ch_0mwa4preua0eeae17de75"
+      ],
+      "resultTree": "ca7b7c6b008e583b13fdc1ee98f104ed768ae55a",
+      "createdAt": "2026-11-10T03:27:47.125Z"
+    }
+  ]
+}
