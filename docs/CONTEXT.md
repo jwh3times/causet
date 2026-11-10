@@ -55,6 +55,41 @@ The permanent, two-way, exact conversion between a native repository and a Git
 repository, through which Git users and cst users work on one repository.
 _Avoid_: importer, mirror, gateway, bridge (alone; see lineage bridge)
 
+## History and facts
+
+**Native commit**:
+A point in a native repository's history: a snapshot, its parents, its message,
+its actors, and the identity and lineage of the change it records. Every commit
+in a native repository is one, whether it was made there or imported from Git.
+_Avoid_: history object, changeset, revision
+
+**Preserved Git object**:
+The exact bytes of an imported Git commit or tag, kept only so the Git bridge
+can reproduce its Git ID. No reader of native history reads it.
+_Avoid_: raw commit, shadow commit
+
+**Fact**:
+A recorded claim about history that arrives after the commits it names, such as
+an application, a landing, a review or a resolution. It is an object of its
+own, never part of a commit, so recording it changes no commit's identity.
+_Avoid_: note, annotation, metadata
+
+**Fact log**:
+The record of which facts a clone holds and when it learned them. Two copies of
+it join as the union of both, so no fact is ever lost by joining.
+_Avoid_: notes, fact store, ledger
+
+**Operation log**:
+A clone's own record of every operation that moved its names or added facts:
+who ran it, what it ran, and the names it left behind. It belongs to one clone
+and is never exchanged.
+_Avoid_: reflog, journal, history
+
+**Conflicted name**:
+A branch or tag that two concurrent operations moved to different places. It
+names both until someone chooses.
+_Avoid_: diverged branch, ref conflict
+
 ## Forecasting and application
 
 **Target overlay**:
