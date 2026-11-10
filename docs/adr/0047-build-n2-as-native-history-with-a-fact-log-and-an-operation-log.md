@@ -1,6 +1,6 @@
 # ADR-0047: Build N2 as native history with a fact log and an operation log
 
-- **Status:** Accepted (owner, 2026-11-09)
+- **Status:** Accepted (owner, 2026-11-09); amended 2026-11-10
 - **Date:** 2026-11-09
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, FR-ID-07, FR-WS-08, FR-TRUST-02
@@ -362,3 +362,36 @@ The prior-art research for #285 bears on the fact side:
   does not say so, and policy can decide what an unstated kind means.
 - **N2 read-only, as N1 is.** Rejected: N3 would be the first to exercise the
   name store and the fact log's writes, and their concurrency.
+
+## Amendment 2026-11-10
+
+Writing the contract (#413,
+[`docs/native-history/`](../native-history/README.md)) changed four of the
+decisions above. The owner accepted each in the contract's review.
+
+- **Entries retire facts as well as add them** (decision 7;
+  [facts.md §4.1](../native-history/facts.md#41-entries)). The Git-backed
+  reader reads only the tip of `refs/notes/causet`, and a note can lose a
+  record: `cst metadata dispose --replace-local` replaces one. A log that only
+  added would disagree with the original about every dispute it settled. An
+  entry also lists the facts it retires, and a fact is **current** when an
+  entry adds it and no entry that has seen that add retires it. That is an
+  observed-remove set, so a join still loses no fact and never brings back one
+  that a side retired. A retired fact stays held and reachable.
+- **The fact log is two chains, shared and local** (decisions 7, 10 and 11;
+  [facts.md §3.4](../native-history/facts.md#34-scope)). Decision 6 gives a
+  fact its family's scope, and a clone-local disposition must never travel
+  with the shared facts N5 sends. In one chain, an entry with a local entry
+  among its ancestors could not be sent whole. An operation's view and the
+  reachability roots name both chains' heads.
+- **The clone's state is a set of operation heads, not one pointer**
+  (decision 10;
+  [operations.md §3.2](../native-history/operations.md#32-the-operation-heads)).
+  A pointer replaced by renaming loses one of two concurrent writes. Each
+  operation adds its own head file and removes its parents', and a reader
+  merges several heads in memory. Writers still take no lock.
+- **The actor of an action has no role** (decisions 3 and 5;
+  [facts.md §2.1](../native-history/facts.md#21-an-actions-actor)). A fact,
+  an entry and an operation record decision 3's actor without `role`:
+  recording a fact or running a command is neither `authored` nor `generated`
+  work. A commit's actors are unchanged.

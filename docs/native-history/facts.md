@@ -146,8 +146,8 @@ actor.
 ### 3.4 Scope
 
 A fact's scope is its family's, as the registry in `native/model` defines it
-(ADR-0047, decision 6), and it decides which chain of the fact log holds the
-fact (§4):
+(ADR-0047, decision 6), and it decides which chain of the fact log records
+the fact (§4):
 
 | Facts | Chain |
 | --- | --- |
@@ -199,19 +199,23 @@ actor      optional actor   who wrote it: an action's actor (§2.1)
 time       optional time    when (§2.2)
 ```
 
-**The state** of one or more heads is the set of facts they hold. A fact is
-in it when some entry A that the heads reach adds it, and no entry that the
-heads reach retires it with A among its ancestors. An entry reaches itself
-and is its own ancestor. So a retire removes only the adds it has seen, and an add made on a fork concurrent with the retire survives the
-join, as an observed-remove set keeps it. A join never brings back a fact
-that one side retired and the other merely kept.
+A fact is **current** at one or more heads when some entry A that the heads
+reach adds it, and no entry that the heads reach retires it with A among its
+ancestors. An entry reaches itself and is its own ancestor. So a retire
+removes only the adds it has seen, and an add made on a fork concurrent with
+the retire survives the join, as an observed-remove set keeps it. A join
+never brings back a fact that one side retired and the other merely kept.
+
+Current is not held. The store **holds** every fact an entry has added, and
+a retired fact stays held and reachable (operations.md §5); it is only no
+longer current.
 
 **The rules:**
 
 - Lists are in byte order with nothing repeated, and every fact an entry adds
   or retires has the entry's scope.
-- An entry adds no fact its parents' state holds, and retires only facts
-  that state holds.
+- An entry adds no fact current at its parents, and retires only facts
+  current there.
 - An entry written natively has an actor and a time, and adds or retires at
   least one fact. An imported entry may have neither, and may change nothing
   (§5.1).
@@ -221,8 +225,8 @@ Git-backed reader reads the tip of `refs/notes/causet` alone, and a note can
 lose a record: `cst metadata dispose --replace-local` replaces one, and a
 duplicated ID is repaired by editing the note. A log that only grew would
 keep every replaced record, and disagree with the original about every
-dispute it settled. A retired fact stays held and reachable, so the log still
-records what a clone learned, and when.
+dispute it settled. A retired fact stays held and reachable, though no longer
+current, so the log still records what a clone learned, and when.
 
 **Why two chains.** ADR-0047 decisions 7, 10 and 11 speak of one chain and
 its head. But decision 6 gives each fact its family's scope, and a
@@ -233,8 +237,8 @@ closed under parents.
 
 ### 4.2 Which facts a reader uses
 
-A reader reads the facts of both chains' heads in the current view
-(operations.md §3). A fact of state `00` in that state is **used** when the
+A reader reads the facts current at both chains' heads in the current view
+(operations.md §3). A current fact of state `00` is **used** when the
 record is valid and its logical ID is not conflicted:
 
 - **Valid** means `native/model`'s validators accept the fact's Git record
@@ -244,10 +248,10 @@ record is valid and its logical ID is not conflicted:
   Git IDs, never native ones. A check that reads a ref or a retention
   commit, such as a resolution's, reads the snapshot and the objects it
   names.
-- **A logical ID is conflicted** when, in the shared chain's state, two
-  facts of state `00` carry it, or one does and a parked fact of reason
-  `02` or `03` does; or when a parked fact of reason `04` in the local
-  chain's state carries it (ADR-0047, decision 7; ADR-0030). Every copy is
+- **A logical ID is conflicted** when, among the facts current in the
+  shared chain, two of state `00` carry it, or one does and a parked fact of
+  reason `02` or `03` does; or when a parked fact of reason `04` current in
+  the local chain carries it (ADR-0047, decision 7; ADR-0030). Every copy is
   then unused until the dispute is settled. A logical ID is the record's
   `id` member, across the note-record families; dispositions are not
   checked against them.
@@ -260,7 +264,7 @@ reader counts every copy, though both give one fact.
 **Dispositions** name records by their **Git digest**: the SHA-256 of the
 record and its attachment as `native/model`'s `record_digest` writes it,
 with Git IDs. A reader computes a fact's Git digest from its Git record
-(§6). A disposition settles nothing by being held; as in Git, settling a
+(§6). A disposition settles nothing by being current; as in Git, settling a
 dispute changes the shared chain, and the disposition records what was
 decided, so a later import or exchange does not raise it again.
 
@@ -287,8 +291,9 @@ fe5c                                                                offset −42
 ```
 
 Its ID is `39deba682a85f74b9faafec22565ab90c4355eb7493f25d436cf990141a10409`.
-Its state holds the reviewed copy and the parked fact of an unknown version
-that the first entry added.
+At it, the reviewed copy and the parked fact of an unknown version that the
+first entry added are current. The record of §3.5 is retired: still held,
+and no longer current.
 
 ## 5. Import
 
@@ -301,14 +306,16 @@ Import builds the shared chain from the notes history (ADR-0047, decision 8):
   `refs/notes/causet` nor a ref under `refs/causet/`, which the Git-backed
   cst refuses until it is migrated. A migrated repository holds both names, and
   import reads only the current ones, as the Git-backed reader does
-  (decision 8). When the notes ref is not held, the shared chain is empty.
+  (decision 8). When the snapshot has no notes ref, the shared chain is
+  empty.
 - **One entry per commit** of its history: every commit the notes ref
   reaches through parents, as Git parses them. Its parents are its notes
   commit's parents' entries.
 - **Its facts** are the notes commit's tree, read as §5.2 says. The entry
-  adds the facts the tree holds and its parents' state does not, and retires
-  the facts the parents' state holds and the tree does not. So each entry's
-  state is exactly what the Git-backed reader would read at that commit.
+  adds the facts the tree gives that are not current at its parents, and
+  retires those current there that the tree does not give. So the facts
+  current at each entry are exactly what the Git-backed reader would read
+  at that commit.
 - **Its actor** comes from the notes commit's committer line, as
   [commits.md §5.2](commits.md#52-deriving-a-native-commit) derives an
   author's actor: no kind, and no actor when that is empty or there is no

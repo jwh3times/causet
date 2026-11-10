@@ -75,8 +75,9 @@ own, never part of a commit, so recording it changes no commit's identity.
 _Avoid_: note, annotation, metadata
 
 **Fact log**:
-The record of which facts a clone holds and when it learned them. Two copies of
-it join as the union of both, so no fact is ever lost by joining.
+The record of which facts a clone has learned, when it learned them, and which
+are still current. Two copies of it join as the union of both, so no fact is
+ever lost by joining.
 _Avoid_: notes, fact store, ledger
 
 **Parked fact**:
