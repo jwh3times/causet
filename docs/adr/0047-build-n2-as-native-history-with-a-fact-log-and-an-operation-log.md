@@ -1,6 +1,6 @@
 # ADR-0047: Build N2 as native history with a fact log and an operation log
 
-- **Status:** Proposed
+- **Status:** Accepted (owner, 2026-11-09)
 - **Date:** 2026-11-09
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, FR-ID-07, FR-WS-08, FR-TRUST-02
