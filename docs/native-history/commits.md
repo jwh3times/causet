@@ -270,8 +270,8 @@ starts from these **roots**:
 
 - every object a direct ref of the snapshot names under `refs/heads/`,
   `refs/tags/` or `refs/remotes/`: the refs that become names;
-- every commit and tag a fact names that the store holds. Which record
-  fields name an object is the second half's.
+- every commit and tag a fact names, except a resolution's carrier commit
+  ([facts.md §5.5](facts.md#55-which-commits-facts-reach)).
 
 From a root, a Git tag leads to its object and a commit to its parents, as
 Git parses them (the lines Git follows,

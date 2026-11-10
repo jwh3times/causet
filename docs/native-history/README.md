@@ -18,12 +18,19 @@ of a re-import (ADR-0047, Constraints).
 - [Commits, tags and actors](commits.md): the native commit and the native
   tag, the actors they carry, how import derives them from Git's commits and
   tags, which commits get one, and what the Git bridge needs from them.
-- Facts, the fact log, names and operations: the second half, published by
-  [#413](https://github.com/jwh3times/causet/issues/413).
-- [Reference vectors](history-vectors.json): native commits and tags with
-  their bodies and IDs, the Git objects the imported ones derive from, the
-  Git encodings of those made natively, and the trailer lift, as
-  [commits.md §8](commits.md#8-reference-vectors) describes them.
+- [Facts and the fact log](facts.md): the fact, a thin envelope around one
+  of cst's records, the fact-log entry, which facts a reader uses, and how
+  import builds them from the notes and disputed copies.
+- [Names and operations](operations.md): branches, tags and remote-tracking
+  names, conflicted names, the operation log and its 3-way merge, which refs
+  import makes names, and reachability.
+- Reference vectors: [history-vectors.json](history-vectors.json), native
+  commits and tags with their bodies and IDs, the Git objects the imported
+  ones derive from, the Git encodings of those made natively, and the trailer
+  lift, as [commits.md §8](commits.md#8-reference-vectors) describes them;
+  and [facts-vectors.json](facts-vectors.json), facts, entries, operations
+  and a merged view, as [facts.md §7](facts.md#7-reference-vectors) describes
+  them.
 
 ## Authority
 
