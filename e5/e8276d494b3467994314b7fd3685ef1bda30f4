@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwc7d6xve8f8c080cf21",
+      "mode": "compact",
+      "sourceRef": "feat/435-native-commit-ids",
+      "sourceHead": "bc7b5e25f05a84e6945682320cd23503079cd9a6",
+      "sourceSubject": "docs: update docs and changelog",
+      "targetBefore": "40ac7f3ec1548c4d8b30f6ffc6733047d34e6962",
+      "landingCommit": "e5e8276d494b3467994314b7fd3685ef1bda30f4",
+      "base": "40ac7f3ec1548c4d8b30f6ffc6733047d34e6962",
+      "absorbedCommits": [
+        "47e35214ac891b18ebfecbcce7dedb50111a6575",
+        "bc7b5e25f05a84e6945682320cd23503079cd9a6"
+      ],
+      "absorbedChanges": [
+        "ch_0mwbrk4e30300046c3d23",
+        "ch_0mwc2t26l0f33fb43eadf"
+      ],
+      "resultTree": "0ab686f41fa0dbdcf13459036598003a5a534928",
+      "createdAt": "2026-11-11T14:16:51.851Z"
+    }
+  ]
+}
