@@ -1501,6 +1501,30 @@ impl Store {
     })
   }
 
+  /// The object a container holds present straight after `id`, with its
+  /// type: where `id` ends in its frame, or else first in the next frame.
+  /// Import puts a native commit straight after the preserved commit it
+  /// derives from (storage.md §3.2), so a reader finds one without reading
+  /// every native commit; it must check what it finds, since nothing else
+  /// keeps that order.
+  pub fn following(&self, id: &NativeId) -> Result<Option<(NativeId, Type)>, StoreError> {
+    let Some((number, record)) = self.locate(id)? else {
+      return Ok(None);
+    };
+    if record.state != PRESENT {
+      return Ok(None);
+    }
+    let indexes = self.indexes()?;
+    let index = &indexes[number];
+    let at = |frame: u32, offset: u32| index.placed(frame, offset).map(|(id, other)| (id, other.kind));
+    let end = record.offset.checked_add(record.length);
+    Ok(
+      end
+        .and_then(|end| at(record.frame, end))
+        .or_else(|| record.frame.checked_add(1).and_then(|next| at(next, 0))),
+    )
+  }
+
   /// An object's type, from the index alone, when any container lists it.
   pub fn held(&self, id: &NativeId) -> Result<Option<Type>, StoreError> {
     Ok(self.locate(id)?.map(|(_, record)| record.kind))

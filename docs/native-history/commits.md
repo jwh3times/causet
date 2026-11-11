@@ -407,6 +407,29 @@ alias row holds (ADR-0046, decision 5). A Git ID given to a command resolves
 through the alias map to the preserved object, then to the native commit or
 tag imported from it.
 
+A commit or tag import derives no native object from is named by its
+preserved object: a carrier commit, one only other refs reach (§5.1), and
+every commit of a store imported before native history existed, until an
+import derives one. A preserved commit a native commit derives from is no
+object to any command: its ID names nothing held, and no prefix names it.
+
+- **Shown as Git shows it.** Plumbing that shows an object as Git does, such
+  as `cat-file`, shows a native commit as its Git encoding (§7): its type is
+  `commit`, its size and bytes are its Git encoding's, and `cat-file -p`
+  prints that encoding with each ID Git's parser follows translated to the
+  ID a command names that object by. For an imported commit, the Git encoding
+  is its preserved commit's payload.
+- **Short IDs.** A prefix of at least 4 hex digits names the one object whose
+  ID it begins, of every object the store holds present except ref
+  snapshots, annotations and the preserved commits no command names. Native
+  commits are among them.
+- **Abbreviations.** A command that abbreviates an ID, such as `log`'s `%h`,
+  prints its shortest prefix that names it alone among those objects, and no
+  shorter than Git's `core.abbrev=auto` makes one: half the bit length of the
+  number of objects the store holds present, rounded up, and at least 7. So
+  every abbreviation a command prints resolves, in any command, to the object
+  it abbreviates.
+
 ## 7. The Git encoding
 
 The **Git encoding** of a native commit or tag is the Git object the bridge

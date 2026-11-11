@@ -15,7 +15,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-import { TYPES, addContainer, aliases, containers, readContainer } from "../test-support/native-store.js";
+import { TYPES, addContainer, aliases, names, nativeCommits, readsZstd } from "../test-support/native-store.js";
 
 const created = [];
 
@@ -96,76 +96,6 @@ function makeHistory(format) {
   return { repo, native, format, git, one, two, side, latin1, merge };
 }
 
-/** Reads a varint (the store contract's minimal LEB128). */
-function varint(bytes, at) {
-  let value = 0;
-  let shift = 0;
-  for (;;) {
-    const byte = bytes[at++];
-    value += (byte & 0x7f) * 2 ** shift;
-    shift += 7;
-    if (!(byte & 0x80)) return [value, at];
-  }
-}
-
-/**
- * A native commit's fields as commits.md §3.1 encodes them, decoded here
- * independently of `cst`: enough of them to find its preserved commit and
- * its lifted identity.
- */
-function decodeCommit(body) {
-  let at = 33;
-  const bytesAt = () => {
-    const [length, next] = varint(body, at);
-    const bytes = body.subarray(next, next + length);
-    at = next + length;
-    return bytes;
-  };
-  const optionalBytes = () => (body[at++] === 1 ? bytesAt() : null);
-  let count;
-  [count, at] = varint(body, at);
-  const parents = [];
-  for (let parent = 0; parent < count; parent++, at += 33) parents.push(body.subarray(at + 1, at + 33).toString("hex"));
-  for (let signature = 0; signature < 2; signature++) {
-    const form = body[at++];
-    if (form === 0) {
-      bytesAt();
-      bytesAt();
-      [, at] = varint(body, at);
-      at += 2;
-    } else if (form === 1) {
-      bytesAt();
-    }
-  }
-  const encoding = optionalBytes();
-  [count, at] = varint(body, at);
-  for (let actor = 0; actor < count; actor++) {
-    at += 1;
-    bytesAt();
-    if (body[at++] === 1) at += 1;
-    optionalBytes();
-  }
-  const [changeId, derivedFrom, originCommit] = [optionalBytes(), optionalBytes(), optionalBytes()].map((text) => text?.toString("utf8") ?? null);
-  const preserved = body[at++] === 1 ? body.subarray(at + 1, at + 33).toString("hex") : null;
-  at += preserved ? 33 : 0;
-  return { parents, encoding, changeId, derivedFrom, originCommit, preserved, message: body.subarray(at) };
-}
-
-/** Every native commit in the store, decoded, by its ID. */
-function nativeCommits(native) {
-  const commits = new Map();
-  for (const file of containers(native)) {
-    for (const object of readContainer(file).objects) {
-      if (object.type !== TYPES.nativeCommit) continue;
-      const id = object.name.toString("hex");
-      const shown = cst(native, ["cat-file", "-p", id]);
-      assert.equal(shown.status, 0, shown.stderr.toString());
-      commits.set(id, decodeCommit(shown.stdout));
-    }
-  }
-  return commits;
-}
-
 /**
  * Git's IDs in `log` output, as the native copy prints them: a commit as its
  * native commit (commits.md §6), anything else as its alias row's object,
@@ -173,10 +103,7 @@ function nativeCommits(native) {
  * small.
  */
 function translator(history) {
-  const rows = aliases(history.native, history.format);
-  const byPreserved = new Map([...nativeCommits(history.native)].map(([id, commit]) => [commit.preserved, id]));
-  const full = new Map();
-  for (const [git, native] of rows) full.set(git, byPreserved.get(native) ?? native);
+  const full = names(history.native, history.format);
   const short = new Map([...full].map(([git, native]) => [git.slice(0, 7), native.slice(0, 7)]));
   const width = history.format === "sha1" ? 40 : 64;
   return (text) => text
@@ -230,10 +157,19 @@ for (const format of ["sha1", "sha256"]) {
     const history = makeHistory(format);
     const checked = cst(history.native, ["fsck"]);
     assert.equal(checked.status, 0, checked.stderr.toString());
-    const [id] = nativeCommits(history.native).keys();
-    const body = cst(history.native, ["cat-file", "-p", id]).stdout;
+    // A native commit of the first commit, which has no parents, made here
+    // by commits.md §3.1: its tree and its preserved commit, no signatures,
+    // encoding, actors or lifted identity, and a message import would not
+    // derive. A native ID is its algorithm tag, 01, and its digest.
+    const native = (id) => Buffer.from(`01${id}`, "hex");
+    const rows = aliases(history.native, format);
+    const tree = names(history.native, format).get(history.git(["rev-parse", `${history.one}^{tree}`]));
+    const made = Buffer.concat([
+      native(tree), Buffer.from([0x00, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]), native(rows.get(history.one)),
+      Buffer.from("a message import would not derive\n"),
+    ]);
     addContainer(history.native, [
-      { type: TYPES.nativeCommit, body: Buffer.concat([body, Buffer.from("a changed message")]) },
+      { type: TYPES.nativeCommit, body: made },
       { type: TYPES.nativeCommit, body: Buffer.from([0x01]) },
     ]);
     const found = cst(history.native, ["fsck"]);
@@ -251,6 +187,9 @@ for (const format of ["sha1", "sha256"]) {
     assert.deepEqual([...commits.values()].map((commit) => commit.preserved).sort(), reached.map((id) => rows.get(id)).sort());
     const notes = history.git(["rev-parse", "refs/notes/causet"]);
     assert.ok(rows.has(notes), "the notes commit is imported, as a preserved Git object");
+    // What import derived, read from the commits' bodies, which a Node that
+    // reads no zstd frame cannot reach; the Rust vectors check it there too.
+    if (!readsZstd) return;
     const byPreserved = new Map([...commits.values()].map((commit) => [commit.preserved, commit]));
     const one = byPreserved.get(rows.get(history.one));
     assert.deepEqual([one.changeId, one.derivedFrom, one.originCommit], ["ch_0one", "ch_0zero", "abc123"]);

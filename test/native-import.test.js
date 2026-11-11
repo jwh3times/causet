@@ -17,7 +17,8 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, aliases, changeFrame, containers, nativeId, readContainer, storeFiles as files, storeObjects as objects,
+  TYPES, aliases, changeFrame, containers, names, nativeCommits, nativeId, readContainer, storeFiles as files,
+  storeObjects as objects,
 } from "../test-support/native-store.js";
 import { sameAsFull, storeState } from "../test-support/import-checks.js";
 
@@ -186,12 +187,12 @@ test("a container's trees are grouped by path, oldest first, then come its commi
   const nativeOf = (revision) => rows.get(git(["rev-parse", revision]).toString().trim());
   // Each commit's native commit, which goes straight after it (storage.md
   // §3.2), names it as its preserved commit (commits.md §3.1).
+  const decoded = nativeCommits(native);
   const derived = commits.map((id) => {
     const preserved = nativeOf(id);
     const after = stored[order.indexOf(preserved) + 1];
     assert.equal(after.type, TYPES.nativeCommit, `what follows the commit ${id}`);
-    const body = execFileSync(cstCommand, [...cstPrefix(), "cat-file", "-p", after.name.toString("hex")], { cwd: native, env: testEnv(OPT_IN) });
-    assert.ok(body.includes(Buffer.from(`01${preserved}`, "hex")), `the native commit after ${id} names it`);
+    assert.equal(decoded.get(after.name.toString("hex")).preserved, preserved, `the native commit after ${id} names it`);
     return after.name.toString("hex");
   });
   // The walk leaves each commit's `dir/sub` first, then `dir`, then its root.
@@ -276,7 +277,7 @@ test("an import that finds nothing new adds no container, and one that finds onl
   assert.equal(added.length, 1);
   assert.deepEqual(readContainer(added[0]).objects.map((object) => object.type), [TYPES.snapshot]);
   const head = cst(native, ["rev-parse", "another"]).stdout.toString().trim();
-  assert.equal(head, aliases(native, "sha1").get(two));
+  assert.equal(head, names(native, "sha1").get(two));
 });
 
 test("an import into a native repository is refused while another is adding to it, or for a history of another algorithm, and changes nothing", () => {
@@ -416,7 +417,7 @@ test("every object Git reaches is imported and read, though its header names it 
   const stdout = imports(root, "source", "native");
   assert.match(stdout, /: 2 blobs, 2 trees, 2 commits, 1 tag,/);
   const native = path.join(root, "native");
-  const rows = aliases(native, "sha1");
+  const rows = names(native, "sha1");
   for (const id of [parent, tree, child, tag]) assert.ok(rows.has(id), id);
   for (const check of [["fsck"], ["import", "--verify"]]) {
     const result = cst(native, check);
@@ -504,7 +505,7 @@ test("versions of a large file are stored as deltas no more than 8 deep, read ba
   assert.deepEqual([...second.keys()], [...first.keys()]);
   for (const [name, bytes] of first) assert.ok(second.get(name).equals(bytes), `${name} differs`);
 
-  const rows = aliases(native, "sha1");
+  const rows = names(native, "sha1");
   const stored = forms(native);
   const blobOf = (rev) => git(["rev-parse", rev]).toString().trim();
   const depths = commits.map((id) => {

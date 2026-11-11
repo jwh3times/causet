@@ -4,7 +4,8 @@
  * Git repository the test left in its temporary directory into a native
  * repository. N1's commands then answer from the native copy, and their
  * answers must equal Git's on the original once Git's IDs are translated
- * through the import's alias map:
+ * through the import's alias map, a commit to its native commit (commits.md
+ * §6):
  *
  * - `cst import --verify` rebuilds every imported object to its Git ID, so a
  *   store problem fails as such rather than as some command's mismatch;
@@ -27,7 +28,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { aliases } from "./native-store.js";
+import { names } from "./native-store.js";
 import { PROCESS_LIMIT, bounded } from "./bounded-process.js";
 import { cstCommand, cstPrefix } from "./cst-command.js";
 
@@ -330,7 +331,7 @@ export async function compareCopy(repository, destination, { env, where, width =
   const inGit = (args) => ["--git-dir", repository.common, ...args];
   const neutral = path.dirname(destination);
   const format = git(neutral, inGit(["rev-parse", "--show-object-format"]), env).stdout.toString().trim();
-  const rows = aliases(destination, format);
+  const rows = names(destination, format);
   const id = format === "sha1" ? "[0-9a-f]{40}" : "[0-9a-f]{64}";
   const swap = (pattern) => (text) => text.replace(pattern, (whole, before, git, after) =>
     rows.has(git) ? `${before}${rows.get(git)}${after}` : whole);

@@ -744,3 +744,33 @@ fn a_preserved_git_tree_is_stored_as_its_body() {
   assert_eq!(store.read(&id).unwrap().body, preserved.encode());
   std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn the_object_stored_after_another_is_found_from_its_index() {
+  let root = scratch("following");
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  let commit = |message: &str| Preserved {
+    algorithm: GitAlgorithm::Sha1,
+    kind: GitKind::Commit,
+    payload: format!("tree 0000000000000000000000000000000000000000\n\n{message}\n").into_bytes(),
+  };
+  // As import writes them: each native commit straight after the preserved
+  // commit it derives from (storage.md §3.2).
+  let one = writer.put_preserved(&commit("one"), b"").unwrap();
+  let native_one = writer.put_native_commit(b"the native commit of one").unwrap();
+  let two = writer.put_preserved(&commit("two"), b"").unwrap();
+  let native_two = writer.put_native_commit(b"the native commit of two").unwrap();
+  let snapshot = no_refs();
+  writer.finish(&snapshot).unwrap();
+  let store = Store::open(&root).unwrap();
+  assert_eq!(store.following(&one).unwrap(), Some((native_one, Type::NativeCommit)));
+  assert_eq!(store.following(&native_one).unwrap(), Some((two, Type::Preserved)));
+  assert_eq!(store.following(&two).unwrap(), Some((native_two, Type::NativeCommit)));
+  // The snapshot is written last, and nothing follows it.
+  let last = NativeId::of(Type::Snapshot, &snapshot.encode());
+  assert_eq!(store.following(&native_two).unwrap(), Some((last, Type::Snapshot)));
+  assert_eq!(store.following(&last).unwrap(), None);
+  // An object the store does not hold has nothing after it.
+  assert_eq!(store.following(&NativeId::of(Type::Content, b"not held")).unwrap(), None);
+  std::fs::remove_dir_all(&root).unwrap();
+}

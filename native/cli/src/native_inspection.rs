@@ -49,13 +49,14 @@ fn value(arg: &[u8], name: &str, rest: &mut std::slice::Iter<OsString>) -> GitRe
   )
 }
 
-/// An object's size as Git reports it.
+/// An object's size as Git reports it: a native commit's is its Git
+/// encoding's (`Repository::presented`).
 fn object_size(repository: &Repository, id: &NativeId) -> GitResult<u64> {
   let store = &repository.store;
   if store.held(id).map_err(store_error)? == Some(Type::Content) {
     return store.content_size(id).map_err(store_error);
   }
-  let read = store.read_known(id).map_err(store_error)?;
+  let read = repository.presented(id).map_err(store_error)?;
   Ok(size(store, &read.kind, &read.body)? as u64)
 }
 
@@ -315,9 +316,8 @@ impl Listing<'_> {
     }
     let not_a_tree = |id: &str| GitError::new("not-found", format!("Object {id} not a tree"));
     let entries = |tree: &NativeId| -> GitResult<Vec<Listed>> {
-      let store = &self.repository.store;
-      let read = store.read_known(tree).map_err(store_error)?;
-      listing(store, &read.kind, &read.body)?.ok_or_else(|| not_a_tree(&tree.hex()))
+      let read = self.repository.store.read_known(tree).map_err(store_error)?;
+      listing(self.repository, &read.kind, &read.body)?.ok_or_else(|| not_a_tree(&tree.hex()))
     };
     let mut base: Vec<u8> = Vec::new();
     let mut stack = vec![Level {
@@ -534,8 +534,7 @@ pub fn ls_tree(args: &[OsString], root: &Path) -> GitResult<i32> {
   };
   let specs = paths.iter().map(|path| pathspec(path)).collect::<GitResult<Vec<_>>>()?;
   let repository = Repository::open(root)?;
-  let id = repository.resolve(tree)?;
-  let tree = repository.tree_of(id)?;
+  let tree = repository.resolve_tree(tree)?;
   let listing = Listing {
     repository: &repository,
     recursive,
@@ -551,7 +550,7 @@ pub fn ls_tree(args: &[OsString], root: &Path) -> GitResult<i32> {
   finish(out, result)
 }
 
-const REV_PARSE_USAGE: &str = "Usage: cst rev-parse [--verify [-q]] [--symbolic | --symbolic-full-name | --abbrev-ref[=strict|loose]] [--all | --branches | --tags | --remotes] [<rev>...] [-- <arg>...]";
+const REV_PARSE_USAGE: &str = "Usage: cst rev-parse [--verify [-q]] [--git-id] [--symbolic | --symbolic-full-name | --abbrev-ref[=strict|loose]] [--all | --branches | --tags | --remotes] [<rev>...] [-- <arg>...]";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Symbolic {
@@ -565,6 +564,9 @@ struct RevParse<'a> {
   symbolic: Symbolic,
   /// `--abbrev-ref`, and whether it is strict.
   abbrev_ref: Option<bool>,
+  /// `--git-id`: an object's Git ID in place of its native ID (ADR-0046,
+  /// decision 5).
+  git_id: bool,
   out: Vec<u8>,
 }
 
@@ -579,15 +581,16 @@ impl RevParse<'_> {
   }
 
   /// Git's `show_rev`: the ID, or with a symbolic option, the name.
-  fn show_rev(&mut self, reversed: bool, id: &NativeId, name: Option<&[u8]>) {
+  fn show_rev(&mut self, reversed: bool, id: &NativeId, name: Option<&[u8]>) -> GitResult<()> {
     let name = name.filter(|_| self.symbolic != Symbolic::No || self.abbrev_ref.is_some());
     let Some(name) = name else {
-      self.show(reversed, id.hex().as_bytes());
-      return;
+      let shown = if self.git_id { self.repository.git_id(id)? } else { id.hex() };
+      self.show(reversed, shown.as_bytes());
+      return Ok(());
     };
     if self.symbolic == Symbolic::AsIs && self.abbrev_ref.is_none() {
       self.show(reversed, name);
-      return;
+      return Ok(());
     }
     let short: &[u8] = if name == b"@" { b"HEAD" } else { name };
     let refs = self.repository.dwim(short);
@@ -605,6 +608,7 @@ impl RevParse<'_> {
         let _ = writeln!(std::io::stderr(), "cst: refname '{}' is ambiguous", lossy(name));
       }
     }
+    Ok(())
   }
 
   /// Git's `try_difference`: `<a>..<b>` and `<a>...<b>`, either side `HEAD`
@@ -630,8 +634,8 @@ impl RevParse<'_> {
         lossy(arg)
       )));
     }
-    self.show_rev(false, &to, Some(end));
-    self.show_rev(true, &from, Some(start));
+    self.show_rev(false, &to, Some(end))?;
+    self.show_rev(true, &from, Some(start))?;
     Ok(true)
   }
 
@@ -680,7 +684,7 @@ impl RevParse<'_> {
       return Ok(false);
     }
     if include_rev {
-      self.show_rev(false, &id, Some(name));
+      self.show_rev(false, &id, Some(name))?;
     }
     for (number, parent) in parents.iter().enumerate() {
       let number = number + 1;
@@ -688,7 +692,7 @@ impl RevParse<'_> {
         continue;
       }
       let shown = (self.symbolic != Symbolic::No).then(|| [name, format!("^{number}").as_bytes()].concat());
-      self.show_rev(!include_parents, parent, shown.as_deref());
+      self.show_rev(!include_parents, parent, shown.as_deref())?;
     }
     Ok(true)
   }
@@ -696,22 +700,22 @@ impl RevParse<'_> {
   /// `--all` and its kinds: every ref whose name begins with `prefix`. Git
   /// names each by the rest of its name, so `--tags` names `v1` where `--all`
   /// names `refs/tags/v1`.
-  fn refs(&mut self, prefix: &[u8], strip: bool) {
-    let listed: Vec<(Vec<u8>, NativeId)> = self
-      .repository
-      .snapshot
-      .refs
-      .iter()
-      .filter(|entry| entry.name.starts_with(prefix))
-      .filter_map(|entry| {
-        let (_, id) = self.repository.resolve_ref(&entry.name)?;
-        let name = if strip { &entry.name[prefix.len()..] } else { &entry.name[..] };
-        Some((name.to_vec(), id))
-      })
-      .collect();
-    for (name, id) in listed {
-      self.show_rev(false, &id, Some(&name));
+  fn refs(&mut self, prefix: &[u8], strip: bool) -> GitResult<()> {
+    let mut listed: Vec<(Vec<u8>, NativeId)> = Vec::new();
+    for entry in &self.repository.snapshot.refs {
+      if !entry.name.starts_with(prefix) {
+        continue;
+      }
+      let Some((_, id)) = self.repository.resolve_ref(&entry.name) else {
+        continue;
+      };
+      let name = if strip { &entry.name[prefix.len()..] } else { &entry.name[..] };
+      listed.push((name.to_vec(), self.repository.named(id)?));
     }
+    for (name, id) in listed {
+      self.show_rev(false, &id, Some(&name))?;
+    }
+    Ok(())
   }
 }
 
@@ -722,6 +726,7 @@ pub fn rev_parse(args: &[OsString], root: &Path) -> GitResult<i32> {
     repository: &repository,
     symbolic: Symbolic::No,
     abbrev_ref: None,
+    git_id: false,
     out: Vec::new(),
   };
   let result = rev_parse_into(&mut parse, args);
@@ -766,10 +771,11 @@ fn rev_parse_into(parse: &mut RevParse, args: &[OsString]) -> GitResult<i32> {
         b"--symbolic-full-name" => parse.symbolic = Symbolic::Full,
         b"--abbrev-ref" | b"--abbrev-ref=strict" => parse.abbrev_ref = Some(true),
         b"--abbrev-ref=loose" => parse.abbrev_ref = Some(false),
-        b"--all" => parse.refs(b"refs/", false),
-        b"--branches" => parse.refs(b"refs/heads/", true),
-        b"--tags" => parse.refs(b"refs/tags/", true),
-        b"--remotes" => parse.refs(b"refs/remotes/", true),
+        b"--git-id" => parse.git_id = true,
+        b"--all" => parse.refs(b"refs/", false)?,
+        b"--branches" => parse.refs(b"refs/heads/", true)?,
+        b"--tags" => parse.refs(b"refs/tags/", true)?,
+        b"--remotes" => parse.refs(b"refs/remotes/", true)?,
         _ if arg.starts_with(b"--abbrev-ref=") => {
           return Err(GitError::new(
             "usage-invalid-option-value",
@@ -793,7 +799,7 @@ fn rev_parse_into(parse: &mut RevParse, args: &[OsString]) -> GitResult<i32> {
     };
     match parse.repository.resolve(name) {
       Ok(id) if verify => verified.push((reversed, id, name.to_vec())),
-      Ok(id) => parse.show_rev(reversed, &id, Some(name)),
+      Ok(id) => parse.show_rev(reversed, &id, Some(name))?,
       Err(error) if matches!(error.code, "not-found" | "ambiguous-match") => {
         if verify {
           return no_single(quiet);
@@ -824,7 +830,7 @@ fn rev_parse_into(parse: &mut RevParse, args: &[OsString]) -> GitResult<i32> {
     let [(reversed, id, name)] = verified.as_slice() else {
       return no_single(quiet);
     };
-    parse.show_rev(*reversed, id, Some(name));
+    parse.show_rev(*reversed, id, Some(name))?;
   }
   Ok(0)
 }
@@ -1155,22 +1161,23 @@ pub fn for_each_ref(args: &[OsString], root: &Path) -> GitResult<i32> {
   let parts = ref_format(&format)?;
   let repository = Repository::open(root)?;
   let head = repository.resolve_ref(b"HEAD").map(|(name, _)| name);
-  let mut listed: Vec<RefRow> = repository
-    .snapshot
-    .refs
-    .iter()
-    .filter(|entry| entry.name.starts_with(b"refs/"))
-    .filter(|entry| patterns.is_empty() || patterns.iter().any(|pattern| matches_ref(pattern, &entry.name)))
-    .filter_map(|entry| {
-      let (end, id) = repository.resolve_ref(&entry.name)?;
-      let symbolic = matches!(entry.target, causet_store::objects::RefTarget::Symbolic(_));
-      Some(RefRow {
-        name: entry.name.clone(),
-        symref: symbolic.then_some(end),
-        id,
-      })
-    })
-    .collect();
+  let mut listed: Vec<RefRow> = Vec::new();
+  for entry in &repository.snapshot.refs {
+    if !entry.name.starts_with(b"refs/")
+      || !(patterns.is_empty() || patterns.iter().any(|pattern| matches_ref(pattern, &entry.name)))
+    {
+      continue;
+    }
+    let Some((end, id)) = repository.resolve_ref(&entry.name) else {
+      continue;
+    };
+    let symbolic = matches!(entry.target, causet_store::objects::RefTarget::Symbolic(_));
+    listed.push(RefRow {
+      name: entry.name.clone(),
+      symref: symbolic.then_some(end),
+      id: repository.named(id)?,
+    });
+  }
   if descending {
     listed.reverse();
   }

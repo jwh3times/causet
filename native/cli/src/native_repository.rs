@@ -45,9 +45,10 @@ Usage:
   cst ls-tree [-d] [-r] [-t] [-z] [-l | --name-only | --object-only
               | --format=<format>] <tree-ish> [<path>...]
                                             list a tree, as git ls-tree does
-  cst rev-parse [--verify [-q]] [--symbolic-full-name | --abbrev-ref]
-                [--all | --branches | --tags | --remotes] [<rev>...]
-                                            name objects, as git rev-parse does
+  cst rev-parse [--verify [-q]] [--git-id] [--symbolic-full-name
+                | --abbrev-ref] [--all | --branches | --tags | --remotes]
+                [<rev>...]                  name objects, as git rev-parse does;
+                                            --git-id prints their Git IDs
   cst for-each-ref [--format=<format>] [--sort=[-]refname] [--count=<n>]
                    [<pattern>...]           list the refs of the snapshot
   cst log [<revision>] --format=<format>    a revision's history, as git log
@@ -229,8 +230,10 @@ fn import(args: &[String]) -> GitResult<()> {
       imported.algorithm
     )
   };
+  // HEAD's commit, by its native commit, as every command names it
+  // (commits.md §6).
   let head = match imported.head {
-    Some(id) => format!("HEAD is at {id}."),
+    Some(id) => format!("HEAD is at {}.", Repository::open(root)?.named(id)?),
     None => "HEAD is unborn.".into(),
   };
   let _ = writeln!(
@@ -446,7 +449,7 @@ fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
   let store = &repository.store;
   let id = repository.resolve(&object)?;
   // A whole native ID names itself, held or not.
-  let read = store.read(&id).map_err(|error| match error {
+  let read = repository.presented(&id).map_err(|error| match error {
     StoreError::NotFound(_) => GitError::new(
       "not-found",
       format!("Not a valid object name {}", String::from_utf8_lossy(&object)),
@@ -457,7 +460,7 @@ fn cat_file(args: &[OsString], root: &Path) -> GitResult<()> {
   match mode.as_str() {
     "-t" => writeln!(out, "{}", type_name(&read.kind, &read.body)?).expect("in memory"),
     "-s" => writeln!(out, "{}", size(store, &read.kind, &read.body)?).expect("in memory"),
-    _ => print(store, &read.kind, read.body, &mut out)?,
+    _ => print(&repository, &read.kind, read.body, &mut out)?,
   }
   let _ = std::io::stdout().lock().write_all(&out);
   Ok(())
@@ -580,7 +583,7 @@ fn batch_object(repository: &Repository, name: &[u8]) -> GitResult<Batched> {
     Err(error) if error.code == "ambiguous-match" => return Ok(Batched::Ambiguous),
     Err(error) => return Err(error),
   };
-  match repository.store.read(&id) {
+  match repository.presented(&id) {
     Ok(read) => Ok(Batched::Found { id, kind: read.kind, body: read.body }),
     // A whole native ID names itself, held or not; content held absent is
     // what Git cannot read either (objects.md §8).
@@ -630,9 +633,10 @@ pub(crate) fn alias(store: &Store, algorithm: GitAlgorithm, digest: &[u8]) -> Gi
   store.native(algorithm, digest).map_err(store_error)
 }
 
-/// The entries of a tree or of a tree kept in Git's encoding; `None` for any
-/// other object.
-pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Option<Vec<Listed>>> {
+/// The entries of a tree or of a tree kept in Git's encoding, each target
+/// as a command names it; `None` for any other object.
+pub(crate) fn listing(repository: &Repository, kind: &Type, body: &[u8]) -> GitResult<Option<Vec<Listed>>> {
+  let store = &repository.store;
   match kind {
     Type::Tree => {
       let tree = Tree::decode(body).map_err(corrupt)?;
@@ -669,7 +673,9 @@ pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Opti
             )
           }
           Target::Git(commit) => {
-            let native = alias(store, commit.algorithm(), &commit.digest)?;
+            let native = alias(store, commit.algorithm(), &commit.digest)?
+              .map(|id| repository.named(id))
+              .transpose()?;
             (
               "commit",
               native,
@@ -704,7 +710,9 @@ pub(crate) fn listing(store: &Store, kind: &Type, body: &[u8]) -> GitResult<Opti
       for entry in entries {
         let mode = git_mode(&entry.mode).ok_or_else(malformed)?;
         let (mode, kind) = canonical_mode(mode);
-        let target = alias(store, preserved.algorithm, &entry.digest)?;
+        let target = alias(store, preserved.algorithm, &entry.digest)?
+          .map(|id| repository.named(id))
+          .transpose()?;
         listed.push(Listed {
           mode,
           kind,
@@ -726,7 +734,8 @@ pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
     Type::Preserved => Preserved::decode(body).map_err(corrupt)?.kind.name(),
     Type::Snapshot => "snapshot",
     Type::Annotation => "annotation",
-    Type::NativeCommit => "native-commit",
+    // `Repository::presented` shows a native commit as its preserved commit.
+    Type::NativeCommit => "commit",
   })
 }
 
@@ -752,8 +761,8 @@ pub(crate) fn size(store: &Store, kind: &Type, body: &[u8]) -> GitResult<usize> 
   })
 }
 
-fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitResult<()> {
-  if let Some(entries) = listing(store, kind, &body)? {
+fn print(repository: &Repository, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitResult<()> {
+  if let Some(entries) = listing(repository, kind, &body)? {
     for entry in entries {
       line(
         out,
@@ -765,7 +774,7 @@ fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitRes
     }
   } else if *kind == Type::Preserved {
     let preserved = Preserved::decode(&body).map_err(corrupt)?;
-    out.extend_from_slice(&translated(store, &preserved)?);
+    out.extend_from_slice(&translated(repository, &preserved)?);
   } else {
     out.extend_from_slice(&body);
   }
@@ -774,16 +783,17 @@ fn print(store: &Store, kind: &Type, body: Vec<u8>, out: &mut Vec<u8>) -> GitRes
 
 /// A commit's or tag's payload as `cat-file -p` prints it here: as Git
 /// prints it, with each header ID Git's parser follows
-/// (`Preserved::header_ids`) translated to its native ID when it names an
-/// imported object. Nothing else changes: not a later `tree`, `parent` or
-/// `object` line, which Git does not follow, nor an ID in a message or a
-/// signature.
-fn translated(store: &Store, preserved: &Preserved) -> GitResult<Vec<u8>> {
+/// (`Preserved::header_ids`) translated to the ID a command names that
+/// object by (commits.md §6) when it names an imported object. Nothing else
+/// changes: not a later `tree`, `parent` or `object` line, which Git does
+/// not follow, nor an ID in a message or a signature.
+fn translated(repository: &Repository, preserved: &Preserved) -> GitResult<Vec<u8>> {
   let payload = &preserved.payload;
   let mut out = Vec::with_capacity(payload.len() + 256);
   let mut copied = 0;
   for id in preserved.header_ids() {
-    if let Some(native) = alias(store, preserved.algorithm, &id.digest)? {
+    if let Some(native) = alias(&repository.store, preserved.algorithm, &id.digest)? {
+      let native = repository.named(native)?;
       out.extend_from_slice(&payload[copied..id.at.start]);
       out.extend_from_slice(native.hex().as_bytes());
       copied = id.at.end;
