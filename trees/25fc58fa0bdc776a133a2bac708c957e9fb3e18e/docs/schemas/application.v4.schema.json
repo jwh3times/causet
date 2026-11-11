@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.application/v4",
+  "title": "Reconciliation application receipt",
+  "description": "Per-change reconciliation application record with conflict, exact-resolution, and semantic spec-merge decisions, attached to the applied commit (shared-portable note record; src/operations.js).",
+  "x-vcs-lab-scope": "note-record",
+  "type": "object",
+  "required": [
+    "schema", "type", "id", "reconciliationOperation", "originCommit",
+    "originChangeId", "appliedCommit", "appliedChangeId", "targetBefore",
+    "sourceTree", "resultTree", "relation", "forecastId", "conflictedPaths",
+    "resolutions", "semanticMerges", "createdAt"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.application/v4" },
+    "type": { "const": "application" },
+    "id": { "type": "string", "minLength": 4 },
+    "reconciliationOperation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ID of the private vcs-lab.reconciliation-operation/v4 journal that produced this application."
+    },
+    "originCommit": { "$ref": "#/$defs/oid" },
+    "originChangeId": { "type": "string", "minLength": 1 },
+    "appliedCommit": {
+      "$ref": "#/$defs/oid",
+      "description": "The commit this record is attached to; when the record carries attachedTo, both must be equal."
+    },
+    "appliedChangeId": { "type": "string", "minLength": 1 },
+    "targetBefore": { "$ref": "#/$defs/oid" },
+    "sourceTree": { "$ref": "#/$defs/oid" },
+    "resultTree": { "$ref": "#/$defs/oid" },
+    "relation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The CLI writes 'causal-reconciliation', 'contextual-application', or 'contextual-fork'; the value is an open string."
+    },
+    "forecastId": { "type": ["string", "null"] },
+    "conflictedPaths": { "type": "array", "items": { "type": "string" } },
+    "resolutions": {
+      "type": "array",
+      "description": "Captured exact-resolution outcomes for the conflicted paths.",
+      "items": { "$ref": "#/$defs/resolutionOutcome" }
+    },
+    "semanticMerges": {
+      "type": "array",
+      "description": "Captured deterministic spec-merge outcomes.",
+      "items": { "type": "object" }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "attachedTo": { "$ref": "#/$defs/oid" }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" },
+    "resolutionOutcome": {
+      "type": "object",
+      "required": ["path", "signature", "algorithm", "decision"],
+      "properties": {
+        "path": { "type": "string" },
+        "signature": { "type": "string", "pattern": "^rsig_[0-9a-f]{64}$" },
+        "algorithm": { "type": "string" },
+        "base": { "$ref": "#/$defs/stage" },
+        "ours": { "$ref": "#/$defs/stage" },
+        "theirs": { "$ref": "#/$defs/stage" },
+        "resultBlob": { "type": ["string", "null"] },
+        "resultMode": { "type": ["string", "null"] },
+        "decision": {
+          "type": "string",
+          "description": "'accepted', 'modified', 'rejected', or 'created'."
+        },
+        "selectionMethod": { "type": ["string", "null"] },
+        "selectedResolutionId": { "type": ["string", "null"] },
+        "reusedResolutionId": { "type": ["string", "null"] }
+      }
+    },
+    "stage": {
+      "type": ["object", "null"],
+      "required": ["mode", "blob"],
+      "properties": {
+        "mode": { "type": "string" },
+        "blob": { "$ref": "#/$defs/oid" }
+      }
+    }
+  }
+}
