@@ -890,16 +890,25 @@ With `CAUSET_EXPERIMENTAL=native` set, `cst import <git-repo> <dest>` copies
 every object a Git repository's refs reach into a new native repository, and
 records every ref in a snapshot: a directory holding `.cst/`, in the format of
 [the native store contract](docs/native-store/README.md). Commits and tags
-are kept in Git's encoding, byte for byte. A new version of a file of 1 MiB
-or more may be stored as a zstd delta against the file's previous version,
+are kept in Git's encoding, byte for byte, and each commit a branch, a tag or
+a remote-tracking ref reaches also becomes a native commit
+([native history](docs/native-history/commits.md#5-import),
+[ADR-0047](docs/adr/0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md));
+a commit only other refs reach, such as the notes' history, does not. A new
+version of a file of 1 MiB or more may be stored as a zstd delta against the
+file's previous version,
 when that is smaller than its chunks. Importing the same history again
 writes the same bytes. Importing into an existing native repository adds only
-what it does not hold, then replaces its snapshot. A shallow clone, a partial clone,
+what it does not hold, with the native commits its history still lacks, then
+replaces its snapshot. A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history
 differently from what it stores, and so is one with a ref, or another
 worktree's `HEAD`, naming an object it does not hold: import names the first
 such ref and writes nothing. So is one with a symbolic ref whose name is not
-UTF-8: Git cannot be given that name to say which ref it points to. In a
+UTF-8: Git cannot be given that name to say which ref it points to. So is
+one whose refs reach a commit Git's `log` cannot read either: one whose first
+line names no tree, or whose tree or a parent is an object of the wrong type.
+In a
 native repository,
 `cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
 `cst for-each-ref --format` print what Git prints on the original, with
@@ -908,18 +917,27 @@ native IDs in place of Git's, and run no Git. `cst cat-file --batch` and
 one opened store, in Git's default formats: the header names the native ID,
 and `--batch`'s content is the object's Git bytes, Git IDs included, the size
 `cst cat-file -s` gives. Each takes the part of Git's
-command that N1 implements, listed by `cst --help` there, and refuses the rest
-by name. `cst fsck` verifies the store: every copy of every object in every
-container, and content absent by promise or by policy, which it reports by
-state rather than as corruption.
+command implemented so far, listed by `cst --help` there, and refuses the rest
+by name. `cst log [<revision>] --format=<format>` prints the history of a
+revision, `HEAD` by default, in Git's order, as `git log --format` prints it,
+for the placeholders `cst --help` lists there. It reads native commits alone,
+so `%H` and `%P` name native commits, whose type `cst cat-file -t` gives as
+`native-commit`, while `cst rev-parse` names a commit by its preserved Git
+object. A native repository imported before native commits existed has
+none until it is imported into again. `cst fsck` verifies the store: every
+copy of every object in every container, and content absent by promise or by
+policy, which it reports by state rather than as corruption. It also checks
+each native commit by the rules of native history, deriving an imported one
+again from its Git commit.
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
 ID, also without Git. Those two, `cst cat-file --batch` and
 `--batch-check`, and an import into an existing native repository, read the
 alias files and every container's index whole: a batch names many objects,
-so it pays for the store's size once rather than for a read per lookup. The
-other reads above check only the parts of the store they touch and verify
-each object they read by its ID, so their cost does not grow with the store's
+so it pays for the store's size once rather than for a read per lookup.
+`cst log` reads every container's index and every native commit, once per
+command. The other reads above check only the parts of the store they touch
+and verify each object they read by its ID, so their cost does not grow with the store's
 object count. A read that misses, or resolves an abbreviation, first reads
 the files it searched whole, once per command, so damage is reported rather
 than answered as a missing object

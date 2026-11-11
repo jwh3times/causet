@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+- **Experimental: a native repository has history, and `cst log` reads it**
+  (#416), the first slice of N2 (ADR-0047). Import now also writes a native
+  commit, store type `06` of `docs/native-history/commits.md`, straight after
+  each Git commit that a branch, a tag or a remote-tracking ref reaches:
+  - its tree and parents, as native objects;
+  - its author and committer;
+  - its message's encoding, and the message byte for byte;
+  - an `authored` actor from its author line;
+  - its `Change-Id`, `Derived-From` and `Origin-Commit`, lifted as
+    Git-backed cst lifts them.
+
+  A carrier commit, such as a notes commit, gets none. A later import gives
+  one to a commit a name reaches only by then. In a native repository,
+  `cst log [<revision>] --format=<format>` prints a revision's history in
+  Git's order, byte for byte with `git log --format` on the original, with
+  native commit IDs, and runs no Git. Its placeholders are
+  `%H %h %T %t %P %p %an %ae %ad %cn %ce %cd %s %b %n %%`. Every other
+  option and placeholder, paths, and a message in an encoding other than
+  UTF-8 or ISO-8859-1 are refused. `cst fsck` also checks each native commit,
+  re-deriving an imported one from the Git commit it came from. A store
+  imported before this change has no native commits, and `cst log` asks for
+  it to be imported again. `cst rev-parse` and the other N1 commands still
+  name a commit by its preserved Git object. Like every native command, all
+  of this needs `CAUSET_EXPERIMENTAL=native` and is not a contract.
+
 - **The generated-history corpus runs weekly on a new seed, without
   blocking anything** (#336). `corpora.yml` checks only the seed
   `causet-n1`, kept fixed so release gate 11 fails the same way twice, and a
