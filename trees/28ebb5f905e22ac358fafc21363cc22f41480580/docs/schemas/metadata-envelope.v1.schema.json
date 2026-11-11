@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.metadata-envelope/v1",
+  "title": "Metadata envelope manifest",
+  "description": "Portable manifest for sanitized notes and resolution refs, written as manifest.json beside an optional objects.bundle payload (src/metadata-envelope.js buildEnvelopeManifest). Bounded on read: the manifest at most 16 MiB, the payload at most 2 GiB and at most 1,000,000 record entries; integrity.manifestHash is the SHA-256 of the canonical-JSON manifest without its integrity member.",
+  "x-vcs-lab-scope": "envelope",
+  "type": "object",
+  "required": [
+    "schema", "producer", "repository", "capabilities", "includedNamespaces",
+    "excludedScopes", "refs", "records", "payload", "trust", "integrity"
+  ],
+  "properties": {
+    "schema": { "const": "vcs-lab.metadata-envelope/v1" },
+    "producer": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "required": ["objectFormat", "lineage"],
+      "properties": {
+        "objectFormat": { "enum": ["sha1", "sha256"] },
+        "lineage": {
+          "type": "object",
+          "required": ["algorithm", "objectFormat", "rootCommits", "id"],
+          "properties": {
+            "algorithm": { "const": "git-root-commits-sha256/v1" },
+            "objectFormat": { "enum": ["sha1", "sha256"] },
+            "rootCommits": { "type": "array", "items": { "$ref": "#/$defs/oid" } },
+            "id": { "type": "string", "pattern": "^lineage_[0-9a-f]{64}$" }
+          }
+        }
+      }
+    },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "includedNamespaces": { "type": "array", "items": { "type": "string" } },
+    "excludedScopes": { "type": "array", "items": { "type": "string" } },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ref", "bundleRef", "oid"],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "description": "Only refs/notes/vcs-lab or refs/vcs-lab/resolutions/* entries are accepted on read; duplicates are rejected."
+          },
+          "bundleRef": { "type": "string" },
+          "oid": {
+            "$ref": "#/$defs/oid",
+            "description": "The unpeeled ref target as exported."
+          }
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["attachment", "id", "schema", "type", "digest", "ref", "resultBlob"],
+        "properties": {
+          "attachment": { "$ref": "#/$defs/oid" },
+          "id": { "type": "string" },
+          "schema": { "type": "string" },
+          "type": { "type": "string" },
+          "digest": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+          "ref": {
+            "type": ["string", "null"],
+            "description": "Retention ref for resolution records; null otherwise."
+          },
+          "resultBlob": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+          }
+        }
+      }
+    },
+    "payload": {
+      "type": ["object", "null"],
+      "required": ["file", "bytes", "sha256"],
+      "properties": {
+        "file": { "const": "objects.bundle" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "required": ["cryptographicallySigned", "authorized", "statement"],
+      "properties": {
+        "cryptographicallySigned": { "const": false },
+        "authorized": { "const": false },
+        "statement": { "type": "string" }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "required": ["algorithm", "manifestHash"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "manifestHash": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+      }
+    }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$" }
+  }
+}
