@@ -333,6 +333,10 @@ or loose.
      order the walk leaves them.
      A native commit or tag goes straight after the preserved commit or tag
      it derives from ([native history §1](../native-history/commits.md#1-object-types)).
+     Then come facts, in byte order of ID; the shared chain's entries, in
+     the order the walk leaves their notes commits; the local entry; and the
+     import's operation
+     ([native history](../native-history/facts.md#5-import)).
   3. **The ref snapshot,** last.
 
   **The reason.** A history's versions of one directory then sit together in

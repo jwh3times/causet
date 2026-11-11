@@ -106,12 +106,15 @@ An object's **identity input** is the byte string its digest is computed over:
 | `05` | annotation | §7 |
 | `06` | native commit | [native history](../native-history/commits.md#3-native-commits) |
 | `07` | native tag | [native history](../native-history/commits.md#4-native-tags) |
+| `08` | fact | [native history](../native-history/facts.md#3-facts) |
+| `09` | fact-log entry | [native history](../native-history/facts.md#4-the-fact-log) |
+| `0a` | operation | [native history](../native-history/operations.md#3-operations) |
 
-- **Codes `00` and `08`–`ff` are reserved.** A reader refuses an object of a
+- **Codes `00` and `0b`–`ff` are reserved.** A reader refuses an object of a
   type it does not know, because the store came from a build that writes a
   format it cannot read. Annotations (§7) are the extension point that a reader
   may ignore.
-- **Native history's types,** `06` and `07`, are defined by the
+- **Native history's types,** `06` to `0a`, are defined by the
   [native history contract](../native-history/README.md). They joined version 1
   without a new version: a build that does not know them refuses them by this
   rule.
@@ -560,9 +563,12 @@ No build knows the type `example`, so every reader ignores it.
 ## 8. Object states
 
 Every clone holds all metadata, and content may be absent (decision 8).
+Native history's local facts and entries, and its operations, belong to the
+clone that wrote them, and no other clone holds them
+([native history](../native-history/facts.md#34-scope)).
 
 - **Metadata** is trees, preserved Git objects, ref snapshots and annotations
-  (types `02`–`05`), and native commits and tags (types `06` and `07`).
+  (types `02`–`05`), and native history's objects (types `06`–`0a`).
 - **Content** is type `01`, chunk lists included.
 
 An ID is **known** to a store when a present object, a stored chunk list or a
@@ -756,11 +762,11 @@ For every row of every alias file, the check:
 Every row must match: a row for which no candidate matches fails the check.
 Every object the store holds that came from Git must have a row. In N1, where
 import is the only writer, that is every object; a phase that writes objects
-of its own changes this rule (ADR-0044, item 4). Native commits and tags are
-the first that are not Git objects: they have no row, and their preserved
-objects have
-([native history §1](../native-history/commits.md#1-object-types)). The
-check shows it from the store alone:
+of its own changes this rule (ADR-0044, item 4). Native history's objects are
+the first that are not Git objects, and have no row. A native commit or tag
+imported from Git reaches its row through its preserved object
+([native history §1](../native-history/commits.md#1-object-types)), and facts,
+entries and operations have none. The check shows it from the store alone:
 
 - each tree and preserved object has a row, and so does all content but the
   chunks of other content (§3.3);
@@ -793,6 +799,7 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
   aliases/sha1    the SHA-1 alias file, when there is one
   aliases/sha256  the SHA-256 alias file, when there is one
   objects/        containers, each with its index ([storage.md](storage.md#4-containers))
+  op-heads/       the operation heads ([native history](../native-history/operations.md#32-the-operation-heads))
 ```
 
 - **`format`** holds exactly `causet-native-store 1` and a line feed, the 22
@@ -838,5 +845,7 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
     import, or removed by hand. A reader ignores it.
 - **Other names under `.cst/` are reserved** for later parts of the contract
   and later phases. A version 1 reader ignores the names it does not know.
-- **`.cst/` holds only the store.** There is no working copy in N1: a native
-  repository is written only by import (decision 11).
+- **`.cst/` holds only the store.** There is no working copy in N1 or N2. In
+  N1 a native repository is written only by import (decision 11); N2's
+  commands also write names and facts, as operations
+  ([native history](../native-history/operations.md#32-the-operation-heads)).
