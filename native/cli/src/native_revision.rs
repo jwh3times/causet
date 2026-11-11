@@ -2,16 +2,23 @@
 //! `cst ls-tree` and `cst rev-parse` take, resolved as Git's `get_oid`
 //! resolves them, from the store and its ref snapshot alone. A name is a ref
 //! (by Git's rules for short names), `HEAD` or `@`, a native ID or a unique
-//! prefix of one, followed by any of `~<n>`, `^<n>` and `^{<type>}`, and
-//! optionally `:<path>`. What needs a reflog, an index or a search is
-//! refused.
+//! prefix of one, or a Git ID, followed by any of `~<n>`, `^<n>` and
+//! `^{<type>}`, and optionally `:<path>`. What needs a reflog, an index or a
+//! search is refused.
+//!
+//! A commit is named by its native commit where import derived one, and the
+//! preserved commit it derives from is named by nothing (commits.md §6): what
+//! a name resolves to, and every ID this hands out, is the native commit.
 
 use crate::native_repository::{Listed, alias, corrupt, listing};
 use causet_engine::errors::{GitError, GitResult};
+use causet_history::commit::{Commit, Commits};
 use causet_import::store_error;
+use causet_store::StoreError;
 use causet_store::id::{NativeId, Type};
 use causet_store::objects::{GitKind, Preserved, RefTarget, Snapshot};
-use causet_store::store::Store;
+use causet_store::store::{Object as Stored, Store};
+use std::cell::OnceCell;
 use std::path::Path;
 
 /// Git's `ref_rev_parse_rules`: the full names a short name is tried as, in
@@ -28,7 +35,8 @@ pub const RULES: [(&str, &str); 6] = [
 /// Git's `SYMREF_MAXDEPTH`: the most refs one resolution reads.
 const SYMREF_MAXDEPTH: usize = 5;
 
-/// An object's Git type, or the native type no Git object has.
+/// An object's Git type, or the native type no Git object has. A native
+/// commit is a commit (commits.md §6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Object {
   Blob,
@@ -37,9 +45,6 @@ pub enum Object {
   Tag,
   Snapshot,
   Annotation,
-  /// A native commit, which N1's commands show as the native object it is;
-  /// `cst log` names commits by it (commits.md §6).
-  NativeCommit,
 }
 
 impl Object {
@@ -51,7 +56,6 @@ impl Object {
       Object::Tag => "tag",
       Object::Snapshot => "snapshot",
       Object::Annotation => "annotation",
-      Object::NativeCommit => "native-commit",
     }
   }
 }
@@ -70,6 +74,9 @@ pub enum Hint {
 pub struct Repository {
   pub store: Store,
   pub snapshot: Snapshot,
+  /// Every native commit, read only when one is not where import places it
+  /// (`native_of`).
+  commits: OnceCell<Commits>,
 }
 
 pub fn unsupported(what: impl std::fmt::Display) -> GitError {
@@ -83,12 +90,148 @@ impl Repository {
   pub fn open(root: &Path) -> GitResult<Repository> {
     let store = Store::open(root).map_err(store_error)?;
     let snapshot = store.refs().map_err(store_error)?;
-    Ok(Repository { store, snapshot })
+    Ok(Repository {
+      store,
+      snapshot,
+      commits: OnceCell::new(),
+    })
+  }
+
+  /// Every native commit the store holds, read once.
+  pub fn commits(&self) -> Result<&Commits, StoreError> {
+    if let Some(commits) = self.commits.get() {
+      return Ok(commits);
+    }
+    let read = Commits::read(&self.store)?;
+    Ok(self.commits.get_or_init(|| read))
+  }
+
+  /// A native commit the store holds, decoded.
+  fn native_commit(&self, id: &NativeId) -> Result<Commit, StoreError> {
+    decoded(id, &self.store.read_known(id)?.body)
+  }
+
+  /// The native commit import derived from a preserved commit, if any: the
+  /// object stored straight after it, where import puts it (storage.md
+  /// §3.2), when that names it; otherwise whichever native commit names it,
+  /// found by reading every one.
+  fn native_of(&self, preserved: &NativeId) -> Result<Option<NativeId>, StoreError> {
+    if let Some((next, Type::NativeCommit)) = self.store.following(preserved)?
+      && self.native_commit(&next)?.preserved == Some(*preserved)
+    {
+      return Ok(Some(next));
+    }
+    Ok(self.commits()?.by_preserved.get(preserved).copied())
+  }
+
+  /// Whether `id` is a preserved Git commit.
+  fn is_preserved_commit(&self, id: &NativeId) -> Result<bool, StoreError> {
+    if self.store.held(id)? != Some(Type::Preserved) {
+      return Ok(false);
+    }
+    let read = self.store.read_known(id)?;
+    Ok(Preserved::decode(&read.body).map_err(StoreError::Corrupt)?.kind == GitKind::Commit)
+  }
+
+  /// Whether no command names `id`: a preserved commit a native commit
+  /// derives from (commits.md §6).
+  fn hidden(&self, id: &NativeId) -> Result<bool, StoreError> {
+    Ok(self.is_preserved_commit(id)? && self.native_of(id)?.is_some())
+  }
+
+  /// The ID a command names an object by (commits.md §6): a preserved
+  /// commit's native commit, where import derived one, and otherwise the
+  /// object's own. A commit with none, such as a carrier, keeps its preserved
+  /// commit's.
+  pub fn named(&self, id: NativeId) -> GitResult<NativeId> {
+    if !self.is_preserved_commit(&id).map_err(store_error)? {
+      return Ok(id);
+    }
+    Ok(self.native_of(&id).map_err(store_error)?.unwrap_or(id))
+  }
+
+  /// An object as the commands show it: a native commit as the preserved
+  /// Git commit it derives from, whose payload is the commit's Git encoding
+  /// (commits.md §7), and a preserved commit a native commit derives from as
+  /// no object at all.
+  pub fn presented(&self, id: &NativeId) -> Result<Stored, StoreError> {
+    let read = self.store.read(id)?;
+    match read.kind {
+      Type::NativeCommit => {
+        match decoded(id, &read.body)?.preserved {
+          Some(preserved) => self.store.read_known(&preserved),
+          None => Err(StoreError::Unsupported(format!(
+            "{id} is a commit made natively, and showing one is not implemented yet"
+          ))),
+        }
+      }
+      Type::Preserved if self.hidden(id)? => Err(StoreError::NotFound(format!(
+        "{id} is not an object this store names"
+      ))),
+      _ => Ok(read),
+    }
+  }
+
+  /// The Git ID of an object a command names, in hex (ADR-0046, decision
+  /// 5): its alias row's, a native commit's that of the preserved commit it
+  /// derives from. An object with none, such as a ref snapshot or a commit
+  /// made natively, is refused.
+  pub fn git_id(&self, id: &NativeId) -> GitResult<String> {
+    let mut object = *id;
+    if self.store.held(id).map_err(store_error)? == Some(Type::NativeCommit) {
+      if let Some(preserved) = self.native_commit(id).map_err(store_error)?.preserved {
+        object = preserved;
+      }
+    }
+    for algorithm in self.store.algorithms() {
+      if let Some(digest) = self.store.git(algorithm, &object).map_err(store_error)? {
+        return Ok(causet_store::id::hex(&digest));
+      }
+    }
+    Err(GitError::new(
+      "not-found",
+      format!("{id} has no Git ID: it is no object imported from Git"),
+    ))
+  }
+
+  /// The object a whole Git ID names here, through the alias map, a commit
+  /// as its preserved commit (commits.md §6). `None` when the store has no
+  /// alias row for it.
+  fn git_object(&self, hex: &str) -> GitResult<Option<NativeId>> {
+    let Some(digest) = digest_of(hex) else {
+      return Ok(None);
+    };
+    for algorithm in self.store.algorithms() {
+      if let Some(id) = alias(&self.store, algorithm, &digest)? {
+        return Ok(Some(id));
+      }
+    }
+    Ok(None)
+  }
+
+  /// The objects a prefix of an ID may name, of at least 4 lowercase hex
+  /// digits: every object the store holds present but ref snapshots,
+  /// annotations and the preserved commits no command names. Native commits
+  /// are among them (commits.md §6).
+  pub fn candidates(&self, prefix: &str) -> GitResult<Vec<NativeId>> {
+    let found = self
+      .store
+      .matching(prefix, |kind| !matches!(kind, Type::Snapshot | Type::Annotation))
+      .map_err(store_error)?;
+    let mut kept = Vec::with_capacity(found.len());
+    for id in found {
+      if !self.hidden(&id).map_err(store_error)? {
+        kept.push(id);
+      }
+    }
+    Ok(kept)
   }
 
   /// A ref by its full name, followed through symbolic refs as Git's
-  /// `resolve_ref` follows them: the name it ends at, and the object there.
-  /// A symbolic ref to a ref the snapshot does not hold resolves to nothing.
+  /// `resolve_ref` follows them: the name it ends at, and the object the
+  /// snapshot records there, a commit as its preserved commit (`named` gives
+  /// the ID a command shows). A symbolic ref to a ref the snapshot does not
+  /// hold resolves to nothing.
   pub fn resolve_ref(&self, name: &[u8]) -> Option<(Vec<u8>, NativeId)> {
     let mut name = name.to_vec();
     for _ in 0..SYMREF_MAXDEPTH {
@@ -142,15 +285,26 @@ impl Repository {
     full.to_vec()
   }
 
-  /// An object's type, or `None` when the store does not hold it.
+  /// An object's type, or `None` when the store does not hold it, or holds
+  /// it as a preserved commit no command names.
   pub fn object(&self, id: &NativeId) -> GitResult<Option<Object>> {
+    let kind = self.kind(id)?;
+    if kind == Some(Object::Commit) && self.hidden(id).map_err(store_error)? {
+      return Ok(None);
+    }
+    Ok(kind)
+  }
+
+  /// An object's type, a preserved commit's included, or `None` when the
+  /// store does not hold it.
+  fn kind(&self, id: &NativeId) -> GitResult<Option<Object>> {
     Ok(Some(match self.store.held(id).map_err(store_error)? {
       None => return Ok(None),
       Some(Type::Content) => Object::Blob,
       Some(Type::Tree) => Object::Tree,
       Some(Type::Snapshot) => Object::Snapshot,
       Some(Type::Annotation) => Object::Annotation,
-      Some(Type::NativeCommit) => Object::NativeCommit,
+      Some(Type::NativeCommit) => Object::Commit,
       Some(Type::Preserved) => match self.preserved(id)?.kind {
         GitKind::Commit => Object::Commit,
         GitKind::Tag => Object::Tag,
@@ -164,9 +318,14 @@ impl Repository {
     Preserved::decode(&read.body).map_err(corrupt)
   }
 
-  /// What a commit or tag is built on, from its first header line: a
-  /// commit's tree or a tag's object, through the alias map.
+  /// What a commit or tag is built on: a native commit's tree, or what the
+  /// first header line of one kept in Git's encoding names through the alias
+  /// map, a commit's tree or a tag's object, a commit as its preserved commit
+  /// (`named` gives the ID a command shows).
   fn built_on(&self, id: &NativeId) -> GitResult<NativeId> {
+    if self.store.held(id).map_err(store_error)? == Some(Type::NativeCommit) {
+      return Ok(self.native_commit(id).map_err(store_error)?.tree);
+    }
     let preserved = self.preserved(id)?;
     let first = preserved.header_ids().into_iter().find(|header| header.first);
     let built_on = match first {
@@ -174,48 +333,59 @@ impl Repository {
       None => None,
     };
     built_on.ok_or_else(|| {
-        GitError::new(
-          "not-found",
-          format!(
-            "the {} {id} names no imported object to build on",
-            preserved.kind.name()
-          ),
-        )
-      })
+      GitError::new(
+        "not-found",
+        format!(
+          "the {} {id} names no imported object to build on",
+          preserved.kind.name()
+        ),
+      )
+    })
   }
 
-  /// What a tag names, from its first line.
+  /// What a tag names, from its first line, as a command names it.
   pub fn tagged(&self, tag: &NativeId) -> GitResult<NativeId> {
-    self.built_on(tag)
+    self.named(self.built_on(tag)?)
   }
 
-  /// A commit's parents, in order, through the alias map.
+  /// A commit's parents, in order, as a command names them: a native
+  /// commit's own, or those one kept in Git's encoding names, through the
+  /// alias map.
   pub fn parents(&self, commit: &NativeId) -> GitResult<Vec<NativeId>> {
+    if self.store.held(commit).map_err(store_error)? == Some(Type::NativeCommit) {
+      return Ok(self.native_commit(commit).map_err(store_error)?.parents);
+    }
     let preserved = self.preserved(commit)?;
     preserved
       .header_ids()
       .into_iter()
       .filter(|header| !header.first)
       .map(|header| {
-        alias(&self.store, preserved.algorithm, &header.digest)?
-          .ok_or_else(|| corrupt(format!("the commit {commit} names a parent that was not imported")))
+        let parent = alias(&self.store, preserved.algorithm, &header.digest)?
+          .ok_or_else(|| corrupt(format!("the commit {commit} names a parent that was not imported")))?;
+        self.named(parent)
       })
       .collect()
   }
 
-  /// Follows tags, guarding against a cycle only a damaged alias map makes.
+  /// Follows tags, guarding against a cycle only a damaged alias map makes,
+  /// to an object as a command names it. A commit passed through on the way,
+  /// as a tag's on the way to its tree, is not named, which would cost a
+  /// lookup of its native commit.
   fn peeling(&self, id: NativeId, step: impl Fn(Object) -> bool) -> GitResult<(NativeId, Option<Object>)> {
     let mut id = id;
     let mut seen = std::collections::HashSet::new();
+    let mut kind = self.kind(&id)?;
     loop {
-      let kind = self.object(&id)?;
       match kind {
-        Some(kind) if step(kind) => {
+        Some(found) if step(found) => {
           if !seen.insert(id) {
             return Err(corrupt(format!("{id} names itself through the alias map")));
           }
           id = self.built_on(&id)?;
+          kind = self.kind(&id)?;
         }
+        Some(Object::Commit) => return Ok((self.named(id)?, kind)),
         _ => return Ok((id, kind)),
       }
     }
@@ -259,8 +429,21 @@ impl Repository {
   }
 
   /// `resolve`, with the type a context expects, which chooses among
-  /// objects a short ID is a prefix of.
+  /// objects a short ID is a prefix of. What it resolves to is named as a
+  /// command names it; on the way, a ref's commit is its preserved commit,
+  /// which costs no lookup of its native commit when a tree is what is
+  /// sought.
   pub fn resolve_as(&self, name: &[u8], hint: Hint) -> GitResult<NativeId> {
+    self.named(self.resolve_raw(name, hint)?)
+  }
+
+  /// The tree a tree-ish names (`tree_of`), resolved without naming the
+  /// commit on the way, whose native commit takes every index to find.
+  pub fn resolve_tree(&self, name: &[u8]) -> GitResult<NativeId> {
+    self.tree_of(self.resolve_raw(name, Hint::Any)?)
+  }
+
+  fn resolve_raw(&self, name: &[u8], hint: Hint) -> GitResult<NativeId> {
     let shown = String::from_utf8_lossy(name).into_owned();
     let not_valid = || GitError::new("not-found", format!("Not a valid object name {shown}"));
     if name.first() == Some(&b':') {
@@ -362,7 +545,7 @@ impl Repository {
       let Some(base) = self.get_as(&name[..open - 1], inner)? else {
         return Ok(None);
       };
-      if self.object(&base)?.is_none() {
+      if self.kind(&base)?.is_none() {
         return Ok(None);
       }
       return match (want, word) {
@@ -373,11 +556,27 @@ impl Repository {
     }
     let text = std::str::from_utf8(name).ok();
     let hex = text.filter(|text| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_hexdigit()));
-    // A whole native ID names itself, held or not, as a whole Git ID does.
-    if let Some(hex) = hex
-      && hex.len() == 64
-    {
-      return Ok(NativeId::from_hex(&hex.to_ascii_lowercase()));
+    if let Some(hex) = hex {
+      let lower = hex.to_ascii_lowercase();
+      let native = (hex.len() == 64).then(|| NativeId::from_hex(&lower)).flatten();
+      if let Some(id) = native
+        && self.store.held(&id).map_err(store_error)?.is_some()
+      {
+        // A preserved commit a native commit derives from is named by
+        // nothing (commits.md §6).
+        if self.hidden(&id).map_err(store_error)? {
+          return Ok(None);
+        }
+        return Ok(Some(id));
+      }
+      // A whole Git ID names what import made of its object (commits.md §6).
+      if let Some(id) = self.git_object(&lower)? {
+        return Ok(Some(id));
+      }
+      // A whole native ID names itself, held or not, as a whole Git ID does.
+      if native.is_some() {
+        return Ok(native);
+      }
     }
     if name.windows(2).any(|pair| pair == b"@{") {
       return Err(unsupported(format!(
@@ -413,19 +612,13 @@ impl Repository {
   }
 
   /// Git's `get_short_oid`: the object a prefix of at least 4 hex digits
-  /// names. Only objects Git has count, so not ref snapshots, annotations
-  /// or native commits. Of several, the one alone of the type `hint` asks
-  /// for.
+  /// names, of the `candidates`. Of several, the one alone of the type
+  /// `hint` asks for.
   fn short(&self, prefix: &str, hint: Hint) -> GitResult<Option<NativeId>> {
     if prefix.len() < 4 || !prefix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
       return Ok(None);
     }
-    let found = self
-      .store
-      .matching(&prefix.to_ascii_lowercase(), |kind| {
-        !matches!(kind, Type::Snapshot | Type::Annotation | Type::NativeCommit)
-      })
-      .map_err(store_error)?;
+    let found = self.candidates(&prefix.to_ascii_lowercase())?;
     let ambiguous = || {
       GitError::new(
         "ambiguous-match",
@@ -486,7 +679,7 @@ impl Repository {
         return Ok(tree);
       }
       let read = self.store.read_known(&tree).map_err(store_error)?;
-      let entries = listing(&self.store, &read.kind, &read.body)?.ok_or_else(missing)?;
+      let entries = listing(self, &read.kind, &read.body)?.ok_or_else(missing)?;
       // Git's `find_tree_entry`: entries are taken to be in Git's order, so the
       // search ends at the first name past the one sought.
       let mut next = None;
@@ -530,4 +723,20 @@ fn found(entry: &Listed) -> GitResult<NativeId> {
       entry.shown
     ))
   })
+}
+
+/// A native commit's body decoded; one that does not decode is corrupt.
+fn decoded(id: &NativeId, body: &[u8]) -> Result<Commit, StoreError> {
+  Commit::decode(body).map_err(|why| StoreError::Corrupt(format!("the native commit {id}: {why}")))
+}
+
+/// The bytes an even number of hex digits spell.
+fn digest_of(hex: &str) -> Option<Vec<u8>> {
+  if hex.len() % 2 != 0 {
+    return None;
+  }
+  (0..hex.len())
+    .step_by(2)
+    .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).ok())
+    .collect()
 }

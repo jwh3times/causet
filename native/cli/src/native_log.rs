@@ -62,7 +62,7 @@ pub fn log(args: &[OsString], root: &Path) -> GitResult<i32> {
   let repository = Repository::open(root)?;
   let history = History {
     repository: &repository,
-    commits: Commits::read(&repository.store).map_err(store_error)?,
+    commits: repository.commits().map_err(store_error)?,
   };
   let tip = history.tip(&revision)?;
   let mut out = Vec::new();
@@ -74,50 +74,29 @@ pub fn log(args: &[OsString], root: &Path) -> GitResult<i32> {
 /// A native repository with its native commits read.
 struct History<'a> {
   repository: &'a Repository,
-  commits: Commits,
+  commits: &'a Commits,
 }
 
 impl History<'_> {
-  /// The native commit a revision names: through the snapshot's refs and
-  /// tags to a commit, as N1's commands resolve names, or else a native
-  /// commit's ID or a unique prefix of it, which they do not know.
+  /// The native commit a revision names, through tags, as every N1 command
+  /// resolves names (commits.md §6). A commit with no native commit is one
+  /// an import before native history left.
   fn tip(&self, revision: &[u8]) -> GitResult<NativeId> {
     let shown = String::from_utf8_lossy(revision).into_owned();
-    let named = match self.repository.resolve_as(revision, Hint::Committish) {
-      Ok(named) => named,
-      Err(error) => return self.native_prefix(revision).ok_or(error),
-    };
+    let named = self.repository.resolve_as(revision, Hint::Committish)?;
     let (peeled, kind) = self.repository.deref_tags(named)?;
-    match kind {
-      Some(Object::NativeCommit) => Ok(peeled),
-      Some(Object::Commit) => self.commits.by_preserved.get(&peeled).copied().ok_or_else(|| {
-        GitError::new(
-          "unsupported-feature",
-          format!(
-            "{shown} names a commit this native repository holds no native commit for, as an import before native history left it. Import the Git repository into it again to derive its history."
-          ),
-        )
-      }),
-      _ => Err(GitError::new("not-found", format!("{shown} does not name a commit"))),
+    if kind != Some(Object::Commit) {
+      return Err(GitError::new("not-found", format!("{shown} does not name a commit")));
     }
-  }
-
-  /// The one native commit whose ID begins with `revision`, of at least 4
-  /// hex digits.
-  fn native_prefix(&self, revision: &[u8]) -> Option<NativeId> {
-    let text = std::str::from_utf8(revision).ok()?.to_ascii_lowercase();
-    if text.len() < 4 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-      return None;
+    if !self.commits.by_id.contains_key(&peeled) {
+      return Err(GitError::new(
+        "unsupported-feature",
+        format!(
+          "{shown} names a commit this native repository holds no native commit for, as an import before native history left it. Import the Git repository into it again to derive its history."
+        ),
+      ));
     }
-    let mut found = self
-      .commits
-      .by_id
-      .keys()
-      .filter(|id| id.hex().starts_with(&text));
-    match (found.next(), found.next()) {
-      (Some(id), None) => Some(*id),
-      _ => None,
-    }
+    Ok(peeled)
   }
 
   fn commit(&self, id: &NativeId) -> GitResult<&Commit> {
@@ -172,21 +151,15 @@ impl History<'_> {
     Ok(())
   }
 
-  /// An ID's unique prefix, at least as long as Git's `core.abbrev=auto`
-  /// makes one for a store of this many objects (ADR-0046, decision 5).
+  /// An ID's prefix that names it alone among the objects a prefix may
+  /// name (`Repository::candidates`), so a revision resolves it, at least as
+  /// long as Git's `core.abbrev=auto` makes one for a store of this many
+  /// objects (ADR-0046, decision 5; commits.md §6).
   fn abbreviate(&self, id: &NativeId) -> GitResult<String> {
     let bits = (usize::BITS - self.commits.objects.leading_zeros()) as usize;
     let mut length = bits.div_ceil(2).max(SHORTEST);
     let hex = id.hex();
-    while length < hex.len() {
-      let found = self
-        .repository
-        .store
-        .matching(&hex[..length], |_| true)
-        .map_err(store_error)?;
-      if found.len() <= 1 {
-        break;
-      }
+    while length < hex.len() && self.repository.candidates(&hex[..length])?.len() > 1 {
       length += 1;
     }
     Ok(hex[..length].to_string())

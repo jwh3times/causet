@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 
 /** The format version a store is written in (README): every reader's. */
 export const VERSION = 1;
@@ -100,6 +101,118 @@ export function aliases(store, format) {
     rows.set(gitId, chosen[0][0]);
   }
   return rows;
+}
+
+/** Reads a varint (the store contract's minimal LEB128): its value and where it ends. */
+function varint(bytes, at) {
+  let value = 0;
+  let shift = 0;
+  for (;;) {
+    const byte = bytes[at++];
+    value += (byte & 0x7f) * 2 ** shift;
+    shift += 7;
+    if (!(byte & 0x80)) return [value, at];
+  }
+}
+
+/**
+ * A native commit's fields as commits.md §3.1 encodes them, decoded here
+ * independently of `cst`: its parents as native IDs in hex, its encoding and
+ * message as bytes, its lifted identity as text, and the preserved commit it
+ * derives from, each `null` when absent. Its tree, signatures and actors are
+ * read past, not returned.
+ */
+export function decodeNativeCommit(body) {
+  let at = 33;
+  const bytesAt = () => {
+    const [length, next] = varint(body, at);
+    const bytes = body.subarray(next, next + length);
+    at = next + length;
+    return bytes;
+  };
+  const optionalBytes = () => (body[at++] === 1 ? bytesAt() : null);
+  let count;
+  [count, at] = varint(body, at);
+  const parents = [];
+  for (let parent = 0; parent < count; parent++, at += 33) parents.push(body.subarray(at + 1, at + 33).toString("hex"));
+  for (let signature = 0; signature < 2; signature++) {
+    const form = body[at++];
+    if (form === 0) {
+      bytesAt();
+      bytesAt();
+      [, at] = varint(body, at);
+      at += 2;
+    } else if (form === 1) {
+      bytesAt();
+    }
+  }
+  const encoding = optionalBytes();
+  [count, at] = varint(body, at);
+  for (let actor = 0; actor < count; actor++) {
+    at += 1;
+    bytesAt();
+    if (body[at++] === 1) at += 1;
+    optionalBytes();
+  }
+  const [changeId, derivedFrom, originCommit] = [optionalBytes(), optionalBytes(), optionalBytes()].map((text) => text?.toString("utf8") ?? null);
+  const preserved = body[at++] === 1 ? body.subarray(at + 1, at + 33).toString("hex") : null;
+  at += preserved ? 33 : 0;
+  return { parents, encoding, changeId, derivedFrom, originCommit, preserved, message: body.subarray(at) };
+}
+
+/** Frame codecs (storage.md §4): stored, and zstd. */
+const STORED_FRAME = 0;
+const ZSTD_FRAME = 1;
+
+/** Whether this Node reads zstd frames (22.15 and later), so the suites can decode what a store compressed. */
+export const readsZstd = typeof zlib.zstdDecompressSync === "function";
+
+/** A frame's uncompressed bytes, or `null` where this Node cannot read its codec. */
+function frameBytes(frame) {
+  if (frame.codec === STORED_FRAME) return frame.bytes;
+  if (frame.codec === ZSTD_FRAME && readsZstd) return zlib.zstdDecompressSync(frame.bytes);
+  return null;
+}
+
+/**
+ * Every native commit the store holds present, by ID (hex): its fields
+ * decoded (`decodeNativeCommit`) and its `body` where this Node reads its
+ * frame. Where it cannot, only `preserved` is known, from where import
+ * places a native commit: straight after the preserved commit it derives
+ * from (storage.md §3.2), which is what `cst` looks at first too, so the
+ * suites check that placement independently only where zstd is read.
+ */
+export function nativeCommits(store) {
+  const commits = new Map();
+  for (const file of containers(store)) {
+    const { frames, objects } = readContainer(file);
+    const endingAt = new Map(objects.map((object) => [`${object.frame}:${object.offset + object.length}`, object]));
+    const read = new Map();
+    for (const object of objects) {
+      if (object.type !== TYPES.nativeCommit || object.state !== 0) continue;
+      if (!read.has(object.frame)) read.set(object.frame, frameBytes(frames[object.frame]));
+      const bytes = read.get(object.frame);
+      if (bytes) {
+        const body = bytes.subarray(object.offset, object.offset + object.length);
+        commits.set(object.name.toString("hex"), { ...decodeNativeCommit(body), body });
+        continue;
+      }
+      const before = object.offset > 0 ? endingAt.get(`${object.frame}:${object.offset}`)
+        : endingAt.get(`${object.frame - 1}:${frames[object.frame - 1]?.uncompressed}`);
+      commits.set(object.name.toString("hex"), { preserved: before?.name.toString("hex") ?? null });
+    }
+  }
+  return commits;
+}
+
+/**
+ * Git ID → the native ID a native repository names that object by, both as
+ * hex: a commit's native commit where it has one (commits.md §6), and
+ * otherwise its alias row's object.
+ */
+export function names(store, format) {
+  const byPreserved = new Map([...nativeCommits(store)].map(([id, commit]) => [commit.preserved, id]));
+  return new Map([...aliases(store, format)].map(([gitId, native]) => [gitId, byPreserved.get(native) ?? native]));
 }
 
 /**

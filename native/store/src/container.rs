@@ -768,6 +768,9 @@ impl Container {
 pub struct Index {
   pub path: PathBuf,
   pub frames: Vec<Frame>,
+  /// Each present record's position in `names`, by its frame and offset:
+  /// built the first time `placed` is asked.
+  places: std::cell::OnceCell<std::collections::HashMap<(u32, u32), usize>>,
   pub names: Vec<[u8; 32]>,
   pub records: Vec<Record>,
   /// The annotation table: each annotation's subject digest and its position
@@ -794,6 +797,22 @@ impl Index {
   /// The bytes this index has read from its file.
   pub fn bytes_read(&self) -> u64 {
     self.file.bytes_read()
+  }
+
+  /// The object present at an offset of a frame, with its record.
+  pub fn placed(&self, frame: u32, offset: u32) -> Option<(NativeId, &Record)> {
+    let places = self.places.get_or_init(|| {
+      self
+        .records
+        .iter()
+        .enumerate()
+        .filter(|(_, record)| record.state == PRESENT)
+        .map(|(at, record)| ((record.frame, record.offset), at))
+        .collect()
+    });
+    places
+      .get(&(frame, offset))
+      .map(|&at| (NativeId(self.names[at]), &self.records[at]))
   }
 
   /// An object's record, when the index lists it.
@@ -918,6 +937,7 @@ fn parse_index(file: Positioned, index: &[u8], index_offset: u64) -> Result<Inde
   Ok(Index {
     path: file.path.clone(),
     frames,
+    places: std::cell::OnceCell::new(),
     names,
     records,
     annotations: table,

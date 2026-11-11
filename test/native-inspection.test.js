@@ -15,7 +15,8 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, markAbsent, nativeId, removeEntry, setVersion, sharingShort,
+  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, markAbsent, names, nativeCommits, nativeId, removeEntry, setVersion,
+  sharingShort,
   writeAliases,
 } from "../test-support/native-store.js";
 
@@ -97,9 +98,14 @@ function makeHistory(format) {
   git(["symbolic-ref", "HEAD", "refs/heads/main"]);
   assert.equal(execFileSync(cstCommand, [...cstPrefix(), "import", "source", "native"], { cwd: root, env: testEnv(OPT_IN) }).length > 0, true);
   const native = path.join(root, "native");
-  const rows = aliases(native, format);
-  const translate = (text) => text.replace(new RegExp(`\\b[0-9a-f]{${width}}\\b`, "g"), (id) => rows.get(id) ?? id);
-  return { repo, native, rows, translate, one, file, merge };
+  const rows = names(native, format);
+  return { repo, native, format, rows, aliased: aliases(native, format), translate: translator(rows, format), one, file, merge };
+}
+
+/** Git's whole IDs in text, each as `rows` (Git ID → native ID) has it. */
+function translator(rows, format) {
+  const width = format === "sha1" ? 40 : 64;
+  return (text) => text.replace(new RegExp(`\\b[0-9a-f]{${width}}\\b`, "g"), (id) => rows.get(id) ?? id);
 }
 
 /** Runs Git on the original and cst on the native copy, and compares them. */
@@ -180,6 +186,77 @@ for (const format of ["sha1", "sha256"]) {
       ["--format=%(nope)"], ["--format=%(refname"], ["--format=%(refname:lstrip=x)"], ["--count=-1"],
     ];
     for (const args of cases) same(history, ["for-each-ref", ...args]);
+  });
+
+  test(`a commit is named by its native commit, one with none by its preserved commit, and a Git ID by what it imported as (${format})`, () => {
+    const history = makeHistory(format);
+    // A notes commit and a stash, which no branch, tag or remote-tracking
+    // ref reaches, get no native commit (commits.md §5.1).
+    const git = (args) => execFileSync("git", args, { cwd: history.repo, env: testEnv(IDENTITY) }).toString().trim();
+    git(["notes", "--ref=causet", "add", "-m", "a record", "main"]);
+    const notes = git(["rev-parse", "refs/notes/causet"]);
+    const stash = git(["commit-tree", `${history.merge}^{tree}`, "-p", history.merge, "-m", "a stash"]);
+    git(["update-ref", "refs/stash", stash]);
+    const again = cst(path.dirname(history.native), ["import", "source", "native"]);
+    assert.equal(again.status, 0, again.stderr.toString());
+    const rows = names(history.native, format);
+    const aliased = aliases(history.native, format);
+    for (const id of [notes, stash]) assert.equal(rows.get(id), aliased.get(id), `${id} has no native commit`);
+    assert.notEqual(rows.get(history.merge), aliased.get(history.merge), "a branch's commit has one");
+    const now = { ...history, translate: translator(rows, format) };
+    same(now, ["for-each-ref"]);
+    same(now, ["for-each-ref", "--format=%(objectname) %(objecttype) %(objectsize) %(tree) %(parent) %(*objectname)"]);
+    same(now, ["rev-parse", "refs/stash", "refs/stash^", "refs/stash^{tree}", "refs/notes/causet", "--all"]);
+    same(now, ["cat-file", "-p", "refs/stash"]);
+    same(now, ["cat-file", "-p", "v1"]);
+    same(now, ["cat-file", "-s", "main"]);
+    same(now, ["cat-file", "-t", "main"]);
+    // Its Git encoding, as stored, is what `--batch` prints by its native ID.
+    const tips = [history.merge, history.one, stash];
+    const input = (ids) => `${ids.join("\n")}\n`;
+    const expected = spawnSync("git", ["cat-file", "--batch"], { cwd: history.repo, env: testEnv(), input: input(tips) }).stdout;
+    const answered = spawnSync(cstCommand, [...cstPrefix(), "cat-file", "--batch"], {
+      cwd: history.native, env: testEnv(OPT_IN), input: input(tips.map((id) => rows.get(id))),
+    }).stdout;
+    const headers = (text) => text.replace(/^([0-9a-f]+) commit /gm, (line, id) => `${rows.get(id)} commit `);
+    assert.equal(answered.toString("latin1"), headers(expected.toString("latin1")));
+    // A Git ID names what import made of its object, as the command names it.
+    same(now, ["rev-parse", history.merge, `${history.merge}^`, `${history.merge}:top`, stash], ["rev-parse", history.merge, `${history.merge}^`, `${history.merge}:top`, stash]);
+    same(now, ["ls-tree", "-r", history.merge]);
+    same(now, ["cat-file", "-t", history.merge]);
+    // The preserved commit a native commit derives from is named by nothing.
+    const hidden = aliased.get(history.merge);
+    const typed = cst(history.native, ["cat-file", "-t", hidden]);
+    assert.equal(typed.status, 1, "a preserved commit with a native commit is no object a command shows");
+    assert.match(typed.stderr.toString(), /Not a valid object name/);
+    const batch = spawnSync(cstCommand, [...cstPrefix(), "cat-file", "--batch-check"], {
+      cwd: history.native, env: testEnv(OPT_IN), input: `${hidden}\n${hidden.slice(0, 12)}\n${rows.get(history.merge)}\n`,
+    });
+    assert.equal(batch.stdout.toString(), `${hidden} missing\n${hidden.slice(0, 12)} missing\n${rows.get(history.merge)} commit ${git(["cat-file", "-s", history.merge])}\n`);
+    // Every abbreviation log prints names its commit alone.
+    const printed = cst(history.native, ["log", "main", "--format=%h %H"]);
+    assert.equal(printed.status, 0, printed.stderr.toString());
+    for (const line of printed.stdout.toString().trim().split("\n")) {
+      const [short, full] = line.split(" ");
+      assert.equal(cst(history.native, ["rev-parse", short]).stdout.toString(), `${full}\n`, short);
+    }
+  });
+
+  test(`rev-parse --git-id prints the Git ID of what each revision names (${format})`, () => {
+    const history = makeHistory(format);
+    const revisions = ["HEAD", "HEAD~1", "HEAD^{tree}", "HEAD:top", "HEAD:dir", "v1", "chain^{}", "odd", "^side", "side..main", "HEAD^!"];
+    const expected = spawnSync("git", ["rev-parse", ...revisions], { cwd: history.repo, env: testEnv() });
+    assert.equal(expected.status, 0, expected.stderr.toString());
+    const answered = cst(history.native, ["rev-parse", "--git-id", ...revisions]);
+    assert.equal(answered.status, 0, answered.stderr.toString());
+    assert.equal(answered.stdout.toString(), expected.stdout.toString());
+    // A native ID, or a Git ID, names the same object.
+    const merge = history.rows.get(history.merge);
+    assert.equal(cst(history.native, ["rev-parse", "--git-id", merge, history.merge]).stdout.toString(), `${history.merge}\n${history.merge}\n`);
+    // Names print as names still; `--all` prints each ref's object.
+    same(history, ["rev-parse", "--symbolic", "HEAD", "main"], ["rev-parse", "--git-id", "--symbolic", "HEAD", "main"]);
+    const all = spawnSync("git", ["rev-parse", "--all"], { cwd: history.repo, env: testEnv() }).stdout.toString();
+    assert.equal(cst(history.native, ["rev-parse", "--git-id", "--all"]).stdout.toString(), all);
   });
 }
 
@@ -354,7 +431,7 @@ test("the alias file holds each Git ID whole and its native ID's short reference
   const written = fs.readFileSync(file);
   const rows = aliasRows(history.native, "sha1");
   assert.equal(written.length, 16 + 2 * 1024 + rows.size * (20 + 8 + 4) + 32);
-  for (const [gitId, short] of rows) assert.equal(history.rows.get(gitId).slice(0, 16), short, gitId);
+  for (const [gitId, short] of rows) assert.equal(history.aliased.get(gitId).slice(0, 16), short, gitId);
   // The helper that writes states import never makes writes import's bytes.
   writeAliases(history.native, "sha1", rows);
   assert.deepEqual(fs.readFileSync(file), written);
@@ -385,7 +462,7 @@ test("two alias rows resolving to one object are corrupt", () => {
   const checked = cst(history.native, ["fsck"]);
   assert.notEqual(checked.status, 0);
   const [first, second] = [history.file, one].sort();
-  assert.match(checked.stderr.toString(), new RegExp(`the sha1 alias rows of ${first} and ${second} both resolve to ${history.rows.get(one)}`));
+  assert.match(checked.stderr.toString(), new RegExp(`the sha1 alias rows of ${first} and ${second} both resolve to ${history.aliased.get(one)}`));
 });
 
 test("metadata is never absent: a tree marked absent is corruption", () => {
@@ -433,4 +510,19 @@ test("an annotation of an unknown type changes no content ID and no command's an
   // The annotation is an object of the store, by its own ID.
   const own = nativeId(TYPES.annotation, body).toString("hex");
   assert.equal(cst(history.native, ["cat-file", "-t", own]).stdout.toString(), "annotation\n");
+});
+
+test("a store imported before native history names every commit by its preserved commit, and log asks for an import", () => {
+  const history = makeHistory("sha1");
+  // Import before #416 wrote no native commits: take them out of the index.
+  for (const id of nativeCommits(history.native).keys()) removeEntry(history.native, id);
+  assert.equal(nativeCommits(history.native).size, 0);
+  const before = { ...history, translate: translator(history.aliased, "sha1") };
+  same(before, ["for-each-ref"]);
+  same(before, ["rev-parse", "HEAD", "HEAD~1", "v1^{}", "--all"]);
+  same(before, ["cat-file", "-p", "HEAD"]);
+  same(before, ["ls-tree", "-r", "HEAD"]);
+  const logged = cst(history.native, ["log", "--format=%H"]);
+  assert.equal(logged.status, 1);
+  assert.match(logged.stderr.toString(), /holds no native commit for.*Import the Git repository into it again/);
 });

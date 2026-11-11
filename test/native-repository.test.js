@@ -18,7 +18,7 @@ import test, { after } from "node:test";
 import { pathToFileURL } from "node:url";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-import { aliases, snapshotEntries } from "../test-support/native-store.js";
+import { names, snapshotEntries } from "../test-support/native-store.js";
 import { parseBatch } from "../test-support/native-kind.js";
 import { latin, reftableUnsupported, writeRefs } from "../test-support/generated-histories.js";
 
@@ -217,12 +217,12 @@ function imported(format) {
   const destination = path.join(source.root, "native");
   const result = cst(source.root, ["import", "source", "native"]);
   assert.equal(result.status, 0, result.stderr.toString());
-  return { ...source, destination, aliases: aliases(destination, format), stdout: result.stdout.toString() };
+  return { ...source, destination, names: names(destination, format), stdout: result.stdout.toString() };
 }
 
 for (const format of ["sha1", "sha256"]) {
   test(`every object the refs reach is imported and prints as git cat-file prints it (${format})`, () => {
-    const { git, destination, aliases: rows } = imported(format);
+    const { git, destination, names: rows } = imported(format);
     const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]).toString().trim().split("\n");
     const kinds = new Map(objects.map((id) => [id, git(["cat-file", "-t", id]).toString().trim()]));
     assert.deepEqual(new Set(kinds.values()), new Set(["blob", "tree", "commit", "tag"]));
@@ -268,7 +268,7 @@ function translateBatch(output, rows, width, contents) {
 
 for (const format of ["sha1", "sha256"]) {
   test(`cat-file --batch and --batch-check answer as Git's do, every name from one process (${format})`, () => {
-    const { git, destination, aliases: rows } = imported(format);
+    const { git, destination, names: rows } = imported(format);
     const width = format === "sha1" ? 40 : 64;
     const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]).toString().trim().split("\n");
     // Every object by its ID, then names a native repository resolves as Git
@@ -289,7 +289,7 @@ for (const format of ["sha1", "sha256"]) {
 }
 
 test("cat-file --batch-check answers each name as it reads it, before its input ends", async () => {
-  const { destination, aliases: rows } = imported("sha1");
+  const { destination, names: rows } = imported("sha1");
   const child = spawn(cstCommand, [...cstPrefix(), "cat-file", "--batch-check"], { cwd: destination, env: testEnv(OPT_IN) });
   const [first] = rows.values();
   let output = "";
@@ -343,7 +343,7 @@ test("a damaged native object fails the check, which names it and checks the res
   assert.equal(result.status, 0, result.stderr.toString());
   const destination = path.join(root, "native");
   const blob = git(["rev-parse", "HEAD:only.txt"]).toString().trim();
-  const rows = aliases(destination, "sha1");
+  const rows = names(destination, "sha1");
   damageContent(destination);
   const refused = cst(destination, ["import", "--verify"]);
   assert.equal(refused.status, 1);
@@ -378,7 +378,7 @@ test("the check needs a native repository, at most one, and the opt-in", () => {
 });
 
 test("a path through trees, commits and tags, and an unambiguous prefix, name the object Git names", () => {
-  const { git, destination, aliases: rows, parent, second, chain } = imported("sha1");
+  const { git, destination, names: rows, parent, second, chain } = imported("sha1");
   const root = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());
   for (const [native, revision] of [[`${root}:a/f`, "main:a/f"], [`${root.slice(0, 10)}:big.bin`, "main:big.bin"],
     [`${rows.get(parent)}:weird/zz`, `${parent}:weird/zz`], [`${rows.get(second)}:a/f`, `${second}:a/f`],
@@ -393,7 +393,7 @@ test("a path through trees, commits and tags, and an unambiguous prefix, name th
 });
 
 test("import reports what it wrote and keeps a tree that is not canonical in Git's encoding", () => {
-  const { stdout, aliases: rows, odd, second, destination } = imported("sha1");
+  const { stdout, names: rows, odd, second, destination } = imported("sha1");
   assert.match(stdout, /^Imported source into native: \d+ blobs, \d+ trees, 1 kept in Git's encoding, 5 commits, 3 tags, from a sha1 repository\.$/m);
   assert.match(stdout, new RegExp(`^Its ref snapshot records 8 refs, 1 symbolic\\. HEAD is at ${rows.get(second)}\\.$`, "m"));
   assert.ok(rows.get(odd));
@@ -440,7 +440,7 @@ test("an import told where writes what it cost there, and holds no metadata when
 });
 
 test("reading a native repository runs no Git", () => {
-  const { destination, aliases: rows, git } = imported("sha1");
+  const { destination, names: rows, git } = imported("sha1");
   const tree = rows.get(git(["rev-parse", "main^{tree}"]).toString().trim());
   const answered = cstWithoutGit(destination, ["cat-file", "-p", `${tree}:hello.txt`]);
   assert.equal(answered.status, 0, answered.stderr.toString());
@@ -448,7 +448,7 @@ test("reading a native repository runs no Git", () => {
 });
 
 test("without the opt-in, import and a native repository's commands are refused, naming it", () => {
-  const { root, destination, aliases: rows, git } = imported("sha1");
+  const { root, destination, names: rows, git } = imported("sha1");
   const refused = cst(root, ["import", "source", "other"], {});
   assert.equal(refused.status, 1);
   assert.match(refused.stderr.toString(), /CAUSET_EXPERIMENTAL=native/);
@@ -536,7 +536,7 @@ test("a tree Git would not walk is imported whole, in its one native form", () =
   const result = cst(source.root, ["import", "source", "native"]);
   assert.equal(result.status, 0, result.stderr.toString());
   const destination = path.join(source.root, "native");
-  const rows = aliases(destination, "sha1");
+  const rows = names(destination, "sha1");
   assert.ok(rows.get(source.inner), "the blob only the hidden tree names is imported");
   assert.equal(cst(destination, ["cat-file", "-t", rows.get(source.hidden)]).stdout.toString(), "tree\n");
   for (const id of [source.hidden, source.asFile, source.asDirectory]) {
@@ -551,7 +551,7 @@ test("a tree Git would not walk is imported whole, in its one native form", () =
 });
 
 test("a path resolves, or fails, wherever Git's does", () => {
-  const { git, destination, aliases: rows, parent } = imported("sha1");
+  const { git, destination, names: rows, parent } = imported("sha1");
   const main = git(["rev-parse", "main^{tree}"]).toString().trim();
   const cases = [
     [main, ["", "hello.txt", "hello.txt/", "/hello.txt", "a", "a/", "a/f", "a//f", "a/f/", "no", "module", "module/x", "big.bin"]],
@@ -586,7 +586,7 @@ test("a replacement ref is recorded, and the object it replaces imports as store
   assert.equal(result.status, 0, result.stderr.toString());
   assert.match(result.stdout.toString(), /records 3 refs, 1 symbolic/);
   const destination = path.join(root, "native");
-  const rows = aliases(destination, "sha1");
+  const rows = names(destination, "sha1");
   const printed = cst(destination, ["cat-file", "-p", rows.get(stored)]).stdout.toString();
   assert.equal(printed, translateHeaders("commit", git(["--no-replace-objects", "cat-file", "-p", stored]).toString(), rows));
   assert.match(printed, /as stored/);
@@ -615,7 +615,7 @@ test("only the header lines Git's parser follows are translated, and a path is l
   git(["update-ref", "refs/tags/late", tag]);
   assert.equal(cst(root, ["import", "source", "native"]).status, 0);
   const destination = path.join(root, "native");
-  const rows = aliases(destination, "sha1");
+  const rows = names(destination, "sha1");
 
   for (const [id, kind] of [[late, "commit"], [tag, "tag"]]) {
     const printed = cst(destination, ["cat-file", "-p", rows.get(id)]).stdout.toString();
@@ -652,7 +652,7 @@ test("a tree mode reads as Git reads it: in 32 bits that wrap, and never with a 
   git(["update-ref", "refs/tags/unread", unread]);
   assert.equal(cst(root, ["import", "source", "native"]).status, 0);
   const destination = path.join(root, "native");
-  const rows = aliases(destination, "sha1");
+  const rows = names(destination, "sha1");
   // Git's rev-list stops at the tree it cannot read, so it walks only main.
   const reached = git(["rev-list", "--objects", "--no-object-names", "main"]).toString().trim().split("\n");
   assert.ok(reached.includes(wrapped));
@@ -815,7 +815,7 @@ test("import reads the repository it names: a linked worktree's main refs, whate
     ...OPT_IN, GIT_DIR: path.join(other, ".git"), GIT_NAMESPACE: "hidden", GIT_GRAFT_FILE: grafts,
   });
   assert.equal(result.status, 0, result.stderr.toString());
-  const rows = aliases(path.join(root, "native"), "sha1");
+  const rows = names(path.join(root, "native"), "sha1");
   assert.match(result.stdout.toString(), new RegExp(`HEAD is at ${rows.get(second)}\\.`), "the main worktree's HEAD");
   assert.match(result.stdout.toString(), /records 9 refs/, "the main worktree's refs, and the new branch");
   const objects = git(["rev-list", "--objects", "--no-object-names", "--all"]).toString().trim().split("\n");
