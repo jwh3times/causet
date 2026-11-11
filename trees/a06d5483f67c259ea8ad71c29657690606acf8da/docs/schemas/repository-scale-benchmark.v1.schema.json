@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.repository-scale-benchmark/v1",
+  "title": "Repository scale benchmark",
+  "description": "Disposable-repository volume, scan, process-amplification, and decision measurements of vlab metadata benchmark --json (CLI output; src/scale-benchmark.js benchmarkRepositoryScale).",
+  "x-vcs-lab-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema",
+    "environment",
+    "fixture",
+    "coverage",
+    "samples",
+    "setup",
+    "measurements",
+    "analysis",
+    "privacy",
+    "cleanup"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.repository-scale-benchmark/v1"
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "platform",
+        "node",
+        "git"
+      ],
+      "properties": {
+        "platform": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "git": {
+          "type": "string"
+        }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "required": [
+        "profile",
+        "historyDepth",
+        "workspaces",
+        "causalNotes",
+        "resolutions",
+        "totalNoteTargets",
+        "totalNoteRecords"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string"
+        },
+        "historyDepth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workspaces": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "causalNotes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolutions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalNoteTargets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalNoteRecords": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "areas": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Directories in the fixture working tree."
+        },
+        "filesPerArea": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Files in each area directory."
+        },
+        "treeFiles": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total files in the fixture working tree (areas x filesPerArea)."
+        }
+      }
+    },
+    "coverage": {
+      "type": "object"
+    },
+    "samples": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "setup": {
+      "type": "object",
+      "required": [
+        "durationMs",
+        "git",
+        "expectedAbsentProbeFailures",
+        "unexpectedGitFailures"
+      ],
+      "properties": {
+        "durationMs": {
+          "type": "number"
+        },
+        "git": {
+          "type": "object"
+        },
+        "expectedAbsentProbeFailures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unexpectedGitFailures": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "measurements": {
+      "type": "object",
+      "required": [
+        "history",
+        "gitWorktrees",
+        "workspaceRegistry",
+        "workspaceStatus",
+        "noteCatalog",
+        "resolutionCatalog",
+        "metadataStatus"
+      ],
+      "properties": {
+        "history": {
+          "$ref": "#/$defs/measurement"
+        },
+        "gitWorktrees": {
+          "$ref": "#/$defs/measurement"
+        },
+        "workspaceRegistry": {
+          "$ref": "#/$defs/measurement"
+        },
+        "workspaceStatus": {
+          "$ref": "#/$defs/measurement"
+        },
+        "noteCatalog": {
+          "$ref": "#/$defs/measurement"
+        },
+        "resolutionCatalog": {
+          "$ref": "#/$defs/measurement"
+        },
+        "metadataStatus": {
+          "$ref": "#/$defs/measurement"
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "required": [
+        "interactiveBudgetMs",
+        "processAmplification",
+        "phasesOverBudget",
+        "recommendations",
+        "nextAction",
+        "persistentIndex",
+        "residentService"
+      ],
+      "properties": {
+        "interactiveBudgetMs": {
+          "type": "number"
+        },
+        "processAmplification": {
+          "type": "object"
+        },
+        "phasesOverBudget": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "nextAction": {
+          "type": "string"
+        },
+        "persistentIndex": {
+          "type": "object"
+        },
+        "residentService": {
+          "type": "object"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": [
+        "repositoryPathsIncluded",
+        "objectIdsIncluded",
+        "fileContentsIncluded",
+        "commitMessagesIncluded"
+      ],
+      "properties": {
+        "repositoryPathsIncluded": {
+          "const": false
+        },
+        "objectIdsIncluded": {
+          "const": false
+        },
+        "fileContentsIncluded": {
+          "const": false
+        },
+        "commitMessagesIncluded": {
+          "const": false
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "required": [
+        "temporaryFixtureRemoved"
+      ],
+      "properties": {
+        "temporaryFixtureRemoved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "description": "Files and bytes a workspace writes to disk, for a full checkout and for one restricted to a sparse cone. Optional and additive: reported since the reduced-local-v2 benchmark profile (issue #10).",
+      "properties": {
+        "full": {
+          "type": "object",
+          "required": [
+            "files",
+            "bytes"
+          ],
+          "properties": {
+            "files": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "cone": {
+          "type": "object",
+          "required": [
+            "files",
+            "bytes"
+          ],
+          "properties": {
+            "files": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "measurement": {
+      "type": "object",
+      "required": [
+        "result",
+        "coldMs",
+        "warmMedianMs",
+        "medianMs",
+        "p95Ms",
+        "medianProcesses",
+        "samples"
+      ],
+      "properties": {
+        "result": {
+          "type": "object"
+        },
+        "coldMs": {
+          "type": "number"
+        },
+        "warmMedianMs": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "medianMs": {
+          "type": "number"
+        },
+        "p95Ms": {
+          "type": "number"
+        },
+        "medianProcesses": {
+          "type": "number"
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "durationMs",
+              "git"
+            ],
+            "properties": {
+              "durationMs": {
+                "type": "number"
+              },
+              "git": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
