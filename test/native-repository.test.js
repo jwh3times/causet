@@ -461,7 +461,7 @@ test("without the opt-in, import and a native repository's commands are refused,
 
 test("a native repository refuses what it does not implement, and has no Git to pass it to", () => {
   const { destination } = imported("sha1");
-  for (const args of [["status"], ["git", "status"], ["log"]]) {
+  for (const args of [["status"], ["git", "status"], ["show"]]) {
     const refused = cst(destination, args);
     assert.equal(refused.status, 1, args.join(" "));
     assert.match(refused.stderr.toString(), /native repository/);

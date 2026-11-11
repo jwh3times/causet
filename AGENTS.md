@@ -6,8 +6,9 @@
 Git object access), `model` (the record model, the authority for every record
 family, bound and error code), `engine` (the Git engine; every repository read
 is an operation of its seam, `engine/src/engine.rs`), `store` (N1's native
-content store, built to `docs/native-store/`), `import` (Git import into a
-native repository, reading Git through the engine's process module), and `cli`
+content store, built to `docs/native-store/`), `history` (N2's native history,
+built to `docs/native-history/`), `import` (Git import into a native
+repository, reading Git through the engine's process module), and `cli`
 (the `cst`
 command, one module per command family, with `front.rs` deciding each
 invocation). `bin/native/` is the npm launcher the main package ships. The

@@ -16,4 +16,5 @@ pub mod json;
 pub mod registry;
 pub mod schemas;
 pub mod sha256;
+pub mod trailer;
 pub mod tree_mode;

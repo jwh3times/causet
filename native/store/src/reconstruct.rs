@@ -249,6 +249,7 @@ fn rebuild(
     }
     Type::Snapshot => Err("it is a ref snapshot, which no Git object becomes".into()),
     Type::Annotation => Err("it is an annotation, which no Git object becomes".into()),
+    Type::NativeCommit => Err("it is a native commit, which no Git object becomes".into()),
   }
 }
 
@@ -290,7 +291,9 @@ pub(crate) fn git_id_of(
       }
       (preserved.kind.name(), preserved.payload)
     }
-    Type::Snapshot | Type::Annotation => return Ok(Err("no Git object becomes it".into())),
+    Type::Snapshot | Type::Annotation | Type::NativeCommit => {
+      return Ok(Err("no Git object becomes it".into()));
+    }
   };
   Ok(git_id(algorithm, kind, &payload))
 }

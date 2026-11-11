@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 causet-engine = { path = "../engine" }
+causet-history = { path = "../history" }
 causet-import = { path = "../import" }
 causet-model = { path = "../model" }
 causet-store = { path = "../store" }

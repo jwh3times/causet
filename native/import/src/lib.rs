@@ -2,7 +2,9 @@
 //! every object reachable from the source's refs is imported with an alias
 //! row. A blob becomes native content and a tree a native tree, or for a tree
 //! that is not canonical a preserved Git object (objects.md §4.3); commits and
-//! tags are preserved Git objects. Every ref is recorded verbatim in the ref
+//! tags are preserved Git objects, and every commit a branch, a tag or a
+//! remote-tracking ref reaches also becomes a native commit (native history,
+//! commits.md §5). Every ref is recorded verbatim in the ref
 //! snapshot. Reachable means what the objects themselves name, followed by
 //! import: `rev-list` is asked only for commit ancestry, so a tree Git would
 //! not walk, such as one named by a file entry, is still read and imported
@@ -20,6 +22,7 @@
 mod git;
 
 use causet_engine::errors::{GitError, GitResult};
+use causet_history::commit::{Commits, derive};
 use causet_store::StoreError;
 use causet_store::delta;
 use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
@@ -161,6 +164,14 @@ struct Importer<'a> {
   parents: HashMap<String, Vec<String>>,
   native: HashMap<String, NativeId>,
   git: HashMap<NativeId, Vec<u8>>,
+  /// The commits this import reads that a name reaches (commits.md §5.1):
+  /// each gets a native commit as it is stored.
+  history: HashSet<String>,
+  /// The native commit of each commit this import wrote one for.
+  commits: HashMap<String, NativeId>,
+  /// The native commits of the store an import adds to, by the preserved
+  /// commit each derives from: read once, when a commit's parent is held.
+  held_commits: Option<HashMap<NativeId, NativeId>>,
   imported: Imported,
   /// The first lookup of the existing store that failed. The writer read
   /// that store whole, with every check, when it opened, so only the file
@@ -283,6 +294,9 @@ fn write(
     held_at: HashMap::new(),
     parents: HashMap::new(),
     native: HashMap::new(),
+    history: HashSet::new(),
+    commits: HashMap::new(),
+    held_commits: None,
     git: HashMap::new(),
     imported: Imported {
       algorithm: algorithm.name(),
@@ -313,6 +327,8 @@ fn write(
   }
   importer.content(&walk.content, &bases)?;
   phases.end("content");
+  let held = importer.history(&refs)?;
+  importer.derive_held(held)?;
   for (id, path) in &walk.metadata {
     importer.metadata(id, path)?;
   }
@@ -466,7 +482,7 @@ impl Importer<'_> {
           GitKind::Tree => "tree",
         }
       }
-      Type::Snapshot | Type::Annotation => return None,
+      Type::Snapshot | Type::Annotation | Type::NativeCommit => return None,
     })
   }
 
@@ -834,7 +850,16 @@ impl Importer<'_> {
       },
       "commit" => {
         self.imported.commits += 1;
-        self.preserved(GitKind::Commit, payload, path)?
+        let preserved = Preserved {
+          algorithm: self.algorithm,
+          kind: GitKind::Commit,
+          payload,
+        };
+        let native = self.store.put_preserved(&preserved, path).map_err(store_error)?;
+        if self.history.contains(id) {
+          self.native_commit(id, native, &preserved.payload)?;
+        }
+        native
       }
       _ => {
         self.imported.tags += 1;
@@ -842,6 +867,179 @@ impl Importer<'_> {
       }
     };
     self.record(id, native)
+  }
+
+  /// Finds the commits a name reaches (commits.md §5.1): every commit the
+  /// refs under `refs/heads/`, `refs/tags/` and `refs/remotes/` lead to,
+  /// through tags to what they name and from commits to their parents. What
+  /// only another ref reaches, such as the notes' carrier commits, gets
+  /// none. Those this import reads go in `history`, to be derived as they are
+  /// stored. Reachability decides, not the import that stored a commit, so
+  /// the walk continues into history the store held already: it returns the
+  /// held commits that have no native commit yet, as an import of a carrier
+  /// alone, or one before native history, left them. A held commit with one
+  /// already ends the walk, since its ancestors have theirs.
+  fn history(&mut self, refs: &[git::Listed]) -> GitResult<Vec<String>> {
+    const NAMES: [&[u8]; 3] = [b"refs/heads/", b"refs/tags/", b"refs/remotes/"];
+    let mut pending: Vec<String> = refs
+      .iter()
+      .filter(|entry| entry.symbolic.is_none() && NAMES.iter().any(|prefix| entry.name.starts_with(prefix)))
+      .filter_map(|entry| entry.id.clone())
+      .collect();
+    let mut seen = HashSet::new();
+    let mut held = Vec::new();
+    while let Some(id) = pending.pop() {
+      if !seen.insert(id.clone()) {
+        continue;
+      }
+      match self.types.get(&id).map(String::as_str) {
+        Some("tag") => pending.extend(self.built_on_of(&id, GitKind::Tag)),
+        Some("commit") => {
+          pending.extend(self.parents.get(&id).into_iter().flatten().cloned());
+          self.history.insert(id);
+        }
+        Some(_) => {}
+        None => {
+          let Some(kept) = self.held_preserved(&id)? else {
+            continue;
+          };
+          match kept.1.kind {
+            GitKind::Tag => pending.extend(self.built_on_of(&id, GitKind::Tag)),
+            GitKind::Commit if self.held_commit(&kept.0)?.is_none() => {
+              pending.extend(
+                kept
+                  .1
+                  .header_ids()
+                  .into_iter()
+                  .filter(|header| !header.first)
+                  .map(|header| hex(&header.digest)),
+              );
+              held.push(id);
+            }
+            _ => {}
+          }
+        }
+      }
+    }
+    Ok(held)
+  }
+
+  /// The preserved object the store held already for a Git ID, with its ID.
+  fn held_preserved(&self, id: &str) -> GitResult<Option<(NativeId, Preserved)>> {
+    let (Some(store), Some(native)) = (self.store.existing(), self.held(id)) else {
+      return Ok(None);
+    };
+    if store.held(&native).map_err(store_error)? != Some(Type::Preserved) {
+      return Ok(None);
+    }
+    let body = store.read(&native).map_err(store_error)?.body;
+    let kept = Preserved::decode(&body)
+      .map_err(|why| GitError::new("store-corrupt", format!("the preserved object {native} is corrupt: {why}")))?;
+    Ok(Some((native, kept)))
+  }
+
+  /// Derives the native commits of held commits that have none, each after
+  /// its parents. Their preserved commits are in an earlier container, so
+  /// they come first among this import's commits.
+  fn derive_held(&mut self, mut remaining: Vec<String>) -> GitResult<()> {
+    while !remaining.is_empty() {
+      let before = remaining.len();
+      let mut later = Vec::new();
+      for id in remaining {
+        let (preserved, kept) = self.held_preserved(&id)?.ok_or_else(|| self.lost(&id))?;
+        let ready = kept.header_ids().iter().filter(|header| !header.first).all(|header| {
+          let parent = hex(&header.digest);
+          self.commits.contains_key(&parent)
+            || self
+              .held(&parent)
+              .and_then(|native| self.held_commits.as_ref()?.get(&native).copied())
+              .is_some()
+        });
+        if ready {
+          self.native_commit(&id, preserved, &kept.payload)?;
+        } else {
+          later.push(id);
+        }
+      }
+      if later.len() == before {
+        return Err(GitError::new(
+          "internal-invariant",
+          format!("the held commits {} wait on one another", later.join(", ")),
+        ));
+      }
+      remaining = later;
+    }
+    Ok(())
+  }
+
+  /// Derives and stores the native commit of the commit `id`, whose
+  /// preserved commit is `preserved` (commits.md §5.2), straight after it. A
+  /// commit Git's `log` cannot read either is refused, naming it.
+  fn native_commit(&mut self, id: &str, preserved: NativeId, payload: &[u8]) -> GitResult<()> {
+    let refused = |what: String| {
+      GitError::new(
+        "unsupported-repository-shape",
+        format!("the commit {id} {what}, which Git's log cannot read either, so it cannot be imported as native history"),
+      )
+    };
+    let headers = header_ids(self.algorithm, GitKind::Commit, payload);
+    let tree = headers
+      .iter()
+      .find(|header| header.first)
+      .map(|header| hex(&header.digest))
+      .ok_or_else(|| refused("names no tree on its first line".into()))?;
+    if self.git_type(&tree) != Some("tree") {
+      return Err(refused(format!("names {tree} as its tree, which is not a tree")));
+    }
+    let tree = self.native_of(&tree).ok_or_else(|| self.lost(&tree))?;
+    let mut parents = Vec::new();
+    for parent in headers.iter().filter(|header| !header.first).map(|header| hex(&header.digest)) {
+      if self.git_type(&parent) != Some("commit") {
+        return Err(refused(format!("names {parent} as a parent, which is not a commit")));
+      }
+      parents.push(self.commit_of(&parent)?);
+    }
+    let commit = derive(payload, preserved, tree, parents);
+    let native = self.store.put_native_commit(&commit.encode()).map_err(store_error)?;
+    self.commits.insert(id.to_string(), native);
+    Ok(())
+  }
+
+  /// The native commit of a commit's parent: one this import wrote, or one
+  /// the store held already.
+  fn commit_of(&mut self, parent: &str) -> GitResult<NativeId> {
+    if let Some(native) = self.commits.get(parent) {
+      return Ok(*native);
+    }
+    let preserved = self.held(parent).ok_or_else(|| self.lost(parent))?;
+    self.held_commit(&preserved)?.ok_or_else(|| {
+      GitError::new(
+        "internal-invariant",
+        format!("the parent {parent} of a commit a name reaches has no native commit"),
+      )
+    })
+  }
+
+  /// The native commit the store held already for a preserved commit. The
+  /// store's native commits are read once, when one is first asked for.
+  fn held_commit(&mut self, preserved: &NativeId) -> GitResult<Option<NativeId>> {
+    if self.held_commits.is_none() {
+      let found = match self.store.existing() {
+        Some(store) => Commits::read(store).map_err(store_error)?.by_preserved,
+        None => HashMap::new(),
+      };
+      self.held_commits = Some(found);
+    }
+    Ok(self.held_commits.as_ref().expect("just read").get(preserved).copied())
+  }
+
+  /// An object the walk stored before what names it, and yet has no native
+  /// object: a lookup that failed, or a broken invariant.
+  fn lost(&self, id: &str) -> GitError {
+    match self.failed.take() {
+      Some(error) => store_error(error),
+      None => GitError::new("internal-invariant", format!("{id} was not imported before what names it")),
+    }
   }
 
   fn preserved(&mut self, kind: GitKind, payload: Vec<u8>, path: &[u8]) -> GitResult<NativeId> {

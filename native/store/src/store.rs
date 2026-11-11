@@ -706,6 +706,17 @@ impl StoreWriter {
     Ok(id)
   }
 
+  /// Stores a native commit's body (native history's commits.md §3), which
+  /// goes straight after the preserved commit it derives from when import
+  /// puts it right after that one (storage.md §3.2). It has no alias row.
+  pub fn put_native_commit(&mut self, body: &[u8]) -> Result<NativeId, StoreError> {
+    let id = NativeId::of(Type::NativeCommit, body);
+    if !self.present.contains(&id) {
+      self.hold(&id, Type::NativeCommit, Form::Body, body, None)?;
+    }
+    Ok(id)
+  }
+
   /// Records that the Git object with this digest is the native object `id`.
   pub fn alias(&mut self, git_digest: Vec<u8>, id: NativeId) {
     self.aliases.push((git_digest, id));

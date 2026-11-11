@@ -312,6 +312,9 @@ fn check_copy(
     // Only what every type shares is checked: an unknown type's payload is
     // not decoded (objects.md §7).
     Type::Annotation => Annotation::decode(bytes).map(Names::Annotation),
+    // Native history's encodings are its own crate's, which depends on this
+    // one, so a native commit is checked here only as every type is.
+    Type::NativeCommit => Ok(Names::Nothing),
   })
 }
 
@@ -345,5 +348,6 @@ fn type_name(kind: Type) -> &'static str {
     Type::Preserved => "a preserved Git object",
     Type::Snapshot => "a ref snapshot",
     Type::Annotation => "an annotation",
+    Type::NativeCommit => "a native commit",
   }
 }

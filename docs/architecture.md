@@ -134,6 +134,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/model/src/registry.rs` | The record-family and resource-bound registries and the error vocabulary, ported from `src/schemas.js` and `src/errors.js`. | None |
 | `native/model/src/schemas.rs` | Record classification, compatibility and structural validation, ported from `src/schemas.js`; the authority since #243. | `dates`, `js`, `json`, `registry`, `sha256` |
 | `native/model/src/sha256.rs` | SHA-256 (FIPS 180-4), the digest every causet identifier and hash uses. | None |
+| `native/model/src/trailer.rs` | The `Change-Id` trailer expression as the JavaScript CLI evaluated it, with the ECMAScript whitespace it depends on. | None |
 | `native/model/src/tree_mode.rs` | A Git tree entry's mode, as Git reads it. | None |
 | `native/engine/src/bin/engine-probe.rs` | Answers Git engine requests, one JSON line in and one out, so the suites can hold the engine's values and process counts, operation for operation, to the frozen answers of `src/engine.js` (#243). | causet-engine, causet-model |
 | `native/engine/src/bin/fuzz-engine.rs` | Dependency-free, reproducible mutation fuzz target for the Git engine's parsers of Git output. | causet-engine |
@@ -149,7 +150,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/engine/src/native.rs` | The gitoxide backend: the five operations `causet-core` is qualified for (ADR-0027), with the checks the JavaScript CLI applied around its N-API binding until #243. | `engine`, `text`, `types`, causet-core |
 | `native/engine/src/process.rs` | One Git process, as `runGit` in `src/git.js` launches it: the caller's environment plus `GIT_TERMINAL_PROMPT=0`, captured output, metrics, the object-session invalidation after a successful mutation, and the bypass rule of ADR-0019. | `engine`, `errors`, `metrics`, `session`, `text`, causet-model |
 | `native/engine/src/session.rs` | The invocation-scoped object session (ADR-0009): one persistent `git cat-file --batch-command` process per repository, answering `info` and `contents` queries for the life of a `with_object_session` call. | `environment`, `errors`, `metrics`, `text`, causet-model |
-| `native/engine/src/text.rs` | The JavaScript string operations the Git engine applies to Git's output, reproduced exactly: `String.prototype.trim`, `split(/\r?\n/)`, `split(/\s+/)`, `Number(text)`, the default `Array.prototype.sort`, the `Change-Id` trailer expression, and `path.resolve` / `path.join`. | None |
+| `native/engine/src/text.rs` | The JavaScript string operations the Git engine applies to Git's output, reproduced exactly: `String.prototype.trim`, `split(/\r?\n/)`, `split(/\s+/)`, `Number(text)`, the default `Array.prototype.sort`, the `Change-Id` trailer expression, and `path.resolve` / `path.join`. | causet-model |
 | `native/engine/src/types.rs` | What the cataloged operations return, and `canonicalValue` of each: the JSON `src/engine.js` digests for the engine differential, with members sorted, `undefined` as `null`, and bytes as `{ bytes, sha256 }`. | `text`, causet-model |
 | `native/store/src/alias.rs` | Alias files (objects.md §9.1): one per Git algorithm, mapping each imported Git object's ID to its native digest's short reference and back, as two sorted tables over the same rows. | `container`, `encoding`, `id`, `positioned`, causet-model |
 | `native/store/src/chunker.rs` | FastCDC as `docs/native-store/storage.md` §2 specifies it: 2/8/64 KiB with normalization level 2, and the gear table derived from SHA-256. | None |
@@ -163,8 +164,15 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/store/src/reconstruct.rs` | The reconstruction check (objects.md §9.2; ADR-0044, item 4): each alias row's short reference is resolved, and its native object, rebuilt in Git's encoding for the row's algorithm, must hash to the row's Git ID, which the row holds whole, and every object the store holds from Git must have a row. | `container`, `id`, `objects`, `store`, causet-model |
 | `native/store/src/store.rs` | A native repository's store (objects.md §10): writing one, and reading it back with every object verified by its ID, a tree's short references resolved through every container's index. | `alias`, `chunker`, `container`, `delta`, `id`, `objects`, `positioned`, `reconstruct` |
 | `native/store/src/verify.rs` | The store's verification (objects.md §8; storage.md §4): what `cst fsck` runs. | `container`, `delta`, `id`, `objects`, `store`, causet-model |
+| `native/history/src/actor.rs` | Actors (commits.md §2.2): `causet.provenance/v1`'s `{role, actor}` with the optional `kind` and `for`, as a commit or tag carries its commit-time claim. | causet-store |
+| `native/history/src/commit.rs` | Native commits (commits.md §3): their encoding, and how import derives one from the preserved Git commit it imports (§5.2, §5.3). | `actor`, `signature`, `text`, causet-model, causet-store |
+| `native/history/src/lib.rs` | Native history (ADR-0047): the objects a native repository's history is made of, as `docs/native-history/` defines them, how import derives them from Git's, and how a reader prints them as Git does. | None |
+| `native/history/src/pretty.rs` | `log --format` as Git prints it (ADR-0046, decision 2): the placeholders a native repository implements, each byte for byte with Git's `pretty.c`, with native IDs where Git prints Git IDs. | `commit`, `signature`, `text`, causet-store |
+| `native/history/src/signature.rs` | Signatures (commits.md §2.1): who made a commit or tag, and when, in one of three forms, so that every identity line has exactly one encoding. | causet-store |
+| `native/history/src/text.rs` | The C library behaviour Git's parsers rely on, which native history reads the same bytes with. | None |
+| `native/history/src/verify.rs` | What `cst fsck` checks of native history (commits.md §9), beyond what the store checks of every object: each native commit decodes by its rules, names a tree and native commits, and, when it was imported, is exactly what import derives from its preserved commit, whose tree and parents it names through the alias map. | `commit`, causet-store |
 | `native/import/src/git.rs` | The reads of the source repository: its shape, its object format, its refs, its commits' ancestry, and objects' types and bytes, each through `git` with replacement disabled, so every object is read as stored. | causet-engine |
-| `native/import/src/lib.rs` | Import of a Git repository into a native one (ADR-0045 decisions 1 to 3): every object reachable from the source's refs is imported with an alias row. | causet-engine, causet-store |
+| `native/import/src/lib.rs` | Import of a Git repository into a native one (ADR-0045 decisions 1 to 3): every object reachable from the source's refs is imported with an alias row. | causet-engine, causet-history, causet-store |
 | `native/cli/src/audit.rs` | `cst audit identity`: the repository-wide identity audit of `src/identity-audit.js` (FR-ID-06) and its rendering in `src/cli.js`. | `notes`, causet-engine, causet-model |
 | `native/cli/src/capabilities.rs` | `cst capabilities` and `cst capabilities --against`, as `src/capabilities.js` and the formatters in `src/cli.js` answer them (ADR-0033). | `envelope`, `lineage`, causet-engine, causet-model |
 | `native/cli/src/cherry_pick.rs` | `cst cherry-pick`: `cherryPick` of `src/operations.js`, with the identity model's origin choice and coverage check. | `audit`, `host`, `metadata`, `notes_write`, `notes`, `provenance`, causet-engine, causet-model |
@@ -185,8 +193,9 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/cli/src/metadata.rs` | `cst metadata status` and `cst metadata validate`: the metadata inventory of `src/metadata.js` (`metadataSnapshot`, `publicStatus`), taken under one object session, with every validator in the JavaScript order so the same diagnostics arise, and the same Git processes run, at the same points. | `envelope`, `lineage`, `migration`, `records`, `store`, causet-engine, causet-model |
 | `native/cli/src/migration.rs` | `src/migration.js`: the state `cst doctor` shows, and `cst migrate`, which moves a repository's metadata from the names used before issue #159 to the current ones (ADR-0039 §3). | `envelope`, `spec`, `store`, causet-engine, causet-model |
 | `native/cli/src/native.rs` | Running a command once the front end has decided it: the part of `main` in `src/cli.js` after the front end, and the error reporting of `bin/cst.js` (ADR-0021), which it ported. | `audit`, `capabilities`, `cherry_pick`, `commit`, `dispose`, `doctor`, `export`, `forecast`, `import`, `landing`, `metadata`, `migration`, `notes`, `parsed`, `plan`, `proof`, `provenance`, `rebase_forecast`, `rebase`, `reconcile`, `records`, `resolve`, `retain`, `scale_benchmark`, `spec`, `store`, `workspaces`, causet-engine, causet-model |
-| `native/cli/src/native_inspection.rs` | N1's inspection commands in a native repository (ADR-0046 decisions 3 and 9; #304). | `native_repository`, `native_revision`, causet-engine, causet-import, causet-store |
-| `native/cli/src/native_repository.rs` | A native repository's commands (N1: ADR-0045 decision 11, ADR-0046 decision 9). | `envelope`, `environment`, `native_inspection`, `native_revision`, `native`, causet-engine, causet-import, causet-model, causet-store |
+| `native/cli/src/native_inspection.rs` | N1's inspection commands in a native repository (ADR-0046 decisions 3 and 9; #304). | `native_repository`, `native_revision`, causet-engine, causet-history, causet-import, causet-store |
+| `native/cli/src/native_log.rs` | `cst log` in a native repository (#416, ADR-0046 decision 2, ADR-0047 decision 12): one revision's history, in Git's order, each commit printed by `--format` as Git prints it, with native IDs (commits.md §6). | `native_repository`, `native_revision`, causet-engine, causet-history, causet-import, causet-store |
+| `native/cli/src/native_repository.rs` | A native repository's commands (N1: ADR-0045 decision 11, ADR-0046 decision 9). | `envelope`, `environment`, `native_inspection`, `native_log`, `native_revision`, `native`, causet-engine, causet-import, causet-model, causet-store |
 | `native/cli/src/native_revision.rs` | Revisions in a native repository (N1, #304): the names `cst cat-file`, `cst ls-tree` and `cst rev-parse` take, resolved as Git's `get_oid` resolves them, from the store and its ref snapshot alone. | `native_repository`, causet-engine, causet-import, causet-store |
 | `native/cli/src/notes.rs` | Reading causal notes, as `src/notes.js` reads them: one note parser shared by every reader, and the batched catalog reads (`readNotes`, `listNoteRecords`). | causet-engine, causet-model |
 | `native/cli/src/notes_write.rs` | Writing causal notes: the notes lock and `appendNote` of `src/notes.js`, and the note and retention carriers of `src/git-carriers.js`. | `envelope`, `host`, `store`, causet-engine, causet-model |
@@ -226,13 +235,14 @@ Supporting test and maintenance tools:
 | `test/fixtures/oracle/*.json` | The retired JavaScript CLI's answers, frozen in #243, that the Rust model, engine, and CLI suites are still held to (`test-support/oracle-vectors.js`) | Model, engine, and CLI probes |
 | `scripts/*.mjs` | Reproducible user experiments and performance comparisons | Published CLI behavior |
 
-The code is a Cargo workspace of six crates: `native/core` (`causet-core`,
+The code is a Cargo workspace of seven crates: `native/core` (`causet-core`,
 bounded read-only object acquisition through gitoxide), `native/model` (the
 record model), `native/engine` (the Git engine), `native/store` (N1's native
 content store, built to [its contract](native-store/README.md), depending on
-neither the core, the engine nor gitoxide), `native/import` (import of a Git
-repository into a native one, reading Git through the engine's process
-module), and `native/cli` (the `cst` executable, one module per command
+neither the core, the engine nor gitoxide), `native/history` (N2's native
+history, built to [its contract](native-history/README.md) on the store and
+the model alone), `native/import` (import of a Git repository into a native
+one, reading Git through the engine's process module), and `native/cli` (the `cst` executable, one module per command
 family). Third-party crates are limited to gitoxide and crates it already
 brings into the workspace, and to `zstd`, the store's frame codec (ADR-0045),
 all pinned in `native/Cargo.lock`. `native/cli/src/native_repository.rs`

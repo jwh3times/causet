@@ -16,6 +16,9 @@ pub enum Type {
   Preserved = 3,
   Snapshot = 4,
   Annotation = 5,
+  /// A native commit (docs/native-history/commits.md §3): metadata that no
+  /// Git object becomes, so it has no alias row.
+  NativeCommit = 6,
 }
 
 impl Type {
@@ -26,6 +29,7 @@ impl Type {
       3 => Type::Preserved,
       4 => Type::Snapshot,
       5 => Type::Annotation,
+      6 => Type::NativeCommit,
       _ => return None,
     })
   }
