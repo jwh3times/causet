@@ -3,9 +3,10 @@
 This is the byte-level format of a native repository's history, its facts
 and its names: N2
 ([ADR-0047](../adr/0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md)).
-It is published before any history code exists, as ADR-0047 decision 13
-requires, beside the [native store contract](../native-store/README.md),
-whose store holds every object it defines.
+It was published before any history code existed, as ADR-0047 decision 13
+requires; `native/history` is built to it. It sits beside the
+[native store contract](../native-store/README.md), whose store holds every
+object it defines.
 
 **No format compatibility is promised yet**
 ([ADR-0042](../adr/0042-grow-the-native-system-as-a-shadow-with-one-kind-per-repository.md),

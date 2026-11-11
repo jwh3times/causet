@@ -163,7 +163,7 @@ test("a path's versions are stored together, oldest first, the paths in the orde
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
-test("a container's trees are grouped by path, oldest first, then come its commits and tags, then its snapshot", () => {
+test("a container's trees are grouped by path, oldest first, then come its commits, each with its native commit, and tags, then its snapshot", () => {
   const root = scratch();
   const { git, commit } = makeRepository(root);
   const commits = [];
@@ -178,17 +178,27 @@ test("a container's trees are grouped by path, oldest first, then come its commi
   assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "snapshot"]);
 
   const [file] = containers(native);
-  const order = readContainer(file).objects
+  const stored = readContainer(file).objects
     .filter((object) => object.type !== TYPES.content)
-    .sort((a, b) => a.frame - b.frame || a.offset - b.offset)
-    .map((object) => object.name.toString("hex"));
+    .sort((a, b) => a.frame - b.frame || a.offset - b.offset);
+  const order = stored.map((object) => object.name.toString("hex"));
   const rows = aliases(native, "sha1");
   const nativeOf = (revision) => rows.get(git(["rev-parse", revision]).toString().trim());
+  // Each commit's native commit, which goes straight after it (storage.md
+  // §3.2), names it as its preserved commit (commits.md §3.1).
+  const derived = commits.map((id) => {
+    const preserved = nativeOf(id);
+    const after = stored[order.indexOf(preserved) + 1];
+    assert.equal(after.type, TYPES.nativeCommit, `what follows the commit ${id}`);
+    const body = execFileSync(cstCommand, [...cstPrefix(), "cat-file", "-p", after.name.toString("hex")], { cwd: native, env: testEnv(OPT_IN) });
+    assert.ok(body.includes(Buffer.from(`01${preserved}`, "hex")), `the native commit after ${id} names it`);
+    return after.name.toString("hex");
+  });
   // The walk leaves each commit's `dir/sub` first, then `dir`, then its root.
   const trees = (at) => commits.map((id) => nativeOf(`${id}:${at}`));
   assert.deepEqual(order, [
     ...trees("dir/sub"), ...trees("dir"), ...trees(""),
-    ...commits.map(nativeOf), nativeOf("v1"),
+    ...commits.flatMap((id, at) => [nativeOf(id), derived[at]]), nativeOf("v1"),
     fs.readFileSync(path.join(native, ".cst", "snapshot"), "utf8").trim(),
   ]);
 });

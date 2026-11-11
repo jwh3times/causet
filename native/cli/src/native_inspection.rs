@@ -1420,7 +1420,11 @@ pub fn fsck(args: &[OsString], root: &Path) -> GitResult<i32> {
     return Err(unsupported(format!("cst fsck {}", arg.to_string_lossy())));
   }
   let store = Store::open(root).map_err(store_error)?;
-  let found = verify::verify(&store).map_err(store_error)?;
+  let mut found = verify::verify(&store).map_err(store_error)?;
+  // Native history's own rules (commits.md §9), once every object reads.
+  if found.problems.is_empty() {
+    found.problems = causet_history::verify::problems(&store).map_err(store_error)?;
+  }
   let mut out = Vec::new();
   for id in &found.absent_by_promise {
     writeln!(out, "absent by promise: {id}").expect("in memory");

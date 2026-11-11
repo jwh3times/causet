@@ -25,6 +25,7 @@ mod metadata;
 mod migration;
 mod native;
 mod native_inspection;
+mod native_log;
 mod native_repository;
 mod native_revision;
 mod notes;

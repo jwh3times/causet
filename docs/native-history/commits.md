@@ -307,7 +307,7 @@ begin with a space; a line that does is a continuation of the one before.
 | tree | the first line, `tree` and a Git ID, read in either case of hex, as Git's parser reads it |
 | parents | the `parent` lines straight after it, in order |
 | author, committer | the value of the **last** header line beginning `author ` or `committer `, after that word and its space, since Git's `--format` prints the last of repeated lines; form `00` or `01` by §2.1, and `02` when there is no such line |
-| encoding | the value of the first header line beginning `encoding `, when there is one |
+| encoding | the value of the first header line beginning `encoding `, when there is one and it is neither empty nor holds a `00`; otherwise none, since §3.2 allows no such encoding and the preserved commit keeps the line |
 | actors | one actor, `authored`, with no `kind` or `for`, whose actor is the author's line (the one the author field takes) up to and including its last `>`, or all of it when it has none, decoded as UTF-8 with replacement (§5.3); no actor when that is empty or there is no author line |
 | changeId, derivedFrom, originCommit | the lift (§5.3) of `Change-Id`, `Derived-From` and `Origin-Commit` from the message, each absent when the lift finds none |
 | preserved | the preserved commit's native ID |

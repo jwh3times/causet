@@ -12,3 +12,6 @@ publish = false
 [dependencies]
 causet-engine = { path = "../engine" }
 causet-store = { path = "../store" }
+# The native commits import derives from the commits it imports (native
+# history, docs/native-history/commits.md §5).
+causet-history = { path = "../history" }

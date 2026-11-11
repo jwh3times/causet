@@ -66,6 +66,7 @@ name = "causet-cli"
 version = "0.1.0"
 dependencies = [
  "causet-engine",
+ "causet-history",
  "causet-import",
  "causet-model",
  "causet-store",
@@ -90,10 +91,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "causet-history"
+version = "0.1.0"
+dependencies = [
+ "causet-model",
+ "causet-store",
+]
+
+[[package]]
 name = "causet-import"
 version = "0.1.0"
 dependencies = [
  "causet-engine",
+ "causet-history",
  "causet-store",
 ]
 

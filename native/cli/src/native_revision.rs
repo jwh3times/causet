@@ -37,6 +37,9 @@ pub enum Object {
   Tag,
   Snapshot,
   Annotation,
+  /// A native commit, which N1's commands show as the native object it is;
+  /// `cst log` names commits by it (commits.md §6).
+  NativeCommit,
 }
 
 impl Object {
@@ -48,6 +51,7 @@ impl Object {
       Object::Tag => "tag",
       Object::Snapshot => "snapshot",
       Object::Annotation => "annotation",
+      Object::NativeCommit => "native-commit",
     }
   }
 }
@@ -146,6 +150,7 @@ impl Repository {
       Some(Type::Tree) => Object::Tree,
       Some(Type::Snapshot) => Object::Snapshot,
       Some(Type::Annotation) => Object::Annotation,
+      Some(Type::NativeCommit) => Object::NativeCommit,
       Some(Type::Preserved) => match self.preserved(id)?.kind {
         GitKind::Commit => Object::Commit,
         GitKind::Tag => Object::Tag,
@@ -408,8 +413,9 @@ impl Repository {
   }
 
   /// Git's `get_short_oid`: the object a prefix of at least 4 hex digits
-  /// names. Only objects Git has count, so not ref snapshots or
-  /// annotations. Of several, the one alone of the type `hint` asks for.
+  /// names. Only objects Git has count, so not ref snapshots, annotations
+  /// or native commits. Of several, the one alone of the type `hint` asks
+  /// for.
   fn short(&self, prefix: &str, hint: Hint) -> GitResult<Option<NativeId>> {
     if prefix.len() < 4 || !prefix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
       return Ok(None);
@@ -417,7 +423,7 @@ impl Repository {
     let found = self
       .store
       .matching(&prefix.to_ascii_lowercase(), |kind| {
-        !matches!(kind, Type::Snapshot | Type::Annotation)
+        !matches!(kind, Type::Snapshot | Type::Annotation | Type::NativeCommit)
       })
       .map_err(store_error)?;
     let ambiguous = || {

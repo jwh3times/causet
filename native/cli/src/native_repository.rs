@@ -12,6 +12,7 @@
 use crate::environment;
 use crate::native::report;
 use crate::native_inspection;
+use crate::native_log;
 use crate::native_revision::Repository;
 use causet_engine::errors::{GitError, GitResult};
 use causet_import::store_error;
@@ -49,6 +50,10 @@ Usage:
                                             name objects, as git rev-parse does
   cst for-each-ref [--format=<format>] [--sort=[-]refname] [--count=<n>]
                    [<pattern>...]           list the refs of the snapshot
+  cst log [<revision>] --format=<format>    a revision's history, as git log
+                                            --format prints it: %H %h %T %t
+                                            %P %p %an %ae %ad %cn %ce %cd %s
+                                            %b %n %%
   cst fsck                                  verify the store: every copy of
                                             every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
@@ -151,6 +156,7 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i3
     "rev-parse" => native_inspection::rev_parse(args, root),
     "for-each-ref" => native_inspection::for_each_ref(args, root),
     "fsck" => native_inspection::fsck(args, root),
+    "log" => native_log::log(args, root),
     "git" => Err(GitError::new(
       "unavailable-in-native-repository",
       "A native repository has no Git to run, so cst git is refused here (ADR-0046, decision 4).",
@@ -720,6 +726,7 @@ pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
     Type::Preserved => Preserved::decode(body).map_err(corrupt)?.kind.name(),
     Type::Snapshot => "snapshot",
     Type::Annotation => "annotation",
+    Type::NativeCommit => "native-commit",
   })
 }
 
