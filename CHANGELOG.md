@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+- **Experimental: a native repository names each commit by its native
+  commit, in every command** (#435). `cst rev-parse`, `cat-file`, `ls-tree`,
+  `for-each-ref` and import's `HEAD is at` line now print a commit's native
+  commit ID wherever import derived one, as `cst log` does, and take that
+  ID, a unique prefix of it, or the commit's Git ID. `cat-file` shows a
+  native commit as Git shows the commit: `-t` prints `commit`, `-s` and
+  `--batch` give its Git bytes, and `-p` names its tree and parents by their
+  native IDs. The preserved Git commit a native commit derives from is no
+  longer an object to any command: its ID and its prefixes name nothing. A
+  commit with no native commit keeps its preserved ID: a carrier such as a
+  notes commit, a commit only `refs/stash` or a similar ref reaches, and
+  every commit of a store imported before #416. `cst log`'s `%h` and a
+  prefix are unique among the same objects, so every `%h` resolves in every
+  command. A new option, `cst rev-parse --git-id`, prints the Git ID of what
+  each revision names. A command that prints a commit ID now reads the
+  store's every index once, about 60 ms on an import of this repository,
+  and also reads every native commit once when it meets a commit that has
+  none, such as a notes or stash commit. `docs/native-history/commits.md` §6 records the rules.
+  Like every native command, all of this needs `CAUSET_EXPERIMENTAL=native`
+  and is not a contract.
+
 - **Experimental: a native repository has history, and `cst log` reads it**
   (#416), the first slice of N2 (ADR-0047). Import now also writes a native
   commit, store type `06` of `docs/native-history/commits.md`, straight after
@@ -23,9 +44,8 @@
   UTF-8 or ISO-8859-1 are refused. `cst fsck` also checks each native commit,
   re-deriving an imported one from the Git commit it came from. A store
   imported before this change has no native commits, and `cst log` asks for
-  it to be imported again. `cst rev-parse` and the other N1 commands still
-  name a commit by its preserved Git object. Like every native command, all
-  of this needs `CAUSET_EXPERIMENTAL=native` and is not a contract.
+  it to be imported again. Like every native command, all of this needs
+  `CAUSET_EXPERIMENTAL=native` and is not a contract.
 
 - **The generated-history corpus runs weekly on a new seed, without
   blocking anything** (#336). `corpora.yml` checks only the seed

@@ -217,7 +217,9 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   test's own `t.after` cleanup. By then `os.tmpdir()` names the directory
   outside the test again, so a cleanup that checks a fixture's path reads
   the temporary directory when it makes the fixture, not when it removes it.
-- **What is compared,** once Git's IDs are translated through the alias map:
+- **What is compared,** once Git's IDs are translated through the alias map,
+  a commit's to its native commit where it has one
+  ([commits.md §6](native-history/commits.md#6-naming-commits)):
   - `cst import --verify` first, so a store problem fails as such rather than
     as a mismatch in some command's output;
   - `cst for-each-ref`, `cst rev-parse HEAD`, `--symbolic-full-name HEAD` and

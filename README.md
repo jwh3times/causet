@@ -912,7 +912,15 @@ In a
 native repository,
 `cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
 `cst for-each-ref --format` print what Git prints on the original, with
-native IDs in place of Git's, and run no Git. `cst cat-file --batch` and
+native IDs in place of Git's, and run no Git. They name a commit by its
+native commit, and take that ID, a unique prefix of it, or the commit's Git
+ID; `cst rev-parse --git-id` prints the Git ID of what each revision names.
+`cst cat-file` shows a native commit as the Git commit it was imported from:
+type `commit`, Git's bytes, and with `-p` its tree and parents named by
+their native IDs. A commit with no native commit, such as one only the notes'
+history reaches, keeps the ID of its preserved Git object
+([native history](docs/native-history/commits.md#6-naming-commits)).
+`cst cat-file --batch` and
 `--batch-check` [`--buffer`] answer each object named on standard input from
 one opened store, in Git's default formats: the header names the native ID,
 and `--batch`'s content is the object's Git bytes, Git IDs included, the size
@@ -921,10 +929,11 @@ command implemented so far, listed by `cst --help` there, and refuses the rest
 by name. `cst log [<revision>] --format=<format>` prints the history of a
 revision, `HEAD` by default, in Git's order, as `git log --format` prints it,
 for the placeholders `cst --help` lists there. It reads native commits alone,
-so `%H` and `%P` name native commits, whose type `cst cat-file -t` gives as
-`native-commit`, while `cst rev-parse` names a commit by its preserved Git
-object. A native repository imported before native commits existed has
-none until it is imported into again. `cst fsck` verifies the store: every
+so `%H` and `%P` name native commits, and every `%h` it prints resolves in
+the other commands. A native repository imported before native commits
+existed has none until it is imported into again: `cst log` refuses it, and
+the other commands name its commits by their preserved Git objects.
+`cst fsck` verifies the store: every
 copy of every object in every container, and content absent by promise or by
 policy, which it reports by state rather than as corruption. It also checks
 each native commit by the rules of native history, deriving an imported one
@@ -938,8 +947,11 @@ so it pays for the store's size once rather than for a read per lookup.
 `cst log` reads every container's index and every native commit, once per
 command. The other reads above check only the parts of the store they touch
 and verify each object they read by its ID, so their cost does not grow with the store's
-object count. A read that misses, or resolves an abbreviation, first reads
-the files it searched whole, once per command, so damage is reported rather
+object count, except where they name a commit: finding the native commit
+import stored straight after a commit's preserved object reads every
+container's index whole, once per command, and a commit with none, such as
+a carrier, costs a read of every native commit too. A read that misses, or
+resolves an abbreviation, first reads the files it searched whole, once per command, so damage is reported rather
 than answered as a missing object
 ([storage.md §4.1](docs/native-store/storage.md#41-the-index)).
 Every other command in a native repository is refused,
