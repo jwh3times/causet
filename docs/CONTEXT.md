@@ -75,9 +75,15 @@ own, never part of a commit, so recording it changes no commit's identity.
 _Avoid_: note, annotation, metadata
 
 **Fact log**:
-The record of which facts a clone holds and when it learned them. Two copies of
-it join as the union of both, so no fact is ever lost by joining.
+The record of which facts a clone has learned, when it learned them, and which
+are still current. Two copies of it join as the union of both, so no fact is
+ever lost by joining.
 _Avoid_: notes, fact store, ledger
+
+**Parked fact**:
+A fact a clone keeps for the bridge but no reader uses: a record cst cannot
+take, a second copy of one, or a parked conflict.
+_Avoid_: quarantined fact, invalid fact
 
 **Operation log**:
 A clone's own record of every operation that moved its names or added facts:
@@ -86,8 +92,8 @@ and is never exchanged.
 _Avoid_: reflog, journal, history
 
 **Conflicted name**:
-A branch or tag that two concurrent operations moved to different places. It
-names both until someone chooses.
+A name that concurrent operations moved to different places. It names every
+side until someone chooses.
 _Avoid_: diverged branch, ref conflict
 
 ## Forecasting and application
