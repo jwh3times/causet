@@ -1325,20 +1325,21 @@ for Git-backed repositories stopped with ADR-0043, and
 **Every gate runs on GitHub-hosted runners, against the release commit.**
 Nothing that can only run on a maintainer's own machine gates a release (owner
 decision, 2026-10-09): a gate has to be something anyone can re-run and audit
-from the repository. Three manually dispatched workflows on the candidate
-commit cover the list, and a routine PR or `main` run does not stand in for
-them:
+from the repository. The gate decides which version becomes the stable
+release: every landing is already a version (ADR-0048, "Releases" below), and
+`promote.yml` makes one of them stable only after running the whole list
+against that version's tag. It calls three workflows, and a routine PR or
+`main` run does not stand in for them:
 
-| Workflow | Dispatch | Gates |
-| --- | --- | --- |
-| `ci.yml` | `gh workflow run ci.yml --ref <branch>` | 1, 2, 3, 6, 7, 8 |
-| `release-gates.yml` | `gh workflow run release-gates.yml --ref <branch>` | 4, 5, 10, and 11 through `corpora.yml` |
-| `release.yml` | `gh workflow run release.yml --ref <branch>` | 9, and 8 again on the tag |
+| Workflow `promote.yml` calls | Gates |
+| --- | --- |
+| `ci.yml`, with the full dispatch matrix | 1, 2, 3, 6, 7, 8 |
+| `release-gates.yml` | 4, 5, 10, and 11 through `corpora.yml` |
+| `release.yml`, building and installing the version's set without publishing | 8 and 9 |
 
-A release candidate is eligible only when:
+A version is eligible to become the stable release only when:
 
-1. every run below is on the same candidate commit, checked out clean by the
-   runner;
+1. every run below is on the version's tag, checked out clean by the runner;
 2. every file in the checkout is text Git will diff — no file contains a NUL
    byte and none is hidden from review by a `binary` attribute;
 3. the integration suite passes in ordinary, session-on, session-off, both
@@ -1350,7 +1351,8 @@ A release candidate is eligible only when:
    reports no errors;
 6. expected-failure cases leave protected refs and worktrees unchanged;
 7. no causet Node or Git process remains after completion;
-8. version constants, package metadata, changelog, and release tag agree;
+8. the tag, the executable's `--version`, the package metadata and the
+   changelog's section for the version agree;
 9. both ways of installing work outside the source checkout: the package set
    of ADR-0038 and the install scripts each install on a Windows and a Linux
    runner, and the installed `cst` runs with Node absent from `PATH`;
@@ -1405,7 +1407,7 @@ is the record of what they are and why:
 | main: history is never rewritten or deleted | `main` | No force push, no deletion | None |
 | main: changes arrive by pull request with static checks | `main` | A pull request, and a passing `static checks` job | Repository admins |
 | release tags are immutable | `v*` tags | No deletion, no update | None |
-| release tags are created by maintainers | `v*` tags | Creation restricted | Repository admins |
+| release tags are created by maintainers | `v*` tags | Creation restricted | Repository admins, GitHub Actions |
 
 - **Admins bypass the pull-request rule because of how this project lands.**
   `cst merge --compact` makes a new two-parent landing commit locally and
@@ -1416,10 +1418,14 @@ is the record of what they are and why:
   documentation-only pull request, and a required check that never runs
   blocks forever.
 - **Linear history is not required:** a compact landing is a merge commit.
-- **A release tag cannot be moved or deleted, by anyone.** A `v*` tag starts
-  the release workflow. To correct a tag placed on the wrong commit before
-  anything was published, an admin disables "release tags are immutable" in
-  the repository settings, fixes the tag, and enables it again.
+- **GitHub Actions creates the release tags** (ADR-0048, set with #440):
+  `release.yml` tags each landing with its version, so the creation rule
+  lets the GitHub Actions integration through beside the admins. Nothing
+  else changes: the tag it creates is as immutable as any other.
+- **A release tag cannot be moved or deleted, by anyone.** To correct a tag
+  placed on the wrong commit before anything was published, an admin
+  disables "release tags are immutable" in the repository settings, fixes the
+  tag, and enables it again.
 - **Squash and rebase merging are turned off.** Either, from the GitHub UI,
   would put a commit on `main` with no landing receipt and no carried
   provenance. Merge commits stay enabled because GitHub requires one method.
@@ -1491,14 +1497,100 @@ same smoke sequence through the installed executable
 
 `.github/workflows/release.yml` builds the executable on a Windows and a Linux
 runner, packs the npm set, adds the two install scripts to the assets and to
-`SHA256SUMS`, and runs both tests against that set on each runner. A pull
-request that touches the packaging and a manual dispatch stop there. A `v*`
-tag also attests the archives and the scripts
-(`gh attestation verify <file> --repo jwh3times/causet`), drafts a GitHub
-release with them, the npm tarballs and `SHA256SUMS`, and publishes to npm
-through trusted publishing when the repository variable `NPM_PUBLISH` is
-`true`. Each package's first publish is manual, from the run's artifacts
-(#139).
+`SHA256SUMS`, and runs both tests against that set on each runner, with
+`CAUSET_RELEASE_VERSION` naming the version the set was built for. Every job
+first writes that version into `package.json` and `package-lock.json`
+(`npm version <v> --no-git-tag-version`), because the executable takes its
+version from the manifest when it is built and `main`'s manifest names only
+the release line. A pull request that touches the packaging and a manual
+dispatch build the version the merge would mint and stop there; so does
+`promote.yml`'s call, on the tag it promotes. A landing also tags the
+commit, attests the archives and the scripts
+(`gh attestation verify <file> --repo jwh3times/causet`), publishes a GitHub
+prerelease with them, the npm tarballs and `SHA256SUMS`, and publishes to npm
+under the `next` dist-tag through trusted publishing when the repository
+variable `NPM_PUBLISH` is `true` ("Releases" below). Each package's first
+publish was manual, from a run's artifacts (#139).
+
+## Releases
+
+Every landing on `main` is a version, and one dispatch makes a version the
+stable release (ADR-0048, #440).
+
+**A landing releases itself.** `docs/agents/releases.md` sets
+`Scheme: per-merge`: `ship` writes each branch's changelog as a dated
+`## [x.y.z]` section for the version its landing will mint, which
+`node scripts/next-version.mjs` computes, and `ci.yml`'s `changelog` job fails
+a pull request whose newest section names another. When `ci.yml` passes on
+the push of a landing to `main`, `release.yml`:
+
+1. reads the version from the landing's newest changelog section
+   (`node scripts/release-plan.mjs landing`), refusing one off the release
+   line `package.json` declares. A landing with no section of its own (a
+   Dependabot pull request's, or one whose number another landing took
+   first) gets the next version instead, and the next pull request's
+   `changelog` job then requires a section for it (`Skipped tags: backfill`);
+2. builds and installs that version's set on both runners;
+3. only then tags the landing `v<version>`, attests the assets, and
+   publishes a GitHub prerelease whose notes are the changelog section;
+4. publishes every npm package under `next`, or under `superseded` when a
+   newer landing's build is already `next`, decided just before each
+   publish. Two releases publishing in the same seconds can still leave
+   `next` on the older build until the next landing moves it.
+
+`npm install @holland-vip/causet` and the install scripts' default keep
+installing the stable release; `npm install @holland-vip/causet@next` and
+`install.sh --version <x.y.z>` reach any landing's build.
+
+**Making a version stable** is one dispatch:
+
+```sh
+gh workflow run promote.yml -f version=<x.y.z>
+```
+
+`promote.yml` refuses a version with no tag, no published GitHub release or
+no npm package, and one older than the stable release unless
+`-f allow-older=true` (a rollback); the stable release itself is a no-op. It
+then runs the whole release gate against the tag ("Release gate" above),
+which takes as long as the corpora do. Only when every gate passed does it
+move npm's `latest` for every package and make the GitHub release the latest
+one. A failed gate changes nothing public: fix forward, and promote a later
+version.
+
+**Starting a release line.** `package.json`'s major and minor on `main` are
+the release line and its build is the floor; landings advance the build. A
+branch that adds capability or breaks a contract moves the line through
+`ship`, with the owner's approval (`Ask before bumping: always`), and its
+landing releases `x.y.0`.
+
+**When a landing is not released:**
+
+- **`main`'s CI failed.** Nothing runs. A flaky failure is re-run, and the
+  release follows the passing run. A real one is fixed forward: the fix's
+  landing takes the next number, and the failed landing's section names a
+  version that was never released.
+- **The release run failed after CI passed.** Re-run its failed jobs. The tag
+  is pushed only after the set installs, and every step from the tag on
+  skips what an earlier attempt finished: a tag already on this landing is
+  kept, an existing GitHub release gets its assets re-uploaded, and a version
+  npm already has is not published again. When the tag step reports the
+  version is another commit's (two landings without sections of their own
+  released at once), re-run all jobs instead, which plans the landing again.
+- **The plan refused the landing.** Its newest section is off the release
+  line, which the `changelog` job should have caught. Correct the section in
+  a new pull request; that landing releases the corrected number.
+
+`promote.yml` calls the workflows as they are on `main`, against the tag's
+code, so a gate added since the version landed applies to it too. Versions
+before 0.26.0, the first a landing released, cannot be promoted: their tags
+predate those workflows, and a rollback that far is `npm dist-tag add` by
+hand.
+
+**What the automation needs** (one-time human steps, #440): the
+"release tags are created by maintainers" ruleset lets GitHub Actions
+through, and the `npm-promote` environment holds an `NPM_TOKEN` secret, a
+granular npm token with read and write access to the `@holland-vip` packages,
+because npm's trusted publishing does not cover moving a dist-tag.
 
 ## Continuous integration
 
@@ -1513,7 +1605,7 @@ start after those checks pass.
 | Code pull request | Default mode on Ubuntu and Windows, Node 24, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
 | Code push to `main` | Default mode on Ubuntu, Node 24, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
 | Known documentation-only PR or main push | None | Static checks still run |
-| Manual `workflow_dispatch` | All nine modes, the reftable and SHA-256 modes among them, on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
+| Manual `workflow_dispatch`, or `promote.yml`'s call on a tag | All nine modes, the reftable and SHA-256 modes among them, on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.
@@ -1527,7 +1619,7 @@ repositories it imports; an unknown change set counts too.
 `.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
 the generated-history corpus and the real repositories, on Ubuntu and
 Windows: weekly on `main`, on manual dispatch, from `release-gates.yml` when a
-release is qualified, and for a pull request that changes a corpus, the
+version is promoted to stable, and for a pull request that changes a corpus, the
 workflow, or the native import, store or history crates, since only the
 corpora measure what a store holds (#437).
 Its jobs have a 90-minute timeout, about twice the slowest run
@@ -1538,10 +1630,18 @@ build and timeout. It gates nothing. Its only write is a `needs-triage` issue
 per failing seed, or a comment on that issue (reopening it if closed), from
 its last job, which is the only job given `issues: write`. See "The generated-history corpus".
 `ci.yml` has no automatic full-matrix schedule. Superseded runs cancel within
-the same event and ref; manual qualification is independent of automatic runs.
+the same event and ref, except a push to `main`: each landing's run is what
+releases it, so each push to `main` has a group of its own. Manual
+qualification is independent of automatic runs.
+For a pull request, a `changelog` job runs `node scripts/check-changelog.mjs`:
+the newest `## [x.y.z]` section must name the version the merge will mint,
+and every released version must have a section ("Releases"). Dependabot's
+pull requests are exempt, since a bot writes no entry; the next human pull
+request backfills their sections.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
 
-Run full qualification before each release and before merging changes to Git
+`promote.yml` runs full qualification on every version it makes stable. Run
+it by hand before merging changes to Git
 session transports, forecast engines, native read routing, platform-specific
 process/filesystem behavior, or the supported Node/Git floor, unless the PR
 already records equivalent checks on both platforms for the candidate. Use:

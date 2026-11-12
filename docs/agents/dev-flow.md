@@ -26,9 +26,10 @@ The published contracts the suites check are code, Markdown included:
   Today the dependencies are the Rust crates in `native/Cargo.toml` and
   `native/Cargo.lock` and the toolchain pin in `native/rust-toolchain.toml`;
   there are no npm dependencies.
-- **Release preparation** is the `chore: prepare vX.Y.Z` commit that sets the
-  version in `package.json` and `package-lock.json` and writes the release's
-  changelog entry. Its branch is, for example, `chore/prepare-v0.25.1`.
+- **Release preparation** is gone with `Scheme: per-merge` (ADR-0048): every
+  landing is a version, and making one stable is a dispatch of `promote.yml`
+  that needs no branch, issue or pull request. `ship` starts a new release
+  line on the branch that warrants it, with the owner's approval.
 
 ## Linking
 

@@ -1,6 +1,6 @@
 # ADR-0038: Deliver the Rust CLI through per-platform npm packages, linked without Node
 
-- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name) and 2026-10-08 (primary install channel)
+- **Status:** Accepted; amended 2026-09-28 (platform package scope, first publishes; main package name) and 2026-10-08 (primary install channel); §6 and §7 amended by [ADR-0048](0048-version-every-landing-and-promote-a-version-to-stable-by-dispatch.md) (Proposed, 2026-11-12: a version per landing, promoted to stable by dispatch)
 - **Decided:** 2026-09-27
 - **Date:** 2026-09-27
 - **Owners:** Repository maintainers

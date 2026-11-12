@@ -1,19 +1,30 @@
 name: release
 
-# Builds the package set of ADR-0038 and installs it the way a user does.
+# Builds the package set of ADR-0038 and installs it the way a user does, and
+# releases every landing (#440, ADR-0048).
 #
+# - Each push to main is a landing, and each landing is a version. When ci.yml
+#   passes on it, this workflow tags the landing with the version its newest
+#   changelog section names, builds and smoke-tests that version's set,
+#   attests the archives and the install scripts, publishes a GitHub
+#   prerelease with every asset, and publishes every npm package under the
+#   `next` dist-tag when the repository variable NPM_PUBLISH is `true`. npm's
+#   `latest` and the GitHub latest release move only by promote.yml.
+# - promote.yml calls it on the tag of the version it promotes, which builds
+#   and smoke-tests that version's set again without publishing (release gates
+#   8 and 9).
 # - A pull request that touches the packaging, and a manual dispatch, are dry
-#   runs: build, assemble, and smoke-test on each platform's runner.
-# - A `v*` tag also attests the archives and the install scripts, drafts a
-#   GitHub release with them, the npm tarballs and SHA256SUMS, and publishes
-#   to npm when the repository variable
-#   NPM_PUBLISH is `true`. Each package's first publish is manual, from this
-#   run's artifacts, because npm configures a trusted publisher only on a
-#   package that exists (issue #139).
+#   runs for the version the merge would mint.
+#
+# The tag is pushed only after the set built and installed, so a landing whose
+# build fails is never tagged; re-running the failed jobs retries it, and
+# every step after the tag skips what an earlier attempt already did.
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
   pull_request:
     paths:
       - ".github/workflows/release.yml"
@@ -21,6 +32,8 @@ on:
       - "native/Cargo.lock"
       - "scripts/pack-release.mjs"
       - "scripts/build-native.mjs"
+      - "scripts/release-plan.mjs"
+      - "scripts/next-version.mjs"
       - "scripts/install.sh"
       - "scripts/install.ps1"
       - "test/release-packaging.test.js"
@@ -28,17 +41,70 @@ on:
       - "test-support/installed-smoke.js"
       - "package.json"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to build (the tag promote.yml is promoting)
+        type: string
+        required: true
+      version:
+        description: The version that commit is released as
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  # One group per landing, so landings never cancel each other's releases.
+  group: release-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    name: decide the version
+    # Only a landing: ci.yml passed on a push to main, not a dispatch on it.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.plan.outputs.ref }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Plan
+        id: plan
+        env:
+          CALLED_VERSION: ${{ inputs.version }}
+        run: |
+          echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            node scripts/release-plan.mjs landing
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$CALLED_VERSION" ]; then
+            # Gate 8: the tag, the changelog and the version agree.
+            test "$(git rev-parse "v$CALLED_VERSION^{commit}")" = "$(git rev-parse HEAD)"
+            awk -v heading="## [$CALLED_VERSION]" 'index($0, heading) == 1 { found = 1 } END { exit !found }' CHANGELOG.md
+            printf 'version=%s\ntag=false\npublish=false\n' "$CALLED_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            node scripts/release-plan.mjs dry-run
+            printf 'tag=false\npublish=false\n' >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
   build:
     name: build / ${{ matrix.platform }}
+    needs: plan
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -53,11 +119,20 @@ jobs:
             platform: win32-x64
             target: x86_64-pc-windows-msvc
             executable: cst.exe
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Stamp the version being released
+        # package.json on main names the release line; the build embeds the
+        # version from it (native/cli/build.rs), so it is set to this release's.
+        shell: bash
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
       - name: Build the executable from the pinned toolchain
         run: |
           rustup toolchain install 1.98.1 --profile minimal
@@ -65,7 +140,6 @@ jobs:
       - name: Stage the executable, its notices and its archive
         shell: bash
         run: |
-          version=$(node -p "require('./package.json').version")
           mkdir -p staged
           cp "native/target/release/${{ matrix.executable }}" staged/
           cp native/target/release/THIRD-PARTY-NOTICES.txt staged/
@@ -74,8 +148,8 @@ jobs:
           grep -q "For Zstandard software" staged/THIRD-PARTY-NOTICES.txt
           cp LICENSE staged/
           "staged/${{ matrix.executable }}" --version
-          test "$("staged/${{ matrix.executable }}" --version)" = "causet $version"
-          archive="cst-$version-${{ matrix.target }}"
+          test "$("staged/${{ matrix.executable }}" --version)" = "causet $VERSION"
+          archive="cst-$VERSION-${{ matrix.target }}"
           if [ "${{ runner.os }}" = "Windows" ]; then
             (cd staged && 7z a -tzip "../$archive.zip" "${{ matrix.executable }}" THIRD-PARTY-NOTICES.txt LICENSE)
           else
@@ -92,13 +166,15 @@ jobs:
 
   package:
     name: assemble the package set
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      version: ${{ steps.pack.outputs.version }}
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -107,11 +183,9 @@ jobs:
           pattern: executable-*
           path: executables
           merge-multiple: true
-      - name: The tag names the version being released
-        if: github.event_name == 'push'
-        run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./package.json').version")"
+      - name: Stamp the version being released
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
       - name: Pack every package
-        id: pack
         run: |
           node scripts/pack-release.mjs --out dist \
             --executable linux-x64-gnu=executables/linux-x64-gnu/cst \
@@ -122,12 +196,11 @@ jobs:
           # The install scripts travel with the release they install (ADR-0038, 2026-10-08).
           cp scripts/install.sh scripts/install.ps1 dist/
           (cd dist && sha256sum cst-* install.sh install.ps1 >> SHA256SUMS && cat SHA256SUMS)
-          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-      # The publish step runs only on a tag, so every run checks here that the
-      # npm it installs reads the same paths as tarballs (v0.22.0's tag run
-      # failed there and nothing earlier could see it). `npm pack` resolves a
-      # path as `npm publish` does, without asking the registry, which refuses
-      # a dry-run publish of a version that is already out.
+      # Every run checks here that the npm it installs reads the same paths as
+      # tarballs, although only a landing publishes (v0.22.0's tag run failed
+      # there and nothing earlier could see it). `npm pack` resolves a path as
+      # `npm publish` does, without asking the registry, which refuses a
+      # dry-run publish of a version that is already out.
       - name: npm reads every tarball path as a file
         run: |
           npm install --global npm@latest
@@ -143,7 +216,7 @@ jobs:
 
   smoke:
     name: install and smoke-test / ${{ matrix.os }}
-    needs: package
+    needs: [plan, package]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -152,6 +225,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -161,6 +236,9 @@ jobs:
           path: dist
       - name: Install by npm and by script, and run each installed command
         shell: bash
+        env:
+          # The set's version, which package.json on main does not name.
+          CAUSET_RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           git --version
           node --version
@@ -175,19 +253,26 @@ jobs:
           fi
 
   publish:
-    name: attest and draft the release, and publish to npm when enabled
-    if: github.event_name == 'push'
-    needs: [package, smoke]
+    name: tag, attest and release the landing, and publish to npm when enabled
+    if: needs.plan.outputs.publish == 'true'
+    needs: [plan, package, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      # Pushing the tag (the v* ruleset lets GitHub Actions create one) and
+      # the GitHub release.
       contents: write
       # Trusted publishing and attestation: this run's OIDC token is exchanged
       # for a short-lived credential, so no npm token is stored anywhere.
       id-token: write
       attestations: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -196,6 +281,25 @@ jobs:
         with:
           name: release-set
           path: dist
+      - name: Tag the landing
+        if: needs.plan.outputs.tag == 'true'
+        run: |
+          # A re-run of failed jobs keeps the plan's tag=true, so the tag may
+          # already be there: it is this landing's, or another landing took
+          # the number first (re-run all jobs to plan again).
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            git fetch --no-tags origin "+refs/tags/v$VERSION:refs/tags/v$VERSION"
+            if [ "$(git rev-parse "v$VERSION^{commit}")" != "$(git rev-parse HEAD)" ]; then
+              echo "v$VERSION is another commit's tag; re-run all jobs to plan this landing again." >&2
+              exit 1
+            fi
+            echo "v$VERSION is already this landing's tag."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$VERSION" -m "causet $VERSION" HEAD
+            git push origin "refs/tags/v$VERSION"
+          fi
       - name: Attest what a user downloads
         # `gh attestation verify <file> --repo jwh3times/causet` checks these.
         uses: actions/attest-build-provenance@v2
@@ -204,14 +308,16 @@ jobs:
             dist/cst-*
             dist/install.sh
             dist/install.ps1
-      - name: Draft the GitHub release with every asset
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish the GitHub prerelease with every asset
         run: |
-          gh release create "${GITHUB_REF_NAME}" --draft --verify-tag \
-            --title "causet ${GITHUB_REF_NAME}" \
-            --notes "Assets of ${GITHUB_REF_NAME}: one archive per platform, the npm tarballs, and SHA256SUMS. See CHANGELOG.md." \
-            dist/*
+          # The release notes are the version's changelog section.
+          awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { on = 1; next } on && /^## \[/ { exit } on' CHANGELOG.md > notes.md
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" dist/* --clobber
+          else
+            gh release create "v$VERSION" --verify-tag --prerelease \
+              --title "causet v$VERSION" --notes-file notes.md dist/*
+          fi
       - name: Publish to npm with provenance
         if: vars.NPM_PUBLISH == 'true'
         run: |
@@ -220,5 +326,14 @@ jobs:
           # Platform packages first, so the main package never names one that is not there.
           # `./` keeps npm 12 from reading `dist/<file>.tgz` as GitHub shorthand.
           for tarball in $(ls ./dist/holland-vip-causet-*.tgz | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-); do
-            npm publish "$tarball" --provenance --access public
+            name="$(tar -xOzf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name')"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already published"
+              continue
+            fi
+            # Decided just before each publish, so a newer landing's build
+            # published meanwhile keeps next (ADR-0048).
+            dist_tag="$(GITHUB_OUTPUT='' node scripts/release-plan.mjs dist-tag --version "$VERSION" | sed -n 's/^dist-tag=//p')"
+            echo "$name@$VERSION: npm dist-tag $dist_tag"
+            npm publish "$tarball" --provenance --access public --tag "$dist_tag"
           done

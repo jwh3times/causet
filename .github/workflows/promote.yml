@@ -1,0 +1,147 @@
+name: promote
+
+# Makes a version a landing already released the stable release (#440,
+# ADR-0048). Dispatch it with the version:
+#
+#   gh workflow run promote.yml -f version=0.26.3
+#
+# It refuses a version that has no tag, no published GitHub release, or no
+# npm package, and one older than the stable release unless allow-older is
+# set (scripts/release-plan.mjs). It then runs the whole release gate of
+# docs/testing.md against the version's tag:
+#
+#   ci.yml             gates 1, 2, 3, 6, 7, 8 (the full dispatch matrix)
+#   release-gates.yml  gates 4, 5, 10, and 11 through corpora.yml
+#   release.yml        gates 8 and 9 (the version's set, built and installed)
+#
+# Only when every gate passes does it move npm's `latest` dist-tag to the
+# version for every package and make its GitHub release the latest, which is
+# what `npm install @holland-vip/causet` and the install scripts' default
+# resolve. A failed gate changes nothing public. Promoting the stable release
+# again does nothing.
+#
+# Moving a dist-tag is not covered by npm's trusted publishing, so the last
+# job uses the NPM_TOKEN secret of the `npm-promote` environment: a granular
+# token for the @holland-vip packages.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to make stable (x.y.z, a landing's release)
+        required: true
+      allow-older:
+        description: Allow a version older than the stable release (a rollback)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: check the version can be promoted
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.plan.outputs.ref }}
+      version: ${{ steps.plan.outputs.version }}
+      noop: ${{ steps.plan.outputs.noop }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          ALLOW_OLDER: ${{ inputs.allow-older }}
+        run: |
+          if [ "$ALLOW_OLDER" = "true" ]; then
+            node scripts/release-plan.mjs promote --version "$VERSION" --allow-older
+          else
+            node scripts/release-plan.mjs promote --version "$VERSION"
+          fi
+          echo "ref=$(git rev-parse "v$VERSION^{commit}")" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+          if grep -qx "noop=true" "$GITHUB_OUTPUT"; then
+            echo "::notice::$VERSION is already the stable release; nothing to promote."
+          fi
+
+  ci:
+    name: gates 1-3, 6-8
+    needs: plan
+    if: needs.plan.outputs.noop == 'false'
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.plan.outputs.ref }}
+
+  gates:
+    name: gates 4, 5, 10, 11
+    needs: plan
+    if: needs.plan.outputs.noop == 'false'
+    uses: ./.github/workflows/release-gates.yml
+    with:
+      ref: ${{ needs.plan.outputs.ref }}
+
+  release-set:
+    name: gates 8, 9
+    needs: plan
+    if: needs.plan.outputs.noop == 'false'
+    uses: ./.github/workflows/release.yml
+    # release.yml's publish job, which does not run here, declares these; a
+    # called workflow cannot be granted less than its jobs declare.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    with:
+      ref: ${{ needs.plan.outputs.ref }}
+      version: ${{ needs.plan.outputs.version }}
+
+  promote:
+    name: make ${{ needs.plan.outputs.version }} the stable release
+    needs: [plan, ci, gates, release-set]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-promote
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Move npm's latest to the version, for every package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN" || { echo "The npm-promote environment has no NPM_TOKEN secret." >&2; exit 1; }
+          npm install --global npm@latest
+          for name in $(node --input-type=module -e 'import { releasePackages } from "./scripts/release-plan.mjs"; console.log(releasePackages().join(" "))'); do
+            npm dist-tag add "$name@$VERSION" latest
+          done
+      - name: Make the GitHub release the latest
+        run: gh release edit "v$VERSION" --prerelease=false --latest
+      - name: Report
+        run: |
+          {
+            echo "### causet $VERSION is the stable release"
+            echo
+            echo "- npm: \`npm install @holland-vip/causet\` installs $VERSION"
+            echo "- GitHub: https://github.com/${{ github.repository }}/releases/tag/v$VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"

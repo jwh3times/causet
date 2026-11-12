@@ -1,5 +1,9 @@
 # Routine runs are bounded; manually dispatch this workflow for the full
 # release/platform qualification matrix. See docs/testing.md.
+#
+# promote.yml calls it on the tag of the version it promotes, with the full
+# matrix, and release.yml waits for its run on each push to main before it
+# tags and publishes that landing (#440).
 name: ci
 
 on:
@@ -7,9 +11,17 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to qualify (the tag promote.yml is promoting)
+        type: string
+        required: true
 
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref }}
+  # A push to main is never cancelled by the next one: each landing's run is
+  # what releases it.
+  group: ci-${{ github.event_name }}-${{ inputs.ref || (github.event_name == 'push' && github.sha) || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -30,12 +42,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: CI policy and benchmark analysis regressions
-        run: node --test test/ci-plan.test.js test/scale-benchmark-analysis.test.js
+      - name: CI policy, release plan and benchmark analysis regressions
+        run: node --test test/ci-plan.test.js test/release-plan.test.js test/scale-benchmark-analysis.test.js
       - name: Select suite matrix
         id: plan
         run: node scripts/ci-plan.mjs
@@ -59,6 +72,25 @@ jobs:
         # one commit's delta.
         run: git diff --check "$(git mktree </dev/null)" HEAD
 
+  changelog:
+    # Every merge to main mints a version (Scheme: per-merge), so a pull
+    # request's newest changelog section must name the version its merge will
+    # mint. A bot cannot write an entry, so Dependabot's pull requests are
+    # exempt; the next human pull request backfills their sections.
+    name: changelog
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: The newest section names the version this merge will mint
+        run: node scripts/check-changelog.mjs
+
   suite:
     needs: static
     if: needs.static.outputs.run-suite == 'true'
@@ -70,6 +102,8 @@ jobs:
       matrix: ${{ fromJSON(needs.static.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
