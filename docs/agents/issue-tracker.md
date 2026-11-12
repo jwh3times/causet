@@ -94,3 +94,8 @@ jwh3times 7
 - `Area`: `Rebase and workspaces`, `Structured documents`, `Identity and provenance`,
   `Proof and verification`, `Trust and protocol`, `Native core and performance`,
   `Docs and process`, `Defect`.
+
+## Priority order
+
+- `Priority`: `P0 — now` / `P1 — next` / `P2 — later` / `P3 — someday`.
+- `board order`: the board's manual order, top first, which is priority order.

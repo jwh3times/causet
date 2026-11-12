@@ -50,9 +50,9 @@
   procedure they walk through changes. Dated audit findings there stay historical; link them to the
   current instructions.
 - `.agents/skills/*/**` — skills, mirrored to `.claude/skills/`. Every skill `skills-lock.json`
-  lists is installed (`end-session`, `handoff`, `lets-go`, `ship` and `docs-updater` from
-  `jwh3times/skills`, the rest from `mattpocock/skills`): `frozen` here, since a reinstall overwrites
-  local edits; fix them upstream.
+  lists is installed (`end-session`, `handoff`, `lets-go`, `ship`, `docs-updater` and `what-next`
+  from `jwh3times/skills`, the rest from `mattpocock/skills`): `frozen` here, since a reinstall
+  overwrites local edits; fix them upstream.
 
 **Never in public docs:** sensitive vulnerability details (they stay in the draft advisory), secret
 values, and run-specific evidence or session handoffs (they belong in issues, PRs or CI artifacts).
