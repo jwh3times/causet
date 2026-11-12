@@ -4,7 +4,7 @@
 
 The required `static checks` job's steps, all from the repository root:
 
-- `node --test test/ci-plan.test.js test/scale-benchmark-analysis.test.js`
+- `node --test test/ci-plan.test.js test/release-plan.test.js test/scale-benchmark-analysis.test.js`
 - `for file in bin/native/*.js scripts/*.mjs test/*.js test-support/*.js; do node --check "$file"; done`
 - `npm run test:docs`
 - `node --test test/architecture-tables.test.js`

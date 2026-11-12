@@ -4,9 +4,10 @@
 
 - `README.md` — the user-facing entry point: install, usage and the command overview. **When:** a
   command, flag, install step or supported platform changes.
-- `CHANGELOG.md` — the versioned record of delivered behavior: `Unreleased` collects entries, and a
-  deliberate release cuts a dated `## [x.y.z] - date` section. `ship-owned`. **When:** a user-visible behavior
-  or contract changes.
+- `CHANGELOG.md` — the versioned record of delivered behavior: each landing gets a dated
+  `## [x.y.z] - date` section for the version it mints (`Scheme: per-merge`, ADR-0048), and
+  `Unreleased` stays an empty placeholder between landings. `ship-owned`. **When:** a user-visible
+  behavior or contract changes.
 - `AGENTS.md` — durable rules for working in this repository: structure, commands, style, testing,
   commits, tracking, the development flow. **When:** one of those rules, or a command it quotes,
   changes.
