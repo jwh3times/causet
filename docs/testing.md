@@ -549,9 +549,15 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
     every repository, git/git's included, through one `cst cat-file
     --batch` per group (#346);
   - zero Git processes: every native read runs with no Git on its `PATH`;
-  - **the storage gate:** every file of the full import's `.cst/` against
-    what `git gc --aggressive --prune=now` leaves in `objects/pack/` of the
-    bare repository, that is, its pack, index, reverse index and bitmap.
+  - **the storage gate:** N1's objects against what `git gc --aggressive
+    --prune=now` leaves in `objects/pack/` of the bare repository, that is,
+    its pack, index, reverse index and bitmap. N1's objects are every file of
+    the `.cst/` of a full import with no native history, which the test hook
+    `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1` asks for (#437). A phase's gate
+    counts its own objects and its predecessors'
+    ([ADR-0044's amendment of 2026-11-11](adr/0044-define-the-exit-regime-every-native-phase-must-meet.md#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts)).
+    What native history adds, the full import's store less that one, is
+    reported, never checked.
     `objects/info/commit-graph` is left out, as the early estimate in
     storage.md §6 left it out.
     Stored bytes must be at most Git's, and on the large-file corpus strictly
@@ -567,7 +573,8 @@ CAUSET_REAL_REPOSITORIES=causet node --test test/real-repositories.test.js
     holds these rules in `npm test`.
 
   Each job's summary reports the gate's verdict and ratio, both byte counts
-  with their parts, the number of Git objects, how many shared deltas the
+  with their parts, the bytes native history adds, the number of Git
+  objects, how many shared deltas the
   incremental import check compared (#338), and what each import cost
   (#347). Import reports these numbers itself (`CAUSET_TEST_IMPORT_REPORT`):
   - its time, in all and by phase;
@@ -867,6 +874,11 @@ the real-repository check reports each import's cost (#347):
 - `heldObjects`: the peak size in bytes of the file holding the Git bytes of
   the commits, tags and trees import read, until it stored them
   (`import.objects`, #405).
+
+`CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1`, inert unless it is set exactly, makes
+`cst import` write no native history: no native commit, and no later N2
+object either. The store holds N1's objects alone, which is what the
+real-repository check gates (#437).
 
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan the Rust CLI, engine and model for every
@@ -1515,8 +1527,10 @@ repositories it imports; an unknown change set counts too.
 `.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
 the generated-history corpus and the real repositories, on Ubuntu and
 Windows: weekly on `main`, on manual dispatch, from `release-gates.yml` when a
-release is qualified, and for a pull request that changes a corpus or the
-workflow. Its jobs have a 90-minute timeout, about twice the slowest run
+release is qualified, and for a pull request that changes a corpus, the
+workflow, or the native import, store or history crates, since only the
+corpora measure what a store holds (#437).
+Its jobs have a 90-minute timeout, about twice the slowest run
 measured, except git/git's, which has 300 minutes.
 `.github/workflows/rotating-corpus.yml` runs the generated-history corpus on
 the ISO week's seed every Thursday and on manual dispatch, with the same

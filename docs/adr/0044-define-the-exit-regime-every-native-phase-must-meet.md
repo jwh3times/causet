@@ -1,6 +1,6 @@
 # ADR-0044: Define the exit regime every native phase must meet
 
-- **Status:** Accepted (owner, 2026-10-17); import equality made precise by [ADR-0045](0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md)
+- **Status:** Accepted (owner, 2026-10-17); import equality made precise by [ADR-0045](0045-build-n1-as-a-whole-content-store-with-lossless-git-import.md); item 2's bytes scoped to a phase, amended 2026-11-11 (see below)
 - **Date:** 2026-10-17
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, NFR-PERF-03, NFR-PERF-06, NFR-PERF-07,
@@ -51,7 +51,8 @@ following, limited to the commands and objects that phase implements.
    - A native repository runs **zero Git processes**.
    - **Stored bytes** are at most Git's fully packed size (`git gc --aggressive`)
      on each real repository in item 1. On a large-file corpus, which the phase
-     ADR names, they are **strictly smaller**.
+     ADR names, they are **strictly smaller**. Which bytes a phase counts is
+     set by the [amendment of 2026-11-11](#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts).
    - From N5, **transferred bytes** for a fetch are at most Git's for the same
      fetch.
 3. **History replay.** CI imports causet's own repository, replays its history
@@ -152,3 +153,48 @@ the same ref snapshot as a full import of the final history. Container layout
 may differ. ADR-0045's amendment of 2026-10-26 narrows "the same native
 objects" to every object but a chunk: a large version's stored form, and so the
 chunks, may differ (storage.md §5.1).
+
+## Amendment 2026-11-11: which bytes a phase's storage gate counts
+
+Decided by the owner on [#437](https://github.com/jwh3times/causet/issues/437).
+
+Item 2 said stored bytes, and the gate counted every byte the store keeps.
+Then N2's first slice, [#416](https://github.com/jwh3times/causet/issues/416),
+made import write a native commit beside each preserved commit a name reaches.
+Before N1 had exited, N2's objects counted against N1's gate, and git/git
+failed it:
+
+| git/git's store | Bytes |
+|---|---|
+| Before #416 | 110,330,078 |
+| After #416 | 126,093,364 |
+| `git gc --aggressive` | ~113,030,000 |
+
+Before #416, N1's margin on git/git was about 34 bytes per commit. A native
+commit's index record alone is 48, so no format change to N1 could fit native
+history within it.
+
+**The decision:**
+
+- **A phase's storage gate counts the objects of that phase and the phases
+  before it,** with their index records and the alias map. N1's gate counts
+  content, trees, preserved commits and tags, the ref snapshot and
+  annotations.
+- **The objects of later phases are measured and reported, never gated,**
+  until their own phase's exit. They are the bytes a full import's store
+  holds beyond one written without them.
+- **The rule and its bound are unchanged:** at most Git's packed size, and
+  strictly smaller on the large-file corpus, with no tolerance.
+
+**Why:**
+
+- [ADR-0047](0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md)
+  already limits N2's exit to N2's commands and objects, after N1 has exited.
+  Counting N2's objects in N1's gate made N1's exit depend on N2's format.
+- The question this leaves open, what native history may cost against Git's
+  packed size, belongs at N2's exit. By then facts and the operation log
+  exist, and their cost is known. #437 records a measurement for it: about
+  166 bytes per native commit on causet's history and 197 on git/git, mostly
+  incompressible native IDs and the index record.
+- **Not a waiver:** item 9's waivers remove a criterion for one phase. This
+  amendment says what the criterion measures, for every phase.

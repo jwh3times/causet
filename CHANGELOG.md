@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- **N1's storage gate counts N1's objects, and native history's bytes are
+  reported beside it** (#437). Since #416, import has written a native
+  commit for each commit a name reaches. Native commits are N2's objects, but
+  they counted against N1's storage gate (ADR-0044 item 2, release gate 11),
+  and git/git's store, 126,093,364 bytes, failed against Git's 113,030,000.
+  ADR-0044 is amended: a phase's storage gate counts its own objects and its
+  predecessors', and a later phase's objects are reported, never gated,
+  until that phase exits. What native history may cost against Git is
+  decided at N2's exit. The real-repository check now gates an import
+  written without native history, through a test-only hook,
+  `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1`, and each job's summary gains a row
+  for the bytes native history adds, never checked. `corpora.yml` also runs
+  for a pull request that touches the native import, store or history
+  crates, since only the corpora measure what a store holds. No behavior of
+  `cst` changes.
+
 - **Experimental: a native repository names each commit by its native
   commit, in every command** (#435). `cst rev-parse`, `cat-file`, `ls-tree`,
   `for-each-ref` and import's `HEAD is at` line now print a commit's native

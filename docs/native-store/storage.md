@@ -290,9 +290,11 @@ next one.
     2.84 MB for the same blobs;
   - in 4 MiB frames they took 2.13 MB.
 
-  The storage gate counts every byte the store keeps (ADR-0044, item 2). At
-  1 MiB, content alone uses the whole margin before chunk lists and the index
-  are added (§6).
+  N1's storage gate counts every byte N1's objects take, their index
+  records and the alias map included (ADR-0044 item 2, as
+  [amended on 2026-11-11](../adr/0044-define-the-exit-regime-every-native-phase-must-meet.md#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts)).
+  At 1 MiB, content alone uses the whole margin before chunk lists and the
+  index are added (§6).
 - **The cost is a single read's:** it decompresses its frame, which is 4 MiB
   at most unless it holds one larger record. That is about 3 ms at zstd's
   published 1.5 GB/s.
@@ -694,6 +696,17 @@ On git/git, the containers take 97.3 MB against Git's pack at 97.9 MB, and
 the alias map 13.1 MB against 15.4 MB for Git's index, reverse index and
 bitmap. Version 1's levers act on trees, small content and per-object
 metadata, so the large-file corpus is within 6 KB of its version 0 store.
+
+**Native history is reported beside the gate, not in it.** From
+[#416](https://github.com/jwh3times/causet/issues/416), import also writes a
+native commit after each preserved commit a name reaches, and on git/git the
+store grew to 126,093,364 B, over Git's pack. Native commits are N2's
+objects, and N1's gate counts N1's alone
+([ADR-0044's amendment of 2026-11-11](../adr/0044-define-the-exit-regime-every-native-phase-must-meet.md#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts)).
+So the check gates an import written without native history, and each
+job's summary reports what native history adds, never checked, until N2's
+exit decides its bound
+([#437](https://github.com/jwh3times/causet/issues/437)).
 
 ## 7. Determinism
 

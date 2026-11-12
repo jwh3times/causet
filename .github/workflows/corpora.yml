@@ -10,11 +10,13 @@ name: corpora
 #   large-file corpus, each through the same checks, with zero Git processes
 #   in native reads and the storage gate against `git gc --aggressive`
 #   (docs/testing.md, "The real repositories"). Each job's summary reports
-#   both byte counts.
+#   both byte counts, and the bytes native history adds, never checked.
 #
 # It runs weekly on main, on manual dispatch, from release-gates.yml when a
 # release is qualified (release gate 11), and for a pull request that changes
-# the corpus or this file. Timings are reported by the runner, never checked.
+# the corpus, this file, or the native crates import writes through: what a
+# store holds, and so its bytes, are only measured here (#437). Timings are
+# reported by the runner, never checked.
 
 on:
   workflow_dispatch:
@@ -38,6 +40,9 @@ on:
       - "test/real-repositories.test.js"
       - "test/storage-gate.test.js"
       - ".github/workflows/corpora.yml"
+      - "native/import/**"
+      - "native/store/**"
+      - "native/history/**"
   schedule:
     # Weekly on main, after perf.yml's run.
     - cron: "41 7 * * 1"

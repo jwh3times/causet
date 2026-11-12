@@ -12,11 +12,15 @@
  *   equality: N1's commands on the full import answer as Git does on the
  *   repository (`compareCopy`);
  * - zero Git processes: every native read runs with no Git on its `PATH`;
- * - the storage gate: the full import's store against what `git gc
+ * - the storage gate: N1's objects alone, a full import with no native
+ *   history (`CAUSET_TEST_IMPORT_WITHOUT_HISTORY`), against what `git gc
  *   --aggressive` leaves in `objects/pack/` of the repository, the pack, its
  *   index, reverse index and bitmap. Stored bytes must be at most Git's, and
  *   on the large-file corpus strictly fewer, unless the repository carries a
- *   known-gap entry (`storage-gate.js`).
+ *   known-gap entry (`storage-gate.js`). A phase's gate counts its objects
+ *   and its predecessors' (ADR-0044 item 2, as amended for #437), so what
+ *   native history adds, N2's, the full import's store less that one, is
+ *   reported, never checked.
  *
  * What each import cost is reported, never checked (#347), from import's own
  * report (`CAUSET_TEST_IMPORT_REPORT`): its time, in all and by phase, the
@@ -78,16 +82,17 @@ const ONE_COMMIT = {
 /**
  * Checks the real repository `name`, in a new directory under `base`. `env`
  * makes the environment of each process. Resolves to its report: the
- * repository's object count, both byte counts with their parts, the storage
- * gate's verdict, what each import cost by its label (the report import
- * wrote), and the problems found.
+ * repository's object count, both byte counts the gate compares with their
+ * parts, the bytes native history adds (`nativeHistory`), the storage gate's
+ * verdict, what each import cost by its label (the report import wrote), and
+ * the problems found.
  */
 export async function checkRepository({ name, env, base = os.tmpdir() }) {
   const repository = REAL_REPOSITORIES[name];
   assert.ok(repository, `no real repository is named ${name}`);
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(base, "cr")));
   const where = `the real repository ${name}`;
-  const report = { name, objects: 0, native: null, git: null, gate: null, imports: {}, deltas: 0, problems: [] };
+  const report = { name, objects: 0, native: null, git: null, nativeHistory: null, gate: null, imports: {}, deltas: 0, problems: [] };
   const run = (command, args, cwd, environment, input = undefined) => {
     const result = spawnSync(command, args, { cwd, env: environment, input, encoding: "buffer", timeout: LIMIT, maxBuffer: 64 * 1024 * 1024 });
     assert.equal(result.status, 0, `${path.basename(command)} ${args.join(" ")}: ${result.error ?? result.stderr}`);
@@ -96,9 +101,9 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
   const git = (cwd, args, more = {}, input = undefined) => run("git", args, cwd, env({ GIT_NO_REPLACE_OBJECTS: "1", ...more }), input);
   const read = (cwd, args) => run(cstCommand, [...cstPrefix(), ...args], cwd, withoutGit(env(OPT_IN)));
   const cost = path.join(root, "cost.json");
-  const imported = (label, from, into) => {
+  const imported = (label, from, into, more = {}) => {
     fs.rmSync(cost, { force: true });
-    run(cstCommand, [...cstPrefix(), "import", from, into], root, env({ ...OPT_IN, CAUSET_TEST_IMPORT_REPORT: cost }));
+    run(cstCommand, [...cstPrefix(), "import", from, into], root, env({ ...OPT_IN, ...more, CAUSET_TEST_IMPORT_REPORT: cost }));
     report.imports[label] = JSON.parse(fs.readFileSync(cost, "utf8"));
   };
   try {
@@ -115,6 +120,7 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     imported("second stage, incrementally", "source", "incremental");
     imported("second stage, in full", "source", "full");
     const full = path.join(root, "full");
+    imported("second stage, without native history", "source", "without-history", { CAUSET_TEST_IMPORT_WITHOUT_HISTORY: "1" });
 
     // The storage gate first, so that its byte counts are reported whatever
     // the checks after it find. The packed copy is then imported again: a
@@ -123,7 +129,10 @@ export async function checkRepository({ name, env, base = os.tmpdir() }) {
     const packed = path.join(root, "packed");
     fs.cpSync(source, packed, { recursive: true });
     git(packed, ["gc", "--aggressive", "--prune=now", "--quiet"]);
-    report.native = bytesUnder(path.join(full, ".cst"), (file) => file.split(path.sep)[0]);
+    const storeBytes = (store) => bytesUnder(path.join(root, store, ".cst"), (file) => file.split(path.sep)[0]);
+    report.native = storeBytes("without-history");
+    report.nativeHistory = storeBytes("full").total - report.native.total;
+    fs.rmSync(path.join(root, "without-history"), { recursive: true, force: true });
     report.git = bytesUnder(path.join(packed, "objects", "pack"), (file) => path.extname(file).slice(1));
     const verdict = storageGate(repository, report.native.total, report.git.total, where);
     report.gate = verdict.gate;
