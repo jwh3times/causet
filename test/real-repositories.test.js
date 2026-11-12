@@ -53,8 +53,9 @@ function summary(report) {
     "",
     "| | Bytes | Parts |",
     "| --- | ---: | --- |",
-    `| cst store | ${report.native.total} (${megabytes(report.native.total)}) | ${parts(report.native)} |`,
+    `| cst store, N1's objects | ${report.native.total} (${megabytes(report.native.total)}) | ${parts(report.native)} |`,
     `| git gc --aggressive | ${report.git.total} (${megabytes(report.git.total)}) | ${parts(report.git)} |`,
+    `| native history, never checked | ${report.nativeHistory} (${megabytes(report.nativeHistory)}) | |`,
     "",
     `${report.objects} Git objects. The incremental import check compared ${report.deltas} ${report.deltas === 1 ? "delta" : "deltas"} both imports store. What each import cost, never checked:`,
     "",
@@ -74,6 +75,7 @@ for (const name of chosen) {
     cstPrefix();
     if (report.native && report.git) {
       t.diagnostic(`${name}: cst store ${report.native.total} bytes, git gc --aggressive ${report.git.total} bytes, storage gate ${report.gate}`);
+      t.diagnostic(`${name}: native history ${report.nativeHistory} bytes more, never checked`);
       if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary(report));
     }
     t.diagnostic(`${name}: import costs ${JSON.stringify(report.imports)}`);

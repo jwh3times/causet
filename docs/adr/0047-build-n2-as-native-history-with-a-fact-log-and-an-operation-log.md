@@ -1,6 +1,6 @@
 # ADR-0047: Build N2 as native history with a fact log and an operation log
 
-- **Status:** Accepted (owner, 2026-11-09); amended 2026-11-10
+- **Status:** Accepted (owner, 2026-11-09); amended 2026-11-10; item 17 notes ADR-0044's amendment of 2026-11-11
 - **Date:** 2026-11-09
 - **Owners:** Repository maintainers
 - **Related requirements:** GP-12, FR-ID-07, FR-WS-08, FR-TRUST-02
@@ -293,6 +293,12 @@ The prior-art research for #285 bears on the fact side:
 
     The owner declares the exit against a named CI run. A waiver needs an
     amendment to this ADR.
+
+    Until then, N2's objects are measured beside N1's storage gate and never
+    counted in it. What they may cost against Git's packed size is decided
+    at this exit
+    ([ADR-0044's amendment of 2026-11-11](0044-define-the-exit-regime-every-native-phase-must-meet.md#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts),
+    [#437](https://github.com/jwh3times/causet/issues/437)).
 
 ## Constraints
 

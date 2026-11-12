@@ -38,12 +38,14 @@ function scratch() {
 
 const OPT_IN = { CAUSET_EXPERIMENTAL: "native" };
 
-function cst(cwd, args) {
-  return spawnSync(cstCommand, [...cstPrefix(), ...args], { cwd, env: testEnv(OPT_IN), encoding: "buffer", maxBuffer: 64 * 1024 * 1024 });
+function cst(cwd, args, env = {}) {
+  return spawnSync(cstCommand, [...cstPrefix(), ...args], {
+    cwd, env: testEnv({ ...OPT_IN, ...env }), encoding: "buffer", maxBuffer: 64 * 1024 * 1024,
+  });
 }
 
-function imports(cwd, source, destination) {
-  const result = cst(cwd, ["import", source, destination]);
+function imports(cwd, source, destination, env = {}) {
+  const result = cst(cwd, ["import", source, destination], env);
   assert.equal(result.status, 0, result.stderr.toString());
   return result.stdout.toString();
 }
@@ -140,6 +142,25 @@ for (const format of ["sha1", "sha256"]) {
     }
   });
 }
+
+test("an import without native history writes no native commit, and every other object, the alias file and the snapshot as a full import does", () => {
+  // What N1's storage gate measures on a real repository (ADR-0044 item 2,
+  // #437): the store N1's objects alone take.
+  const { root } = makeHistory();
+  imports(root, "source", "with");
+  imports(root, "source", "without", { CAUSET_TEST_IMPORT_WITHOUT_HISTORY: "1" });
+  const [withHistory, without] = ["with", "without"].map((name) => path.join(root, name));
+  const history = nativeCommits(withHistory);
+  assert.ok(history.size > 0, "the full import has native commits");
+  assert.equal(nativeCommits(without).size, 0);
+  assert.deepEqual(sorted(objects(without)), sorted([...objects(withHistory)].filter((id) => !history.has(id))));
+  const [full, kept] = [files(withHistory), files(without)];
+  for (const name of [...full.keys()].filter((file) => !file.startsWith("objects/"))) {
+    assert.ok(kept.get(name)?.equals(full.get(name)), `${name} differs`);
+  }
+  const checked = cst(without, ["fsck"]);
+  assert.equal(checked.status, 0, checked.stderr.toString());
+});
 
 test("a path's versions are stored together, oldest first, the paths in the order the walk reaches them", () => {
   const root = scratch();

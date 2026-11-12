@@ -65,7 +65,8 @@ no npm dependencies.
   storage gate (`test/real-repositories.test.js` with
   `CAUSET_REAL_REPOSITORIES=<name>`), on hosted Windows and Ubuntu runners:
   weekly on `main`, on manual dispatch, as release gate 11 from
-  `release-gates.yml`, and for PRs touching the corpora.
+  `release-gates.yml`, and for PRs touching the corpora or the native import,
+  store or history crates.
 - `.github/workflows/rotating-corpus.yml` runs the generated-history corpus
   on a new seed each week, the ISO week's (`weekly-<year>-W<week>`), on hosted
   Windows and Ubuntu runners, and on manual dispatch with an optional seed. It

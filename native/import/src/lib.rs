@@ -879,8 +879,17 @@ impl Importer<'_> {
   /// held commits that have no native commit yet, as an import of a carrier
   /// alone, or one before native history, left them. A held commit with one
   /// already ends the walk, since its ancestors have theirs.
+  ///
+  /// The test hook `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1` finds none, so the
+  /// import writes no native history, only N1's objects: what N1's storage
+  /// gate measures on a real repository (ADR-0044 item 2, #437). Native
+  /// commits are N2's only objects so far; each later one stays out under it
+  /// too. Nothing outside the suites sets it.
   fn history(&mut self, refs: &[git::Listed]) -> GitResult<Vec<String>> {
     const NAMES: [&[u8]; 3] = [b"refs/heads/", b"refs/tags/", b"refs/remotes/"];
+    if causet_engine::environment::test_hook("CAUSET_TEST_IMPORT_WITHOUT_HISTORY").as_deref() == Some("1") {
+      return Ok(Vec::new());
+    }
     let mut pending: Vec<String> = refs
       .iter()
       .filter(|entry| entry.symbolic.is_none() && NAMES.iter().any(|prefix| entry.name.starts_with(prefix)))
