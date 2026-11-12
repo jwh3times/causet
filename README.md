@@ -81,8 +81,8 @@ irm https://github.com/jwh3times/causet/releases/latest/download/install.ps1 | i
 ```
 
 These install the stable release. Every change that lands on `main` is also
-released, as a GitHub prerelease and on npm under `next`, and a version
-becomes the stable release once it passes the whole release gate (see
+released as a GitHub prerelease, and a version becomes the stable release
+once it passes the whole release gate (see
 [Releases](docs/testing.md#releases)).
 
 Each script downloads the release's archive for your platform, refuses it
@@ -116,8 +116,9 @@ npm install -g --allow-scripts=@holland-vip/causet @holland-vip/causet
 cst --help
 ```
 
-`@holland-vip/causet@next` installs the newest landing's build instead of
-the stable release.
+When CI publishes to npm, `@holland-vip/causet@next` installs the newest
+landing's build instead of the stable release. Until an npm bug that blocks
+it is fixed, npm releases are published by hand.
 
 npm installs the same executable, from a `@holland-vip/causet-<platform>`
 package alongside the main one. Nothing is downloaded outside npm and nothing

@@ -6,7 +6,7 @@
 //   node scripts/release-plan.mjs landing                       version=, tag=  (the checked-out landing)
 //   node scripts/release-plan.mjs dry-run                       version=        (what this merge would mint)
 //   node scripts/release-plan.mjs dist-tag --version <v>        dist-tag=       (asks the npm registry)
-//   node scripts/release-plan.mjs promote --version <v> [--allow-older]
+//   node scripts/release-plan.mjs promote --version <v> [--allow-older] [--github-only]
 //                                                               version=, noop= (asks GitHub and npm)
 //
 // Each writes its outputs to $GITHUB_OUTPUT when set, and to standard output otherwise. A refusal
@@ -77,7 +77,7 @@ export function planPromotion({ version, tags, release, unpublished, latest, all
   parse(version);
   if (compareVersions(version, FIRST_PER_MERGE_VERSION) < 0) {
     throw new Error(`${version} predates ${FIRST_PER_MERGE_VERSION}, the first version a landing ` +
-      "released; move npm's latest to it by hand (npm dist-tag add) to roll back that far.");
+      "released; roll back that far by hand (npm dist-tag add, gh release edit --latest).");
   }
   if (!releasedVersions(tags).includes(version)) throw new Error(`There is no tag v${version}.`);
   if (!release) throw new Error(`v${version} has no GitHub release.`);
@@ -153,11 +153,22 @@ function githubRelease(root, version) {
   throw new Error(`gh release view v${version} failed: ${result.stderr.trim()}`);
 }
 
+// The version of the release GitHub marks latest, which the install scripts install by default.
+function githubLatest(root) {
+  const result = run("gh", ["release", "view", "--json", "tagName"], root);
+  if (!result.ok) {
+    if (/release not found/i.test(result.stderr)) return null;
+    throw new Error(`gh release view failed: ${result.stderr.trim()}`);
+  }
+  return RELEASE_TAG.exec(JSON.parse(result.stdout).tagName)?.[1] ?? null;
+}
+
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const options = { command, version: null, allowOlder: false };
+  const options = { command, version: null, allowOlder: false, githubOnly: false };
   for (let index = 0; index < rest.length; index += 1) {
     if (rest[index] === "--allow-older") options.allowOlder = true;
+    else if (rest[index] === "--github-only") options.githubOnly = true;
     else if (rest[index] === "--version" && rest[index + 1]) options.version = rest[++index];
     else throw new Error(`Unknown argument: ${rest[index]}`);
   }
@@ -187,17 +198,18 @@ export function main(argv, root = process.cwd()) {
     outputs = { "dist-tag": distTagForBuild({ version: options.version, distTags: npmDistTags(root) }) };
   } else if (options.command === "promote") {
     refreshTags(root);
+    // Without npm (NPM_PUBLISH is not `true`), the stable release is GitHub's latest alone.
     const plan = planPromotion({
       version: options.version,
       tags: gitTags(root),
       release: githubRelease(root, options.version),
-      unpublished: releasePackages().filter((name) => !npmHas(root, name, options.version)),
-      latest: npmDistTags(root).latest ?? null,
+      unpublished: options.githubOnly ? [] : releasePackages().filter((name) => !npmHas(root, name, options.version)),
+      latest: options.githubOnly ? githubLatest(root) : npmDistTags(root).latest ?? null,
       allowOlder: options.allowOlder,
     });
     outputs = { version: plan.version, noop: plan.noop };
   } else {
-    throw new Error("Usage: release-plan.mjs landing | dry-run | dist-tag --version <v> | promote --version <v> [--allow-older]");
+    throw new Error("Usage: release-plan.mjs landing | dry-run | dist-tag --version <v> | promote --version <v> [--allow-older] [--github-only]");
   }
   const lines = Object.entries(outputs).map(([name, value]) => `${name}=${value}\n`).join("");
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, lines);

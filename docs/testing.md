@@ -1586,11 +1586,24 @@ before 0.26.0, the first a landing released, cannot be promoted: their tags
 predate those workflows, and a rollback that far is `npm dist-tag add` by
 hand.
 
+**npm takes part only when the repository variable `NPM_PUBLISH` is
+`true`.** Trusted publishing from this repository has failed on every tag
+run since v0.23.0, on [npm/cli#9969](https://github.com/npm/cli/issues/9969)
+([#139](https://github.com/jwh3times/causet/issues/139)), so until that is
+fixed `NPM_PUBLISH` is `false`: a landing publishes its GitHub prerelease
+only, `promote.yml` judges a version and makes it stable by its GitHub
+release alone (`release-plan.mjs promote --github-only`), and npm is
+published and tagged by hand. Setting `NPM_PUBLISH` to `true` turns the npm
+half of both on again, with no code change.
+
 **What the automation needs** (one-time human steps, #440): the
 "release tags are created by maintainers" ruleset lets GitHub Actions
-through, and the `npm-promote` environment holds an `NPM_TOKEN` secret, a
-granular npm token with read and write access to the `@holland-vip` packages,
-because npm's trusted publishing does not cover moving a dist-tag.
+through, and `NPM_PUBLISH` is `false` while npm/cli#9969 is open. Before
+`NPM_PUBLISH` goes back to `true`, the `npm-promote` environment needs an
+`NPM_TOKEN` secret, a granular npm token with read and write access to the
+`@holland-vip` packages, because npm's trusted publishing does not cover
+moving a dist-tag; the packages' "disallow tokens" publishing setting must
+let it move one.
 
 ## Continuous integration
 

@@ -66,7 +66,12 @@ Two constraints shape the answer:
    the hand-placed tag go.
 7. **Only release automation and admins create release tags.** The ruleset that restricts `v*` tag
    creation adds GitHub Actions as a bypass actor; tags stay immutable for everyone.
-8. **Moving a dist-tag uses a token; publishing does not.** npm's trusted publishing covers
+8. **npm takes part only when `NPM_PUBLISH` is `true`.** Trusted publishing from this repository
+   fails on npm/cli#9969 (#139), so while it does, landings publish GitHub prereleases only and a
+   promotion judges and moves the GitHub latest release alone; npm is published by hand. The
+   variable turns the npm half of both tracks on again with no code change (owner decision,
+   2026-11-12).
+9. **Moving a dist-tag uses a token; publishing does not.** npm's trusted publishing covers
    `npm publish` and not `npm dist-tag`. Promotion uses a granular token limited to the
    `@holland-vip` packages, held as the `NPM_TOKEN` secret of an `npm-promote` environment only
    `promote.yml` uses. Publishing stays on trusted publishing.

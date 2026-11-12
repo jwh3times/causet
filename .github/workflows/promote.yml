@@ -20,8 +20,11 @@ name: promote
 # resolve. A failed gate changes nothing public. Promoting the stable release
 # again does nothing.
 #
-# Moving a dist-tag is not covered by npm's trusted publishing, so the last
-# job uses the NPM_TOKEN secret of the `npm-promote` environment: a granular
+# npm takes part only when the repository variable NPM_PUBLISH is `true`, as
+# in release.yml: otherwise a version is judged, and made stable, by its
+# GitHub release alone, and npm is published by hand (npm/cli#9969, #139).
+# Moving a dist-tag is not covered by npm's trusted publishing, so the npm
+# step uses the NPM_TOKEN secret of the `npm-promote` environment: a granular
 # token for the @holland-vip packages.
 
 on:
@@ -64,12 +67,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           ALLOW_OLDER: ${{ inputs.allow-older }}
+          NPM_PUBLISH: ${{ vars.NPM_PUBLISH }}
         run: |
-          if [ "$ALLOW_OLDER" = "true" ]; then
-            node scripts/release-plan.mjs promote --version "$VERSION" --allow-older
-          else
-            node scripts/release-plan.mjs promote --version "$VERSION"
-          fi
+          flags=()
+          if [ "$ALLOW_OLDER" = "true" ]; then flags+=(--allow-older); fi
+          if [ "$NPM_PUBLISH" != "true" ]; then flags+=(--github-only); fi
+          node scripts/release-plan.mjs promote --version "$VERSION" "${flags[@]}"
           echo "ref=$(git rev-parse "v$VERSION^{commit}")" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
           if grep -qx "noop=true" "$GITHUB_OUTPUT"; then
@@ -118,6 +121,7 @@ jobs:
     env:
       VERSION: ${{ needs.plan.outputs.version }}
       GH_TOKEN: ${{ github.token }}
+      NPM_PUBLISH: ${{ vars.NPM_PUBLISH }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,6 +131,7 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - name: Move npm's latest to the version, for every package
+        if: vars.NPM_PUBLISH == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -142,6 +147,10 @@ jobs:
           {
             echo "### causet $VERSION is the stable release"
             echo
-            echo "- npm: \`npm install @holland-vip/causet\` installs $VERSION"
+            if [ "$NPM_PUBLISH" = "true" ]; then
+              echo "- npm: \`npm install @holland-vip/causet\` installs $VERSION"
+            else
+              echo "- npm: not moved (NPM_PUBLISH is not true); publish and tag it by hand"
+            fi
             echo "- GitHub: https://github.com/${{ github.repository }}/releases/tag/v$VERSION"
           } >> "$GITHUB_STEP_SUMMARY"
