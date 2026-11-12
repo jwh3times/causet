@@ -1,0 +1,1110 @@
+//! The command front end: everything `main` in `src/cli.js` decides before a
+//! command touches the repository. It reproduces the JavaScript CLI's global
+//! flags, environment checks, help, version, generic option parsing, and each
+//! command's argument-only usage checks, in the same order, so those outcomes
+//! are answered natively byte for byte. Every command is ported, so every
+//! invocation is answered here.
+//!
+//! One decision departs from it on purpose: an option a command does not take
+//! is refused (`unknown_option`, #257), where the JavaScript CLI dropped it.
+
+use crate::parsed::{Opt, Parsed};
+
+pub const READ_ENGINES: [&str; 2] = ["git", "native"];
+pub const FORECAST_ENGINES: [&str; 2] = ["worktree", "merge-tree"];
+
+/// A `CliError` as `src/errors.js` defines it. `details` is always empty and
+/// `exitCode` always 1 for the failures the front end raises.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Failure {
+  pub message: String,
+  pub code: &'static str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Outcome {
+  Help,
+  Version,
+  /// `json` is whether `--json` was in scope when the failure was raised
+  /// (ADR-0021): failures before command dispatch are always prose.
+  Fail {
+    failure: Failure,
+    json: bool,
+  },
+  /// The repository still keeps its metadata under the former names, and the
+  /// command is not one of the two that answer there (ADR-0039 §8).
+  Unmigrated {
+    json: bool,
+  },
+  /// `cst fetch`, `pull`, `push` or `clone` (ADR-0040): Git's command with
+  /// `args`, which also carries the records unless `--no-records` was given.
+  Sync {
+    command: String,
+    args: Vec<String>,
+    json: bool,
+    records: bool,
+    settings: Vec<(&'static str, String)>,
+  },
+  /// A ported command, answered by this CLI. `settings` are the variables its
+  /// global flags select, as `setEnvironmentValue` would.
+  Native {
+    command: String,
+    parsed: Parsed,
+    settings: Vec<(&'static str, String)>,
+  },
+}
+
+/// The commands this CLI answers natively. A command joins only when every
+/// CLI-level test that exercises it passes against this CLI in all six modes
+/// (ADR-0037 §4).
+pub const NATIVE_COMMANDS: &[&str] = &[
+  "audit identity",
+  "branch",
+  "capabilities",
+  "cherry-pick",
+  "commit",
+  "compact-merge",
+  "doctor",
+  "forecast",
+  "graph",
+  "hard-squash",
+  "init",
+  "merge",
+  "merge-plan",
+  "metadata benchmark",
+  "metadata dispose",
+  "metadata export",
+  "metadata import",
+  "metadata retain",
+  "metadata status",
+  "metadata validate",
+  "migrate",
+  "proof-bundle",
+  "provenance",
+  "rebase",
+  "rebase-forecast",
+  "rebase-plan",
+  "receipts",
+  "reconcile",
+  "resolve apply",
+  "resolve list",
+  "resolve reject",
+  "resolve status",
+  "spec benchmark",
+  "spec index",
+  "spec merge-plan",
+  "spec resolve",
+  "spec show",
+  "spec status",
+  "verify-proof",
+  "workspace archive",
+  "workspace checkpoint",
+  "workspace create",
+  "workspace forecast",
+  "workspace list",
+  "workspace move",
+  "workspace prune",
+  "workspace repair",
+  "workspace restore",
+];
+
+/// The commands that run Git's command of the same name and carry the
+/// records with it (ADR-0040). Their arguments are Git's, so the front end
+/// reads only `--json` and `--no-records` from them.
+pub const SYNC_COMMANDS: [&str; 4] = ["fetch", "pull", "push", "clone"];
+
+/// The first words `cst` answers itself: each command's first word, and the
+/// help and version spellings the front end reads.
+fn is_cst_word(word: &str) -> bool {
+  matches!(word, "help" | "version")
+    || SYNC_COMMANDS.contains(&word)
+    || NATIVE_COMMANDS
+      .iter()
+      .any(|command| command.split(' ').next() == Some(word))
+}
+
+/// Whether an invocation is Git's (ADR-0040): `Some(n)` when it runs `git`
+/// with the arguments after the first `n`. `cst git <arguments>` is Git's
+/// whatever follows, and so is any first word `cst` does not answer itself.
+/// A first word that begins with `-` is `cst`'s, so the global flags and the
+/// help and version spellings keep their meaning; a global flag is never read
+/// from a passthrough command.
+pub fn passthrough(raw: &[String]) -> Option<usize> {
+  let first = raw.first()?;
+  if first == "git" {
+    Some(1)
+  } else if first.is_empty() || first.starts_with('-') || is_cst_word(first) {
+    None
+  } else {
+    Some(0)
+  }
+}
+
+/// Whether this invocation is a ported command: the command, or for a command
+/// with subcommands, the command and its subcommand.
+fn is_native(command: &str, parsed: &Parsed) -> bool {
+  // `cst resolve` alone is `cst resolve status` (`positionals[0] ?? "status"`).
+  let default = (command == "resolve").then_some("status");
+  NATIVE_COMMANDS.contains(&command)
+    || parsed
+      .positionals
+      .first()
+      .map(String::as_str)
+      .or(default)
+      .is_some_and(|subcommand| {
+        NATIVE_COMMANDS.contains(&format!("{command} {subcommand}").as_str())
+      })
+}
+
+fn fail(message: impl Into<String>, code: &'static str, json: bool) -> Outcome {
+  Outcome::Fail {
+    failure: Failure {
+      message: message.into(),
+      code,
+    },
+    json,
+  }
+}
+
+/// The variables a command's global flags select, as `setEnvironmentValue` would.
+pub type Settings = [(&'static str, String)];
+
+/// Decide an invocation. `env` looks up a user-facing environment variable by
+/// the name after its `CAUSET_` prefix, the way the JavaScript CLI sees it;
+/// `None` means unset. `unmigrated` says whether the working directory is in a
+/// repository that has not run `cst migrate`, under the settings it is given.
+pub fn decide(
+  raw: &[String],
+  env: &dyn Fn(&str) -> Option<String>,
+  unmigrated: &dyn Fn(&Settings) -> bool,
+  help: &str,
+) -> Outcome {
+  let has = |flag: &str| raw.iter().any(|item| item == flag);
+  if has("--git-session") && has("--no-git-session") {
+    return fail(
+      "Choose only one of --git-session or --no-git-session.",
+      "usage-conflicting-options",
+      false,
+    );
+  }
+  // Each selector: its flag, its accepted values, and the label its
+  // environment variable's error uses. A flag replaces the variable's value.
+  let selectors = [
+    ("--forecast-engine", &FORECAST_ENGINES, "forecast engine"),
+    ("--engine", &READ_ENGINES, "engine"),
+  ];
+  let mut selections = [env("FORECAST_ENGINE"), env("ENGINE")];
+  let mut settings: Vec<(&'static str, String)> = Vec::new();
+  if has("--trace-git") {
+    settings.push(("TRACE", "1".into()));
+  }
+  if has("--git-session") {
+    settings.push(("GIT_SESSION", "1".into()));
+  }
+  if has("--no-git-session") {
+    settings.push(("GIT_SESSION", "0".into()));
+  }
+  let names = ["FORECAST_ENGINE", "ENGINE"];
+  let mut args: Vec<&str> = Vec::new();
+  let mut index = 0;
+  while index < raw.len() {
+    let item = raw[index].as_str();
+    index += 1;
+    if matches!(item, "--trace-git" | "--git-session" | "--no-git-session") {
+      continue;
+    }
+    let selector = selectors
+      .iter()
+      .position(|(flag, ..)| item == *flag || item.starts_with(&format!("{flag}=")));
+    let Some(slot) = selector else {
+      args.push(item);
+      continue;
+    };
+    let (flag, allowed, _) = selectors[slot];
+    let value = if item.contains('=') {
+      Some(&item[flag.len() + 1..])
+    } else {
+      index += 1;
+      raw.get(index - 1).map(String::as_str)
+    };
+    match value {
+      Some(value) if allowed.contains(&value) => {
+        selections[slot] = Some(value.to_string());
+        settings.push((names[slot], value.to_string()));
+      }
+      _ => {
+        return fail(
+          format!("{flag} requires one of: {}.", allowed.join(", ")),
+          "usage-invalid-option-value",
+          false,
+        );
+      }
+    }
+  }
+  // The environment selections are validated on every command, as the flags are.
+  for ((_, allowed, label), selection) in selectors.iter().zip(&selections) {
+    if let Some(value) = selection.as_deref().filter(|value| !value.is_empty()) {
+      if !allowed.contains(&value) {
+        return fail(
+          format!(
+            "Unknown {label} '{value}'. Use one of: {}.",
+            allowed.join(", ")
+          ),
+          "usage-invalid-option-value",
+          false,
+        );
+      }
+    }
+  }
+
+  let command = args.first().copied().unwrap_or("");
+  if matches!(command, "" | "help" | "--help" | "-h") {
+    return Outcome::Help;
+  }
+  if matches!(command, "version" | "--version" | "-V") {
+    return Outcome::Version;
+  }
+  if SYNC_COMMANDS.contains(&command) {
+    let own = |item: &&str| matches!(*item, "--json" | "--no-records");
+    let json = args[1..].contains(&"--json");
+    let records = !args[1..].contains(&"--no-records");
+    // Git's merge output is on standard output, so a pull has no JSON form
+    // (ADR-0040); Git would answer the option with its usage text.
+    if command == "pull" && json {
+      return fail(
+        "Unknown option '--json' for 'cst pull': Git's merge output uses standard output, so a pull has no JSON form. Run 'cst fetch --json' for a report of the records, then 'cst pull'.",
+        "usage-unknown-option",
+        true,
+      );
+    }
+    if command != "clone" && unmigrated(&settings) {
+      return Outcome::Unmigrated { json };
+    }
+    return Outcome::Sync {
+      command: command.to_string(),
+      args: args[1..]
+        .iter()
+        .filter(|item| !own(item))
+        .map(|item| item.to_string())
+        .collect(),
+      json,
+      records,
+      settings,
+    };
+  }
+  if let Some((item, flag, json)) = camel_value_option(&args[1..]) {
+    return fail(
+      format!("Unknown option '{item}' for 'cst {command}'. Spell it '{flag}', followed by its value."),
+      "usage-unknown-option",
+      json,
+    );
+  }
+  let parsed = match parse_args(&args[1..]) {
+    Ok(parsed) => parsed,
+    Err(failure) => {
+      return Outcome::Fail {
+        failure,
+        json: false,
+      };
+    }
+  };
+  let json = parsed.truthy("json");
+  // The migration window has ended (ADR-0039 §8): the refusal comes before a
+  // command's own checks, as it does in `main` of `src/cli.js`.
+  if !matches!(command, "migrate" | "doctor") && unmigrated(&settings) {
+    return Outcome::Unmigrated { json };
+  }
+  if let Some(failure) = unknown_option(command, &args[1..], &parsed) {
+    return Outcome::Fail { failure, json };
+  }
+  match usage_check(command, &parsed, help) {
+    Some(failure) => Outcome::Fail { failure, json },
+    None if is_native(command, &parsed) => Outcome::Native {
+      command: command.to_string(),
+      parsed,
+      settings,
+    },
+    None => fail(
+      format!("'{command}' passed its usage checks but has no native implementation."),
+      "internal-invariant",
+      json,
+    ),
+  }
+}
+
+const REPEATABLE_FLAGS: &[&str] = &[
+  "--authored-by",
+  "--generated-by",
+  "--reviewed-by",
+  "--reword",
+  "--edit",
+  "--squash",
+  "--fixup",
+];
+
+const VALUE_FLAGS: &[&str] = &[
+  "--message",
+  "-m",
+  "--from",
+  "--path",
+  "--owner",
+  "--focus",
+  "--cone",
+  "--against",
+  "--anchors-from",
+  "--label",
+  "--reason",
+  "--resolution",
+  "--use-forecast",
+  "--samples",
+  "--warmup",
+  "--documents",
+  "--blocks",
+  "--history",
+  "--workspaces",
+  "--notes",
+  "--resolutions",
+  "--budget-ms",
+  "--areas",
+  "--files-per-area",
+];
+
+/// `item.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())`.
+fn option_key(item: &str) -> String {
+  let mut key = String::new();
+  let mut chars = item[2..].chars().peekable();
+  while let Some(c) = chars.next() {
+    match chars.peek() {
+      Some(next) if c == '-' && next.is_ascii_lowercase() => {
+        key.push(next.to_ascii_uppercase());
+        chars.next();
+      }
+      _ => key.push(c),
+    }
+  }
+  key
+}
+
+/// The first camel-case spelling of an option that takes a value, with its
+/// kebab-case spelling and whether `--json` was given (#262). `parse_args`
+/// consumes a value only after a kebab-case spelling, so `--generatedBy agent`
+/// would store `true` under the key and drop `agent`: a provenance claim by an
+/// actor named "true". A boolean flag keeps its camel-case spelling.
+fn camel_value_option(args: &[&str]) -> Option<(String, &'static str, bool)> {
+  let mut found = None;
+  let mut json = false;
+  let mut index = 0;
+  while index < args.len() {
+    let item = args[index];
+    index += 1;
+    if REPEATABLE_FLAGS.contains(&item) || VALUE_FLAGS.contains(&item) {
+      index += 1;
+    } else if item == "--json" {
+      json = true;
+    } else if found.is_none() && item.starts_with("--") {
+      let key = option_key(item);
+      let flag = REPEATABLE_FLAGS
+        .iter()
+        .chain(VALUE_FLAGS)
+        .find(|flag| flag.starts_with("--") && option_key(flag) == key);
+      if let Some(flag) = flag {
+        found = Some((item.to_string(), *flag));
+      }
+    }
+  }
+  found.map(|(item, flag)| (item, flag, json))
+}
+
+/// `parseArgs` in `src/cli.js`. A value option spelled in camel case never
+/// reaches it (`camel_value_option`), so a repeatable flag's key only ever
+/// holds its values.
+fn parse_args(args: &[&str]) -> Result<Parsed, Failure> {
+  let mut parsed = Parsed::default();
+  let mut index = 0;
+  while index < args.len() {
+    let item = args[index];
+    let repeatable = REPEATABLE_FLAGS.contains(&item);
+    if repeatable || VALUE_FLAGS.contains(&item) {
+      let Some(value) = args.get(index + 1) else {
+        return Err(Failure {
+          message: format!("{item} requires a value."),
+          code: "usage-missing-argument",
+        });
+      };
+      let key = if item == "-m" {
+        "message".to_string()
+      } else {
+        option_key(item)
+      };
+      if repeatable {
+        match parsed.options.get_mut(&key) {
+          Some(Opt::Values(values)) => values.push(value.to_string()),
+          _ => {
+            parsed
+              .options
+              .insert(key, Opt::Values(vec![value.to_string()]));
+          }
+        }
+      } else {
+        parsed.options.insert(key, Opt::Value(value.to_string()));
+      }
+      index += 2;
+    } else if item.starts_with("--") {
+      parsed.options.insert(option_key(item), Opt::Flag);
+      index += 1;
+    } else {
+      parsed.positionals.push(item.to_string());
+      index += 1;
+    }
+  }
+  Ok(parsed)
+}
+
+const ACTORS: &[&str] = &["authoredBy", "generatedBy", "reviewedBy"];
+const INTERACTIVE: &[&str] = &["from", "reword", "edit", "squash", "fixup"];
+
+/// The option keys a command reads, by the key `parse_args` stores them
+/// under, so a camel-case spelling is accepted wherever its kebab-case one is.
+/// `--json` is every command's: it selects the failure envelope (ADR-0021).
+/// `None` for a command or subcommand that does not exist, which
+/// `usage_check` refuses by name.
+fn allowed_options(command: &str, parsed: &Parsed) -> Option<Vec<&'static str>> {
+  let subcommand = parsed.positionals.first().map(String::as_str);
+  let keys: Vec<&'static str> = match (command, subcommand) {
+    ("init" | "graph" | "receipts" | "branch" | "proof-bundle" | "merge-plan", _) => vec![],
+    ("commit", _) => [&["message", "all", "allowEmpty"][..], ACTORS].concat(),
+    ("provenance", Some("declare")) => ACTORS.to_vec(),
+    ("provenance", _) => vec!["all"],
+    ("merge", _) => vec!["message", "compact", "hardSquash"],
+    ("compact-merge" | "hard-squash", _) => vec!["message"],
+    ("verify-proof", _) => vec!["offline", "anchorsFrom"],
+    ("rebase-plan", _) => INTERACTIVE.to_vec(),
+    ("rebase-forecast", _) => [INTERACTIVE, &["targetCheckpoint", "acceptCandidates"]].concat(),
+    ("rebase", _) => [
+      INTERACTIVE,
+      &["acceptCandidates", "useForecast", "status", "continue", "fork", "abort", "message"],
+    ]
+    .concat(),
+    ("forecast", _) => vec!["targetCheckpoint", "acceptCandidates"],
+    ("reconcile", _) => vec!["acceptCandidates", "useForecast", "status", "continue", "fork", "abort"],
+    ("resolve", None | Some("status" | "list")) => vec![],
+    ("resolve", Some("apply" | "reject")) => vec!["all", "resolution"],
+    ("cherry-pick", _) => vec!["fork", "repeat"],
+    ("audit", Some("identity")) => vec![],
+    ("metadata", Some("status" | "export")) => vec![],
+    ("metadata", Some("validate")) => vec!["strict"],
+    ("metadata", Some("retain")) => vec!["dryRun", "apply"],
+    ("metadata", Some("import")) => vec!["dryRun", "apply", "parkConflicts"],
+    ("metadata", Some("dispose")) => vec!["keepLocal", "replaceLocal", "reason"],
+    ("metadata", Some("benchmark")) => vec![
+      "history", "workspaces", "notes", "resolutions", "samples", "budgetMs", "areas", "filesPerArea",
+    ],
+    ("capabilities", _) => vec!["against"],
+    ("workspace", Some("list" | "move" | "archive")) => vec![],
+    ("workspace", Some("create")) => vec!["from", "path", "owner", "focus", "cone"],
+    ("workspace", Some("checkpoint")) => vec!["label"],
+    ("workspace", Some("restore" | "repair")) => vec!["path"],
+    ("workspace", Some("prune")) => vec!["dryRun", "apply"],
+    ("workspace", Some("forecast")) => vec!["sourceCheckpoint", "targetCheckpoint", "acceptCandidates"],
+    ("spec", Some("index")) => vec!["force", "all"],
+    ("spec", Some("show" | "merge-plan" | "status")) => vec![],
+    ("spec", Some("resolve")) => vec!["all"],
+    ("spec", Some("benchmark")) => vec!["documents", "blocks"],
+    ("doctor", _) => vec!["benchmark", "samples", "warmup", "differential"],
+    ("migrate", _) => vec!["dryRun"],
+    _ => return None,
+  };
+  Some([keys, vec!["json"]].concat())
+}
+
+/// The commands whose names Git also has: an option `cst`'s command does not
+/// define is most likely Git's, so the refusal names Git's command (ADR-0040).
+const GIT_NAMES: &[&str] = &["init", "commit", "branch", "merge", "rebase", "cherry-pick"];
+
+/// The first option in `args` that `command` does not define (#257). It walks
+/// `args` as `parse_args` does, so a flag's value is never mistaken for an
+/// option, and a short option other than `-m` (which `parse_args` would have
+/// taken for a positional) is refused too.
+fn unknown_option(command: &str, args: &[&str], parsed: &Parsed) -> Option<Failure> {
+  let allowed = allowed_options(command, parsed)?;
+  let mut index = 0;
+  while index < args.len() {
+    let item = args[index];
+    index += 1;
+    let key = if item == "-m" {
+      "message".to_string()
+    } else if item.starts_with("--") {
+      option_key(item)
+    } else if item.starts_with('-') && item.len() > 1 {
+      String::new()
+    } else {
+      continue;
+    };
+    if REPEATABLE_FLAGS.contains(&item) || VALUE_FLAGS.contains(&item) {
+      index += 1;
+    }
+    if !allowed.contains(&key.as_str()) {
+      let git = if GIT_NAMES.contains(&command) {
+        format!(" For Git's own '{command}', run 'cst git {command}'.")
+      } else {
+        String::new()
+      };
+      let message =
+        format!("Unknown option '{item}' for 'cst {command}'. Run 'cst --help' for the options it takes.{git}");
+      return Some(Failure {
+        message,
+        code: "usage-unknown-option",
+      });
+    }
+  }
+  None
+}
+
+fn missing(usage: &str) -> Failure {
+  Failure {
+    message: format!("Missing required argument. Usage: {usage}"),
+    code: "usage-missing-argument",
+  }
+}
+
+fn failure(message: &str, code: &'static str) -> Failure {
+  Failure {
+    message: message.to_string(),
+    code,
+  }
+}
+
+/// Each command's checks that `src/cli.js` makes from its arguments alone,
+/// before any repository access, in its order. `None` when they pass.
+fn usage_check(command: &str, parsed: &Parsed, help: &str) -> Option<Failure> {
+  let require = |present: bool, usage: &str| (!present).then(|| missing(usage));
+  let p = |index| parsed.positional(index);
+  let positional = |index: usize| parsed.positionals.get(index).map(String::as_str);
+  let conflicting_action = || {
+    let actions = ["status", "continue", "abort"]
+      .iter()
+      .filter(|key| parsed.truthy(key))
+      .count();
+    (actions > 1).then(|| {
+      failure(
+        "Choose only one of --status, --continue, or --abort.",
+        "usage-conflicting-options",
+      )
+    })
+  };
+  let any_action = || {
+    ["status", "continue", "abort"]
+      .iter()
+      .any(|key| parsed.truthy(key))
+  };
+  match command {
+    "provenance" if positional(0) == Some("declare") => require(
+      p(1),
+      "cst provenance declare <commit> --authored-by|--generated-by|--reviewed-by <actor>",
+    ),
+    "init" | "graph" | "provenance" | "receipts" | "capabilities" | "doctor" | "migrate" => None,
+    "commit" => require(parsed.truthy("message"), "cst commit -m <message>"),
+    "branch" => require(p(0), "cst branch <name> [from]"),
+    "merge" | "compact-merge" | "hard-squash" => require(p(0), &format!("cst {command} <source>")),
+    "proof-bundle" => require(p(0), "cst proof-bundle <source>"),
+    "verify-proof" => require(p(0), "cst verify-proof <file>"),
+    "merge-plan" => require(p(0), "cst merge-plan <source>"),
+    "rebase-plan" | "rebase-forecast" => require(p(0), &format!("cst {command} <onto> [<source>]"))
+      .or_else(|| {
+        (parsed.positionals.len() > 2).then(|| Failure {
+          message: format!("Usage: cst {command} <onto> [<source>]"),
+          code: "usage-missing-argument",
+        })
+      }),
+    "rebase" => conflicting_action().or_else(|| {
+      if any_action() {
+        return None;
+      }
+      require(p(0), "cst rebase <onto>").or_else(|| {
+        (parsed.positionals.len() > 1)
+          .then(|| failure("Usage: cst rebase <onto>", "usage-missing-argument"))
+      })
+    }),
+    "forecast" => require(p(0), "cst forecast <source>"),
+    "reconcile" => conflicting_action().or_else(|| {
+      if any_action() {
+        None
+      } else {
+        require(p(0), "cst reconcile <source>")
+      }
+    }),
+    "resolve" => match positional(0).unwrap_or("status") {
+      "status" | "apply" | "reject" | "list" => None,
+      _ => Some(failure(
+        "Unknown resolve command. Use status, apply, reject, or list.",
+        "usage-unknown-command",
+      )),
+    },
+    "cherry-pick" => require(p(0), "cst cherry-pick <commit-or-change-id>"),
+    "audit" => (positional(0) != Some("identity")).then(|| {
+      failure(
+        "Unknown audit command. Use identity.",
+        "usage-unknown-command",
+      )
+    }),
+    "metadata" => match positional(0) {
+      Some("retain" | "status" | "validate" | "benchmark") => None,
+      Some("export") => require(p(1), "cst metadata export <directory>"),
+      Some("import") => require(p(1), "cst metadata import <directory> --dry-run|--apply"),
+      Some("dispose") => require(
+        p(1),
+        "cst metadata dispose <record-id> --keep-local|--replace-local",
+      )
+      .or_else(|| {
+        (parsed.truthy("keepLocal") == parsed.truthy("replaceLocal")).then(|| {
+          failure(
+            "Choose exactly one of --keep-local or --replace-local for a disposition.",
+            "usage-conflicting-options",
+          )
+        })
+      }),
+      _ => Some(failure(
+        "Unknown metadata command. Use status, validate, retain, export, import, dispose, or benchmark.",
+        "usage-unknown-command",
+      )),
+    },
+    "workspace" => match positional(0) {
+      Some("list" | "checkpoint" | "prune") => None,
+      Some("create") => require(p(1), "cst workspace create <name>"),
+      Some("move") => require(p(1), "cst workspace move <name> <directory>")
+        .or_else(|| require(p(2), "cst workspace move <name> <directory>")),
+      Some("archive") => require(p(1), "cst workspace archive <name>"),
+      Some("restore") => require(p(1), "cst workspace restore <name>"),
+      Some("repair") => {
+        require(p(1), "cst workspace repair <name> --path <directory>").or_else(|| {
+          require(
+            parsed.truthy("path"),
+            "cst workspace repair <name> --path <directory>",
+          )
+        })
+      }
+      Some("forecast") => require(p(1), "cst workspace forecast <target> <source>")
+        .or_else(|| require(p(2), "cst workspace forecast <target> <source>")),
+      _ => Some(failure(
+        "Unknown workspace command. Use create, list, checkpoint, move, archive, restore, repair, prune, or forecast.",
+        "usage-unknown-command",
+      )),
+    },
+    "spec" => match positional(0) {
+      Some("status" | "resolve" | "benchmark") => None,
+      Some("index") if parsed.truthy("all") => None,
+      Some("index") => require(p(1), "cst spec index <file>"),
+      Some("show") => require(p(1), "cst spec show <file>"),
+      Some("merge-plan") => {
+        let usage = "cst spec merge-plan <file> <base> <ours> <theirs>";
+        (1..=4).find_map(|index| require(p(index), usage))
+      }
+      _ => Some(failure(
+        "Unknown spec command. Use index, show, merge-plan, status, resolve, or benchmark.",
+        "usage-unknown-command",
+      )),
+    },
+    _ => Some(Failure {
+      message: format!("Unknown command '{command}'.\n\n{help}"),
+      code: "usage-unknown-command",
+    }),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn run(args: &[&str]) -> Outcome {
+    run_with(args, &[])
+  }
+
+  fn run_with(args: &[&str], env: &[(&str, &str)]) -> Outcome {
+    let raw: Vec<String> = args.iter().map(|item| item.to_string()).collect();
+    let lookup = |name: &str| {
+      env
+        .iter()
+        .find(|(key, _)| *key == name)
+        .map(|(_, value)| value.to_string())
+    };
+    decide(&raw, &lookup, &|_| false, "HELP")
+  }
+
+  #[test]
+  fn an_unmigrated_repository_is_refused_before_a_command_checks_its_arguments() {
+    let decide_in = |args: &[&str]| {
+      let raw: Vec<String> = args.iter().map(|item| item.to_string()).collect();
+      decide(&raw, &|_| None, &|_| true, "HELP")
+    };
+    // `commit` without a message and an unknown command are usage errors elsewhere.
+    for args in [&["commit"][..], &["no-such-command"], &["graph"]] {
+      assert_eq!(decide_in(args), Outcome::Unmigrated { json: false }, "{args:?}");
+    }
+    assert_eq!(decide_in(&["receipts", "--json"]), Outcome::Unmigrated { json: true });
+    assert_eq!(decide_in(&["version"]), Outcome::Version);
+    assert_eq!(decide_in(&["--help"]), Outcome::Help);
+    for command in ["migrate", "doctor"] {
+      assert!(matches!(decide_in(&[command]), Outcome::Native { .. }), "{command}");
+    }
+  }
+
+  fn failed(outcome: Outcome) -> (String, &'static str, bool) {
+    match outcome {
+      Outcome::Fail { failure, json } => (failure.message, failure.code, json),
+      other => panic!("expected a failure, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn help_and_version_spellings() {
+    for args in [
+      &[][..],
+      &[""],
+      &["help"],
+      &["--help"],
+      &["-h"],
+      &["--trace-git"],
+      &["--engine=git", "help"],
+    ] {
+      assert_eq!(run(args), Outcome::Help, "{args:?}");
+    }
+    for args in [
+      &["version"][..],
+      &["--version"],
+      &["-V"],
+      &["--no-git-session", "version", "--json"],
+    ] {
+      assert_eq!(run(args), Outcome::Version, "{args:?}");
+    }
+  }
+
+  #[test]
+  fn a_pull_refuses_json_and_the_other_remote_commands_take_it() {
+    let (message, code, json) = failed(run(&["pull", "origin", "--json"]));
+    assert!(message.starts_with("Unknown option '--json' for 'cst pull'"), "{message}");
+    assert_eq!((code, json), ("usage-unknown-option", true));
+    for command in ["fetch", "push", "clone"] {
+      match run(&[command, "origin", "--json", "--no-records"]) {
+        Outcome::Sync { args, json, records, .. } => {
+          assert_eq!(args, ["origin"], "{command}");
+          assert!(json && !records, "{command}");
+        }
+        other => panic!("expected {command} to sync, got {other:?}"),
+      }
+    }
+  }
+
+  #[test]
+  fn global_flags_fail_as_prose_in_order() {
+    let (message, code, json) = failed(run(&[
+      "--git-session",
+      "--no-git-session",
+      "--engine=bogus",
+    ]));
+    assert_eq!(
+      message,
+      "Choose only one of --git-session or --no-git-session."
+    );
+    assert_eq!((code, json), ("usage-conflicting-options", false));
+    let (message, _, json) = failed(run(&["--engine", "bogus", "commit", "--json"]));
+    assert_eq!(message, "--engine requires one of: git, native.");
+    assert!(!json);
+    let (message, _, _) = failed(run(&["--forecast-engine"]));
+    assert_eq!(
+      message,
+      "--forecast-engine requires one of: worktree, merge-tree."
+    );
+    let (message, _, _) = failed(run(&["--engine="]));
+    assert_eq!(message, "--engine requires one of: git, native.");
+  }
+
+  #[test]
+  fn a_flag_value_is_consumed_even_when_it_looks_like_a_flag() {
+    let (message, _, _) = failed(run(&["--engine", "--trace-git"]));
+    assert_eq!(message, "--engine requires one of: git, native.");
+    assert_eq!(run(&["--engine", "native", "--help"]), Outcome::Help);
+  }
+
+  #[test]
+  fn environment_selections_are_validated_after_the_flags() {
+    let (message, code, _) = failed(run_with(
+      &["version"],
+      &[("FORECAST_ENGINE", "x"), ("ENGINE", "y")],
+    ));
+    assert_eq!(
+      message,
+      "Unknown forecast engine 'x'. Use one of: worktree, merge-tree."
+    );
+    assert_eq!(code, "usage-invalid-option-value");
+    let (message, _, _) = failed(run_with(&["version"], &[("ENGINE", "y")]));
+    assert_eq!(message, "Unknown engine 'y'. Use one of: git, native.");
+    assert_eq!(
+      run_with(&["--engine=git", "version"], &[("ENGINE", "y")]),
+      Outcome::Version
+    );
+    assert_eq!(run_with(&["version"], &[("ENGINE", "")]), Outcome::Version);
+  }
+
+  #[test]
+  fn a_missing_flag_value_is_prose_even_with_json() {
+    let (message, code, json) = failed(run(&["commit", "--json", "-m"]));
+    assert_eq!(message, "-m requires a value.");
+    assert_eq!((code, json), ("usage-missing-argument", false));
+    let (message, _, _) = failed(run(&["no-such-command", "--reviewed-by"]));
+    assert_eq!(message, "--reviewed-by requires a value.");
+  }
+
+  #[test]
+  fn an_unknown_command_honours_json() {
+    let (message, code, json) = failed(run(&["no-such-command", "--json"]));
+    assert_eq!(message, "Unknown command 'no-such-command'.\n\nHELP");
+    assert_eq!((code, json), ("usage-unknown-command", true));
+    let (_, _, json) = failed(run(&["--json"]));
+    assert!(!json, "--json as the command is not an option");
+    let (_, _, json) = failed(run(&["x", "-m", "--json"]));
+    assert!(!json, "a consumed value is not an option");
+  }
+
+  #[test]
+  fn command_usage_checks() {
+    let cases: &[(&[&str], &str)] = &[
+      (
+        &["commit"],
+        "Missing required argument. Usage: cst commit -m <message>",
+      ),
+      (
+        &["commit", "-m", ""],
+        "Missing required argument. Usage: cst commit -m <message>",
+      ),
+      (
+        &["hard-squash"],
+        "Missing required argument. Usage: cst hard-squash <source>",
+      ),
+      (
+        &["rebase-plan", "a", "b", "c"],
+        "Usage: cst rebase-plan <onto> [<source>]",
+      ),
+      (
+        &["rebase", "--status", "--abort"],
+        "Choose only one of --status, --continue, or --abort.",
+      ),
+      (&["rebase", "a", "b"], "Usage: cst rebase <onto>"),
+      (
+        &["resolve", ""],
+        "Unknown resolve command. Use status, apply, reject, or list.",
+      ),
+      (&["audit"], "Unknown audit command. Use identity."),
+      (
+        &["metadata", "dispose", "r"],
+        "Choose exactly one of --keep-local or --replace-local for a disposition.",
+      ),
+      (
+        &["workspace", "repair", "w", "--path", ""],
+        "Missing required argument. Usage: cst workspace repair <name> --path <directory>",
+      ),
+      (
+        &["spec", "merge-plan", "f", "b", "o"],
+        "Missing required argument. Usage: cst spec merge-plan <file> <base> <ours> <theirs>",
+      ),
+      (
+        &["spec"],
+        "Unknown spec command. Use index, show, merge-plan, status, resolve, or benchmark.",
+      ),
+    ];
+    for (args, expected) in cases {
+      let (message, _, _) = failed(run(args));
+      assert_eq!(&message, expected, "{args:?}");
+    }
+  }
+
+  #[test]
+  fn the_front_end_answers_every_command() {
+    // #262: a value option spelled in camel case is refused, naming its
+    // spelling, where the JavaScript parser recorded `true` or failed with a
+    // TypeError. A boolean flag keeps its camel-case spelling.
+    for (args, item, flag, json) in [
+      (&["commit", "--authoredBy", "--authored-by", "a"][..], "--authoredBy", "--authored-by", false),
+      (&["commit", "--json", "--generatedBy", "--generated-by", "a"], "--generatedBy", "--generated-by", true),
+      (&["commit", "-m", "x", "--generatedBy", "agent"], "--generatedBy", "--generated-by", false),
+      (&["reconcile", "x", "--useForecast", "f", "--json"], "--useForecast", "--use-forecast", true),
+      (&["metadata", "benchmark", "--budgetMs", "5"], "--budgetMs", "--budget-ms", false),
+    ] {
+      let (message, code, enveloped) = failed(run(args));
+      assert_eq!((code, enveloped), ("usage-unknown-option", json), "{args:?}");
+      assert!(message.contains(&format!("'{item}'")) && message.contains(&format!("'{flag}'")), "{message}");
+    }
+    // A camel-case word that is a flag's value is not an option.
+    assert!(matches!(run(&["commit", "-m", "--generatedBy"]), Outcome::Native { .. }));
+    assert!(matches!(run(&["commit", "-m", "x", "--allowEmpty"]), Outcome::Native { .. }));
+    for args in [&["commit", "-m", "x"][..], &["spec", "benchmark"], &["migrate"]] {
+      assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
+    }
+  }
+
+  #[test]
+  fn every_word_cst_does_not_answer_is_gits() {
+    let words = |args: &[&str]| passthrough(&args.iter().map(|item| item.to_string()).collect::<Vec<_>>());
+    for args in [&["status"][..], &["log", "--oneline"], &["UPPER"], &["Commit"], &["switch", "-c", "x"]] {
+      assert_eq!(words(args), Some(0), "{args:?}");
+    }
+    for args in [&["git"][..], &["git", "commit", "--amend"], &["git", "status", "--json"]] {
+      assert_eq!(words(args), Some(1), "{args:?}");
+    }
+    for command in SYNC_COMMANDS {
+      assert_eq!(words(&[command, "origin"]), None, "{command}");
+    }
+    for args in [
+      &[][..],
+      &[""],
+      &["help"],
+      &["version"],
+      &["--help"],
+      &["-V"],
+      &["--json"],
+      &["--trace-git", "status"],
+      &["commit", "--amend"],
+      &["metadata", "nope"],
+      &["resolve"],
+      &["audit"],
+      &["spec"],
+      &["workspace"],
+      &["merge-plan", "x"],
+    ] {
+      assert_eq!(words(args), None, "{args:?}");
+    }
+  }
+
+  #[test]
+  fn an_option_a_command_does_not_take_is_refused_by_name() {
+    // #257: `cst commit --amend` made a new commit, and `cst branch -d x`
+    // took `-d` for the branch name.
+    for (args, item, command) in [
+      (&["commit", "--amend", "-m", "x"][..], "--amend", "commit"),
+      (&["branch", "-d", "foo"], "-d", "branch"),
+      (&["merge", "feature", "--no-ff"], "--no-ff", "merge"),
+      (&["commit", "-am", "x"], "-am", "commit"),
+      (&["commit", "-m", "x", "--from", "main"], "--from", "commit"),
+    ] {
+      let (message, code, json) = failed(run(args));
+      assert_eq!(code, "usage-unknown-option", "{args:?}");
+      assert!(!json, "{args:?}");
+      assert!(message.starts_with(&format!("Unknown option '{item}' for 'cst {command}'.")), "{message}");
+      assert!(message.ends_with(&format!("run 'cst git {command}'.")), "{message}");
+    }
+    let (message, code, json) = failed(run(&["receipts", "--all", "--json"]));
+    assert_eq!((code, json), ("usage-unknown-option", true));
+    assert!(!message.contains("git receipts"), "{message}");
+    for args in [
+      &["workspace", "list", "--path", "x"][..],
+      &["metadata", "status", "--strict"],
+      &["spec", "show", "a.md", "--all"],
+      &["compact-merge", "feature", "--hard-squash"],
+    ] {
+      assert_eq!(failed(run(args)).1, "usage-unknown-option", "{args:?}");
+    }
+    // A flag's value is never read as an option, camel-case spellings stay
+    // accepted, and an unknown command or subcommand is still refused by name.
+    for args in [
+      &["commit", "-m", "--amend"][..],
+      &["commit", "--allowEmpty", "-m", "x"],
+      &["workspace", "create", "w", "--path", "-x"],
+    ] {
+      assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
+    }
+    assert_eq!(failed(run(&["no-such", "--amend"])).1, "usage-unknown-command");
+    assert_eq!(failed(run(&["metadata", "nope", "--amend"])).1, "usage-unknown-command");
+  }
+
+  #[test]
+  fn ported_commands_are_answered_natively_with_their_flag_selections() {
+    for args in [
+      &["doctor", "--benchmark"][..],
+      &["init", "--json"],
+      &["metadata", "retain", "--apply"],
+      &["metadata", "export", "x"],
+      &["metadata", "import", "x", "--apply", "--park-conflicts"],
+      &["metadata", "dispose", "r", "--replace-local", "--reason", "peer is right"],
+      &["commit", "-m", "x", "--generated-by", "agent", "--all"],
+      &["branch", "feature", "main"],
+      &["merge", "feature", "--compact", "-m", "Land it"],
+      &["merge", "feature", "--hard-squash"],
+      &["compact-merge", "feature", "--json"],
+      &["hard-squash", "feature"],
+      &["cherry-pick", "ch_abc", "--fork", "--json"],
+      &["cherry-pick", "HEAD~1", "--repeat"],
+      &["capabilities", "--json"],
+      &["metadata", "status"],
+      &["metadata", "validate", "--strict"],
+      &["resolve"],
+      &["resolve", "list", "--json"],
+      &["forecast", "feature", "--target-checkpoint", "--accept-candidates"],
+      &["resolve", "apply", "--all"],
+      &["resolve", "reject", "f", "--resolution", "res_x", "--json"],
+      &["spec", "show", "a.md"],
+      &["spec", "status"],
+      &["spec", "merge-plan", "f", "b", "o", "t", "--json"],
+      &["spec", "index", "f", "--force"],
+      &["spec", "index", "--all", "--json"],
+      &["spec", "resolve", "specs/a.md", "--all"],
+      &["merge-plan", "feature", "--json"],
+      &["rebase-plan", "main", "feature", "--from", "base", "--squash", "a=b"],
+      &["proof-bundle", "feature"],
+      &["verify-proof", "bundle.json", "--offline", "--anchors-from", "origin"],
+      &["workspace", "list"],
+      &["workspace", "checkpoint", "--label", "x", "--json"],
+      &["workspace", "prune", "--apply"],
+      &["workspace", "create", "w", "--cone", "src", "--from", "main"],
+      &["workspace", "move", "w", "d"],
+      &["workspace", "archive", "w"],
+      &["workspace", "restore", "w", "--path", "p"],
+      &["workspace", "repair", "w", "--path", "p"],
+      &["workspace", "forecast", "a", "b", "--source-checkpoint"],
+      &["rebase-forecast", "main", "feature", "--target-checkpoint", "--edit", "abc"],
+      &["rebase", "main", "--use-forecast", "rebase_forecast_1", "--fixup", "b=a"],
+      &["rebase", "--status", "--json"],
+      &["rebase", "--continue", "--fork", "-m", "words"],
+      &["rebase", "--abort"],
+      &["migrate", "--dry-run"],
+      &["metadata", "benchmark", "--history", "5", "--files-per-area", "2"],
+      &["spec", "benchmark", "--documents", "2"],
+      &["reconcile", "feature", "--accept-candidates", "--use-forecast", "forecast_x"],
+      &["reconcile", "--status", "--json"],
+      &["reconcile", "--abort"],
+      &["reconcile", "feature", "--fork"],
+      &["reconcile", "--continue"],
+      &["reconcile", "--continue", "--fork", "--json"],
+    ] {
+      assert!(matches!(run(args), Outcome::Native { .. }), "{args:?}");
+    }
+    let Outcome::Native {
+      settings, parsed, ..
+    } = run(&[
+      "--trace-git",
+      "--no-git-session",
+      "--engine",
+      "native",
+      "doctor",
+      "--differential",
+    ])
+    else {
+      panic!("doctor is native");
+    };
+    assert!(parsed.truthy("differential"));
+    assert_eq!(
+      settings,
+      [
+        ("TRACE", "1".to_string()),
+        ("GIT_SESSION", "0".to_string()),
+        ("ENGINE", "native".to_string())
+      ]
+    );
+  }
+
+  #[test]
+  fn option_keys_are_camel_cased_like_the_javascript_regex() {
+    assert_eq!(option_key("--allow-empty"), "allowEmpty");
+    assert_eq!(option_key("--a--b"), "a-B");
+    assert_eq!(option_key("--files-per-area"), "filesPerArea");
+    assert_eq!(option_key("--X-Y"), "X-Y");
+  }
+}
