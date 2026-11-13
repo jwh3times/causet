@@ -46,7 +46,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - name: CI policy, release plan and benchmark analysis regressions
         run: node --test test/ci-plan.test.js test/release-plan.test.js test/scale-benchmark-analysis.test.js
       - name: Select suite matrix
@@ -87,7 +87,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - name: The newest section names the version this merge will mint
         run: node scripts/check-changelog.mjs
 

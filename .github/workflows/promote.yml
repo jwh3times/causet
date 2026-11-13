@@ -60,7 +60,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - name: Plan
         id: plan
         env:
@@ -128,7 +128,7 @@ jobs:
           ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
           registry-url: https://registry.npmjs.org
       - name: Move npm's latest to the version, for every package
         if: vars.NPM_PUBLISH == 'true'

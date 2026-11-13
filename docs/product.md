@@ -8,7 +8,7 @@
 | Document version | 1.0 |
 | Product baseline | `main`, where every landing is a release (ADR-0048); `CHANGELOG.md` names each version |
 | Status | Active product baseline |
-| Last updated | 2026-11-12 |
+| Last updated | 2026-11-13 |
 | Primary audience | Maintainers, contributors, protocol designers, and AI coding agents |
 | Decision owner | Repository maintainers |
 
@@ -478,7 +478,7 @@ Priorities use **P0** (required invariant), **P1** (core product), **P2**
 
 | ID | Requirement |
 | --- | --- |
-| NFR-PORT-01 | From v0.21.0 the installed `cst` is a Rust executable, published for Windows x64 and Linux x64 (glibc), that needs no Node.js to run (ADR-0037, ADR-0038). Node.js 20+ is still needed to install it through npm, to run the small launcher when install scripts did not run, and to develop; on a platform with no published executable `cst` must be built from a checkout, since v0.24.0 removed the JavaScript CLI that served there (#243). The Git baseline is 2.40+ (raised from 2.38 on 2026-08-28 by ADR-0015 for `git merge-tree --merge-base`) until changed by a documented release decision; the merge-tree forecast engine (the default on Windows since the 2026-08-30 ADR-0016 amendment, opt-in elsewhere) additionally needs Git 2.49 (`merge-tree --stdin` flushes each record only from there) and falls back to the worktree simulator below it (ADR-0016). |
+| NFR-PORT-01 | From v0.21.0 the installed `cst` is a Rust executable, published for Windows x64 and Linux x64 (glibc), that needs no Node.js to run (ADR-0037, ADR-0038). Node.js 24+ (raised from 20 on 2026-11-13, #445, when Node 20 was past its end of life) is still needed to install it through npm, to run the small launcher when install scripts did not run, and to develop; on a platform with no published executable `cst` must be built from a checkout, since v0.24.0 removed the JavaScript CLI that served there (#243). The Git baseline is 2.40+ (raised from 2.38 on 2026-08-28 by ADR-0015 for `git merge-tree --merge-base`) until changed by a documented release decision; the merge-tree forecast engine (the default on Windows since the 2026-08-30 ADR-0016 amendment, opt-in elsewhere) additionally needs Git 2.49 (`merge-tree --stdin` flushes each record only from there) and falls back to the worktree simulator below it (ADR-0016). |
 | NFR-PORT-02 | Tests shall run on Windows and a POSIX platform; newline-sensitive behavior shall state whether LF normalization is semantic. |
 | NFR-PORT-03 | Paths stored for portable identity shall use repository-relative normalized form; local materialization paths may remain platform-specific. |
 | NFR-PORT-04 | Repositories using SHA-1 or SHA-256 object formats shall not be rejected by hard-coded OID length assumptions. |

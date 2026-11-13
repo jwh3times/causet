@@ -81,7 +81,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - name: Plan
         id: plan
         env:
@@ -127,7 +127,7 @@ jobs:
           ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - name: Stamp the version being released
         # package.json on main names the release line; the build embeds the
         # version from it (native/cli/build.rs), so it is set to this release's.
@@ -177,7 +177,7 @@ jobs:
           ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - uses: actions/download-artifact@v4
         with:
           pattern: executable-*
@@ -229,7 +229,7 @@ jobs:
           ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - uses: actions/download-artifact@v4
         with:
           name: release-set
@@ -276,7 +276,7 @@ jobs:
           ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
           registry-url: https://registry.npmjs.org
       - uses: actions/download-artifact@v4
         with:
