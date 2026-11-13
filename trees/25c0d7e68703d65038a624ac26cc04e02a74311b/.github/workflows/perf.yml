@@ -59,7 +59,7 @@ jobs:
         run: git fetch --no-tags origin '+refs/notes/causet:refs/notes/causet' '+refs/causet/*:refs/causet/*'
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 26
       - name: Toolchain
         run: |
           git --version

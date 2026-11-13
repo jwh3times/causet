@@ -4,6 +4,19 @@
 
 No unreleased changes.
 
+## [0.27.0] - 2026-11-13
+
+- **Node.js 24 is the new floor** (#445). Node 20 reached end of life on
+  2026-04-30. The npm package now declares `engines.node` `>=24`, so
+  installing `cst` through npm, running its launcher when install scripts did
+  not run, and developing from a checkout all need Node.js 24 or newer. The
+  installed `cst` still needs no Node.js, and `install.sh` and `install.ps1`
+  are unchanged. CI runs every suite on Node 26, the active LTS, and a full
+  qualification also runs the default and session-on modes on Node 24, the
+  floor. The suites' store reader dropped its fallback for a Node that cannot
+  read zstd. That fallback mistranslated a commit a later import adds, and it
+  failed the 0.26.1 promotion on Node 20.
+
 ## [0.26.1] - 2026-11-12
 
 - **`/what-next` puts an active handoff first.** When `handoff_map.json`

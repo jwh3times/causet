@@ -164,42 +164,27 @@ export function decodeNativeCommit(body) {
 const STORED_FRAME = 0;
 const ZSTD_FRAME = 1;
 
-/** Whether this Node reads zstd frames (22.15 and later), so the suites can decode what a store compressed. */
-export const readsZstd = typeof zlib.zstdDecompressSync === "function";
-
-/** A frame's uncompressed bytes, or `null` where this Node cannot read its codec. */
+/** A frame's uncompressed bytes. Every supported Node reads zstd (#445). */
 function frameBytes(frame) {
   if (frame.codec === STORED_FRAME) return frame.bytes;
-  if (frame.codec === ZSTD_FRAME && readsZstd) return zlib.zstdDecompressSync(frame.bytes);
-  return null;
+  if (frame.codec === ZSTD_FRAME) return zlib.zstdDecompressSync(frame.bytes);
+  throw new Error(`a frame with codec ${frame.codec}, which storage.md §4 does not define`);
 }
 
 /**
  * Every native commit the store holds present, by ID (hex): its fields
- * decoded (`decodeNativeCommit`) and its `body` where this Node reads its
- * frame. Where it cannot, only `preserved` is known, from where import
- * places a native commit: straight after the preserved commit it derives
- * from (storage.md §3.2), which is what `cst` looks at first too, so the
- * suites check that placement independently only where zstd is read.
+ * decoded (`decodeNativeCommit`) and its `body`.
  */
 export function nativeCommits(store) {
   const commits = new Map();
   for (const file of containers(store)) {
     const { frames, objects } = readContainer(file);
-    const endingAt = new Map(objects.map((object) => [`${object.frame}:${object.offset + object.length}`, object]));
     const read = new Map();
     for (const object of objects) {
       if (object.type !== TYPES.nativeCommit || object.state !== 0) continue;
       if (!read.has(object.frame)) read.set(object.frame, frameBytes(frames[object.frame]));
-      const bytes = read.get(object.frame);
-      if (bytes) {
-        const body = bytes.subarray(object.offset, object.offset + object.length);
-        commits.set(object.name.toString("hex"), { ...decodeNativeCommit(body), body });
-        continue;
-      }
-      const before = object.offset > 0 ? endingAt.get(`${object.frame}:${object.offset}`)
-        : endingAt.get(`${object.frame - 1}:${frames[object.frame - 1]?.uncompressed}`);
-      commits.set(object.name.toString("hex"), { preserved: before?.name.toString("hex") ?? null });
+      const body = read.get(object.frame).subarray(object.offset, object.offset + object.length);
+      commits.set(object.name.toString("hex"), { ...decodeNativeCommit(body), body });
     }
   }
   return commits;

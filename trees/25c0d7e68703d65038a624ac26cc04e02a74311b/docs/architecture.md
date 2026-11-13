@@ -6,8 +6,8 @@
 | --- | --- |
 | Architecture baseline | `main`, where every landing is a release (ADR-0048) |
 | Status | Current implementation reference |
-| Last updated | 2026-11-12 |
-| Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 20+ installs it through npm and runs the suites; there is no JavaScript implementation of the CLI since #243 |
+| Last updated | 2026-11-13 |
+| Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 24+ installs it through npm and runs the suites; there is no JavaScript implementation of the CLI since #243 |
 | External runtime dependencies | Git. Node.js only to launch the executable when npm install scripts did not run; a platform with no published executable is refused, not served by a fallback |
 
 This document explains the system that exists. [product.md](product.md) defines

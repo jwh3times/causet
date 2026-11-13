@@ -145,7 +145,7 @@ removed it
 ## Develop from a checkout
 
 A checkout builds `cst` from `native/` with Rust (the toolchain
-`native/rust-toolchain.toml` pins) and runs the suites with Node.js 20 or newer;
+`native/rust-toolchain.toml` pins) and runs the suites with Node.js 24 or newer;
 it has no npm dependencies. The build is what the suites run.
 
 ```bash

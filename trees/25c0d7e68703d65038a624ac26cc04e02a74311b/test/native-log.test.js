@@ -15,7 +15,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-import { TYPES, addContainer, aliases, names, nativeCommits, readsZstd } from "../test-support/native-store.js";
+import { TYPES, addContainer, aliases, names, nativeCommits } from "../test-support/native-store.js";
 
 const created = [];
 
@@ -187,9 +187,7 @@ for (const format of ["sha1", "sha256"]) {
     assert.deepEqual([...commits.values()].map((commit) => commit.preserved).sort(), reached.map((id) => rows.get(id)).sort());
     const notes = history.git(["rev-parse", "refs/notes/causet"]);
     assert.ok(rows.has(notes), "the notes commit is imported, as a preserved Git object");
-    // What import derived, read from the commits' bodies, which a Node that
-    // reads no zstd frame cannot reach; the Rust vectors check it there too.
-    if (!readsZstd) return;
+    // What import derived, read from the commits' bodies.
     const byPreserved = new Map([...commits.values()].map((commit) => [commit.preserved, commit]));
     const one = byPreserved.get(rows.get(history.one));
     assert.deepEqual([one.changeId, one.derivedFrom, one.originCommit], ["ch_0one", "ch_0zero", "abc123"]);

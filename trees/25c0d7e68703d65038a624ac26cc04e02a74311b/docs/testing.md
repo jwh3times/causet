@@ -6,7 +6,7 @@ run history-changing manual experiments in a valuable repository.
 
 ## Requirements
 
-- Node.js 20 or newer, which runs the suites; the installed `cst` itself needs none
+- Node.js 24 or newer, which runs the suites; the installed `cst` itself needs none
 - Rust (the toolchain `native/rust-toolchain.toml` pins), to build the `cst` the suites run with `npm run build:native`
 - Git 2.40 or newer (Git 2.49 or newer to exercise the merge-tree forecast
   engine; the merge-tree scenarios skip on older Git, where one scenario
@@ -213,7 +213,7 @@ Remove-Item Env:CAUSET_KIND -ErrorAction SilentlyContinue
   again. A repository is compared whenever its refs or `HEAD` differ from when
   it was last compared, so a fixture one test makes and later tests change is
   compared as they leave it. A repository a test removes before it ends is not
-  seen. The mode needs Node 20.5 or later, where `afterEach` runs before a
+  seen. The mode relies on `afterEach` running before a
   test's own `t.after` cleanup. By then `os.tmpdir()` names the directory
   outside the test again, so a cleanup that checks a fixture's path reads
   the temporary directory when it makes the fixture, not when it removes it.
@@ -1619,10 +1619,10 @@ start after those checks pass.
 
 | Trigger | Suite jobs after static checks | Purpose |
 | --- | --- | --- |
-| Code pull request | Default mode on Ubuntu and Windows, Node 24, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
-| Code push to `main` | Default mode on Ubuntu, Node 24, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
+| Code pull request | Default mode on Ubuntu and Windows, Node 26, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
+| Code push to `main` | Default mode on Ubuntu, Node 26, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
 | Known documentation-only PR or main push | None | Static checks still run |
-| Manual `workflow_dispatch`, or `promote.yml`'s call on a tag | All nine modes, the reftable and SHA-256 modes among them, on Ubuntu and Windows, Node 24; default and session-on on Ubuntu, Node 20 | Full platform and minimum-Node qualification |
+| Manual `workflow_dispatch`, or `promote.yml`'s call on a tag | All nine modes, the reftable and SHA-256 modes among them, on Ubuntu and Windows, Node 26; default and session-on on Ubuntu, Node 24, the floor | Full platform and minimum-Node qualification |
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.
@@ -1671,7 +1671,7 @@ Record the tested SHA and results in the PR or release evidence. Local six-mode
 validation remains required for cross-cutting changes, and the native-kind
 mode for changes to native code. Routine defaults cover
 the normal POSIX session-off and Windows session-on paths, but alternate modes
-and Node 20 can otherwise regress until explicit qualification. Code changes
+and the Node 24 floor can otherwise regress until explicit qualification. Code changes
 should go through a PR; an exceptional direct main push requires equivalent
 Windows evidence before pushing. A failed check is investigated before retrying.
 The `static checks` job runs for every change; matrix checks are conditional,

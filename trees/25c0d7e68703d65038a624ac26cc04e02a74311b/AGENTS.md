@@ -38,7 +38,7 @@ mirror.
 
 ## Build, Test, and Development Commands
 
-Developing and testing need Node.js 20+, Git 2.40+ and the Rust toolchain
+Developing and testing need Node.js 24+, Git 2.40+ and the Rust toolchain
 `native/rust-toolchain.toml` pins. The released `cst` is the Rust executable
 in `native/`, which needs Git only, and it is what the suites run (#243):
 `npm run build:native` builds it, and `npm test` fails without it. There are
@@ -50,7 +50,7 @@ no npm dependencies.
 - `.github/workflows/ci.yml` runs static checks on every PR and push to `main`.
   Code PRs add the default suite on Ubuntu and Windows; main adds Ubuntu only.
   Known documentation-only changes omit suites. Manual dispatch runs every
-  mode on both platforms plus the Node 20 floor; use it for high-risk
+  mode on both platforms plus the Node 24 floor; use it for high-risk
   platform qualification as described in `docs/testing.md`, and
   `promote.yml` calls it the same way on the tag it promotes. A PR's
   `changelog` job requires its newest section to name the version its merge

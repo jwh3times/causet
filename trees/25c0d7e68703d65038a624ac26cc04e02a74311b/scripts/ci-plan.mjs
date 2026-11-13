@@ -8,6 +8,11 @@ const MODES = [
   "sha256",
 ];
 
+// Every suite runs on the current active LTS; manual qualification adds the
+// supported floor that package.json's engines names (#445).
+const CURRENT_NODE = 26;
+const FLOOR_NODE = 24;
+
 // The native-kind mode runs on every change to native code (ADR-0044 item 7),
 // and to the suites and harness, which decide the repositories it imports.
 function nativeCode(file) {
@@ -27,9 +32,9 @@ export function planCi(eventName, changedFiles) {
       reason: "Explicit full qualification",
       include: [
         ...["ubuntu-latest", "windows-latest"].flatMap((os) =>
-          MODES.map((mode) => ({ os, node: 24, mode }))),
-        { os: "ubuntu-latest", node: 20, mode: "default" },
-        { os: "ubuntu-latest", node: 20, mode: "session-on" },
+          MODES.map((mode) => ({ os, node: CURRENT_NODE, mode }))),
+        { os: "ubuntu-latest", node: FLOOR_NODE, mode: "default" },
+        { os: "ubuntu-latest", node: FLOOR_NODE, mode: "session-on" },
       ],
     };
   }
@@ -48,7 +53,7 @@ export function planCi(eventName, changedFiles) {
     include: (eventName === "pull_request"
       ? ["ubuntu-latest", "windows-latest"]
       : ["ubuntu-latest"]
-    ).flatMap((os) => modes.map((mode) => ({ os, node: 24, mode }))),
+    ).flatMap((os) => modes.map((mode) => ({ os, node: CURRENT_NODE, mode }))),
   };
 }
 

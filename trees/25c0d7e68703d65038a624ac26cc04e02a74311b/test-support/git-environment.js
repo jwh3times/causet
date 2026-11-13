@@ -24,9 +24,8 @@ import { installNativeKind, nativeKind } from "./native-kind.js";
  * that file and then fail to copy it (#203).
  *
  * This module lives beside `test/` rather than inside it because `node --test`
- * runs every JavaScript file under a directory named `test` as a test file
- * (Node 20 by the directory's name, Node 22 and later by its `test/**` glob),
- * so a shared helper there would be executed as one. Every suite file runs in
+ * runs every JavaScript file under `test/**` as a test file, so a shared
+ * helper there would be executed as one. Every suite file runs in
  * its own process and imports this module once, so the configuration is
  * created and removed per process.
  */

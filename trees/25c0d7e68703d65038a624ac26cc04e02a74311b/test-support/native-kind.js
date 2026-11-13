@@ -105,12 +105,6 @@ function point(directory) {
  * and cst read no host configuration here either.
  */
 export function installNativeKind({ beforeEach, afterEach, after, env }) {
-  // Node runs a test's own `t.after` cleanup after `afterEach` only from
-  // 20.5; before it, a repository a test removes there would go unchecked.
-  const [major, minor] = process.versions.node.split(".").map(Number);
-  if (major < 20 || (major === 20 && minor < 5)) {
-    throw new Error(`CAUSET_KIND=native needs Node 20.5 or later, not ${process.versions.node}`);
-  }
   // Every directory the mode makes sits directly in the host's temporary
   // directory under a short name: Windows refuses paths over 259 characters,
   // and some suites already come within a dozen of that.
