@@ -4,6 +4,20 @@
 
 No unreleased changes.
 
+## [0.27.2] - 2026-11-13
+
+- **npm is published by hand with `scripts/publish-npm.ps1`** (#448). While
+  npm/cli#9969 keeps automatic npm publishing off (#139), a maintainer runs
+  `pwsh -File scripts/publish-npm.ps1 -Version <x.y.z>` after `npm login`. It
+  publishes the release's own tarballs from its GitHub release, never a
+  checkout. It refuses a tarball whose digest is not the one `SHA256SUMS`
+  lists, and a main package that does not pin both platform packages at the
+  version. A main package published from a checkout would install without
+  `cst`. It publishes the platform packages first, then the main package,
+  skips any version npm already has (so a rerun is safe), and takes
+  `-DryRun`. It needs PowerShell 7. Nothing changes for `cst` or its
+  packages.
+
 ## [0.27.1] - 2026-11-13
 
 - **ADR-0048 is accepted** (#440). Every landing releases a version of its

@@ -89,6 +89,10 @@ no npm dependencies.
   that version's tag by calling `ci.yml`, `release-gates.yml` and
   `release.yml`, then moves npm's `latest` and the GitHub latest release.
   There is no release-preparation branch.
+- While `NPM_PUBLISH` is `false` (#139), npm is published by hand with
+  `pwsh -File scripts/publish-npm.ps1 -Version <x.y.z>`, which publishes the
+  release's own tarballs after checking their digests. Never run
+  `npm publish` in a checkout: its manifest pins no platform package.
 - `.github/workflows/release-gates.yml` runs the release gates that are not
   the suite or the package set (demos, this repository's metadata validation,
   the deterministic benchmark check) on hosted Windows and Ubuntu runners.

@@ -1599,6 +1599,26 @@ release alone (`release-plan.mjs promote --github-only`), and npm is
 published and tagged by hand. Setting `NPM_PUBLISH` to `true` turns the npm
 half of both on again, with no code change.
 
+**Publishing to npm by hand** is `scripts/publish-npm.ps1`, run after
+`npm login` for the version `promote.yml` made stable:
+
+```sh
+pwsh -File scripts/publish-npm.ps1 -Version <x.y.z> -DryRun
+pwsh -File scripts/publish-npm.ps1 -Version <x.y.z>
+```
+
+It downloads the version's three tarballs and `SHA256SUMS` from its GitHub
+release, refuses a tarball whose digest is not the listed one and a main
+package that does not pin both platform packages at the version, and then
+publishes the platform packages before the main package, skipping any
+version npm already has. Publishing under the default dist-tag moves
+`latest`. **Never run `npm publish` in a checkout**: its `package.json` pins
+no platform package and has no launcher checksums (`pack-release.mjs` adds
+both), so the package it publishes installs without `cst`.
+`test/publish-npm-script.test.js` runs the script with `-From` on a set
+packed by `pack-release.mjs` and a stub `npm`, so it never reaches the
+registry.
+
 **What the automation needs** (one-time human steps, #440): the
 "release tags are created by maintainers" ruleset is removed, so the
 workflow's token can create a `v*` tag, and `NPM_PUBLISH` is `false` while

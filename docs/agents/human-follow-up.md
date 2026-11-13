@@ -9,7 +9,8 @@ can complete under existing authority.
 A release gate is never a follow-up: every release gate runs on GitHub-hosted runners
 (`docs/testing.md`, "Release gate"). What a release still needs from a person is an account or a
 decision, such as which version `promote.yml` makes the stable release, and, while
-npm/cli#9969 keeps `NPM_PUBLISH` false, an npm publish.
+npm/cli#9969 keeps `NPM_PUBLISH` false, an npm publish, by `scripts/publish-npm.ps1`
+(`docs/testing.md`, "Releases").
 
 The public destinations are intentional: ordinary follow-ups need no private repository, and the
 private board does not make the issues or wiki pages it links private. Do not change visibility to
