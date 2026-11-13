@@ -1398,8 +1398,8 @@ review, service-level objectives, or broad platform performance.
 
 ## Repository rules
 
-`jwh3times/causet` carries four rulesets and one merge setting, set on
-2026-10-09. They live in the repository's settings, not in the tree, so this
+`jwh3times/causet` carries three rulesets and one merge setting, set on
+2026-10-09 (a fourth was removed on 2026-11-12, below). They live in the repository's settings, not in the tree, so this
 is the record of what they are and why:
 
 | Ruleset | Applies to | Rule | Bypass |
@@ -1407,7 +1407,6 @@ is the record of what they are and why:
 | main: history is never rewritten or deleted | `main` | No force push, no deletion | None |
 | main: changes arrive by pull request with static checks | `main` | A pull request, and a passing `static checks` job | Repository admins |
 | release tags are immutable | `v*` tags | No deletion, no update | None |
-| release tags are created by maintainers | `v*` tags | Creation restricted | Repository admins, GitHub Actions |
 
 - **Admins bypass the pull-request rule because of how this project lands.**
   `cst merge --compact` makes a new two-parent landing commit locally and
@@ -1418,10 +1417,14 @@ is the record of what they are and why:
   documentation-only pull request, and a required check that never runs
   blocks forever.
 - **Linear history is not required:** a compact landing is a merge commit.
-- **GitHub Actions creates the release tags** (ADR-0048, set with #440):
-  `release.yml` tags each landing with its version, so the creation rule
-  lets the GitHub Actions integration through beside the admins. Nothing
-  else changes: the tag it creates is as immutable as any other.
+- **Who may create a release tag is not restricted** (ADR-0048, #441). A
+  fourth ruleset, "release tags are created by maintainers", let only
+  admins create a `v*` tag, because a pushed tag started a publish. Since
+  #440 a pushed tag starts nothing: `release.yml` tags each landing itself,
+  with the workflow's token, and GitHub does not accept the GitHub Actions
+  integration as a bypass actor on a repository a personal account owns. The
+  ruleset was removed on 2026-11-12; the owner is the only collaborator.
+  Every tag, the workflow's included, is still immutable.
 - **A release tag cannot be moved or deleted, by anyone.** To correct a tag
   placed on the wrong commit before anything was published, an admin
   disables "release tags are immutable" in the repository settings, fixes the
@@ -1586,11 +1589,25 @@ before 0.26.0, the first a landing released, cannot be promoted: their tags
 predate those workflows, and a rollback that far is `npm dist-tag add` by
 hand.
 
+**npm takes part only when the repository variable `NPM_PUBLISH` is
+`true`.** Trusted publishing from this repository has failed on every tag
+run since v0.23.0, on [npm/cli#9969](https://github.com/npm/cli/issues/9969)
+([#139](https://github.com/jwh3times/causet/issues/139)), so until that is
+fixed `NPM_PUBLISH` is `false`: a landing publishes its GitHub prerelease
+only, `promote.yml` judges a version and makes it stable by its GitHub
+release alone (`release-plan.mjs promote --github-only`), and npm is
+published and tagged by hand. Setting `NPM_PUBLISH` to `true` turns the npm
+half of both on again, with no code change.
+
 **What the automation needs** (one-time human steps, #440): the
-"release tags are created by maintainers" ruleset lets GitHub Actions
-through, and the `npm-promote` environment holds an `NPM_TOKEN` secret, a
-granular npm token with read and write access to the `@holland-vip` packages,
-because npm's trusted publishing does not cover moving a dist-tag.
+"release tags are created by maintainers" ruleset is removed, so the
+workflow's token can create a `v*` tag, and `NPM_PUBLISH` is `false` while
+npm/cli#9969 is open. Before
+`NPM_PUBLISH` goes back to `true`, the `npm-promote` environment needs an
+`NPM_TOKEN` secret, a granular npm token with read and write access to the
+`@holland-vip` packages, because npm's trusted publishing does not cover
+moving a dist-tag; the packages' "disallow tokens" publishing setting must
+let it move one.
 
 ## Continuous integration
 

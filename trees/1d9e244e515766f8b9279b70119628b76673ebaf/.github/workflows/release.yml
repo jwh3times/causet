@@ -259,7 +259,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      # Pushing the tag (the v* ruleset lets GitHub Actions create one) and
+      # Pushing the tag (no ruleset restricts who creates a v* tag; none may
+      # move or delete one) and
       # the GitHub release.
       contents: write
       # Trusted publishing and attestation: this run's OIDC token is exchanged
