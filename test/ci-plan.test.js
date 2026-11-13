@@ -12,11 +12,11 @@ const planner = fileURLToPath(new URL("../scripts/ci-plan.mjs", import.meta.url)
 
 test("routine code changes use two PR suites and one main suite", () => {
   assert.deepEqual(planCi("pull_request", ["bin/native/cst.js"]).include, [
-    { os: "ubuntu-latest", node: 24, mode: "default" },
-    { os: "windows-latest", node: 24, mode: "default" },
+    { os: "ubuntu-latest", node: 26, mode: "default" },
+    { os: "windows-latest", node: 26, mode: "default" },
   ]);
   assert.deepEqual(planCi("push", ["scripts/ci-plan.mjs"]).include, [
-    { os: "ubuntu-latest", node: 24, mode: "default" },
+    { os: "ubuntu-latest", node: 26, mode: "default" },
   ]);
 });
 
@@ -24,14 +24,14 @@ test("a change to native code, a suite or the harness adds the native-kind mode 
   for (const files of [["native/engine/src/git.rs"], ["README.md", "native/store/src/delta.rs"],
     ["test-support/native-kind.js"], ["test-support/git-environment.js"], ["test/integration.test.js"], null, []]) {
     assert.deepEqual(planCi("pull_request", files).include, [
-      { os: "ubuntu-latest", node: 24, mode: "default" },
-      { os: "ubuntu-latest", node: 24, mode: "kind-native" },
-      { os: "windows-latest", node: 24, mode: "default" },
-      { os: "windows-latest", node: 24, mode: "kind-native" },
+      { os: "ubuntu-latest", node: 26, mode: "default" },
+      { os: "ubuntu-latest", node: 26, mode: "kind-native" },
+      { os: "windows-latest", node: 26, mode: "default" },
+      { os: "windows-latest", node: 26, mode: "kind-native" },
     ], JSON.stringify(files));
     assert.deepEqual(planCi("push", files).include, [
-      { os: "ubuntu-latest", node: 24, mode: "default" },
-      { os: "ubuntu-latest", node: 24, mode: "kind-native" },
+      { os: "ubuntu-latest", node: 26, mode: "default" },
+      { os: "ubuntu-latest", node: 26, mode: "kind-native" },
     ], JSON.stringify(files));
   }
 });
@@ -49,19 +49,22 @@ test("only known documentation paths omit automatic suites", () => {
   }
 });
 
-test("manual qualification always retains all platform modes and the Node floor", () => {
+test("manual qualification always retains all platform modes on current Node and the Node floor", () => {
   const jobs = planCi("workflow_dispatch", ["README.md"]).include;
   assert.equal(jobs.length, 20);
   assert.equal(new Set(jobs.map((job) => JSON.stringify(job))).size, 20);
   for (const os of ["ubuntu-latest", "windows-latest"]) {
-    assert.deepEqual(jobs.filter((job) => job.os === os && job.node === 24).map((job) => job.mode),
+    assert.deepEqual(jobs.filter((job) => job.os === os && job.node === 26).map((job) => job.mode),
       ["default", "session-on", "session-off", "forecast-worktree", "forecast-merge-tree", "engine-native",
         "kind-native", "reftable", "sha256"]);
   }
-  assert.deepEqual(jobs.filter((job) => job.node === 20), [
-    { os: "ubuntu-latest", node: 20, mode: "default" },
-    { os: "ubuntu-latest", node: 20, mode: "session-on" },
+  assert.deepEqual(jobs.filter((job) => job.node === 24), [
+    { os: "ubuntu-latest", node: 24, mode: "default" },
+    { os: "ubuntu-latest", node: 24, mode: "session-on" },
   ]);
+  // The floor qualified is the floor package.json declares (#445).
+  const { engines } = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(engines.node, ">=24");
   assert.throws(() => planCi("unknown", []), /Unsupported CI event/);
 });
 
