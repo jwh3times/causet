@@ -4,6 +4,14 @@
 
 No unreleased changes.
 
+## [0.26.1] - 2026-11-12
+
+- **`/what-next` puts an active handoff first.** When `handoff_map.json`
+  names one for this repository, the report leads with it and recommends
+  `/lets-go`, and one whose document has not reached this machine is shown
+  as pending. It still changes nothing, and a machine without the handoffs
+  config skips the check.
+
 ## [0.26.0] - 2026-11-12
 
 **Every landing is a version, and native repositories arrive.** This is the
