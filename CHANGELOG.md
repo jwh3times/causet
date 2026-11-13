@@ -4,6 +4,14 @@
 
 No unreleased changes.
 
+## [0.27.1] - 2026-11-13
+
+- **ADR-0048 is accepted** (#440). Every landing releases a version of its
+  own, and one dispatch of `promote.yml` makes a version the stable release.
+  The owner accepted it after v0.26.0, v0.26.1 and v0.27.0 released
+  themselves on landing and v0.27.0 became the stable release that way. This
+  documents a decision and changes no behavior.
+
 ## [0.27.0] - 2026-11-13
 
 - **Node.js 24 is the new floor** (#445). Node 20 reached end of life on
