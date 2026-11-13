@@ -1,0 +1,31 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwee58cr2a9347465d2e",
+      "mode": "compact",
+      "sourceRef": "ci/440-per-merge-releases",
+      "sourceHead": "78497db88315ec4be0df4bfdcd3449eef795028b",
+      "sourceSubject": "docs: remove the release-tag creation rule instead of letting Actions bypass it",
+      "targetBefore": "a6a66b3aedc29229d45e12c0c58841ab7541a95e",
+      "landingCommit": "3388512827644acfa42ad2d34c426979af04d0f2",
+      "base": "a6a66b3aedc29229d45e12c0c58841ab7541a95e",
+      "absorbedCommits": [
+        "0acc7c6cab68364d2004210429f5d7f659b93cbe",
+        "693b0b798801d7530f4e2866b4845cae0669ff19",
+        "730663522cde19281682c0e570543ec7ffa29a49",
+        "78497db88315ec4be0df4bfdcd3449eef795028b"
+      ],
+      "absorbedChanges": [
+        "ch_0mwe3kxd7863006ea3d86",
+        "ch_0mwe42gu1266c554bc637",
+        "ch_0mwe42m2i2b53e2c0952c",
+        "ch_0mwea0jn5c9571169d7af"
+      ],
+      "resultTree": "1d9e244e515766f8b9279b70119628b76673ebaf",
+      "createdAt": "2026-11-13T03:02:10.108Z"
+    }
+  ]
+}
