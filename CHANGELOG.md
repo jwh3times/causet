@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.26.0] - 2026-11-12
+
+**Every landing is a version, and native repositories arrive.** This is the
+first version a landing released by itself (ADR-0048); a later one becomes
+the stable release by one dispatch. Since 0.25.1, experimental native
+repositories have come in: `cst import` copies a Git repository's whole
+history into N1's content store (ADR-0045), losslessly, verifiably,
+deterministically and incrementally; a native repository answers Git's
+inspection commands itself; and it has a history of its own that `cst log`
+reads (N2, ADR-0047). The suites gained reftable, SHA-256 and native-kind
+modes, and corpora of generated histories and real repositories.
+
+- **Every landing is a version, and one dispatch makes a version stable**
+  (#440, ADR-0048). When `ci.yml` passes on a push to `main`, `release.yml`
+  tags the landing with the version its newest changelog section names,
+  builds and installs that version, and publishes it as a GitHub prerelease.
+  The install scripts keep installing the stable release, and
+  `install.sh --version <x.y.z>` reaches any landing's build.
+  `gh workflow run promote.yml -f version=<x.y.z>` runs the whole release
+  gate on that version's tag and, when every gate passes, makes its GitHub
+  release the latest. npm takes part in both, under `next` and then
+  `latest`, once the repository variable `NPM_PUBLISH` is `true`; while
+  npm/cli#9969 blocks publishing from CI (#139), npm is published by hand. A pull request's newest
+  changelog section must now name the version its merge will mint, which a
+  new `changelog` job checks, and `package.json` on `main` names the release
+  line: a release build writes its own version into it. The hand release
+  procedure, its preparation branch and its draft releases are gone.
+
 - **N1's storage gate counts N1's objects, and native history's bytes are
   reported beside it** (#437). Since #416, import has written a native
   commit for each commit a name reaches. Native commits are N2's objects, but

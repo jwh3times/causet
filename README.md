@@ -80,6 +80,11 @@ curl -fsSL https://github.com/jwh3times/causet/releases/latest/download/install.
 irm https://github.com/jwh3times/causet/releases/latest/download/install.ps1 | iex
 ```
 
+These install the stable release. Every change that lands on `main` is also
+released as a GitHub prerelease, and a version becomes the stable release
+once it passes the whole release gate (see
+[Releases](docs/testing.md#releases)).
+
 Each script downloads the release's archive for your platform, refuses it
 unless its SHA-256 is the one the release's `SHA256SUMS` lists, and copies
 `cst` into `~/.local/bin` (Linux) or `%LOCALAPPDATA%\Programs\causet`
@@ -89,11 +94,11 @@ to add if the directory is not on it.
 - **Read it first, if you prefer.** Download the script, read it, then run it:
   `curl -fsSLO <url>` and `sh install.sh`, or `irm <url> -OutFile install.ps1`
   and `.\install.ps1`. Both are short.
-- **Options,** which need the downloaded form: `--version 0.25.1` installs
-  that release, and `--prefix <dir>` installs somewhere else (`-Version` and
+- **Options,** which need the downloaded form: `--version <x.y.z>` installs
+  that release, a prerelease included, and `--prefix <dir>` installs somewhere else (`-Version` and
   `-Prefix` in PowerShell). The script
   attached to a release installs that release's layout, so pin both together:
-  `https://github.com/jwh3times/causet/releases/download/v0.25.1/install.sh`.
+  `https://github.com/jwh3times/causet/releases/download/v<x.y.z>/install.sh`.
 - **Upgrade** by running it again; that also removes the `vlab` alias an
   install before v0.23.0 left. **Uninstall** by deleting the `cst` file it
   names when it finishes.
@@ -110,6 +115,10 @@ to add if the directory is not on it.
 npm install -g --allow-scripts=@holland-vip/causet @holland-vip/causet
 cst --help
 ```
+
+When CI publishes to npm, `@holland-vip/causet@next` installs the newest
+landing's build instead of the stable release. Until an npm bug that blocks
+it is fixed, npm releases are published by hand.
 
 npm installs the same executable, from a `@holland-vip/causet-<platform>`
 package alongside the main one. Nothing is downloaded outside npm and nothing
@@ -154,7 +163,7 @@ PowerShell, Git Bash, or a terminal where `git`, `cargo` and `node` are on `PATH
 This project now has its own Git history and should live in a normal development repository. The portable repository bundle retains the release commits and tags:
 
 ```bash
-git clone /path/to/causet-0.25.1.bundle causet
+git clone /path/to/causet-<version>.bundle causet
 cd causet
 git remote remove origin
 npm run build:native
@@ -166,7 +175,7 @@ If you instead use the source ZIP, initialize its extracted directory with:
 ```bash
 git init -b main
 git add .
-git commit -m "Bootstrap causet 0.25.1"
+git commit -m "Bootstrap causet <version>"
 npm run build:native
 npm test
 ```

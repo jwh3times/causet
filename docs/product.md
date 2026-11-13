@@ -6,9 +6,9 @@
 | --- | --- |
 | Product | causet (command `cst`; formerly vcs-lab) / causal source-control laboratory |
 | Document version | 1.0 |
-| Product baseline | v0.25.1 release |
+| Product baseline | `main`, where every landing is a release (ADR-0048); `CHANGELOG.md` names each version |
 | Status | Active product baseline |
-| Last updated | 2026-10-17 |
+| Last updated | 2026-11-12 |
 | Primary audience | Maintainers, contributors, protocol designers, and AI coding agents |
 | Decision owner | Repository maintainers |
 
@@ -312,7 +312,7 @@ coverage where it changes observable behavior (§14 gates 7 and 8).
 
 Priorities use **P0** (required invariant), **P1** (core product), **P2**
 (important expansion), and **P3** (exploratory). Status is **Implemented**,
-**Partial**, **Planned**, or **Deferred** at the v0.25.1 release baseline.
+**Partial**, **Planned**, or **Deferred** on `main`.
 
 ### 9.1 Git compatibility and repository adoption
 

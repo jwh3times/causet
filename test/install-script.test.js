@@ -10,7 +10,8 @@
  *
  * Without `CAUSET_RELEASE_SET=<directory>` the assets are made here from the
  * workspace's release build; the release workflow passes the set it has just
- * built. Skipped without either, and on a host no archive is published for.
+ * built, and `CAUSET_RELEASE_VERSION=<x.y.z>`, the version it built it for.
+ * Skipped without either, and on a host no archive is published for.
  */
 
 import assert from "node:assert/strict";
@@ -32,7 +33,10 @@ const built = path.join(projectRoot, "native", "target", "release", windows ? "c
 const releaseSet = process.env.CAUSET_RELEASE_SET ? path.resolve(process.env.CAUSET_RELEASE_SET) : null;
 const skip = !target ? `no archive is published for ${process.platform}-${process.arch}`
   : releaseSet || fs.existsSync(built) ? false : "no Rust CLI build; run node scripts/build-native.mjs";
-const version = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")).version;
+// A release set is built for the version its workflow names (#440): package.json on main names
+// only the release line, so the workflow passes the set's version.
+const version = (releaseSet && process.env.CAUSET_RELEASE_VERSION)
+  || JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")).version;
 const script = windows ? "install.ps1" : "install.sh";
 const archive = target && `cst-${version}-${target}.${windows ? "zip" : "tar.gz"}`;
 

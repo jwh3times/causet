@@ -9,7 +9,9 @@
  *
  * With `CAUSET_RELEASE_SET=<directory>` it installs the tarballs a release
  * workflow already packed there instead of packing its own, which is how the
- * workflow smoke-tests what it is about to publish.
+ * workflow smoke-tests what it is about to publish. With it,
+ * `CAUSET_RELEASE_VERSION=<x.y.z>` names the version the set was built for,
+ * which the set must carry and the installed `cst` must report.
  *
  * Skipped without either (`node scripts/build-native.mjs` makes the build) and
  * on a host no platform package is published for.
@@ -35,7 +37,10 @@ const platform = PLATFORMS[hostKey()];
 const releaseSet = process.env.CAUSET_RELEASE_SET ? path.resolve(process.env.CAUSET_RELEASE_SET) : null;
 const skip = !platform ? `no platform package is published for ${hostKey()}`
   : releaseSet || fs.existsSync(built) ? false : "no Rust CLI build; run node scripts/build-native.mjs";
-const version = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")).version;
+// A release set is built for the version its workflow names (#440): package.json on main names
+// only the release line, so the workflow passes the set's version.
+const version = (releaseSet && process.env.CAUSET_RELEASE_VERSION)
+  || JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")).version;
 
 const scratch = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "vcs-lab-packaging-")));
 after(() => fs.rmSync(scratch, { recursive: true, force: true }));
@@ -56,7 +61,9 @@ before(() => {
     .map((file) => path.join(releaseSet, file));
   sums = fs.readFileSync(path.join(releaseSet, "SHA256SUMS"), "utf8");
   const digest = new RegExp(`^([0-9a-f]{64})  ${platform.package}/${platform.file}$`, "m").exec(sums)?.[1];
-  packed = { version, tarballs, checksums: { [platform.package]: { sha256: digest } } };
+  // The set's own version, read from the main package's file name, which sorts last.
+  const setVersion = /^holland-vip-causet-(\d+\.\d+\.\d+)\.tgz$/.exec(path.basename(tarballs.at(-1)))?.[1];
+  packed = { version: setVersion, tarballs, checksums: { [platform.package]: { sha256: digest } } };
 });
 
 const npm = windows ? "npm.cmd" : "npm";

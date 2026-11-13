@@ -10,8 +10,9 @@ name: release gates
 #   gate 11  the generated-history corpus and the real repositories pass every
 #            N1 check, the real repositories the storage gate too (corpora.yml)
 #
-# Dispatch it on the release commit. It also runs for a pull request that
-# touches the benchmark, its baseline, or this file.
+# promote.yml calls it on the tag of the version being promoted; a manual
+# dispatch runs it on a branch. It also runs for a pull request that touches
+# the benchmark, its baseline, or this file.
 #
 # The benchmark compares process, record and materialization counts with the
 # committed baseline entry recorded on the same kind of runner
@@ -22,6 +23,12 @@ name: release gates
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to qualify (the tag promote.yml is promoting)
+        type: string
+        required: true
   pull_request:
     paths:
       - ".github/workflows/release-gates.yml"
@@ -33,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-gates-${{ github.ref }}
+  group: release-gates-${{ inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -52,6 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
       - name: Fetch the causal refs metadata validation reads
         # A checkout brings branches and tags, not notes or refs/causet/*.
@@ -110,3 +118,5 @@ jobs:
     # Gate 11: corpora.yml's heavy corpora, on the same commit.
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/corpora.yml
+    with:
+      ref: ${{ inputs.ref }}

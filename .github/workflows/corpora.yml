@@ -13,7 +13,7 @@ name: corpora
 #   both byte counts, and the bytes native history adds, never checked.
 #
 # It runs weekly on main, on manual dispatch, from release-gates.yml when a
-# release is qualified (release gate 11), and for a pull request that changes
+# version is promoted to stable (release gate 11, on that version's tag), and for a pull request that changes
 # the corpus, this file, or the native crates import writes through: what a
 # store holds, and so its bytes, are only measured here (#437). Timings are
 # reported by the runner, never checked.
@@ -28,6 +28,11 @@ on:
         description: The corpus seed
         default: causet-n1
   workflow_call:
+    inputs:
+      ref:
+        description: The commit to check (a release candidate's tag, from promote.yml)
+        type: string
+        default: ""
   pull_request:
     paths:
       - "test-support/generated-histories.js"
@@ -51,7 +56,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: corpora-${{ github.event_name }}-${{ github.ref }}
+  group: corpora-${{ github.event_name }}-${{ inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -74,6 +79,8 @@ jobs:
       CAUSET_GENERATED_SEED: ${{ inputs.seed || 'causet-n1' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -105,6 +112,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           # The causet corpus is this repository's whole history and tags.
           fetch-depth: 0
       - uses: actions/setup-node@v4

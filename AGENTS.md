@@ -50,9 +50,11 @@ no npm dependencies.
 - `.github/workflows/ci.yml` runs static checks on every PR and push to `main`.
   Code PRs add the default suite on Ubuntu and Windows; main adds Ubuntu only.
   Known documentation-only changes omit suites. Manual dispatch runs every
-  mode on both platforms plus the Node 20 floor; use it for release and
-  high-risk platform qualification as described in `docs/testing.md`.
-  The per-host benchmark remains local.
+  mode on both platforms plus the Node 20 floor; use it for high-risk
+  platform qualification as described in `docs/testing.md`, and
+  `promote.yml` calls it the same way on the tag it promotes. A PR's
+  `changelog` job requires its newest section to name the version its merge
+  will mint. The per-host benchmark remains local.
 - `.github/workflows/perf.yml` runs `scripts/perf-checkpoint.mjs` on hosted
   Windows and Ubuntu runners: on manual dispatch, weekly on `main`, and for PRs
   touching `native/`, the harness, or the workflow. It reports only what a
@@ -72,13 +74,21 @@ no npm dependencies.
   Windows and Ubuntu runners, and on manual dispatch with an optional seed. It
   gates nothing; a failure opens or updates one `needs-triage` issue per seed
   (`scripts/rotating-corpus.mjs`).
-- `.github/workflows/release.yml` builds the `cst` executable per platform,
-  packs the ADR-0038 package set with `scripts/pack-release.mjs`, and installs
-  it on each runner, by npm and by `scripts/install.sh` or
-  `scripts/install.ps1`. Pull requests touching the packaging and manual dispatch
-  are dry runs; a `v*` tag drafts the GitHub release and, when the repository
-  variable `NPM_PUBLISH` is `true`, publishes to npm. See "Release packaging"
-  in `docs/testing.md`.
+- `.github/workflows/release.yml` releases every landing (ADR-0048): when
+  `ci.yml` passes on a push to `main`, it builds the `cst` executable per
+  platform at the version the landing's newest changelog section names, packs
+  the ADR-0038 package set with `scripts/pack-release.mjs`, installs it on
+  each runner by npm and by `scripts/install.sh` or `scripts/install.ps1`, and
+  then tags the landing, publishes a GitHub prerelease and, when the
+  repository variable `NPM_PUBLISH` is `true`, publishes to npm under `next`.
+  Pull requests touching the packaging and manual dispatch are dry runs.
+  `scripts/release-plan.mjs` makes its decisions. See "Releases" in
+  `docs/testing.md`.
+- `.github/workflows/promote.yml` makes a released version the stable one:
+  `gh workflow run promote.yml -f version=<x.y.z>` runs every release gate on
+  that version's tag by calling `ci.yml`, `release-gates.yml` and
+  `release.yml`, then moves npm's `latest` and the GitHub latest release.
+  There is no release-preparation branch.
 - `.github/workflows/release-gates.yml` runs the release gates that are not
   the suite or the package set (demos, this repository's metadata validation,
   the deterministic benchmark check) on hosted Windows and Ubuntu runners.
