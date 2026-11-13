@@ -64,8 +64,10 @@ Two constraints shape the answer:
 6. **The release gate's list does not change; how it runs does.** The eleven items stay. The
    promotion runs them all against one commit, so the candidate branch, the hand dispatches and
    the hand-placed tag go.
-7. **Only release automation and admins create release tags.** The ruleset that restricts `v*` tag
-   creation adds GitHub Actions as a bypass actor; tags stay immutable for everyone.
+7. **Release tags are immutable, but who creates one is not restricted.** The ruleset that
+   restricted `v*` tag creation to admins is removed (owner decision, 2026-11-12): a pushed tag no longer starts a publish, and GitHub does not accept the
+   GitHub Actions integration as a bypass actor on a repository a personal account owns. Tags stay
+   immutable for everyone.
 8. **npm takes part only when `NPM_PUBLISH` is `true`.** Trusted publishing from this repository
    fails on npm/cli#9969 (#139), so while it does, landings publish GitHub prereleases only and a
    promotion judges and moves the GitHub latest release alone; npm is published by hand. The
