@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwf2kmcgd0997544ee0a",
+      "mode": "compact",
+      "sourceRef": "chore/445-node-24-floor",
+      "sourceHead": "71e5c62ed6531ea9c7bdcc36d4075b8f22b4b963",
+      "sourceSubject": "docs: update docs and changelog for v0.27.0",
+      "targetBefore": "4a6f163ce2e374b8f80e98b691c5109a857da547",
+      "landingCommit": "ef2223ea7bc420ae5a16e329c8c6d952dba61654",
+      "base": "4a6f163ce2e374b8f80e98b691c5109a857da547",
+      "absorbedCommits": [
+        "ba5b78f4b98cc1df753130b0528a6e0e0e5b0ad6",
+        "71e5c62ed6531ea9c7bdcc36d4075b8f22b4b963"
+      ],
+      "absorbedChanges": [
+        "ch_0mwemvxk0c31ae3d647f2",
+        "ch_0mweo4r3ma46927a50141"
+      ],
+      "resultTree": "25c0d7e68703d65038a624ac26cc04e02a74311b",
+      "createdAt": "2026-11-13T14:25:58.857Z"
+    }
+  ]
+}
