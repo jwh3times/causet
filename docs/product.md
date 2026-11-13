@@ -8,7 +8,7 @@
 | Document version | 1.0 |
 | Product baseline | `main`, where every landing is a release (ADR-0048); `CHANGELOG.md` names each version |
 | Status | Active product baseline |
-| Last updated | 2026-11-12 |
+| Last updated | 2026-11-13 |
 | Primary audience | Maintainers, contributors, protocol designers, and AI coding agents |
 | Decision owner | Repository maintainers |
 
