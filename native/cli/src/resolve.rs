@@ -6,6 +6,7 @@
 
 use crate::metadata::{duplicated_record_ids, object_lookup};
 use crate::notes::read_notes;
+use crate::record_source::Notes;
 use crate::records::{not_callable, short};
 use crate::store::read_json;
 use causet_engine::errors::{GitError, GitResult};
@@ -78,7 +79,7 @@ pub fn list_resolution_records(cwd: &str) -> GitResult<Vec<Value>> {
 /// `retainedResolutions(refs, cwd)`.
 fn retained_resolutions(refs: &[(String, String)], cwd: &str) -> GitResult<Vec<Value>> {
   let commits: Vec<String> = refs.iter().map(|(_, commit)| commit.clone()).collect();
-  let notes = read_notes(&commits, cwd)?;
+  let notes = read_notes(&commits, &Notes::at(cwd))?;
   let mut records = Vec::new();
   for (name, commit) in refs {
     for record in notes.get(commit).cloned().unwrap_or_default() {

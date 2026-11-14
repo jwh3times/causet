@@ -4,6 +4,17 @@
 
 No unreleased changes.
 
+## [0.28.1] - 2026-11-14
+
+- **cst's records are read through one record source** (#415). `cst
+  provenance`, `cst receipts`, `cst graph` and `cst metadata status` and
+  `validate` now take their records from a single source. In a Git-backed
+  repository that source is the notes, as before. This prepares a native
+  repository to answer the same commands from its fact log (#419, #420;
+  ADR-0047), without any reader's parsing, validation or output changing.
+  Nothing changes for `cst`: every suite mode, the conformance fixtures and
+  the frozen oracle answers pass unchanged.
+
 ## [0.28.0] - 2026-11-14
 
 - **Provenance says whether an actor is a human or an agent, and whom an

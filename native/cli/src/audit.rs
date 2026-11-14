@@ -5,6 +5,7 @@
 //! JavaScript throws.
 
 use crate::notes::list_note_records;
+use crate::record_source::Notes;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::types::HistoryOptions;
 use causet_engine::{engine, text};
@@ -263,7 +264,7 @@ fn actors_of(record: &Value) -> GitResult<Vec<Value>> {
 pub fn audit_identity(cwd: &str) -> GitResult<Value> {
   let context = engine::repo_context(cwd)?;
   let commits = engine::commit_history(&["--all".to_string()], cwd, HistoryOptions::default())?;
-  let records = list_note_records(cwd)?;
+  let records = list_note_records(&Notes::at(cwd))?;
   let applications: Vec<&Value> = records
     .iter()
     .filter(|record| is_application(record))

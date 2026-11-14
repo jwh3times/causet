@@ -7,6 +7,7 @@ use crate::export::{build_notes_commit, group_records, resolve_against, temporar
 use crate::lineage::{lineage_relation, repository_lineage};
 use crate::metadata::{full_snapshot, inspection_records, read_dispositions, trust_state};
 use crate::notes_write::{build_note_tree, build_retention_commit, checked_ref_update, commit_with_parents, record_dependencies, with_notes_lock};
+use crate::record_source::Notes;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::locations::{CURRENT_NAMES, local_ref, names, ref_family};
 use causet_engine::process::{RunOptions, run_git};
@@ -273,7 +274,7 @@ fn import_preview(envelope: &Envelope, incoming: &Incoming, cwd: &str, park_conf
       format!("Metadata envelope lineage is {relation}; v1 import requires a shared root commit."),
     ));
   }
-  let destination = full_snapshot(&context)?;
+  let destination = full_snapshot(&context, &Notes::at(&context.root))?;
   let mut local_digests: Vec<(String, Vec<String>)> = Vec::new();
   let summaries = get(get(get(Some(&destination.scopes), "sharedPortable"), "notes"), "records");
   if let Some(Value::Array(summaries)) = summaries {
