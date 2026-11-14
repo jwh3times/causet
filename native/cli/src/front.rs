@@ -367,6 +367,8 @@ const VALUE_FLAGS: &[&str] = &[
   "--budget-ms",
   "--areas",
   "--files-per-area",
+  "--kind",
+  "--for",
 ];
 
 /// `item.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())`.
@@ -473,7 +475,7 @@ fn allowed_options(command: &str, parsed: &Parsed) -> Option<Vec<&'static str>> 
   let keys: Vec<&'static str> = match (command, subcommand) {
     ("init" | "graph" | "receipts" | "branch" | "proof-bundle" | "merge-plan", _) => vec![],
     ("commit", _) => [&["message", "all", "allowEmpty"][..], ACTORS].concat(),
-    ("provenance", Some("declare")) => ACTORS.to_vec(),
+    ("provenance", Some("declare")) => [ACTORS, &["kind", "for"]].concat(),
     ("provenance", _) => vec!["all"],
     ("merge", _) => vec!["message", "compact", "hardSquash"],
     ("compact-merge" | "hard-squash", _) => vec!["message"],
@@ -574,6 +576,40 @@ fn failure(message: &str, code: &'static str) -> Failure {
   }
 }
 
+/// `--kind` and `--for` of `cst provenance declare` (ADR-0047, decision 3):
+/// a kind is one of the two, and `for`, whom an agent acts for, is a name
+/// given only with kind agent. Whether exactly one actor was declared needs
+/// `CAUSET_AGENT`, so `provenance::declare` checks that.
+fn declared_kind_check(parsed: &Parsed) -> Option<Failure> {
+  let kind = parsed.value("kind");
+  if let Some(kind) = kind
+    && !causet_model::registry::PROVENANCE_KIND_NAMES.contains(&kind)
+  {
+    return Some(Failure {
+      message: format!("'{kind}' is not an actor kind. Use --kind human or --kind agent."),
+      code: "usage-invalid-option-value",
+    });
+  }
+  let on_behalf_of = parsed.value("for")?;
+  if on_behalf_of.is_empty() {
+    return Some(failure(
+      "--for needs the name of the human or organisation the agent acts for.",
+      "usage-invalid-option-value",
+    ));
+  }
+  match kind {
+    Some("agent") => None,
+    Some(_) => Some(failure(
+      "--for names whom an agent acts for, so it cannot be given with --kind human.",
+      "usage-conflicting-options",
+    )),
+    None => Some(failure(
+      "--for needs --kind agent: it names whom an agent acts for.",
+      "usage-missing-argument",
+    )),
+  }
+}
+
 /// Each command's checks that `src/cli.js` makes from its arguments alone,
 /// before any repository access, in its order. `None` when they pass.
 fn usage_check(command: &str, parsed: &Parsed, help: &str) -> Option<Failure> {
@@ -601,7 +637,8 @@ fn usage_check(command: &str, parsed: &Parsed, help: &str) -> Option<Failure> {
     "provenance" if positional(0) == Some("declare") => require(
       p(1),
       "cst provenance declare <commit> --authored-by|--generated-by|--reviewed-by <actor>",
-    ),
+    )
+    .or_else(|| declared_kind_check(parsed)),
     "init" | "graph" | "provenance" | "receipts" | "capabilities" | "doctor" | "migrate" => None,
     "commit" => require(parsed.truthy("message"), "cst commit -m <message>"),
     "branch" => require(p(0), "cst branch <name> [from]"),

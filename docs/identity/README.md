@@ -261,6 +261,13 @@ format. Spell every actor the same way every time:
   under, spelled the same way every time.
 - **An agent harness** sets `CAUSET_AGENT` once to the machine actor's name, so
   the spelling comes from configuration rather than from each command.
+- **A kind, and whom an agent acts for,** are optional, and declared like the name
+  (ADR-0047, decision 3). `cst provenance declare <commit> --kind human` or
+  `--kind agent` states what the one actor it declares is, and `--for`, which
+  is accepted only with `--kind agent`, names the human or organisation the
+  agent acts for. Spell that name as it is spelled where it is itself an
+  actor. An actor without a kind is unstated:
+  nothing infers one from the name or the role.
 
 `cst audit identity` reports a `near-duplicate-actor-names` warning for actor
 names that look like one actor spelled differently: the same words ignoring case

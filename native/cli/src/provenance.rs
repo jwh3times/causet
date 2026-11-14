@@ -101,6 +101,20 @@ fn pad_end(text: &[u16], width: usize) -> String {
   padded
 }
 
+/// An actor's stated kind, and whom an agent acts for, after its name:
+/// ` (human)`, ` (agent)` or ` (agent for <actor>)`. Nothing when the kind
+/// is unstated, so an actor without one reads as it always has.
+fn kind_suffix(actor: &Value) -> String {
+  let kind = match get(Some(actor), "kind") {
+    Some(Value::String(units)) if !units.is_empty() => lossy(units),
+    _ => return String::new(),
+  };
+  match get(Some(actor), "for") {
+    Some(Value::String(units)) if !units.is_empty() => format!(" ({kind} for {})", lossy(units)),
+    _ => format!(" ({kind})"),
+  }
+}
+
 /// `formatProvenance(entries)`.
 fn format_provenance(entries: &[Value]) -> GitResult<String> {
   if entries.is_empty() {
@@ -160,8 +174,9 @@ fn format_provenance(entries: &[Value]) -> GitResult<String> {
         other => return Err(not_callable("actor.role", "padEnd", other)),
       };
       lines.push(format!(
-        "    {role} {}",
-        String::from_utf16_lossy(&to_js_string(get(Some(actor), "actor")))
+        "    {role} {}{}",
+        String::from_utf16_lossy(&to_js_string(get(Some(actor), "actor"))),
+        kind_suffix(actor)
       ));
     }
   }
@@ -192,7 +207,7 @@ pub fn provenance(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
   Ok(string(&format_provenance(&entries)?))
 }
 
-/// `cst provenance declare <commit> [--authored-by|--generated-by|--reviewed-by <actor>]...`:
+/// `cst provenance declare <commit> [--authored-by|--generated-by|--reviewed-by <actor>]... [--kind human|agent] [--for <actor>]`:
 /// the repair of docs/identity/README.md §7 for an attributed `cst commit`
 /// whose note was not published, and a declaration for any other commit. The
 /// record is the one `cst commit` writes: `origin: "declared"`, the change the
@@ -202,7 +217,7 @@ pub fn provenance(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
 /// concurrent declaration cannot add a second claim.
 pub fn declare(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
   let revision = parsed.positionals.get(1).cloned().unwrap_or_default();
-  let actors = declared_actors(parsed)?;
+  let mut actors = declared_actors(parsed)?;
   if actors.is_empty() {
     return Err(
       GitError::new("usage-missing-argument", "Declare at least one actor for the commit.")
@@ -210,6 +225,31 @@ pub fn declare(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
           "Name each with --authored-by, --generated-by or --reviewed-by, or set {AGENT_ENV}; provenance is declared, never inferred."
         )),
     );
+  }
+  // `front::declared_kind_check` has judged the values; a kind describes one
+  // actor, so with several it could not say whose it is.
+  if let Some(kind) = parsed.value("kind") {
+    if actors.len() != 1 {
+      let names: Vec<String> = actors.iter().map(|actor| format!("{} {}", actor.role, actor.actor)).collect();
+      let agent_set = causet_engine::environment::value("AGENT").is_some_and(|agent| !causet_engine::text::trim(&agent).is_empty());
+      let agent = if agent_set {
+        format!(", with {AGENT_ENV} unset or naming that actor")
+      } else {
+        String::new()
+      };
+      return Err(
+        GitError::new(
+          "usage-conflicting-options",
+          format!("--kind describes exactly one actor, and this declaration names {}.", actors.len()),
+        )
+        .details(format!(
+          "It names {}. Declare one actor with --kind and --for{agent}, or declare without them.",
+          names.join(", ")
+        )),
+      );
+    }
+    actors[0].kind = Some(kind.to_string());
+    actors[0].on_behalf_of = parsed.value("for").map(str::to_string);
   }
   let commit = engine::resolve_revision(&revision, cwd)?;
   let change_id = extract_trailer(&engine::commit_message(&commit, cwd)?, "Change-Id");
@@ -258,6 +298,13 @@ fn member_text(entry: &Value, name: &str) -> String {
   if nullish(value) { String::new() } else { text(value) }
 }
 
+/// An optional member of a source's actor: absent or null is unstated, and any
+/// other value is carried as its text for `normalize_actors` to judge.
+fn stated(entry: &Value, name: &str) -> Option<String> {
+  let value = get(Some(entry), name);
+  (!nullish(value)).then(|| text(value))
+}
+
 /// `carryProvenance(fromCommits, toCommit, changeId, cwd)`: the union of the
 /// sources' declared actors, attached to `to_commit` as a `carried` record
 /// naming its immediate sources, or `None` when no source declared anything.
@@ -295,7 +342,12 @@ fn carry_provenance(
     carried_from.push(commit.clone());
     for record in records {
       for entry in carried_actor_entries(get(Some(record), "actors"))? {
-        actors.push(Actor { role: member_text(entry, "role"), actor: member_text(entry, "actor") });
+        actors.push(Actor {
+          role: member_text(entry, "role"),
+          actor: member_text(entry, "actor"),
+          kind: stated(entry, "kind"),
+          on_behalf_of: stated(entry, "for"),
+        });
       }
     }
   }

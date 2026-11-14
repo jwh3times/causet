@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "causet.provenance/v1",
   "title": "Authorship provenance record",
-  "description": "Declared claim about which actors produced a commit's content and in what role, attached to that commit (shared-portable note record; src/provenance.js). The record is an UNAUTHENTICATED CLAIM by whoever ran the command that wrote it, never detection of how content was produced (FR-TRUST-04): vcs-lab records only what an actor declared and never infers a role from content, from a Git author, or from any existing commit trailer such as Co-Authored-By. Signing such a claim is FR-TRUST-02 and does not exist; the canonical-JSON profile reserves the integrity and signatures members for it. The runtime validator in src/schemas.js remains the authority for the cross-member rules this document states in prose: actors is never empty, a declared record has an empty carriedFrom, and a carried record names at least one source.",
+  "description": "Declared claim about which actors produced a commit's content and in what role, attached to that commit (shared-portable note record; src/provenance.js). The record is an UNAUTHENTICATED CLAIM by whoever ran the command that wrote it, never detection of how content was produced (FR-TRUST-04): vcs-lab records only what an actor declared and never infers a role from content, from a Git author, or from any existing commit trailer such as Co-Authored-By. Signing such a claim is FR-TRUST-02 and does not exist; the canonical-JSON profile reserves the integrity and signatures members for it. The runtime validator in src/schemas.js remains the authority for the cross-member rules this document states in prose: actors is never empty, an actor's for is present only with kind agent, a declared record has an empty carriedFrom, and a carried record names at least one source.",
   "x-causet-scope": "note-record",
   "type": "object",
   "required": [
@@ -23,16 +23,25 @@
     },
     "actors": {
       "type": "array",
-      "description": "Declared actors, at least one, at most the provenanceActors bound of 64. Deduplicated on the (role, actor) pair and ordered by role then actor so the same declaration always produces the same bytes. Never empty: a record exists only because something was declared, and an empty one would turn silence into a claim.",
+      "description": "Declared actors, at least one, at most the provenanceActors bound of 64. Deduplicated on the (role, actor) pair and ordered by role then actor so the same declaration always produces the same bytes; when a carried record unites two entries for one pair, a kind or for they disagree on is left out. Never empty: a record exists only because something was declared, and an empty one would turn silence into a claim.",
       "items": {
         "type": "object",
         "required": ["role", "actor"],
         "properties": {
           "role": {
             "enum": ["authored", "generated", "reviewed"],
-            "description": "Closed vocabulary. 'authored': a person wrote this content. 'generated': a machine produced it. 'reviewed': an actor examined and accepted it. The role carries the human/machine distinction, so no separate kind field has to be inferred from an actor's name."
+            "description": "Closed vocabulary. 'authored': a person wrote this content. 'generated': a machine produced it. 'reviewed': an actor examined and accepted it. The role says what the actor did, not what the actor is: that is the optional kind, which is declared and never inferred from an actor's name."
           },
-          "actor": { "type": "string", "minLength": 1 }
+          "actor": { "type": "string", "minLength": 1 },
+          "kind": {
+            "enum": ["human", "agent"],
+            "description": "Optional (ADR-0047, decision 3; added within v1): whether the actor is a human or an agent, as declared by whoever wrote the record. Absent means unstated, never a claim of either kind."
+          },
+          "for": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional (ADR-0047, decision 3; added within v1): the human or organisation an agent acts for. Present only with kind agent."
+          }
         }
       }
     },

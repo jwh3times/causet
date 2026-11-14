@@ -198,6 +198,21 @@ This is the runtime meeting the published contract, not a narrowing of it, so
 no family's version changes (owner decision, 2026-10-13). No record this
 project has written is affected.
 
+## 2.4 Members added inside a version
+
+Each row is an optional member added under section 1's first rule. A record
+without it validates exactly as before, and a reader that predates it
+tolerates it, as every reader tolerates unknown members.
+
+| Member | Family | Meaning | Added by |
+| --- | --- | --- | --- |
+| `actors[].kind`, `actors[].for` | `causet.provenance/v1` | The actor's declared kind, `human` or `agent`, and the human or organisation an agent acts for; `for` is present only with kind `agent` ([ADR-0047](../adr/0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md), decision 3) | #414 |
+
+An absent `kind` is unstated, never a claim of either kind. A build that
+predates `kind` and `for` reads such a record correctly, but when it carries
+provenance through a rewrite it writes the carried actors without them: the
+claim is lost on that copy, never changed. The original record keeps it.
+
 ## 3. Migration
 
 Only two families read a version they do not write.
