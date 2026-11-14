@@ -257,6 +257,8 @@ pub const EXCHANGE_FEATURES: &[&str] = &[
   "metadata-integrity/v1",
 ];
 pub const PROVENANCE_ROLE_NAMES: &[&str] = &["authored", "generated", "reviewed"];
+/// A provenance actor's optional `kind` (ADR-0047, decision 3).
+pub const PROVENANCE_KIND_NAMES: &[&str] = &["human", "agent"];
 pub const RESOLUTION_SIGNATURE_ALGORITHM: &str = "ordered-three-way-blobs/v1";
 pub const METADATA_LINEAGE_ALGORITHM: &str = "git-root-commits-sha256/v1";
 

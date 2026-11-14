@@ -226,6 +226,93 @@ test("provenance declare accepts a plain Git commit and refuses an empty declara
   assert.equal(git(repo, "rev-parse", "refs/notes/causet"), notes);
 });
 
+test("provenance declare states an actor's kind, and whom an agent acts for", () => {
+  // ADR-0047 decision 3: an actor may say whether it is a human or an agent,
+  // and an agent whom it acts for. Both are claims, declared like the role.
+  const repo = makeRepo();
+  write(repo, "f.txt", "one\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "agent work");
+  const agent = {
+    role: "generated",
+    actor: "claude-opus-5-5",
+    kind: "agent",
+    for: "Ada Lovelace <ada@example.com>",
+  };
+  // CAUSET_AGENT naming the same actor is the same declaration, not a second actor.
+  const declared = JSON.parse(vlabEnv(
+    repo, { CAUSET_AGENT: "claude-opus-5-5" }, "provenance", "declare", "HEAD",
+    "--generated-by", "claude-opus-5-5", "--kind", "agent", "--for", "Ada Lovelace <ada@example.com>",
+    "--json",
+  ));
+  assert.deepEqual(declared.provenance.actors, [agent]);
+  assert.deepEqual(provenance(repo)[0].actors, [agent], "cst provenance --json reports both members");
+  assert.match(
+    vlab(repo, "provenance"),
+    /^ {4}generated claude-opus-5-5 \(agent for Ada Lovelace <ada@example\.com>\)$/m,
+  );
+
+  write(repo, "g.txt", "two\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "human work");
+  vlab(repo, "provenance", "declare", "HEAD", "--authored-by", "Ada", "--kind", "human");
+  assert.deepEqual(provenance(repo)[0].actors.map(({ kind }) => kind), ["human"]);
+  assert.match(vlab(repo, "provenance"), /^ {4}authored {2}Ada \(human\)$/m);
+
+  // An actor declared without a kind reads exactly as before: unstated, never a claim of either.
+  write(repo, "h.txt", "three\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "unstated work");
+  vlab(repo, "provenance", "declare", "HEAD", "--generated-by", "agent-7");
+  assert.deepEqual(provenance(repo)[0].actors, [{ role: "generated", actor: "agent-7" }]);
+  assert.match(vlab(repo, "provenance"), /^ {4}generated agent-7$/m);
+
+  const validation = JSON.parse(vlab(repo, "metadata", "validate", "--strict", "--json"));
+  assert.equal(validation.summary.errors, 0, "kinded records validate strictly");
+});
+
+test("provenance declare refuses a kind it cannot attach to exactly one agent or human", () => {
+  const repo = makeRepo();
+  write(repo, "f.txt", "one\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "plain Git commit");
+  const notesRef = () => spawnSync("git", ["rev-parse", "--verify", "-q", "refs/notes/causet"], {
+    cwd: repo, encoding: "utf8", env: testEnv(),
+  }).stdout.trim();
+  const notes = notesRef();
+  const refused = (args, env = {}) => {
+    const result = vlabResult(repo, ["provenance", "declare", "HEAD", ...args, "--json"], env);
+    assert.equal(result.status, 1, args.join(" "));
+    return JSON.parse(result.stdout);
+  };
+
+  assert.equal(refused(["--generated-by", "a", "--kind", "robot"]).code, "usage-invalid-option-value");
+  assert.equal(refused(["--generated-by", "a", "--kind", ""]).code, "usage-invalid-option-value");
+  // `for` names whom an agent acts for, so it needs --kind agent.
+  const unkinded = refused(["--generated-by", "a", "--for", "Ada"]);
+  assert.equal(unkinded.code, "usage-missing-argument");
+  assert.match(unkinded.message, /--for needs --kind agent/);
+  assert.equal(refused(["--authored-by", "a", "--kind", "human", "--for", "Ada"]).code, "usage-conflicting-options");
+  assert.equal(refused(["--generated-by", "a", "--kind", "agent", "--for", ""]).code, "usage-invalid-option-value");
+  // A kind describes one actor: with two it cannot say whose it is.
+  const two = refused(["--authored-by", "Ada", "--generated-by", "claude", "--kind", "agent"]);
+  assert.equal(two.code, "usage-conflicting-options");
+  assert.match(two.message, /exactly one actor/);
+  assert.equal(
+    refused(["--authored-by", "Ada", "--kind", "human"], { CAUSET_AGENT: "claude" }).code,
+    "usage-conflicting-options",
+    "CAUSET_AGENT declares an actor too",
+  );
+  assert.equal(refused(["--kind", "agent"]).code, "usage-missing-argument", "a kind is no actor");
+
+  assert.equal(notesRef(), notes, "nothing was written");
+  assert.deepEqual(provenance(repo), []);
+
+  // Only `cst provenance declare` takes them.
+  const commit = vlabResult(repo, ["commit", "--allow-empty", "-m", "x", "--generated-by", "a", "--kind", "agent", "--json"]);
+  assert.equal(JSON.parse(commit.stdout).code, "usage-unknown-option");
+});
+
 test("a declared role outside the closed vocabulary is refused", () => {
   const repo = makeRepo();
   write(repo, "f.txt", "one\n");
@@ -303,6 +390,32 @@ test("provenance survives a hard squash, which is where Git loses it", () => {
   // its own note record, not a member smuggled into another family's schema.
   assert.equal(receipt.schema, "causet.landing/v1");
   assert.equal(receipt.provenance, undefined);
+});
+
+test("an actor's kind, and whom an agent acts for, carry through a hard squash", () => {
+  // A landing that dropped them would turn a declared agent into an unstated
+  // actor: the carried record unites the sources' claims, kinds included.
+  const repo = makeRepo();
+  git(repo, "switch", "-c", "feature");
+  write(repo, "f.txt", "one\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "feature one");
+  vlab(repo, "provenance", "declare", "HEAD", "--generated-by", "claude-opus-5-5", "--kind", "agent", "--for", "Ada");
+  write(repo, "g.txt", "two\n");
+  git(repo, "add", "-A");
+  // The same actor, unstated here: that is no claim against the kind declared above.
+  vlabEnv(repo, { CAUSET_AGENT: "claude-opus-5-5" }, "commit", "-m", "feature two", "--authored-by", "Ada");
+  git(repo, "switch", "main");
+  vlab(repo, "hard-squash", "feature", "--json");
+
+  const [entry] = provenance(repo);
+  assert.equal(entry.origin, "carried");
+  assert.deepEqual(entry.actors, [
+    { role: "authored", actor: "Ada" },
+    { role: "generated", actor: "claude-opus-5-5", kind: "agent", for: "Ada" },
+  ]);
+  const validation = JSON.parse(vlab(repo, "metadata", "validate", "--strict", "--json"));
+  assert.equal(validation.summary.errors, 0, "the carried record validates strictly");
 });
 
 test("provenance carries through a cherry-pick to the applied commit", () => {

@@ -530,6 +530,17 @@ function scenario() {
   ));
   keep("spec-benchmark", vlabJson(repo, "spec", "benchmark", "--documents", "1", "--blocks", "2", "--json"));
 
+  // Declared provenance with ADR-0047's actor kind and whom it acts for, so the
+  // family is published like every other note record.
+  write(repo, "provenance.txt", "declared\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "Declared provenance");
+  keep("provenance-declare", vlabJson(
+    repo, "provenance", "declare", "HEAD",
+    "--generated-by", "claude-opus-5-5", "--kind", "agent", "--for", "VCS Lab Schema Catalog Test",
+    "--json",
+  ));
+
   // Every published note record, and one raw note container.
   captured.noteRecords = vlabJson(repo, "receipts", "--json");
   // The records are judged in the format of the repository that wrote them,
@@ -632,6 +643,7 @@ test("every published note record satisfies its document and the runtime validat
       "causet.application/v4",
       "causet.interactive-absorption/v1",
       "causet.landing/v1",
+      "causet.provenance/v1",
       "causet.rebase-application/v1",
       "causet.rebase/v3",
       "causet.reconciliation/v6",
@@ -639,6 +651,21 @@ test("every published note record satisfies its document and the runtime validat
     ],
     "the scenario must publish every note-record family",
   );
+});
+
+test("the provenance document and the runtime agree on an actor's kind", { timeout: 600_000 }, () => {
+  const state = scenario();
+  const declared = state.noteRecords.find((record) => record.schema === "causet.provenance/v1");
+  assert.ok(declared, "the scenario declares provenance");
+  // ADR-0047 decision 3: `kind` is human or agent, and nothing else.
+  const cases = [["human", true], ["agent", true], ["robot", false], ["Agent", false], [null, false]];
+  const records = cases.map(([kind]) => ({ ...declared, actors: [{ role: "generated", actor: "a", kind }] }));
+  const verdicts = validateNoteRecords(records, state.objectFormat);
+  for (const [index, [kind, valid]] of cases.entries()) {
+    assert.equal(verdicts[index].length === 0, valid, `runtime verdict on kind ${JSON.stringify(kind)}`);
+    assert.equal(validateAgainst(declared.schema, records[index]).length === 0, valid,
+      `document verdict on kind ${JSON.stringify(kind)}`);
+  }
 });
 
 test("documents are at least as strict as the runtime validator on missing fields", { timeout: 600_000 }, () => {

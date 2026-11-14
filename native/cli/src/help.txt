@@ -32,6 +32,7 @@ Usage:
   cst provenance [<rev>] [--all] [--json]
   cst provenance declare <commit> [--authored-by <actor>]
                  [--generated-by <actor>] [--reviewed-by <actor>]
+                 [--kind human|agent [--for <actor>]]
   cst receipts [--json]
   cst audit identity [--json]
   cst metadata status [--json]

@@ -7,7 +7,7 @@
 use crate::js::{get, same_value_zero, strict_equals, truthy};
 use crate::json::{JsString, Object, Value, js, lossy, object, string, stringify};
 use crate::registry::{
-  Family, PROVENANCE_ROLE_NAMES, RECORD_FAMILIES, RESOLUTION_SIGNATURE_ALGORITHM, RESOURCE_BOUNDS,
+  Family, PROVENANCE_KIND_NAMES, PROVENANCE_ROLE_NAMES, RECORD_FAMILIES, RESOLUTION_SIGNATURE_ALGORITHM, RESOURCE_BOUNDS,
 };
 
 pub const SCHEMA_NAMESPACE: &str = "causet.";
@@ -235,6 +235,16 @@ fn equals_str(value: Option<&Value>, text: &str) -> bool {
 
 fn one_of(value: Option<&Value>, texts: &[&str]) -> bool {
   texts.iter().any(|text| equals_str(value, text))
+}
+
+/// The optional `kind` and `for` of a `causet.provenance/v1` actor
+/// (ADR-0047, decision 3). An absent `kind` is unstated; `for` is present
+/// only with kind agent (docs/native-history/commits.md §2.2).
+fn provenance_actor_kind_ok(actor: &Value) -> bool {
+  let kind = get(Some(actor), "kind");
+  let on_behalf_of = get(Some(actor), "for");
+  (kind.is_none() || one_of(kind, PROVENANCE_KIND_NAMES))
+    && (on_behalf_of.is_none() || (is_non_empty_string(on_behalf_of) && equals_str(kind, "agent")))
 }
 
 /// `value && typeof value === "object"` (arrays included).
@@ -495,7 +505,8 @@ pub fn validate_note_record(record: Option<&Value>, format: &str) -> Vec<FieldEr
         "changeId",
         "non-empty string or null",
       );
-      let actors_ok = matches!(get(record, "actors"), Some(Value::Array(actors)) if !actors.is_empty() && actors.iter().all(|actor| {
+      let actors = get(record, "actors");
+      let actors_ok = matches!(actors, Some(Value::Array(actors)) if !actors.is_empty() && actors.iter().all(|actor| {
         is_object(Some(actor)) && one_of(get(Some(actor), "role"), PROVENANCE_ROLE_NAMES) && is_non_empty_string(get(Some(actor), "actor"))
       }));
       e.check(
@@ -504,6 +515,20 @@ pub fn validate_note_record(record: Option<&Value>, format: &str) -> Vec<FieldEr
         format!(
           "non-empty array of {{role, actor}} with role in {}",
           PROVENANCE_ROLE_NAMES.join("|")
+        ),
+      );
+      // A separate check, so a record that fails only the one above reports
+      // exactly what it always has.
+      let kinds_ok = match actors {
+        Some(Value::Array(actors)) => actors.iter().all(provenance_actor_kind_ok),
+        _ => true,
+      };
+      e.check(
+        kinds_ok,
+        "actors",
+        format!(
+          "kind, when present, in {}, and for, when present, a non-empty string with kind agent",
+          PROVENANCE_KIND_NAMES.join("|")
         ),
       );
       let carried = equals_str(origin, "carried");
@@ -995,6 +1020,47 @@ mod tests {
     assert_eq!(objects.len(), 1);
     assert_eq!(objects[0].field, "applications.sourceCommit");
     assert!(referenced_objects(None).is_empty());
+  }
+
+  fn provenance_with_actors(actors: &str) -> Value {
+    let oid = "a".repeat(40);
+    parse(&format!(
+      r#"{{"schema":"causet.provenance/v1","type":"provenance","id":"prov_x","commit":"{oid}","changeId":null,"actors":{actors},"origin":"declared","carriedFrom":[],"createdAt":"2026-11-14T12:00:00.000Z"}}"#
+    ))
+    .unwrap()
+  }
+
+  fn actor_errors(actors: &str) -> Vec<String> {
+    validate_note_record(Some(&provenance_with_actors(actors)), "sha1")
+      .into_iter()
+      .map(|error| error.field)
+      .collect()
+  }
+
+  #[test]
+  fn a_provenance_actor_may_state_its_kind_and_whom_an_agent_acts_for() {
+    // ADR-0047 decision 3: both members are optional, and a record without
+    // them validates exactly as before.
+    assert!(actor_errors(r#"[{"role":"generated","actor":"a"}]"#).is_empty());
+    assert!(actor_errors(r#"[{"role":"authored","actor":"Ada","kind":"human"}]"#).is_empty());
+    assert!(
+      actor_errors(r#"[{"role":"generated","actor":"claude","kind":"agent","for":"Ada"}]"#).is_empty()
+    );
+    assert!(actor_errors(r#"[{"role":"generated","actor":"claude","kind":"agent"}]"#).is_empty());
+
+    let refused = [
+      r#"[{"role":"generated","actor":"a","kind":"robot"}]"#,
+      r#"[{"role":"generated","actor":"a","kind":null}]"#,
+      r#"[{"role":"generated","actor":"a","kind":"Agent"}]"#,
+      // `for` is present only with kind agent (commits.md §2.2).
+      r#"[{"role":"generated","actor":"a","for":"Ada"}]"#,
+      r#"[{"role":"authored","actor":"a","kind":"human","for":"Ada"}]"#,
+      r#"[{"role":"generated","actor":"a","kind":"agent","for":""}]"#,
+      r#"[{"role":"generated","actor":"a","kind":"agent","for":7}]"#,
+    ];
+    for actors in refused {
+      assert_eq!(actor_errors(actors), vec!["actors".to_string()], "{actors}");
+    }
   }
 
   #[test]

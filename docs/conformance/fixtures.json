@@ -1001,6 +1001,74 @@
           "reason": "Empty for a declared record; the rendering names sources only when there are some."
         }
       ]
+    },
+    {
+      "name": "provenance-kinds",
+      "argv": [
+        "provenance",
+        "provenance-kinds"
+      ],
+      "stage": "clean",
+      "mode": "reread",
+      "note": "An actor's declared kind, and whom an agent acts for (ADR-0047, decision 3), shown beside the actor they describe. Both are claims, like the role.",
+      "required": [
+        {
+          "pointer": "",
+          "rule": "present",
+          "label": "unverified claims, not detection"
+        },
+        {
+          "pointer": "/entries/0/commit",
+          "rule": "prefix",
+          "minPrefix": 12
+        },
+        {
+          "pointer": "/entries/0/id",
+          "rule": "exact"
+        },
+        {
+          "pointer": "/entries/0/origin",
+          "rule": "exact"
+        },
+        {
+          "pointer": "/entries/0/actors/0/role",
+          "rule": "exact"
+        },
+        {
+          "pointer": "/entries/0/actors/0/actor",
+          "rule": "exact"
+        },
+        {
+          "pointer": "/entries/0/actors/0/kind",
+          "rule": "exact"
+        },
+        {
+          "pointer": "/entries/0/actors/0/for",
+          "rule": "exact"
+        }
+      ],
+      "jsonOnly": [
+        {
+          "pointer": "/revision",
+          "reason": "The revision the caller asked about; a person already knows what they typed."
+        },
+        {
+          "pointer": "/inspected",
+          "reason": "How many commits were read, a scope measure rather than part of the claim."
+        },
+        {
+          "pointer": "/entries/0/changeId",
+          "reason": "The logical change is reported by the planning and receipt commands; the provenance rendering identifies the commit."
+        },
+        {
+          "pointer": "/entries/0/createdAt",
+          "reason": "When the claim was recorded is audit detail, not part of who produced the content."
+        },
+        {
+          "pointer": "/entries/0/carriedFrom",
+          "reason": "Empty for a declared record; the rendering names sources only when there are some."
+        }
+      ]
     }
   ],
   "jsonOnlyCommands": [

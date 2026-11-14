@@ -6,7 +6,7 @@
 | --- | --- |
 | Architecture baseline | `main`, where every landing is a release (ADR-0048) |
 | Status | Current implementation reference |
-| Last updated | 2026-11-13 |
+| Last updated | 2026-11-14 |
 | Runtime | The installed `cst` is a Rust executable for Windows x64 and Linux x64 (glibc) and needs Git 2.40+ only (merge-tree forecast engine: Git 2.49+). Node.js 24+ installs it through npm and runs the suites; there is no JavaScript implementation of the CLI since #243 |
 | External runtime dependencies | Git. Node.js only to launch the executable when npm install scripts did not run; a platform with no published executable is refused, not served by a fallback |
 
@@ -183,7 +183,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/cli/src/environment.rs` | The user-facing environment variables, read as `src/environment.js` reads them (ADR-0039 §5): `CAUSET_<name>` when present, even empty. | None |
 | `native/cli/src/export.rs` | `cst metadata export <directory>`: `exportMetadata` of `src/metadata-transfer.js` with the manifest of `src/metadata-envelope.js`. | `envelope`, `metadata`, `notes_write`, causet-engine, causet-model |
 | `native/cli/src/forecast.rs` | `cst forecast` and `cst workspace forecast`: `forecastReconciliation` and `forecastWorkspaces` of `src/forecasts.js`, the plan simulator they drive under either forecast engine (ADR-0016), and `formatForecast` of `src/cli.js`. | `envelope`, `export`, `host`, `plan`, `rebase_program`, `records`, `resolve`, `spec`, `target_overlay`, `workspaces`, causet-engine, causet-model |
-| `native/cli/src/front.rs` | The command front end: everything `main` in `src/cli.js` decides before a command touches the repository. | `parsed` |
+| `native/cli/src/front.rs` | The command front end: everything `main` in `src/cli.js` decides before a command touches the repository. | `parsed`, causet-model |
 | `native/cli/src/host.rs` | What the notes lock and record ids need from the operating system, as Node provides it: `os.hostname()`, `process.kill(pid, 0)`, `randomBytes`, and the test hooks of `src/faults.js`. | causet-model |
 | `native/cli/src/import.rs` | `cst metadata import <directory> --dry-run\|--apply [--park-conflicts]`: `importMetadata` of `src/metadata-transfer.js`, with the parking of `src/quarantine.js` (ADR-0030). | `envelope`, `export`, `lineage`, `metadata`, `notes_write`, causet-engine, causet-model |
 | `native/cli/src/json.rs` | The failure envelope (ADR-0021) for a front-end refusal, rendered by the shared record model so every command writes the same bytes. | `front`, causet-model |

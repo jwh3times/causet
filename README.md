@@ -317,7 +317,16 @@ instead of blindly repeating the commit: once the notes write can succeed,
 `cst provenance declare <commit>` with the original actors attaches the
 declaration, and refuses if the commit already has one.
 
-After a hard squash, `git blame` attributes every absorbed line to the landing commit and the original authorship is gone. The landing receipt already names the absorbed commits, so causet carries their declared provenance onto the landing as the union of their actors, marked `carried` and naming its sources.
+`cst provenance declare` can also state what an actor is (ADR-0047, decision 3): `--kind human` or `--kind agent`, and with `--kind agent`, `--for` names the human or organisation the agent acts for. A kind describes one actor, so the declaration must name exactly one, counting `CAUSET_AGENT`:
+
+```bash
+cst provenance declare HEAD --generated-by claude-opus-5-5 --kind agent --for "Ada Lovelace <ada@example.com>"
+cst provenance HEAD   # generated claude-opus-5-5 (agent for Ada Lovelace <ada@example.com>)
+```
+
+`--for` without `--kind agent` is refused, as is a kind other than the two. An actor declared without a kind is unstated, never assumed to be either kind.
+
+After a hard squash, `git blame` attributes every absorbed line to the landing commit and the original authorship is gone. The landing receipt already names the absorbed commits, so causet carries their declared provenance onto the landing as the union of their actors, marked `carried` and naming its sources. An actor's kind, and whom an agent acts for, carry with it. When the sources disagree about either, the carried actor leaves that member out.
 
 Provenance is **declared, never inferred**. Nothing examines content to guess who produced it, no existing trailer is read as a role, and a commit with no declaration reports nothing rather than falling back to the Git author. The record is an unauthenticated claim by whoever ran the command, not detection and not proof; signing it is a separate, unimplemented layer (FR-TRUST-02).
 

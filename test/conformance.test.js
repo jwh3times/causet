@@ -141,6 +141,19 @@ function scenario() {
   const proofBundle = path.join(parent, "proof.json");
   fs.writeFileSync(proofBundle, vlab(repo, "proof-bundle", "plan-source"));
 
+  // An actor declared with its kind and whom it acts for (ADR-0047,
+  // decision 3), on a branch of its own made after the envelope and the proof
+  // bundle, so neither changes.
+  git(repo, "switch", "-c", "provenance-kinds", baseCommit);
+  write(repo, "k.txt", "kinded\n");
+  git(repo, "add", "-A");
+  git(repo, "commit", "-m", "Kinded provenance change");
+  vlab(
+    repo, "provenance", "declare", "HEAD",
+    "--generated-by", "conformance-agent", "--kind", "agent", "--for", "Conformance Reviewer",
+  );
+  git(repo, "switch", "main");
+
   const clean = { repo, parent, envelope, proofBundle };
 
   // Stage two: a second conflicted reconciliation, left paused.
