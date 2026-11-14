@@ -851,7 +851,7 @@ fn benchmark_in(
   measurements.set(
     "noteCatalog",
     Value::Object(measure_phase("note-catalog", samples, || {
-      single("records", count(crate::notes::list_note_records(&repo)?.len()))
+      single("records", count(crate::notes::list_note_records(&crate::record_source::Notes::at(&repo))?.len()))
     })?),
   );
   measurements.set(
@@ -866,7 +866,7 @@ fn benchmark_in(
   measurements.set(
     "metadataStatus",
     Value::Object(measure_phase("metadata-status", samples, || {
-      let status = crate::metadata::metadata_report(&repo, crate::metadata::METADATA_STATUS_SCHEMA)?;
+      let status = crate::metadata::metadata_report(&crate::record_source::Notes::at(&repo), &repo, crate::metadata::METADATA_STATUS_SCHEMA)?;
       let summary = get(Some(&status), "summary");
       let scopes = get(Some(&status), "scopes");
       let portable = get(scopes, "sharedPortable");

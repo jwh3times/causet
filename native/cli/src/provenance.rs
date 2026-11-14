@@ -7,6 +7,7 @@ use crate::commit::{Actor, declared_actors, normalize_actors, provenance_record}
 use crate::notes::read_notes;
 use crate::notes_write::{append_note, with_notes_lock};
 use crate::parsed::Parsed;
+use crate::record_source::{Notes, RecordSource};
 use crate::records::not_callable;
 use causet_engine::engine;
 use causet_engine::errors::{GitError, GitResult};
@@ -18,8 +19,9 @@ use causet_model::schemas::canonical_schema;
 pub const PROVENANCE_SCHEMA: &str = "causet.provenance/v1";
 const AGENT_ENV: &str = "CAUSET_AGENT";
 
-/// `provenanceFor(commits)`: every provenance record attached to each commit.
-fn provenance_for(commits: &[String], cwd: &str) -> GitResult<Vec<(String, Vec<Value>)>> {
+/// `provenanceFor(commits)`: every provenance record the source attaches to
+/// each commit.
+fn provenance_for(commits: &[String], source: &dyn RecordSource) -> GitResult<Vec<(String, Vec<Value>)>> {
   let mut unique: Vec<String> = Vec::new();
   for commit in commits {
     if !commit.is_empty() && !unique.contains(commit) {
@@ -29,7 +31,7 @@ fn provenance_for(commits: &[String], cwd: &str) -> GitResult<Vec<(String, Vec<V
   if unique.is_empty() {
     return Ok(Vec::new());
   }
-  let notes = read_notes(&unique, cwd)?;
+  let notes = read_notes(&unique, source)?;
   let mut found = Vec::new();
   for commit in unique {
     let records: Vec<Value> = notes
@@ -60,9 +62,10 @@ fn or_value(value: Option<&Value>, fallback: Value) -> Value {
   }
 }
 
-/// The entries `cst provenance` reports, in commit order.
-fn entries(commits: &[String], cwd: &str) -> GitResult<Vec<Value>> {
-  let found = provenance_for(commits, cwd)?;
+/// The entries `cst provenance` reports, in commit order: the source's
+/// records, with each commit's subject.
+fn entries(commits: &[String], source: &dyn RecordSource, cwd: &str) -> GitResult<Vec<Value>> {
+  let found = provenance_for(commits, source)?;
   let mut entries = Vec::new();
   for commit in commits {
     let Some((_, records)) = found.iter().find(|(candidate, _)| candidate == commit) else {
@@ -183,8 +186,9 @@ fn format_provenance(entries: &[Value]) -> GitResult<String> {
   Ok(lines.join("\n"))
 }
 
-/// `cst provenance [revision] [--all] [--json]`.
-pub fn provenance(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
+/// `cst provenance [revision] [--all] [--json]`, over the records `source`
+/// holds.
+pub fn provenance(parsed: &Parsed, source: &dyn RecordSource, cwd: &str) -> GitResult<Value> {
   // `positionals[0] ?? "HEAD"`: an empty argument stays empty.
   let revision = parsed
     .positionals
@@ -196,7 +200,7 @@ pub fn provenance(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
   } else {
     vec![engine::resolve_revision(&revision, cwd)?]
   };
-  let entries = entries(&commits, cwd)?;
+  let entries = entries(&commits, source, cwd)?;
   if parsed.truthy("json") {
     let mut report = Object::new();
     report.set("revision", string(&revision));
@@ -254,7 +258,7 @@ pub fn declare(parsed: &Parsed, cwd: &str) -> GitResult<Value> {
   let commit = engine::resolve_revision(&revision, cwd)?;
   let change_id = extract_trailer(&engine::commit_message(&commit, cwd)?, "Change-Id");
   let record = with_notes_lock(cwd, || {
-    if let Some((_, records)) = provenance_for(std::slice::from_ref(&commit), cwd)?.first() {
+    if let Some((_, records)) = provenance_for(std::slice::from_ref(&commit), &Notes::at(cwd))?.first() {
       let count = records.len();
       return Err(
         GitError::new(
@@ -326,7 +330,7 @@ fn carry_provenance(
   let existing = match known {
     Some(known) => known,
     None => {
-      read = provenance_for(&sources, cwd)?;
+      read = provenance_for(&sources, &Notes::at(cwd))?;
       &read
     }
   };
@@ -379,7 +383,7 @@ pub fn carry_provenance_for_applications(applications: &[(String, String, Option
     .map(|(origin, ..)| origin.clone())
     .filter(|origin| !origin.is_empty())
     .collect();
-  let known = provenance_for(&origins, cwd)?;
+  let known = provenance_for(&origins, &Notes::at(cwd))?;
   if known.is_empty() {
     return Ok(());
   }
@@ -387,4 +391,32 @@ pub fn carry_provenance_for_applications(applications: &[(String, String, Option
     let _ = carry_provenance(std::slice::from_ref(origin), applied, change_id.as_deref(), cwd, Some(&known));
   }
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::record_source::fake::{Containers, container};
+  use causet_model::json::stringify;
+
+  #[test]
+  fn a_commits_provenance_is_the_provenance_records_the_source_attaches_to_it() {
+    let source = Containers(vec![
+      container(
+        "c1",
+        r#"{"schema":"causet.note/v1","records":[{"schema":"causet.provenance/v1","id":"prov_1"},{"schema":"causet.landing/v1","id":"land_1"}]}"#,
+      ),
+      container("c2", r#"{"schema":"causet.note/v1","records":[{"schema":"causet.landing/v1","id":"land_2"}]}"#),
+    ]);
+    let asked = ["c2", "c1", "c1", "", "c3"].map(String::from);
+    let found: Vec<(String, Vec<String>)> = provenance_for(&asked, &source)
+      .unwrap()
+      .into_iter()
+      .map(|(commit, records)| (commit, records.iter().map(stringify).collect()))
+      .collect();
+    assert_eq!(
+      found,
+      [("c1".to_string(), vec![r#"{"schema":"causet.provenance/v1","id":"prov_1"}"#.to_string()])]
+    );
+  }
 }

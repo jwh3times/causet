@@ -4,6 +4,7 @@
 use crate::envelope::{ENVELOPE_BUNDLE, ENVELOPE_MANIFEST, METADATA_ENVELOPE_SCHEMA, io_failure, manifest_hash};
 use crate::metadata::{full_snapshot, trust_state};
 use crate::notes_write::{build_retention_commit, record_dependencies};
+use crate::record_source::Notes;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::locations::{CURRENT_NAMES, local_ref, names};
 use causet_engine::process::{RunOptions, run_git};
@@ -249,7 +250,7 @@ pub fn export_metadata(envelope_path: &str, cwd: &str) -> GitResult<Value> {
     ));
   }
   let collector = metrics::begin("metadata-export");
-  let snapshot = match full_snapshot(&context) {
+  let snapshot = match full_snapshot(&context, &Notes::at(&context.root)) {
     Ok(snapshot) => snapshot,
     Err(error) => {
       metrics::end(collector);

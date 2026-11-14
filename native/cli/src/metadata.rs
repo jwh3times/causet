@@ -6,6 +6,7 @@
 use crate::envelope::io_failure;
 use crate::lineage::repository_lineage;
 use crate::migration::advanced_legacy_refs;
+use crate::record_source::{Container, Notes, RecordSource};
 use crate::records::short;
 use crate::store::read_json;
 use causet_engine::errors::{GitError, GitResult};
@@ -177,14 +178,10 @@ fn is_commit(object: Option<&ObjectRecord>) -> bool {
 
 /// `parseNoteObject(object, entry, diagnostics)`: a container's records, or
 /// `None` with its diagnostic.
-fn parse_note_object(
-  object: Option<&ObjectRecord>,
-  note: &str,
-  target: &str,
-  diagnostics: &mut Diagnostics,
-) -> Option<Vec<Value>> {
+fn parse_note_object(container: &Container, diagnostics: &mut Diagnostics) -> Option<Vec<Value>> {
+  let (note, target) = (&container.id, &container.target);
   let subject = || string(target);
-  if !is_blob(object) {
+  let Some(content) = container.bytes.as_deref() else {
     diagnostics.add(
       "missing-note-object",
       "error",
@@ -194,10 +191,7 @@ fn parse_note_object(
       Vec::new(),
     );
     return None;
-  }
-  let content = object
-    .and_then(|object| object.content.as_deref())
-    .unwrap_or_default();
+  };
   if !within_bound("noteContainerBytes", content.len() as u64) {
     diagnostics.add(
       "oversize-record",
@@ -314,6 +308,13 @@ pub(crate) fn duplicated_record_ids(records: &[&Value]) -> BTreeSet<String> {
     .collect()
 }
 
+/// The source's containers in the snapshot's order, by attachment.
+fn sorted_containers(source: &dyn RecordSource) -> GitResult<Vec<Container>> {
+  let mut containers = source.containers()?;
+  containers.sort_by(|left, right| locale_compare(&left.target, &right.target));
+  Ok(containers)
+}
+
 /// `readCausalRecordCatalog(cwd)`: every record in the notes tree, read under
 /// the snapshot's container rules, with the identifiers that conflict across
 /// the whole tree (duplicated here, or disputed by a parked copy).
@@ -322,23 +323,13 @@ pub(crate) fn read_causal_record_catalog(
 ) -> GitResult<(Vec<Value>, BTreeSet<String>)> {
   let context = engine::repo_context(cwd)?;
   let root = &context.root;
-  let mut entries = engine::list_note_entries(names(root)?.notes_ref, root)?;
-  entries.sort_by(|left, right| locale_compare(&left.target, &right.target));
-  let note_objects = object_lookup(
-    entries.iter().map(|entry| entry.note.clone()).collect(),
-    root,
-  )?;
+  let containers = sorted_containers(&Notes::at(root))?;
   let mut ignored = Diagnostics::default();
   let mut records = Vec::new();
-  for entry in &entries {
-    let parsed = parse_note_object(
-      note_objects.get(&entry.note),
-      &entry.note,
-      &entry.target,
-      &mut ignored,
-    );
+  for container in &containers {
+    let parsed = parse_note_object(container, &mut ignored);
     for record in parsed.unwrap_or_default() {
-      records.push(attached(&record, &entry.target));
+      records.push(attached(&record, &container.target));
     }
   }
   let mut conflicting = duplicated_record_ids(&records.iter().collect::<Vec<_>>());
@@ -434,31 +425,27 @@ const ALL_CHECKS: NoteChecks = NoteChecks { attachments: true, references: true 
 
 fn validate_portable_notes(
   context: &RepoContext,
+  source: &dyn RecordSource,
   diagnostics: &mut Diagnostics,
   parked: &BTreeSet<String>,
   checks: NoteChecks,
 ) -> GitResult<Portable> {
   let root = &context.root;
   let repository_names = names(root)?;
-  let mut entries = engine::list_note_entries(repository_names.notes_ref, root)?;
-  entries.sort_by(|left, right| locale_compare(&left.target, &right.target));
-  let note_objects = object_lookup(
-    entries.iter().map(|entry| entry.note.clone()).collect(),
-    root,
-  )?;
+  let containers = sorted_containers(source)?;
   let target_objects = if checks.attachments {
-    object_lookup(entries.iter().map(|entry| entry.target.clone()).collect(), root)?
+    object_lookup(containers.iter().map(|container| container.target.clone()).collect(), root)?
   } else {
     HashMap::new()
   };
   let mut raw_records: Vec<(Value, String)> = Vec::new();
-  for entry in &entries {
-    if checks.attachments && !is_commit(target_objects.get(&entry.target)) {
+  for container in &containers {
+    if checks.attachments && !is_commit(target_objects.get(&container.target)) {
       diagnostics.add(
         "missing-attachment",
         "error",
         "shared-portable",
-        string(&entry.target),
+        string(&container.target),
         format!(
           "The note attachment is missing or is not a commit in this clone. Fetch {}/* together with {} from the fact's origin and validate again; if it remains missing, restore it from a trusted clone, backup, or metadata envelope.",
           repository_names.refs_root, repository_names.notes_ref
@@ -466,14 +453,9 @@ fn validate_portable_notes(
         Vec::new(),
       );
     }
-    let records = parse_note_object(
-      note_objects.get(&entry.note),
-      &entry.note,
-      &entry.target,
-      diagnostics,
-    );
+    let records = parse_note_object(container, diagnostics);
     for record in records.unwrap_or_default() {
-      raw_records.push((record, entry.target.clone()));
+      raw_records.push((record, container.target.clone()));
     }
   }
 
@@ -799,7 +781,7 @@ fn validate_portable_notes(
   let quarantined = summaries.len() - accepted.len();
   let mut notes = Object::new();
   notes.set("ref", string(repository_names.notes_ref));
-  notes.set("targetCount", number(entries.len()));
+  notes.set("targetCount", number(containers.len()));
   notes.set("recordCount", number(summaries.len()));
   notes.set("acceptedCount", number(accepted.len()));
   notes.set("quarantinedCount", number(quarantined));
@@ -1478,7 +1460,7 @@ pub(crate) fn inspection_records(root: &str) -> GitResult<Vec<(String, Value, St
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
     let checks = NoteChecks { attachments: false, references: false };
-    let portable = validate_portable_notes(&context, &mut diagnostics, &parked, checks)?;
+    let portable = validate_portable_notes(&context, &Notes::at(&context.root), &mut diagnostics, &parked, checks)?;
     repository_lineage(&context.root)?;
     Ok(portable.records)
   })
@@ -1489,7 +1471,7 @@ pub(crate) fn portable_snapshot(cwd: &str) -> GitResult<PortableSnapshot> {
   with_object_session(&context.root, || -> GitResult<PortableSnapshot> {
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
-    let portable = validate_portable_notes(&context, &mut diagnostics, &parked, ALL_CHECKS)?;
+    let portable = validate_portable_notes(&context, &Notes::at(&context.root), &mut diagnostics, &parked, ALL_CHECKS)?;
     // The snapshot states the lineage, though retention does not report it.
     repository_lineage(&context.root)?;
     Ok(PortableSnapshot {
@@ -1515,11 +1497,12 @@ pub(crate) struct FullSnapshot {
   pub records: Vec<(String, Value, String)>,
 }
 
-pub(crate) fn full_snapshot(context: &RepoContext) -> GitResult<FullSnapshot> {
+/// `source` holds the portable records the snapshot validates.
+pub(crate) fn full_snapshot(context: &RepoContext, source: &dyn RecordSource) -> GitResult<FullSnapshot> {
   with_object_session(&context.root, || -> GitResult<FullSnapshot> {
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
-    let portable = validate_portable_notes(context, &mut diagnostics, &parked, ALL_CHECKS)?;
+    let portable = validate_portable_notes(context, source, &mut diagnostics, &parked, ALL_CHECKS)?;
     let tracked = validate_specs(context, &mut diagnostics)?;
     let mut local_digests: HashMap<String, Vec<String>> = HashMap::new();
     for summary in &portable.summaries {
@@ -1556,9 +1539,9 @@ pub(crate) fn full_snapshot(context: &RepoContext) -> GitResult<FullSnapshot> {
   })
 }
 
-pub fn metadata_report(cwd: &str, schema: &str) -> GitResult<Value> {
+pub fn metadata_report(source: &dyn RecordSource, cwd: &str, schema: &str) -> GitResult<Value> {
   let context = engine::repo_context(cwd)?;
-  let FullSnapshot { scopes, mut diagnostics, accepted, quarantined, lineage, .. } = full_snapshot(&context)?;
+  let FullSnapshot { scopes, mut diagnostics, accepted, quarantined, lineage, .. } = full_snapshot(&context, source)?;
   diagnostics.0.sort_by(|left, right| {
     locale_compare(&left.code, &right.code)
       .then_with(|| locale_compare(left.scope, right.scope))
@@ -1763,9 +1746,17 @@ fn text_of(value: Option<&Value>) -> String {
 
 /// `cst metadata status` and `cst metadata validate [--strict]`, with their
 /// exit codes.
-pub fn metadata(subcommand: &str, strict: bool, json: bool, cwd: &str) -> GitResult<(Value, i32)> {
+/// `cst metadata status` and `cst metadata validate` over the records
+/// `source` holds.
+pub fn metadata(
+  subcommand: &str,
+  strict: bool,
+  json: bool,
+  source: &dyn RecordSource,
+  cwd: &str,
+) -> GitResult<(Value, i32)> {
   if subcommand == "status" {
-    let result = metadata_report(cwd, METADATA_STATUS_SCHEMA)?;
+    let result = metadata_report(source, cwd, METADATA_STATUS_SCHEMA)?;
     let output = if json {
       result
     } else {
@@ -1773,7 +1764,7 @@ pub fn metadata(subcommand: &str, strict: bool, json: bool, cwd: &str) -> GitRes
     };
     return Ok((output, 0));
   }
-  let mut result = metadata_report(cwd, METADATA_VALIDATION_SCHEMA)?;
+  let mut result = metadata_report(source, cwd, METADATA_VALIDATION_SCHEMA)?;
   let errors = get(get(Some(&result), "summary"), "errors").cloned();
   let warnings = get(get(Some(&result), "summary"), "warnings").cloned();
   let valid = matches!(errors, Some(Value::Number(count)) if count == 0.0)

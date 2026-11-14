@@ -95,6 +95,12 @@ fn rebase_options(parsed: &Parsed) -> crate::plan::RebaseOptions {
   }
 }
 
+/// Where a Git-backed repository's commands read cst's records: its notes
+/// (#415). A native repository will hand over its fact log instead (#419).
+fn record_source(cwd: &str) -> crate::record_source::Notes<'_> {
+  crate::record_source::Notes::at(cwd)
+}
+
 fn answer(command: &str, parsed: &Parsed, cwd: &str) -> GitResult<(Value, i32)> {
   let json = parsed.truthy("json");
   match command {
@@ -130,7 +136,7 @@ fn answer(command: &str, parsed: &Parsed, cwd: &str) -> GitResult<(Value, i32)> 
     }
     "graph" => {
       let graph = causet_engine::engine::history_graph(cwd)?;
-      let records = crate::notes::list_note_records(cwd)?;
+      let records = crate::notes::list_note_records(&record_source(cwd))?;
       let edges = crate::records::format_causal_edges(&records)?;
       Ok((
         causet_model::json::string(&format!(
@@ -144,7 +150,7 @@ Causal edges
       ))
     }
     "receipts" => {
-      let records = crate::notes::list_note_records(cwd)?;
+      let records = crate::notes::list_note_records(&record_source(cwd))?;
       if json {
         return Ok((Value::Array(records), 0));
       }
@@ -157,7 +163,7 @@ Causal edges
     "provenance" if parsed.positionals.first().map(String::as_str) == Some("declare") => {
       Ok((crate::provenance::declare(parsed, cwd)?, 0))
     }
-    "provenance" => Ok((crate::provenance::provenance(parsed, cwd)?, 0)),
+    "provenance" => Ok((crate::provenance::provenance(parsed, &record_source(cwd), cwd)?, 0)),
     "forecast" => {
       let source = parsed.positionals.first().cloned().unwrap_or_default();
       let forecast = crate::forecast::forecast_reconciliation(
@@ -545,7 +551,7 @@ Causal edges
         .first()
         .map(String::as_str)
         .unwrap_or_default();
-      crate::metadata::metadata(subcommand, parsed.truthy("strict"), json, cwd)
+      crate::metadata::metadata(subcommand, parsed.truthy("strict"), json, &record_source(cwd), cwd)
     }
     other => Err(GitError::new(
       "internal-invariant",

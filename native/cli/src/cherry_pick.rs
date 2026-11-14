@@ -7,6 +7,7 @@ use crate::metadata::{accepted_causal_records, read_causal_record_catalog};
 use crate::notes::list_note_records;
 use crate::notes_write::append_note;
 use crate::provenance::carry_provenance_safely;
+use crate::record_source::Notes;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::process::{GIT_NO_RERERE, RunOptions, run_git};
 use causet_engine::types::HistoryOptions;
@@ -37,7 +38,7 @@ fn origin_of_change(bearers: Vec<String>, cwd: &str) -> GitResult<String> {
   if bearers.len() == 1 {
     return Ok(bearers.into_iter().next().unwrap_or_default());
   }
-  let records = list_note_records(cwd)?;
+  let records = list_note_records(&Notes::at(cwd))?;
   let record_refs: Vec<&Value> = records.iter().collect();
   // A `Set` of the applied values: only a string can equal a commit.
   let applied: HashSet<String> = identity_preserving_edges(&record_refs)

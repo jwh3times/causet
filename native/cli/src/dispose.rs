@@ -4,6 +4,7 @@
 
 use crate::metadata::{full_snapshot, parsed_parked_ref, read_dispositions};
 use crate::notes_write::replace_note_record;
+use crate::record_source::Notes;
 use crate::store::ensure_lab_runtime;
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::locations::ref_family;
@@ -135,7 +136,7 @@ fn read_parked_record(record_id: &str, root: &str) -> GitResult<Parked> {
 /// The local snapshot's summary records.
 fn summaries(root: &str) -> GitResult<Vec<Value>> {
   let context = engine::repo_context(root)?;
-  let snapshot = full_snapshot(&context)?;
+  let snapshot = full_snapshot(&context, &Notes::at(&context.root))?;
   Ok(match get(get(get(Some(&snapshot.scopes), "sharedPortable"), "notes"), "records") {
     Some(Value::Array(items)) => items.clone(),
     _ => Vec::new(),
