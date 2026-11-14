@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwgqii5mbc4c10ee4085",
+      "mode": "compact",
+      "sourceRef": "feat/414-provenance-actor-kind",
+      "sourceHead": "10ccbdbe1ec18e6535a71afc26248ba9e173b262",
+      "sourceSubject": "docs: update docs and changelog for v0.28.0",
+      "targetBefore": "1295b88f8af19a89cb03216205a20fcc701f2ba9",
+      "landingCommit": "2226b8409e683c2a3e670877f11c0ab7010883a3",
+      "base": "1295b88f8af19a89cb03216205a20fcc701f2ba9",
+      "absorbedCommits": [
+        "7bad42f71971b479ec6946b3381e7de4eba5195d",
+        "10ccbdbe1ec18e6535a71afc26248ba9e173b262"
+      ],
+      "absorbedChanges": [
+        "ch_0mwgjyrju0e4a28e6db8e",
+        "ch_0mwgpa7sabc3f376c207b"
+      ],
+      "resultTree": "4c14be73a03992b49d922a9757608e2adbf902b7",
+      "createdAt": "2026-11-14T18:23:57.083Z"
+    }
+  ]
+}
