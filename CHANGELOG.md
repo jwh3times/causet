@@ -4,6 +4,32 @@
 
 No unreleased changes.
 
+## [0.28.0] - 2026-11-14
+
+- **Provenance says whether an actor is a human or an agent, and whom an
+  agent acts for** (#414, ADR-0047 decision 3). A `causet.provenance/v1`
+  actor takes two optional members: `kind`, `human` or `agent`, and `for`,
+  the human or organisation an agent acts for, present only with kind
+  `agent`. `cst provenance declare <commit> --kind agent --for <actor>`
+  states them, and `--kind human` states the other kind. A kind describes
+  one actor, so the declaration must name exactly one, `CAUSET_AGENT`
+  included. Otherwise it is refused with `usage-conflicting-options`, as is
+  `--for` with `--kind human`. An unknown kind or an empty `--for` is
+  `usage-invalid-option-value`, and `--for` without `--kind` is
+  `usage-missing-argument`. `cst commit` does not take them. `cst provenance`
+  shows them after the actor as `(human)`, `(agent)` or `(agent for <actor>)`,
+  and its JSON reports them in `actors`. A record without them validates and
+  reads exactly as before, and an absent kind means the kind is unstated.
+  The record model refuses any other kind, and any `for` that is not a
+  non-empty string with kind `agent`. The published schema records the
+  addition, and so does `docs/schemas/compatibility.md`, in a new section on
+  members added inside a version. Provenance carried through a hard squash,
+  cherry-pick, reconcile or rebase keeps both. Where the carried sources
+  disagree about one actor's kind or principal, the carried actor leaves that
+  member out, whatever order the sources come in. A build older than this one
+  drops both members when it carries provenance. The record it carried from
+  keeps them. `cst --help` lists the new flags.
+
 ## [0.27.2] - 2026-11-13
 
 - **npm is published by hand with `scripts/publish-npm.ps1`** (#448). While

@@ -8,7 +8,7 @@
 | Document version | 1.0 |
 | Product baseline | `main`, where every landing is a release (ADR-0048); `CHANGELOG.md` names each version |
 | Status | Active product baseline |
-| Last updated | 2026-11-13 |
+| Last updated | 2026-11-14 |
 | Primary audience | Maintainers, contributors, protocol designers, and AI coding agents |
 | Decision owner | Repository maintainers |
 
@@ -617,7 +617,7 @@ stable IDs, or auditability.
 | Invocation-scoped Git object session | Complete with lazy startup and fallback | Equality/count/failure/worktree tests plus 10 direct, 20 redirected, three full current-Node, and one full Node 20 forced-session qualification runs |
 | Repository-scale evidence | Synthetic representative profile implemented; selected batching implemented | Trendable semantic/process/timing measurements selected workspace-status and resolution-catalog batching; the rerun shows one process per workspace and six for the resolution catalog; no index or service is yet justified |
 | Metadata integrity and portability | Experimental but complete for accepted shared facts | Inventory/validation plus deterministic envelope and two-clone idempotence tests |
-| Authorship provenance | Implemented for commit granularity | `causet.provenance/v1` declared at commit time and carried through cherry-pick, reconciliation, causal rebase, and squash landing; parity and never-inferred tests in `test/provenance.test.js`. Sub-commit anchoring is open product question 11 |
+| Authorship provenance | Implemented for commit granularity | `causet.provenance/v1` declared at commit time and carried through cherry-pick, reconciliation, causal rebase, and squash landing; an actor's declared kind, and whom an agent acts for, are optional members `cst provenance declare` records and the rewrites carry ([ADR-0047](adr/0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md), decision 3); parity and never-inferred tests in `test/provenance.test.js`. Sub-commit anchoring is open product question 11 |
 | Cryptographic trust/server policy | Not implemented | Explicit non-goal |
 | Native store/protocol | Not implemented | Exit criteria not yet satisfied |
 

@@ -1141,6 +1141,12 @@ guess; nor does the command fall back to the Git author, because "who committed
 this" and "who produced this" are different claims. And **a carried record says
 that it is carried**, never presenting itself as a fresh declaration.
 
+An actor's declared kind, and whom an agent acts for (ADR-0047, decision 3),
+follow the same discipline: an actor declared without `--kind` records none,
+the declaration is refused unless it names exactly one actor for the kind to
+describe, `--for` is refused without `--kind agent`, and a hard squash carries
+both members onto the landing.
+
 The proof-verification integration fixtures rehash bundles after omitting,
 duplicating, injecting, reordering, or misidentifying source changes and after
 altering subjects, counts, lineage fields, and physical/effective bases. Each
