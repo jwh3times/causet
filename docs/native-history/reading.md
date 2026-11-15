@@ -52,7 +52,7 @@ terminal:
 
 | Placeholder | Why |
 | --- | --- |
-| `%d %D %S %(decorate) %(describe)` | Names are #418's. |
+| `%d %D %S %(decorate) %(describe)` | They read names, beside a `HEAD` that is no name (#455). |
 | `%N` | Notes become facts (#419). |
 | `%g…` | A native repository keeps no reflog. |
 | `%G…` | Native history carries no Git signatures (commits.md §7.1). |

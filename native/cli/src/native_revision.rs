@@ -35,7 +35,7 @@ pub const RULES: [(&str, &str); 6] = [
 ];
 
 /// Git's `SYMREF_MAXDEPTH`: the most refs one resolution reads.
-const SYMREF_MAXDEPTH: usize = 5;
+pub(crate) const SYMREF_MAXDEPTH: usize = 5;
 
 /// An object's Git type, or the native type no Git object has. A native
 /// commit is a commit (commits.md §6).

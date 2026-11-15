@@ -151,6 +151,7 @@ vocabulary is published in [errors.md](errors.md).
 | `causet.error/v1` | [error.v1.schema.json](error.v1.schema.json) |
 | `causet.log/v1` | [log.v1.schema.json](log.v1.schema.json) |
 | `causet.show/v1` | [show.v1.schema.json](show.v1.schema.json) |
+| `causet.names/v1` | [names.v1.schema.json](names.v1.schema.json) |
 
 The catalog retains historical spec plan v1 and spec benchmark v2 documents.
 Current commands emit plan v2 and benchmark v3; see the command table below.
@@ -218,6 +219,7 @@ rendering at all.
 | `cst workspace prune` | `causet.workspace-prune/v1` |
 | `cst log` in a native repository | `causet.log/v1` (experimental, behind `CAUSET_EXPERIMENTAL=native`; ADR-0047 decision 12) |
 | `cst show` in a native repository | `causet.show/v1` (experimental, as `cst log`) |
+| `cst branch` and `cst tag` in a native repository | `causet.names/v1` (experimental, as `cst log`) |
 | `cst workspace forecast` | `causet.forecast/v2` (with `workspaceComparison` populated) |
 | `cst spec index` | Projection `{manifestPath, manifest, changes, entityCount, cacheHit, cacheMode, contentRead, written, ...}`; `--all` wraps per-file results in a summary projection |
 | `cst spec show` | Projection `{manifestPath, manifest}` with a materialized manifest view (adds `sourceBytes`, `sourceLines`, `blocks`); stored v1/v2/v3/v4 schema and parser semantics are retained |

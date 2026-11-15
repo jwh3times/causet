@@ -94,6 +94,55 @@ that equals some add, and drop it and the first add equal to it. Then, when
 every add left is the same target, the value resolves to it, and to no name
 at all when that target is absent.
 
+### 2.3 Listing names
+
+`cst branch` and `cst tag` list names (ADR-0047 decision 12), behind
+`CAUSET_EXPERIMENTAL=native` as `log` is
+([reading.md](reading.md)). Until the operation log exists, a native
+repository's names are those its ref snapshot becomes (§4.1), read when a
+command runs. Neither command starts a Git process.
+
+- **What each lists:** `cst branch` the branches, with `-r` or `--remotes`
+  the remote-tracking names, and with `-a` or `--all` both. `cst tag` the
+  tags. `-l` and `--list` take patterns, each a glob matched against the name
+  without its kind's namespace, in which `*` crosses `/`, as Git's
+  `ref-filter` matches them. A listing shows the names any pattern matches,
+  in order of kind, then of name in byte order.
+- **Three outputs,** as reading.md §1 has them:
+  - `--format=<template>` prints as `git branch --format` and
+    `git tag --format` print the Git-backed original, byte for byte, IDs
+    translated. Its fields are those `cst for-each-ref` implements, read
+    from the name's full ref (`refs/heads/<name>` and the rest), less
+    `%(HEAD)`, which marks what `HEAD` names. A symbolic name is followed to
+    the object it ends at, as Git follows a symbolic ref, and one that ends
+    at no name is left out, as Git leaves out a broken ref.
+  - `--json` prints `causet.names/v1`, every name listed, a symbolic one
+    that ends at no name included.
+  - With neither, they print cst's own: a name a line, a symbolic one
+    followed by ` -> ` and the name it names, with that name's kind when it
+    is another, as `to-tag -> tag v1`. Beside branches, a remote-tracking name is
+    `remotes/<name>`.
+- **Refused:** `--json` with `--format`, and a name given to `-r` or `-a`
+  without `-l`, as Git refuses it (`usage-conflicting-options`); `%(HEAD)`,
+  because `HEAD` is no name, and every field `cst for-each-ref` does not
+  implement, such as `%(subject)`; creating, moving, copying or deleting a
+  branch or tag, which #423 and #426 build; and Git's other options, such as
+  `-v`, `--sort` and `--contains` (`unsupported-feature`); every option Git does not have
+  (`usage-unknown-option`).
+
+**Where Git cannot be matched:**
+
+- **`HEAD`.** With a detached `HEAD`, `git branch` lists
+  `(HEAD detached at <id>)` first, under `--format` too. `HEAD` is no name,
+  so `cst branch` never lists it.
+- **A symbolic ref to a ref that becomes no name,** such as a branch naming
+  `HEAD` or `refs/stash`, is snapshot only (§4.1), so neither command lists
+  it, though Git does.
+- **Replacement.** Git reads an object through `refs/replace/`, and a native
+  repository never does: the equality tests compare with Git's
+  `--no-replace-objects`
+  ([commits.md §7.1](commits.md#71-what-native-history-does-not-carry)).
+
 ## 3. Operations
 
 ### 3.1 Encoding
