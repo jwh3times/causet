@@ -4,6 +4,43 @@
 
 No unreleased changes.
 
+## [0.30.0] - 2026-11-15
+
+- **Experimental: `cst branch` and `cst tag` list a native repository's
+  names** (#418, ADR-0047 decisions 9 and 12). Import's ref snapshot now
+  becomes names:
+  - `refs/heads/*` become branches, `refs/tags/*` tags and `refs/remotes/*`
+    read-only remote-tracking names;
+  - a symbolic ref names a name when its target is in one of those three
+    namespaces, as `origin/HEAD` names `origin/main`;
+  - cst's records (`refs/notes/causet`, `refs/causet/*`, `refs/vcs-lab/*`)
+    and every other ref, `refs/stash` and `refs/replace/*` among them, stay in
+    the snapshot for the bridge and are never shown as names.
+
+  In a native repository, `cst branch` lists the branches, `-r` the
+  remote-tracking names and `-a` both, and `cst tag` the tags. `-l` and
+  `--list` take patterns matched as Git's `ref-filter` matches them, `*`
+  crossing `/`.
+  - **`--format`** prints byte for byte what `git branch --format` and
+    `git tag --format` print on the Git-backed original, IDs translated, for
+    every field `cst for-each-ref` implements. `%(HEAD)` is refused, since a
+    native repository's `HEAD` is no name.
+  - **Without `--format`** both print cst's own listing, a name a line and a
+    symbolic one as `alias -> main`. With `--json` they print the new
+    `causet.names/v1` document.
+  - **Refused:** creating, moving, copying or deleting a branch or tag, which
+    the operation log and native writes bring (#423, #426); Git's other
+    options, such as `-v`, `--sort` and `--contains`; `-r` or `-a` given a
+    name. Each has a registered code, and under `--json` is the failure
+    envelope.
+
+  Neither command starts a Git process. `docs/native-history/operations.md`
+  §2.3 is their contract, including where Git cannot be matched: a detached
+  `HEAD`'s line, and a symbolic ref to a ref that is no name. `cst log`'s
+  decorations (`%d`, `%D`, `%S`, `%(decorate)`, `%(describe)`) stay refused;
+  #455 tracks them. Like every native command, all of this needs
+  `CAUSET_EXPERIMENTAL=native` and is not a contract.
+
 ## [0.29.0] - 2026-11-15
 
 - **Experimental: `cst log` and `cst show` read native history the way Git

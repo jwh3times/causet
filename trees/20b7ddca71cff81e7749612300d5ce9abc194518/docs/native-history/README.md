@@ -24,7 +24,7 @@ of a re-import (ADR-0047, Constraints).
   import builds them from the notes and disputed copies.
 - [Names and operations](operations.md): branches, tags and remote-tracking
   names, conflicted names, the operation log and its 3-way merge, which refs
-  import makes names, and reachability.
+  import makes names, what `cst branch` and `cst tag` list, and reachability.
 - [Reading history](reading.md): what `cst log` and `cst show` print, Git's
   `--format` byte for byte, cst's own human output and their JSON documents,
   and what they refuse.
