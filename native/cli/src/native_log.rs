@@ -281,7 +281,7 @@ fn date_mode(command: Command, name: &[u8]) -> GitResult<DateMode> {
 
 /// Whether an invocation asked for `--json`, which a refusal answers as an
 /// envelope.
-fn wants_json(args: &[OsString]) -> bool {
+pub(crate) fn wants_json(args: &[OsString]) -> bool {
   args
     .iter()
     .take_while(|arg| *arg != "--")

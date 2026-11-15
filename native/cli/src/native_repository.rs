@@ -13,6 +13,7 @@ use crate::environment;
 use crate::native::report;
 use crate::native_inspection;
 use crate::native_log;
+use crate::native_names;
 use crate::native_revision::Repository;
 use causet_engine::errors::{GitError, GitResult};
 use causet_import::store_error;
@@ -62,6 +63,13 @@ Usage:
                                             commits and annotated tags;
                                             --format needs -s, and prints as
                                             git show -s --format does
+  cst branch [-r | -a] [--json | --format=<format>] [(-l | --list) [<pattern>...]]
+                                            list the branches, with -r the
+                                            remote-tracking names, -a both;
+                                            --format prints as git branch
+                                            --format does, and without it, cst's own
+  cst tag [--json | --format=<format>] [(-l | --list) [<pattern>...]]
+                                            list the tags, as cst branch does
   cst fsck                                  verify the store: every copy of
                                             every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
@@ -164,6 +172,8 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i3
     "rev-parse" => native_inspection::rev_parse(args, root),
     "for-each-ref" => native_inspection::for_each_ref(args, root),
     "fsck" => native_inspection::fsck(args, root),
+    "branch" => native_names::branch(args, root),
+    "tag" => native_names::tag(args, root),
     "log" => native_log::log(args, root),
     "show" => native_log::show(args, root),
     "git" => Err(GitError::new(

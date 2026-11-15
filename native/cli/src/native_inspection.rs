@@ -18,16 +18,16 @@ use std::io::Write as _;
 use std::path::Path;
 
 /// Writes what a command printed, then passes its result on.
-fn finish(out: Vec<u8>, result: GitResult<i32>) -> GitResult<i32> {
+pub(crate) fn finish(out: Vec<u8>, result: GitResult<i32>) -> GitResult<i32> {
   let _ = std::io::stdout().lock().write_all(&out);
   result
 }
 
-fn lossy(bytes: &[u8]) -> String {
+pub(crate) fn lossy(bytes: &[u8]) -> String {
   String::from_utf8_lossy(bytes).into_owned()
 }
 
-fn unknown_option(command: &str, option: &str, usage: &str) -> GitError {
+pub(crate) fn unknown_option(command: &str, option: &str, usage: &str) -> GitError {
   GitError::new(
     "usage-unknown-option",
     format!("Unknown option '{option}' for 'cst {command}'. {usage}"),
@@ -35,7 +35,7 @@ fn unknown_option(command: &str, option: &str, usage: &str) -> GitError {
 }
 
 /// An option's value, given as `--name=<value>` or as the next argument.
-fn value(arg: &[u8], name: &str, rest: &mut std::slice::Iter<OsString>) -> GitResult<Option<Vec<u8>>> {
+pub(crate) fn value(arg: &[u8], name: &str, rest: &mut std::slice::Iter<OsString>) -> GitResult<Option<Vec<u8>>> {
   if arg == name.as_bytes() {
     return rest.next().map(|next| Some(bytes_of(next))).ok_or_else(|| {
       GitError::new("usage-missing-argument", format!("option '{name}' requires a value"))
@@ -841,7 +841,7 @@ const FOR_EACH_REF_USAGE: &str =
 /// How a ref name is shown: `:short`, `:lstrip=<n>` (or `:strip`) and
 /// `:rstrip=<n>`.
 #[derive(Clone, Copy)]
-enum Strip {
+pub(crate) enum Strip {
   Whole,
   Short,
   Left(i64),
@@ -849,7 +849,7 @@ enum Strip {
 }
 
 #[derive(Clone, Copy)]
-enum Field {
+pub(crate) enum Field {
   RefName(Strip),
   SymRef(Strip),
   Head,
@@ -863,12 +863,14 @@ enum Field {
   Object(bool),
 }
 
-enum Part {
+pub(crate) enum Part {
   Literal(Vec<u8>),
   Field(Field),
 }
 
-fn ref_format(format: &[u8]) -> GitResult<Vec<Part>> {
+/// A ref format as Git's `ref-filter` parses it; `command` names the command
+/// a refused field is refused by.
+pub(crate) fn ref_format(format: &[u8], command: &str) -> GitResult<Vec<Part>> {
   let mut parts = Vec::new();
   let mut literal = Vec::new();
   let mut at = 0;
@@ -885,7 +887,7 @@ fn ref_format(format: &[u8]) -> GitResult<Vec<Part>> {
             ));
           };
           parts.push(Part::Literal(std::mem::take(&mut literal)));
-          parts.push(Part::Field(field(&format[at + 2..at + end])?));
+          parts.push(Part::Field(field(&format[at + 2..at + end], command)?));
           at += end + 1;
           continue;
         }
@@ -912,7 +914,7 @@ fn ref_format(format: &[u8]) -> GitResult<Vec<Part>> {
   Ok(parts)
 }
 
-fn field(atom: &[u8]) -> GitResult<Field> {
+fn field(atom: &[u8], command: &str) -> GitResult<Field> {
   let text = lossy(atom);
   let (deref, name) = match text.strip_prefix('*') {
     Some(name) => (true, name),
@@ -922,7 +924,7 @@ fn field(atom: &[u8]) -> GitResult<Field> {
     Some((name, argument)) => (name, Some(argument)),
     None => (name, None),
   };
-  let refused = |what: &str| unsupported(format!("The field %({what}) of cst for-each-ref"));
+  let refused = |what: &str| unsupported(format!("The field %({what}) of cst {command}"));
   let unrecognized = || {
     GitError::new(
       "usage-invalid-option-value",
@@ -1018,11 +1020,11 @@ fn right_strip(name: &[u8], count: i64) -> Vec<u8> {
 }
 
 /// A ref `for-each-ref` lists.
-struct RefRow {
-  name: Vec<u8>,
+pub(crate) struct RefRow {
+  pub(crate) name: Vec<u8>,
   /// The ref a symbolic ref ends at.
-  symref: Option<Vec<u8>>,
-  id: NativeId,
+  pub(crate) symref: Option<Vec<u8>>,
+  pub(crate) id: NativeId,
 }
 
 fn stripped(repository: &Repository, name: &[u8], strip: Strip) -> Vec<u8> {
@@ -1158,7 +1160,7 @@ pub fn for_each_ref(args: &[OsString], root: &Path) -> GitResult<i32> {
       return Err(unsupported(format!("cst for-each-ref {}", lossy(&arg))));
     }
   }
-  let parts = ref_format(&format)?;
+  let parts = ref_format(&format, "for-each-ref")?;
   let repository = Repository::open(root)?;
   let head = repository.resolve_ref(b"HEAD").map(|(name, _)| name);
   let mut listed: Vec<RefRow> = Vec::new();
@@ -1185,19 +1187,29 @@ pub fn for_each_ref(args: &[OsString], root: &Path) -> GitResult<i32> {
     listed.truncate(count);
   }
   let mut out = Vec::new();
-  let result = (|| {
-    for entry in &listed {
-      for part in &parts {
-        match part {
-          Part::Literal(bytes) => out.extend_from_slice(bytes),
-          Part::Field(field) => expand(&repository, head.as_deref(), entry, *field, &mut out)?,
-        }
-      }
-      out.push(b'\n');
-    }
-    Ok(0)
-  })();
+  let result = print_refs(&repository, head.as_deref(), &listed, &parts, &mut out).map(|()| 0);
   finish(out, result)
+}
+
+/// Each row by a parsed format, a line each, as Git's `ref-filter` prints
+/// it; `head` is the ref `%(HEAD)` marks.
+pub(crate) fn print_refs(
+  repository: &Repository,
+  head: Option<&[u8]>,
+  rows: &[RefRow],
+  parts: &[Part],
+  out: &mut Vec<u8>,
+) -> GitResult<()> {
+  for row in rows {
+    for part in parts {
+      match part {
+        Part::Literal(bytes) => out.extend_from_slice(bytes),
+        Part::Field(field) => expand(repository, head, row, *field, out)?,
+      }
+    }
+    out.push(b'\n');
+  }
+  Ok(())
 }
 
 /// Git's `match_name_as_path`: a pattern matches a ref it is a prefix of up
@@ -1208,21 +1220,21 @@ fn matches_ref(pattern: &[u8], name: &[u8]) -> bool {
   {
     return true;
   }
-  wildmatch(pattern, name) == Wild::Match
+  wildmatch(pattern, name, true) == Wild::Match
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Wild {
+pub(crate) enum Wild {
   Match,
   NoMatch,
   AbortAll,
   AbortToStarStar,
 }
 
-/// Git's `wildmatch` with `WM_PATHNAME`: `*` and `?` stop at `/`, `**`
-/// between slashes crosses them, and `[...]` takes ranges, `!` and the
-/// POSIX classes.
-fn wildmatch(pattern: &[u8], text: &[u8]) -> Wild {
+/// Git's `wildmatch`: `[...]` takes ranges, `!` and the POSIX classes.
+/// With `pathname`, `WM_PATHNAME`, `*`, `?` and `[...]` stop at `/`
+/// and `**` between slashes crosses them; without it, `*` is `**`.
+pub(crate) fn wildmatch(pattern: &[u8], text: &[u8], pathname: bool) -> Wild {
   let special = |byte: u8| matches!(byte, b'*' | b'?' | b'[' | b'\\');
   let at = |bytes: &[u8], index: usize| bytes.get(index).copied().unwrap_or(0);
   let (mut p, mut t) = (0usize, 0usize);
@@ -1234,7 +1246,7 @@ fn wildmatch(pattern: &[u8], text: &[u8]) -> Wild {
     }
     match p_ch {
       b'?' => {
-        if t_ch == b'/' {
+        if pathname && t_ch == b'/' {
           return Wild::NoMatch;
         }
       }
@@ -1246,12 +1258,14 @@ fn wildmatch(pattern: &[u8], text: &[u8]) -> Wild {
           while at(pattern, p) == b'*' {
             p += 1;
           }
-          if before.is_none_or(|before| pattern[before] == b'/')
+          if !pathname {
+            match_slash = true;
+          } else if before.is_none_or(|before| pattern[before] == b'/')
             && (p == pattern.len()
               || pattern[p] == b'/'
               || (pattern[p] == b'\\' && at(pattern, p + 1) == b'/'))
           {
-            if at(pattern, p) == b'/' && wildmatch(&pattern[p + 1..], &text[t..]) == Wild::Match {
+            if at(pattern, p) == b'/' && wildmatch(&pattern[p + 1..], &text[t..], pathname) == Wild::Match {
               return Wild::Match;
             }
             match_slash = true;
@@ -1259,7 +1273,7 @@ fn wildmatch(pattern: &[u8], text: &[u8]) -> Wild {
             match_slash = false;
           }
         } else {
-          match_slash = false;
+          match_slash = !pathname;
         }
         if p == pattern.len() {
           if !match_slash && text[t..].contains(&b'/') {
@@ -1302,7 +1316,7 @@ fn wildmatch(pattern: &[u8], text: &[u8]) -> Wild {
               return Wild::AbortToStarStar;
             }
           }
-          let matched = wildmatch(&pattern[p..], &text[t..]);
+          let matched = wildmatch(&pattern[p..], &text[t..], pathname);
           if matched != Wild::NoMatch {
             if !match_slash || matched != Wild::AbortToStarStar {
               return matched;
@@ -1401,7 +1415,7 @@ fn wildmatch(pattern: &[u8], text: &[u8]) -> Wild {
             break;
           }
         }
-        if matched == negated || t_ch == b'/' {
+        if matched == negated || (pathname && t_ch == b'/') {
           return Wild::NoMatch;
         }
       }
@@ -1486,7 +1500,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn globs_match_as_gits_wildmatch_with_pathname_matches() {
+  fn globs_match_as_gits_wildmatch_with_and_without_pathname() {
     let cases: &[(&str, &str, bool)] = &[
       ("refs/heads/*", "refs/heads/main", true),
       ("refs/heads/*", "refs/heads/a/b", false),
@@ -1507,9 +1521,28 @@ mod tests {
     ];
     for (pattern, text, expected) in cases {
       assert_eq!(
-        wildmatch(pattern.as_bytes(), text.as_bytes()) == Wild::Match,
+        wildmatch(pattern.as_bytes(), text.as_bytes(), true) == Wild::Match,
         *expected,
         "{pattern} {text}"
+      );
+    }
+    // Without WM_PATHNAME, as ref-filter matches a branch or tag pattern:
+    // `*`, `?` and `[...]` cross `/`.
+    let crossing: &[(&str, &str, bool)] = &[
+      ("*", "refs/heads", true),
+      ("origin/*", "origin/a/b", true),
+      ("*main", "origin/main", true),
+      ("a?b", "a/b", true),
+      ("a[/]b", "a/b", true),
+      ("a[!/]b", "a/b", false),
+      ("**/x", "x", false),
+      ("v*", "w1", false),
+    ];
+    for (pattern, text, expected) in crossing {
+      assert_eq!(
+        wildmatch(pattern.as_bytes(), text.as_bytes(), false) == Wild::Match,
+        *expected,
+        "{pattern} {text} without WM_PATHNAME"
       );
     }
   }

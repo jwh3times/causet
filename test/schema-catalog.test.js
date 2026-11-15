@@ -552,6 +552,8 @@ function scenario() {
   native(parent, "import", "repo", "native");
   keep("native-log", JSON.parse(native(path.join(parent, "native"), "log", "--json")));
   keep("native-show", JSON.parse(native(path.join(parent, "native"), "show", "--json", "chain", "HEAD~1")));
+  keep("native-branches", JSON.parse(native(path.join(parent, "native"), "branch", "--all", "--json")));
+  keep("native-tags", JSON.parse(native(path.join(parent, "native"), "tag", "--json")));
 
   // Every published note record, and one raw note container.
   captured.noteRecords = vlabJson(repo, "receipts", "--json");
@@ -606,6 +608,8 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
     ["causet.spec-benchmark/v3", "spec-benchmark"],
     ["causet.log/v1", "native-log"],
     ["causet.show/v1", "native-show"],
+    ["causet.names/v1", "native-branches"],
+    ["causet.names/v1", "native-tags"],
   ];
   for (const [schemaId, outputName] of cases) {
     const value = state.outputs.get(outputName);

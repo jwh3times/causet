@@ -962,6 +962,14 @@ every `%h` they print resolves in the other commands. A native repository
 imported before native commits or tags existed has none until it is imported
 into again: `cst log` and `cst show` refuse it, and the other commands name
 its commits and tags by their preserved Git objects.
+`cst branch [-r | -a] [-l <pattern>...]` lists the branches, with `-r` the
+remote-tracking names, and `cst tag [-l <pattern>...]` the tags: the names
+import makes of the ref snapshot's `refs/heads/*`, `refs/tags/*` and
+`refs/remotes/*`, never cst's records or any other ref. With `--format` they
+print as `git branch --format` and `git tag --format` do, byte for byte;
+without it, cst's own listing, and with `--json` the `causet.names/v1`
+document ([listing names](docs/native-history/operations.md#23-listing-names)).
+Neither writes a name yet.
 `cst fsck` verifies the store: every
 copy of every object in every container, and content absent by promise or by
 policy, which it reports by state rather than as corruption. It also checks
