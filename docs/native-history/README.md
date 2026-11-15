@@ -25,6 +25,9 @@ of a re-import (ADR-0047, Constraints).
 - [Names and operations](operations.md): branches, tags and remote-tracking
   names, conflicted names, the operation log and its 3-way merge, which refs
   import makes names, and reachability.
+- [Reading history](reading.md): what `cst log` and `cst show` print, Git's
+  `--format` byte for byte, cst's own human output and their JSON documents,
+  and what they refuse.
 - Reference vectors: [history-vectors.json](history-vectors.json), native
   commits and tags with their bodies and IDs, the Git objects the imported
   ones derive from, the Git encodings of those made natively, and the trailer

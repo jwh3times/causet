@@ -2,9 +2,12 @@
 //! the store checks of every object: each native commit decodes by its
 //! rules, names a tree and native commits, and, when it was imported, is
 //! exactly what import derives from its preserved commit, whose tree and
-//! parents it names through the alias map.
+//! parents it names through the alias map; and each native tag decodes,
+//! names an object a tag may name (§4.2), and, when it was imported, is
+//! exactly what import derives from its preserved tag.
 
 use crate::commit::{Commit, derive};
+use crate::tag::{self, Tag};
 use causet_store::StoreError;
 use causet_store::id::{NativeId, Type};
 use causet_store::objects::{GitKind, Preserved};
@@ -15,13 +18,18 @@ use std::collections::HashMap;
 pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
   let mut problems = Vec::new();
   let mut commits = Vec::new();
+  let mut tags = Vec::new();
   for (id, kind, _) in store.present()? {
-    if kind != Type::NativeCommit {
-      continue;
-    }
-    match Commit::decode(&store.read(&id)?.body) {
-      Ok(commit) => commits.push((id, commit)),
-      Err(why) => problems.push(format!("the native commit {id}: {why}")),
+    match kind {
+      Type::NativeCommit => match Commit::decode(&store.read(&id)?.body) {
+        Ok(commit) => commits.push((id, commit)),
+        Err(why) => problems.push(format!("the native commit {id}: {why}")),
+      },
+      Type::NativeTag => match Tag::decode(&store.read(&id)?.body) {
+        Ok(tag) => tags.push((id, tag)),
+        Err(why) => problems.push(format!("the native tag {id}: {why}")),
+      },
+      _ => {}
     }
   }
   let by_preserved: HashMap<NativeId, NativeId> = commits
@@ -33,7 +41,72 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
       problems.push(format!("the native commit {id}: {why}"));
     }
   }
+  let tags_by_preserved: HashMap<NativeId, NativeId> = tags
+    .iter()
+    .filter_map(|(id, tag)| Some((tag.preserved?, *id)))
+    .collect();
+  for (id, tag) in &tags {
+    if let Err(why) = check_tag(store, tag, &by_preserved, &tags_by_preserved)? {
+      problems.push(format!("the native tag {id}: {why}"));
+    }
+  }
   Ok(problems)
+}
+
+/// A native tag's problem, or a read that failed.
+fn check_tag(
+  store: &Store,
+  tag: &Tag,
+  commits: &HashMap<NativeId, NativeId>,
+  tags: &HashMap<NativeId, NativeId>,
+) -> Result<Result<(), String>, StoreError> {
+  let target = tag.target;
+  let fits = match store.held(&target)? {
+    Some(Type::NativeCommit | Type::NativeTag | Type::Tree | Type::Content) => true,
+    Some(Type::Preserved) => {
+      preserved(store, &target)?.is_ok_and(|kept| kept.kind == GitKind::Tree)
+    }
+    _ => false,
+  };
+  if !fits {
+    return Ok(Err(format!(
+      "its target {target} is not a native commit, a native tag, a tree or content the store holds"
+    )));
+  }
+  let Some(source) = tag.preserved else {
+    return Ok(Ok(()));
+  };
+  let kept = match preserved(store, &source)? {
+    Ok(kept) if kept.kind == GitKind::Tag => kept,
+    Ok(_) => {
+      return Ok(Err(format!(
+        "{source}, which it names as imported from, is not a Git tag"
+      )));
+    }
+    Err(why) => return Ok(Err(why)),
+  };
+  let named = match kept.header_ids().into_iter().find(|header| header.first) {
+    Some(header) => store.native(kept.algorithm, &header.digest)?,
+    None => None,
+  };
+  let named = named.map(|native| {
+    commits
+      .get(&native)
+      .or_else(|| tags.get(&native))
+      .copied()
+      .unwrap_or(native)
+  });
+  if named != Some(target) {
+    return Ok(Err(format!(
+      "its target is not the native form of what its preserved tag {source} names"
+    )));
+  }
+  if tag::derive(&kept.payload, source, target) != *tag {
+    return Ok(Err(format!(
+      "it is not what import derives from its preserved tag {source}"
+    )));
+  }
+  Ok(Ok(()))
 }
 
 /// A preserved object, or why the store holds none of that ID.

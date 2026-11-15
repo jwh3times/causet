@@ -17,7 +17,7 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, aliases, changeFrame, containers, names, nativeCommits, nativeId, readContainer, storeFiles as files,
+  TYPES, aliases, changeFrame, containers, names, nativeCommits, nativeId, nativeTags, readContainer, storeFiles as files,
   storeObjects as objects,
 } from "../test-support/native-store.js";
 import { sameAsFull, storeState } from "../test-support/import-checks.js";
@@ -143,16 +143,18 @@ for (const format of ["sha1", "sha256"]) {
   });
 }
 
-test("an import without native history writes no native commit, and every other object, the alias file and the snapshot as a full import does", () => {
+test("an import without native history writes no native commit or tag, and every other object, the alias file and the snapshot as a full import does", () => {
   // What N1's storage gate measures on a real repository (ADR-0044 item 2,
   // #437): the store N1's objects alone take.
   const { root } = makeHistory();
   imports(root, "source", "with");
   imports(root, "source", "without", { CAUSET_TEST_IMPORT_WITHOUT_HISTORY: "1" });
   const [withHistory, without] = ["with", "without"].map((name) => path.join(root, name));
-  const history = nativeCommits(withHistory);
-  assert.ok(history.size > 0, "the full import has native commits");
+  const history = new Map([...nativeCommits(withHistory), ...nativeTags(withHistory)]);
+  assert.ok(nativeCommits(withHistory).size > 0, "the full import has native commits");
+  assert.ok(nativeTags(withHistory).size > 0, "the full import has native tags");
   assert.equal(nativeCommits(without).size, 0);
+  assert.equal(nativeTags(without).size, 0);
   assert.deepEqual(sorted(objects(without)), sorted([...objects(withHistory)].filter((id) => !history.has(id))));
   const [full, kept] = [files(withHistory), files(without)];
   for (const name of [...full.keys()].filter((file) => !file.startsWith("objects/"))) {
@@ -185,7 +187,7 @@ test("a path's versions are stored together, oldest first, the paths in the orde
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
-test("a container's trees are grouped by path, oldest first, then come its commits, each with its native commit, and tags, then its snapshot", () => {
+test("a container's trees are grouped by path, oldest first, then come its commits, each with its native commit, and tags, each with its native tag, then its snapshot", () => {
   const root = scratch();
   const { git, commit } = makeRepository(root);
   const commits = [];
@@ -216,11 +218,19 @@ test("a container's trees are grouped by path, oldest first, then come its commi
     assert.equal(decoded.get(after.name.toString("hex")).preserved, preserved, `the native commit after ${id} names it`);
     return after.name.toString("hex");
   });
+  // A tag's native tag goes straight after it too, and names the native
+  // commit it tags (commits.md §4.2).
+  const tagged = stored[order.indexOf(nativeOf("v1")) + 1];
+  assert.equal(tagged.type, TYPES.nativeTag, "what follows the tag v1");
+  const tag = nativeTags(native).get(tagged.name.toString("hex"));
+  assert.equal(tag.preserved, nativeOf("v1"));
+  assert.equal(tag.target, derived[0]);
+  assert.equal(tag.name.toString(), "v1");
   // The walk leaves each commit's `dir/sub` first, then `dir`, then its root.
   const trees = (at) => commits.map((id) => nativeOf(`${id}:${at}`));
   assert.deepEqual(order, [
     ...trees("dir/sub"), ...trees("dir"), ...trees(""),
-    ...commits.flatMap((id, at) => [nativeOf(id), derived[at]]), nativeOf("v1"),
+    ...commits.flatMap((id, at) => [nativeOf(id), derived[at]]), nativeOf("v1"), tagged.name.toString("hex"),
     fs.readFileSync(path.join(native, ".cst", "snapshot"), "utf8").trim(),
   ]);
 });

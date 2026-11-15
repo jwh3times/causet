@@ -931,12 +931,13 @@ native repository,
 `cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
 `cst for-each-ref --format` print what Git prints on the original, with
 native IDs in place of Git's, and run no Git. They name a commit by its
-native commit, and take that ID, a unique prefix of it, or the commit's Git
-ID; `cst rev-parse --git-id` prints the Git ID of what each revision names.
+native commit and an annotated tag by its native tag, and take that ID, a
+unique prefix of it, or the object's Git ID; `cst rev-parse --git-id` prints the Git ID of what each revision names.
 `cst cat-file` shows a native commit as the Git commit it was imported from:
 type `commit`, Git's bytes, and with `-p` its tree and parents named by
-their native IDs. A commit with no native commit, such as one only the notes'
-history reaches, keeps the ID of its preserved Git object
+their native IDs, and a native tag as the Git tag it was imported from. A
+commit with no native commit, such as one only the notes' history reaches,
+keeps the ID of its preserved Git object
 ([native history](docs/native-history/commits.md#6-naming-commits)).
 `cst cat-file --batch` and
 `--batch-check` [`--buffer`] answer each object named on standard input from
@@ -944,26 +945,32 @@ one opened store, in Git's default formats: the header names the native ID,
 and `--batch`'s content is the object's Git bytes, Git IDs included, the size
 `cst cat-file -s` gives. Each takes the part of Git's
 command implemented so far, listed by `cst --help` there, and refuses the rest
-by name. `cst log [<revision>] --format=<format>` prints the history of a
-revision, `HEAD` by default, in Git's order, as `git log --format` prints it,
-for the placeholders `cst --help` lists there. It reads native commits alone,
-so `%H` and `%P` name native commits, and every `%h` it prints resolves in
-the other commands. A native repository imported before native commits
-existed has none until it is imported into again: `cst log` refuses it, and
-the other commands name its commits by their preserved Git objects.
+by name. `cst log [<revision>...]` prints the history of the revisions given,
+`HEAD` by default, walked as Git walks them, ranges, `-n`, `--skip`,
+`--reverse`, `--first-parent` and `--merges` included, and `cst show [-s]
+[<object>...]` prints commits and annotated tags. With `--format` each prints
+as `git log --format` and `git show -s --format` do, byte for byte, every
+placeholder whose source native history holds; without it they print cst's
+own human output, and with `--json` the `causet.log/v1` and `causet.show/v1`
+documents ([reading history](docs/native-history/reading.md)). They read
+native commits and tags alone, so `%H` and `%P` name native commits, and
+every `%h` they print resolves in the other commands. A native repository
+imported before native commits or tags existed has none until it is imported
+into again: `cst log` and `cst show` refuse it, and the other commands name
+its commits and tags by their preserved Git objects.
 `cst fsck` verifies the store: every
 copy of every object in every container, and content absent by promise or by
 policy, which it reports by state rather than as corruption. It also checks
-each native commit by the rules of native history, deriving an imported one
-again from its Git commit.
+each native commit and tag by the rules of native history, deriving an
+imported one again from its Git commit or tag.
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
 ID, also without Git. Those two, `cst cat-file --batch` and
 `--batch-check`, and an import into an existing native repository, read the
 alias files and every container's index whole: a batch names many objects,
 so it pays for the store's size once rather than for a read per lookup.
-`cst log` reads every container's index and every native commit, once per
-command. The other reads above check only the parts of the store they touch
+`cst log` and `cst show` read every container's index and every native
+commit, once per command. The other reads above check only the parts of the store they touch
 and verify each object they read by its ID, so their cost does not grow with the store's
 object count, except where they name a commit: finding the native commit
 import stored straight after a commit's preserved object reads every

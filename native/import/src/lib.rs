@@ -3,8 +3,9 @@
 //! row. A blob becomes native content and a tree a native tree, or for a tree
 //! that is not canonical a preserved Git object (objects.md §4.3); commits and
 //! tags are preserved Git objects, and every commit a branch, a tag or a
-//! remote-tracking ref reaches also becomes a native commit (native history,
-//! commits.md §5). Every ref is recorded verbatim in the ref
+//! remote-tracking ref reaches also becomes a native commit, and every
+//! annotated tag one reaches a native tag (native history, commits.md §5).
+//! Every ref is recorded verbatim in the ref
 //! snapshot. Reachable means what the objects themselves name, followed by
 //! import: `rev-list` is asked only for commit ancestry, so a tree Git would
 //! not walk, such as one named by a file entry, is still read and imported
@@ -23,6 +24,7 @@ mod git;
 
 use causet_engine::errors::{GitError, GitResult};
 use causet_history::commit::{Commits, derive};
+use causet_history::tag::{self, Tags};
 use causet_store::StoreError;
 use causet_store::delta;
 use causet_store::id::{GitAlgorithm, GitId, NativeId, Type, hex, unhex};
@@ -172,6 +174,14 @@ struct Importer<'a> {
   /// The native commits of the store an import adds to, by the preserved
   /// commit each derives from: read once, when a commit's parent is held.
   held_commits: Option<HashMap<NativeId, NativeId>>,
+  /// The annotated tags this import reads that a name reaches: each gets a
+  /// native tag as it is stored (commits.md §5.1).
+  tag_history: HashSet<String>,
+  /// The native tag of each tag this import wrote one for.
+  tags: HashMap<String, NativeId>,
+  /// The native tags of the store an import adds to, by the preserved tag
+  /// each derives from: read once, when one is first asked for.
+  held_tags: Option<HashMap<NativeId, NativeId>>,
   imported: Imported,
   /// The first lookup of the existing store that failed. The writer read
   /// that store whole, with every check, when it opened, so only the file
@@ -297,6 +307,9 @@ fn write(
     history: HashSet::new(),
     commits: HashMap::new(),
     held_commits: None,
+    tag_history: HashSet::new(),
+    tags: HashMap::new(),
+    held_tags: None,
     git: HashMap::new(),
     imported: Imported {
       algorithm: algorithm.name(),
@@ -327,8 +340,9 @@ fn write(
   }
   importer.content(&walk.content, &bases)?;
   phases.end("content");
-  let held = importer.history(&refs)?;
+  let (held, held_tags) = importer.history(&refs)?;
   importer.derive_held(held)?;
+  importer.derive_held_tags(held_tags)?;
   for (id, path) in &walk.metadata {
     importer.metadata(id, path)?;
   }
@@ -482,7 +496,7 @@ impl Importer<'_> {
           GitKind::Tree => "tree",
         }
       }
-      Type::Snapshot | Type::Annotation | Type::NativeCommit => return None,
+      Type::Snapshot | Type::Annotation | Type::NativeCommit | Type::NativeTag => return None,
     })
   }
 
@@ -863,32 +877,37 @@ impl Importer<'_> {
       }
       _ => {
         self.imported.tags += 1;
-        self.preserved(GitKind::Tag, payload, path)?
+        let native = self.preserved(GitKind::Tag, payload.clone(), path)?;
+        if self.tag_history.contains(id) {
+          self.native_tag(id, native, &payload)?;
+        }
+        native
       }
     };
     self.record(id, native)
   }
 
-  /// Finds the commits a name reaches (commits.md §5.1): every commit the
-  /// refs under `refs/heads/`, `refs/tags/` and `refs/remotes/` lead to,
-  /// through tags to what they name and from commits to their parents. What
-  /// only another ref reaches, such as the notes' carrier commits, gets
-  /// none. Those this import reads go in `history`, to be derived as they are
-  /// stored. Reachability decides, not the import that stored a commit, so
-  /// the walk continues into history the store held already: it returns the
-  /// held commits that have no native commit yet, as an import of a carrier
-  /// alone, or one before native history, left them. A held commit with one
-  /// already ends the walk, since its ancestors have theirs.
+  /// Finds the commits and annotated tags a name reaches (commits.md §5.1):
+  /// every commit and tag the refs under `refs/heads/`, `refs/tags/` and
+  /// `refs/remotes/` lead to, through tags to what they name and from
+  /// commits to their parents. What only another ref reaches, such as the
+  /// notes' carrier commits, gets none. Those this import reads go in
+  /// `history` and `tag_history`, to be derived as they are stored.
+  /// Reachability decides, not the import that stored an object, so the
+  /// walk continues into history the store held already: it returns the
+  /// held commits and tags that have no native form yet, as an import of a
+  /// carrier alone, or one before native history, left them. A held commit
+  /// with one already ends the walk, since its ancestors have theirs.
   ///
   /// The test hook `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1` finds none, so the
   /// import writes no native history, only N1's objects: what N1's storage
   /// gate measures on a real repository (ADR-0044 item 2, #437). Native
-  /// commits are N2's only objects so far; each later one stays out under it
-  /// too. Nothing outside the suites sets it.
-  fn history(&mut self, refs: &[git::Listed]) -> GitResult<Vec<String>> {
+  /// commits and tags are N2's only objects so far; each later one stays out
+  /// under it too. Nothing outside the suites sets it.
+  fn history(&mut self, refs: &[git::Listed]) -> GitResult<(Vec<String>, Vec<String>)> {
     const NAMES: [&[u8]; 3] = [b"refs/heads/", b"refs/tags/", b"refs/remotes/"];
     if causet_engine::environment::test_hook("CAUSET_TEST_IMPORT_WITHOUT_HISTORY").as_deref() == Some("1") {
-      return Ok(Vec::new());
+      return Ok((Vec::new(), Vec::new()));
     }
     let mut pending: Vec<String> = refs
       .iter()
@@ -897,12 +916,16 @@ impl Importer<'_> {
       .collect();
     let mut seen = HashSet::new();
     let mut held = Vec::new();
+    let mut held_tags = Vec::new();
     while let Some(id) = pending.pop() {
       if !seen.insert(id.clone()) {
         continue;
       }
       match self.types.get(&id).map(String::as_str) {
-        Some("tag") => pending.extend(self.built_on_of(&id, GitKind::Tag)),
+        Some("tag") => {
+          pending.extend(self.built_on_of(&id, GitKind::Tag));
+          self.tag_history.insert(id);
+        }
         Some("commit") => {
           pending.extend(self.parents.get(&id).into_iter().flatten().cloned());
           self.history.insert(id);
@@ -913,7 +936,12 @@ impl Importer<'_> {
             continue;
           };
           match kept.1.kind {
-            GitKind::Tag => pending.extend(self.built_on_of(&id, GitKind::Tag)),
+            GitKind::Tag => {
+              pending.extend(self.built_on_of(&id, GitKind::Tag));
+              if self.held_tag(&kept.0)?.is_none() {
+                held_tags.push(id);
+              }
+            }
             GitKind::Commit if self.held_commit(&kept.0)?.is_none() => {
               pending.extend(
                 kept
@@ -930,7 +958,7 @@ impl Importer<'_> {
         }
       }
     }
-    Ok(held)
+    Ok((held, held_tags))
   }
 
   /// The preserved object the store held already for a Git ID, with its ID.
@@ -1012,6 +1040,93 @@ impl Importer<'_> {
     let native = self.store.put_native_commit(&commit.encode()).map_err(store_error)?;
     self.commits.insert(id.to_string(), native);
     Ok(())
+  }
+
+  /// Derives the native tags of held tags that have none, each after the
+  /// tag it names, when it names one. Like held commits', their preserved
+  /// tags are in an earlier container.
+  fn derive_held_tags(&mut self, mut remaining: Vec<String>) -> GitResult<()> {
+    while !remaining.is_empty() {
+      let before = remaining.len();
+      let mut later = Vec::new();
+      for id in remaining {
+        let (preserved, kept) = self.held_preserved(&id)?.ok_or_else(|| self.lost(&id))?;
+        let target = built_on(self.algorithm, GitKind::Tag, &kept.payload);
+        if target.as_deref().is_some_and(|target| self.waits_on_tag(target)) {
+          later.push(id);
+        } else {
+          self.native_tag(&id, preserved, &kept.payload)?;
+        }
+      }
+      if later.len() == before {
+        return Err(GitError::new(
+          "internal-invariant",
+          format!("the held tags {} wait on one another", later.join(", ")),
+        ));
+      }
+      remaining = later;
+    }
+    Ok(())
+  }
+
+  /// Whether a tag's target is a tag that has no native tag yet.
+  fn waits_on_tag(&mut self, target: &str) -> bool {
+    if self.git_type(target) != Some("tag") || self.tags.contains_key(target) {
+      return false;
+    }
+    match self.held(target) {
+      Some(native) => matches!(self.held_tag(&native), Ok(None)),
+      None => true,
+    }
+  }
+
+  /// Derives and stores the native tag of the tag `id`, whose preserved tag
+  /// is `preserved` (commits.md §5.4), straight after it. A tag whose first
+  /// line names no object is refused, naming it.
+  fn native_tag(&mut self, id: &str, preserved: NativeId, payload: &[u8]) -> GitResult<()> {
+    let target = built_on(self.algorithm, GitKind::Tag, payload).ok_or_else(|| {
+      GitError::new(
+        "unsupported-repository-shape",
+        format!("the tag {id} names no object on its first line, which Git cannot read either, so it cannot be imported as native history"),
+      )
+    })?;
+    let native = match self.git_type(&target) {
+      Some("commit") => self.commit_of(&target)?,
+      Some("tag") => self.tag_of(&target)?,
+      _ => self.native_of(&target).ok_or_else(|| self.lost(&target))?,
+    };
+    let derived = tag::derive(payload, preserved, native);
+    let native = self.store.put_native_tag(&derived.encode()).map_err(store_error)?;
+    self.tags.insert(id.to_string(), native);
+    Ok(())
+  }
+
+  /// The native tag of a tag a tag names: one this import wrote, or one the
+  /// store held already.
+  fn tag_of(&mut self, target: &str) -> GitResult<NativeId> {
+    if let Some(native) = self.tags.get(target) {
+      return Ok(*native);
+    }
+    let preserved = self.held(target).ok_or_else(|| self.lost(target))?;
+    self.held_tag(&preserved)?.ok_or_else(|| {
+      GitError::new(
+        "internal-invariant",
+        format!("the tag {target}, which a tag a name reaches names, has no native tag"),
+      )
+    })
+  }
+
+  /// The native tag the store held already for a preserved tag. The store's
+  /// native tags are read once, when one is first asked for.
+  fn held_tag(&mut self, preserved: &NativeId) -> GitResult<Option<NativeId>> {
+    if self.held_tags.is_none() {
+      let found = match self.store.existing() {
+        Some(store) => Tags::read(store).map_err(store_error)?.by_preserved,
+        None => HashMap::new(),
+      };
+      self.held_tags = Some(found);
+    }
+    Ok(self.held_tags.as_ref().expect("just read").get(preserved).copied())
   }
 
   /// The native commit of a commit's parent: one this import wrote, or one

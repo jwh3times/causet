@@ -165,3 +165,70 @@ fn a_body_that_breaks_a_rule_is_refused() {
   // Nothing may follow the fields but the message, so a truncated body fails.
   assert!(Commit::decode(&body[..40]).is_err(), "a truncated body");
 }
+
+fn native_tags() -> Vec<Value> {
+  array(member(&vectors(), "vectors"))
+    .iter()
+    .filter(|vector| text(member(vector, "object")) == "native tag")
+    .cloned()
+    .collect()
+}
+
+#[test]
+fn every_native_tag_vector_round_trips_to_its_bytes_and_id() {
+  let tags = native_tags();
+  assert_eq!(tags.len(), 3);
+  for vector in &tags {
+    let name = text(member(vector, "name"));
+    let body = unhex(&text(member(vector, "body")));
+    let tag = causet_history::tag::Tag::decode(&body).unwrap_or_else(|why| panic!("{name}: {why}"));
+    assert_eq!(tag.encode(), body, "{name}");
+    assert_eq!(tag.id(), id(member(vector, "id")), "{name}");
+  }
+}
+
+#[test]
+fn an_imported_tag_is_derived_from_its_git_tag_alone() {
+  let mut imported = 0;
+  for vector in native_tags() {
+    let Some(payload) = optional(&vector, "gitPayload") else {
+      continue;
+    };
+    imported += 1;
+    let name = text(member(&vector, "name"));
+    let body = unhex(&text(member(&vector, "body")));
+    let expected = causet_history::tag::Tag::decode(&body).unwrap();
+    let derived = causet_history::tag::derive(
+      &unhex(&text(payload)),
+      id(member(&vector, "preservedId")),
+      expected.target,
+    );
+    assert_eq!(derived.encode(), body, "{name}");
+  }
+  assert_eq!(imported, 2);
+}
+
+#[test]
+fn a_tag_made_natively_needs_a_name_a_tagger_in_fields_and_an_actor() {
+  let made = native_tags()
+    .into_iter()
+    .find(|vector| optional(vector, "gitPayload").is_none())
+    .unwrap();
+  let tag = causet_history::tag::Tag::decode(&unhex(&text(member(&made, "body")))).unwrap();
+  for broken in [
+    causet_history::tag::Tag {
+      name: Vec::new(),
+      ..tag.clone()
+    },
+    causet_history::tag::Tag {
+      actors: Vec::new(),
+      ..tag.clone()
+    },
+    causet_history::tag::Tag {
+      tagger: causet_history::signature::Signature::None,
+      ..tag.clone()
+    },
+  ] {
+    assert!(causet_history::tag::Tag::decode(&broken.encode()).is_err());
+  }
+}

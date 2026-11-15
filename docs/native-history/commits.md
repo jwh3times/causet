@@ -491,8 +491,8 @@ not in the Git object. Its native ID is
   They cross back to Git through the preserved object. A commit made natively
   has none; signing native history is N5's (FR-TRUST-02). A `log`
   placeholder that reads a Git signature, such as `%G?`, has nothing to read
-  in native history; how `log` answers it is
-  [#417](https://github.com/jwh3times/causet/issues/417)'s.
+  in native history, so `log` refuses it
+  ([reading.md §2.1](reading.md#21-refused-placeholders)).
 - **Replacement and grafts.** A native commit's parents are those its Git
   object names. Git's `log` follows `refs/replace/` unless told not to, so
   the equality tests compare with Git's `--no-replace-objects`. Import
