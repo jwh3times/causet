@@ -541,6 +541,18 @@ function scenario() {
     "--json",
   ));
 
+  // Native history's reads (ADR-0047 decision 12): the scenario imported into
+  // a native repository, with an annotated tag of a tag, as log and show
+  // print them.
+  git(repo, "tag", "-a", "-m", "the first", "v1");
+  git(repo, "tag", "-a", "-m", "a tag of a tag", "chain", "v1");
+  const native = (cwd, ...args) => execFileSync(cstCommand, [...cstPrefix(), ...args], {
+    cwd, encoding: "utf8", env: testEnv({ CAUSET_EXPERIMENTAL: "native" }),
+  });
+  native(parent, "import", "repo", "native");
+  keep("native-log", JSON.parse(native(path.join(parent, "native"), "log", "--json")));
+  keep("native-show", JSON.parse(native(path.join(parent, "native"), "show", "--json", "chain", "HEAD~1")));
+
   // Every published note record, and one raw note container.
   captured.noteRecords = vlabJson(repo, "receipts", "--json");
   // The records are judged in the format of the repository that wrote them,
@@ -592,6 +604,8 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
     ["causet.metadata-disposition/v1", "metadata-disposition"],
     ["causet.repository-scale-benchmark/v1", "scale-benchmark"],
     ["causet.spec-benchmark/v3", "spec-benchmark"],
+    ["causet.log/v1", "native-log"],
+    ["causet.show/v1", "native-show"],
   ];
   for (const [schemaId, outputName] of cases) {
     const value = state.outputs.get(outputName);

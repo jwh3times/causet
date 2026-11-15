@@ -5,7 +5,10 @@
 
 pub mod actor;
 pub mod commit;
+pub mod date;
 pub mod pretty;
 pub mod signature;
+pub mod tag;
 mod text;
+pub mod trailers;
 pub mod verify;

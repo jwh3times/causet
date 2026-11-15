@@ -51,10 +51,17 @@ Usage:
                                             --git-id prints their Git IDs
   cst for-each-ref [--format=<format>] [--sort=[-]refname] [--count=<n>]
                    [<pattern>...]           list the refs of the snapshot
-  cst log [<revision>] --format=<format>    a revision's history, as git log
-                                            --format prints it: %H %h %T %t
-                                            %P %p %an %ae %ad %cn %ce %cd %s
-                                            %b %n %%
+  cst log [-<n> | -n <n> | --max-count=<n>] [--skip=<n>] [--reverse]
+          [--first-parent] [--merges | --no-merges] [--date=<mode>]
+          [--json | --format=<format>] [<revision>...]
+                                            history, newest first, as git log
+                                            walks it: <rev>, ^<rev>, <a>..<b>;
+                                            --format prints as git log --format
+                                            does, and without it, cst's own
+  cst show [-s] [--date=<mode>] [--json | --format=<format>] [<object>...]
+                                            commits and annotated tags;
+                                            --format needs -s, and prints as
+                                            git show -s --format does
   cst fsck                                  verify the store: every copy of
                                             every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
@@ -158,6 +165,7 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i3
     "for-each-ref" => native_inspection::for_each_ref(args, root),
     "fsck" => native_inspection::fsck(args, root),
     "log" => native_log::log(args, root),
+    "show" => native_log::show(args, root),
     "git" => Err(GitError::new(
       "unavailable-in-native-repository",
       "A native repository has no Git to run, so cst git is refused here (ADR-0046, decision 4).",
@@ -734,8 +742,10 @@ pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
     Type::Preserved => Preserved::decode(body).map_err(corrupt)?.kind.name(),
     Type::Snapshot => "snapshot",
     Type::Annotation => "annotation",
-    // `Repository::presented` shows a native commit as its preserved commit.
+    // `Repository::presented` shows a native commit as its preserved commit,
+    // and a native tag as its preserved tag.
     Type::NativeCommit => "commit",
+    Type::NativeTag => "tag",
   })
 }
 

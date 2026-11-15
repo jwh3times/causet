@@ -717,6 +717,17 @@ impl StoreWriter {
     Ok(id)
   }
 
+  /// Stores a native tag's body (native history's commits.md §4), straight
+  /// after the preserved tag it derives from, as a native commit is. It has
+  /// no alias row.
+  pub fn put_native_tag(&mut self, body: &[u8]) -> Result<NativeId, StoreError> {
+    let id = NativeId::of(Type::NativeTag, body);
+    if !self.present.contains(&id) {
+      self.hold(&id, Type::NativeTag, Form::Body, body, None)?;
+    }
+    Ok(id)
+  }
+
   /// Records that the Git object with this digest is the native object `id`.
   pub fn alias(&mut self, git_digest: Vec<u8>, id: NativeId) {
     self.aliases.push((git_digest, id));

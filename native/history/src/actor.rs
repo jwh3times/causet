@@ -19,6 +19,26 @@ pub enum Kind {
   Agent = 2,
 }
 
+impl Role {
+  /// The role's name in `causet.provenance/v1`.
+  pub fn name(self) -> &'static str {
+    match self {
+      Role::Authored => "authored",
+      Role::Generated => "generated",
+    }
+  }
+}
+
+impl Kind {
+  /// The kind's name in `causet.provenance/v1`.
+  pub fn name(self) -> &'static str {
+    match self {
+      Kind::Human => "human",
+      Kind::Agent => "agent",
+    }
+  }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Actor {
   pub role: Role,

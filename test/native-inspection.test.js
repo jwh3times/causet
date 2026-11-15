@@ -15,7 +15,7 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, markAbsent, names, nativeCommits, nativeId, removeEntry, setVersion,
+  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, markAbsent, names, nativeCommits, nativeId, nativeTags, removeEntry, setVersion,
   sharingShort,
   writeAliases,
 } from "../test-support/native-store.js";
@@ -512,11 +512,15 @@ test("an annotation of an unknown type changes no content ID and no command's an
   assert.equal(cst(history.native, ["cat-file", "-t", own]).stdout.toString(), "annotation\n");
 });
 
-test("a store imported before native history names every commit by its preserved commit, and log asks for an import", () => {
+test("a store imported before native history names every commit and tag by its preserved object, and log asks for an import", () => {
   const history = makeHistory("sha1");
-  // Import before #416 wrote no native commits: take them out of the index.
-  for (const id of nativeCommits(history.native).keys()) removeEntry(history.native, id);
+  // Import before #416 wrote no native commits, and before #417 no native
+  // tags: take them out of the index.
+  for (const id of [...nativeCommits(history.native).keys(), ...nativeTags(history.native).keys()]) {
+    removeEntry(history.native, id);
+  }
   assert.equal(nativeCommits(history.native).size, 0);
+  assert.equal(nativeTags(history.native).size, 0);
   const before = { ...history, translate: translator(history.aliased, "sha1") };
   same(before, ["for-each-ref"]);
   same(before, ["rev-parse", "HEAD", "HEAD~1", "v1^{}", "--all"]);

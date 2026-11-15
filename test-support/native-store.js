@@ -18,7 +18,7 @@ const INDEX_MAGIC = Buffer.from("CSTINDEX");
 const NO_FRAME = 0xffffffff;
 
 /** The type codes of objects.md §2. */
-export const TYPES = { content: 1, tree: 2, preserved: 3, snapshot: 4, annotation: 5, nativeCommit: 6 };
+export const TYPES = { content: 1, tree: 2, preserved: 3, snapshot: 4, annotation: 5, nativeCommit: 6, nativeTag: 7 };
 
 const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest();
 
@@ -160,6 +160,45 @@ export function decodeNativeCommit(body) {
   return { parents, encoding, changeId, derivedFrom, originCommit, preserved, message: body.subarray(at) };
 }
 
+/**
+ * A native tag's fields as commits.md §4.1 encodes them, decoded here
+ * independently of `cst`: its target as a native ID in hex, its name and
+ * message as bytes, and the preserved tag it derives from, `null` when it was
+ * made natively. Its tagger and actors are read past, not returned.
+ */
+export function decodeNativeTag(body) {
+  let at = 0;
+  const bytesAt = () => {
+    const [length, next] = varint(body, at);
+    const bytes = body.subarray(next, next + length);
+    at = next + length;
+    return bytes;
+  };
+  const target = body.subarray(1, 33).toString("hex");
+  at = 33;
+  const name = bytesAt();
+  const form = body[at++];
+  if (form === 0) {
+    bytesAt();
+    bytesAt();
+    [, at] = varint(body, at);
+    at += 2;
+  } else if (form === 1) {
+    bytesAt();
+  }
+  let count;
+  [count, at] = varint(body, at);
+  for (let actor = 0; actor < count; actor++) {
+    at += 1;
+    bytesAt();
+    if (body[at++] === 1) at += 1;
+    if (body[at++] === 1) bytesAt();
+  }
+  const preserved = body[at++] === 1 ? body.subarray(at + 1, at + 33).toString("hex") : null;
+  at += preserved ? 33 : 0;
+  return { target, name, preserved, message: body.subarray(at) };
+}
+
 /** Frame codecs (storage.md §4): stored, and zstd. */
 const STORED_FRAME = 0;
 const ZSTD_FRAME = 1;
@@ -176,27 +215,39 @@ function frameBytes(frame) {
  * decoded (`decodeNativeCommit`) and its `body`.
  */
 export function nativeCommits(store) {
-  const commits = new Map();
+  return nativeObjects(store, TYPES.nativeCommit, decodeNativeCommit);
+}
+
+/**
+ * Every native tag the store holds present, by ID (hex): its fields decoded
+ * (`decodeNativeTag`) and its `body`.
+ */
+export function nativeTags(store) {
+  return nativeObjects(store, TYPES.nativeTag, decodeNativeTag);
+}
+
+function nativeObjects(store, type, decode) {
+  const found = new Map();
   for (const file of containers(store)) {
     const { frames, objects } = readContainer(file);
     const read = new Map();
     for (const object of objects) {
-      if (object.type !== TYPES.nativeCommit || object.state !== 0) continue;
+      if (object.type !== type || object.state !== 0) continue;
       if (!read.has(object.frame)) read.set(object.frame, frameBytes(frames[object.frame]));
       const body = read.get(object.frame).subarray(object.offset, object.offset + object.length);
-      commits.set(object.name.toString("hex"), { ...decodeNativeCommit(body), body });
+      found.set(object.name.toString("hex"), { ...decode(body), body });
     }
   }
-  return commits;
+  return found;
 }
 
 /**
  * Git ID → the native ID a native repository names that object by, both as
- * hex: a commit's native commit where it has one (commits.md §6), and
- * otherwise its alias row's object.
+ * hex: a commit's native commit and a tag's native tag where it has one
+ * (commits.md §6), and otherwise its alias row's object.
  */
 export function names(store, format) {
-  const byPreserved = new Map([...nativeCommits(store)].map(([id, commit]) => [commit.preserved, id]));
+  const byPreserved = new Map([...nativeCommits(store), ...nativeTags(store)].map(([id, object]) => [object.preserved, id]));
   return new Map([...aliases(store, format)].map(([gitId, native]) => [gitId, byPreserved.get(native) ?? native]));
 }
 

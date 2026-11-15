@@ -700,8 +700,10 @@ metadata, so the large-file corpus is within 6 KB of its version 0 store.
 **Native history is reported beside the gate, not in it.** From
 [#416](https://github.com/jwh3times/causet/issues/416), import also writes a
 native commit after each preserved commit a name reaches, and on git/git the
-store grew to 126,093,364 B, over Git's pack. Native commits are N2's
-objects, and N1's gate counts N1's alone
+store grew to 126,093,364 B, over Git's pack. From
+[#417](https://github.com/jwh3times/causet/issues/417) it writes a native tag
+after each preserved annotated tag a name reaches too. Native commits and
+tags are N2's objects, and N1's gate counts N1's alone
 ([ADR-0044's amendment of 2026-11-11](../adr/0044-define-the-exit-regime-every-native-phase-must-meet.md#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts)).
 So the check gates an import written without native history, and each
 job's summary reports what native history adds, never checked, until N2's

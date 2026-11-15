@@ -147,8 +147,9 @@ impl Commit {
   /// Its date as Git's revision walk orders by it: the committer's time,
   /// or for a line held verbatim the digits after its last `>` and any
   /// space, and 0 when there are none. Git reads the committer line
-  /// straight after the author's, which a commit with repeated or reordered
-  /// lines may not have; such commits are #417's.
+  /// straight after the first author line, which a commit with repeated or
+  /// reordered lines may not have, and a native commit does not keep their
+  /// order (reading.md §6).
   pub fn date(&self) -> u64 {
     match &self.committer {
       Signature::Fields { time, .. } => *time,

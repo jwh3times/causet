@@ -19,6 +19,9 @@ pub enum Type {
   /// A native commit (docs/native-history/commits.md §3): metadata that no
   /// Git object becomes, so it has no alias row.
   NativeCommit = 6,
+  /// A native tag (docs/native-history/commits.md §4): metadata that no
+  /// Git object becomes, so it has no alias row.
+  NativeTag = 7,
 }
 
 impl Type {
@@ -30,6 +33,7 @@ impl Type {
       4 => Type::Snapshot,
       5 => Type::Annotation,
       6 => Type::NativeCommit,
+      7 => Type::NativeTag,
       _ => return None,
     })
   }

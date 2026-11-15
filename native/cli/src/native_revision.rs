@@ -6,13 +6,15 @@
 //! `^{<type>}`, and optionally `:<path>`. What needs a reflog, an index or a
 //! search is refused.
 //!
-//! A commit is named by its native commit where import derived one, and the
-//! preserved commit it derives from is named by nothing (commits.md §6): what
-//! a name resolves to, and every ID this hands out, is the native commit.
+//! A commit is named by its native commit where import derived one, and a
+//! tag by its native tag, and the preserved commit or tag it derives from is
+//! named by nothing (commits.md §6): what a name resolves to, and every ID
+//! this hands out, is the native object.
 
 use crate::native_repository::{Listed, alias, corrupt, listing};
 use causet_engine::errors::{GitError, GitResult};
 use causet_history::commit::{Commit, Commits};
+use causet_history::tag::{Tag, Tags};
 use causet_import::store_error;
 use causet_store::StoreError;
 use causet_store::id::{NativeId, Type};
@@ -77,6 +79,8 @@ pub struct Repository {
   /// Every native commit, read only when one is not where import places it
   /// (`native_of`).
   commits: OnceCell<Commits>,
+  /// Every native tag, read the same way.
+  tags: OnceCell<Tags>,
 }
 
 pub fn unsupported(what: impl std::fmt::Display) -> GitError {
@@ -94,6 +98,7 @@ impl Repository {
       store,
       snapshot,
       commits: OnceCell::new(),
+      tags: OnceCell::new(),
     })
   }
 
@@ -106,48 +111,83 @@ impl Repository {
     Ok(self.commits.get_or_init(|| read))
   }
 
+  /// Every native tag the store holds, read once.
+  pub fn tags(&self) -> Result<&Tags, StoreError> {
+    if let Some(tags) = self.tags.get() {
+      return Ok(tags);
+    }
+    let read = Tags::read(&self.store)?;
+    Ok(self.tags.get_or_init(|| read))
+  }
+
   /// A native commit the store holds, decoded.
   fn native_commit(&self, id: &NativeId) -> Result<Commit, StoreError> {
     decoded(id, &self.store.read_known(id)?.body)
   }
 
-  /// The native commit import derived from a preserved commit, if any: the
-  /// object stored straight after it, where import puts it (storage.md
-  /// §3.2), when that names it; otherwise whichever native commit names it,
-  /// found by reading every one.
-  fn native_of(&self, preserved: &NativeId) -> Result<Option<NativeId>, StoreError> {
-    if let Some((next, Type::NativeCommit)) = self.store.following(preserved)?
-      && self.native_commit(&next)?.preserved == Some(*preserved)
-    {
-      return Ok(Some(next));
-    }
-    Ok(self.commits()?.by_preserved.get(preserved).copied())
+  /// A native tag the store holds, decoded.
+  pub fn native_tag(&self, id: &NativeId) -> Result<Tag, StoreError> {
+    Tag::decode(&self.store.read_known(id)?.body)
+      .map_err(|why| StoreError::Corrupt(format!("the native tag {id}: {why}")))
   }
 
-  /// Whether `id` is a preserved Git commit.
-  fn is_preserved_commit(&self, id: &NativeId) -> Result<bool, StoreError> {
+  /// The native commit or tag import derived from a preserved commit or tag
+  /// of kind `kind`, if any: the object stored straight after it, where
+  /// import puts it (storage.md §3.2), when that names it; otherwise
+  /// whichever native object names it, found by reading every one.
+  fn native_of(&self, preserved: &NativeId, kind: GitKind) -> Result<Option<NativeId>, StoreError> {
+    match (kind, self.store.following(preserved)?) {
+      (GitKind::Commit, Some((next, Type::NativeCommit)))
+        if self.native_commit(&next)?.preserved == Some(*preserved) =>
+      {
+        return Ok(Some(next));
+      }
+      (GitKind::Tag, Some((next, Type::NativeTag)))
+        if self.native_tag(&next)?.preserved == Some(*preserved) =>
+      {
+        return Ok(Some(next));
+      }
+      _ => {}
+    }
+    Ok(match kind {
+      GitKind::Commit => self.commits()?.by_preserved.get(preserved).copied(),
+      GitKind::Tag => self.tags()?.by_preserved.get(preserved).copied(),
+      GitKind::Tree => None,
+    })
+  }
+
+  /// The kind of a preserved Git commit or tag `id` is, `None` for anything
+  /// else.
+  fn preserved_history(&self, id: &NativeId) -> Result<Option<GitKind>, StoreError> {
     if self.store.held(id)? != Some(Type::Preserved) {
-      return Ok(false);
+      return Ok(None);
     }
     let read = self.store.read_known(id)?;
-    Ok(Preserved::decode(&read.body).map_err(StoreError::Corrupt)?.kind == GitKind::Commit)
+    let kind = Preserved::decode(&read.body).map_err(StoreError::Corrupt)?.kind;
+    Ok((kind != GitKind::Tree).then_some(kind))
   }
 
-  /// Whether no command names `id`: a preserved commit a native commit
-  /// derives from (commits.md §6).
+  /// The native commit or tag a preserved commit or tag derives into, if it
+  /// is one and import derived one.
+  fn native_form(&self, id: &NativeId) -> Result<Option<NativeId>, StoreError> {
+    match self.preserved_history(id)? {
+      Some(kind) => self.native_of(id, kind),
+      None => Ok(None),
+    }
+  }
+
+  /// Whether no command names `id`: a preserved commit or tag a native
+  /// commit or tag derives from (commits.md §6).
   fn hidden(&self, id: &NativeId) -> Result<bool, StoreError> {
-    Ok(self.is_preserved_commit(id)? && self.native_of(id)?.is_some())
+    Ok(self.native_form(id)?.is_some())
   }
 
   /// The ID a command names an object by (commits.md §6): a preserved
-  /// commit's native commit, where import derived one, and otherwise the
-  /// object's own. A commit with none, such as a carrier, keeps its preserved
-  /// commit's.
+  /// commit's native commit and a preserved tag's native tag, where import
+  /// derived one, and otherwise the object's own. A commit or tag with none,
+  /// such as a carrier, keeps its preserved object's.
   pub fn named(&self, id: NativeId) -> GitResult<NativeId> {
-    if !self.is_preserved_commit(&id).map_err(store_error)? {
-      return Ok(id);
-    }
-    Ok(self.native_of(&id).map_err(store_error)?.unwrap_or(id))
+    Ok(self.native_form(&id).map_err(store_error)?.unwrap_or(id))
   }
 
   /// An object as the commands show it: a native commit as the preserved
@@ -165,6 +205,12 @@ impl Repository {
           ))),
         }
       }
+      Type::NativeTag => match self.native_tag(id)?.preserved {
+        Some(preserved) => self.store.read_known(&preserved),
+        None => Err(StoreError::Unsupported(format!(
+          "{id} is a tag made natively, and showing one is not implemented yet"
+        ))),
+      },
       Type::Preserved if self.hidden(id)? => Err(StoreError::NotFound(format!(
         "{id} is not an object this store names"
       ))),
@@ -178,10 +224,13 @@ impl Repository {
   /// made natively, is refused.
   pub fn git_id(&self, id: &NativeId) -> GitResult<String> {
     let mut object = *id;
-    if self.store.held(id).map_err(store_error)? == Some(Type::NativeCommit) {
-      if let Some(preserved) = self.native_commit(id).map_err(store_error)?.preserved {
-        object = preserved;
-      }
+    let preserved = match self.store.held(id).map_err(store_error)? {
+      Some(Type::NativeCommit) => self.native_commit(id).map_err(store_error)?.preserved,
+      Some(Type::NativeTag) => self.native_tag(id).map_err(store_error)?.preserved,
+      _ => None,
+    };
+    if let Some(preserved) = preserved {
+      object = preserved;
     }
     for algorithm in self.store.algorithms() {
       if let Some(digest) = self.store.git(algorithm, &object).map_err(store_error)? {
@@ -289,7 +338,7 @@ impl Repository {
   /// it as a preserved commit no command names.
   pub fn object(&self, id: &NativeId) -> GitResult<Option<Object>> {
     let kind = self.kind(id)?;
-    if kind == Some(Object::Commit) && self.hidden(id).map_err(store_error)? {
+    if matches!(kind, Some(Object::Commit | Object::Tag)) && self.hidden(id).map_err(store_error)? {
       return Ok(None);
     }
     Ok(kind)
@@ -305,6 +354,7 @@ impl Repository {
       Some(Type::Snapshot) => Object::Snapshot,
       Some(Type::Annotation) => Object::Annotation,
       Some(Type::NativeCommit) => Object::Commit,
+      Some(Type::NativeTag) => Object::Tag,
       Some(Type::Preserved) => match self.preserved(id)?.kind {
         GitKind::Commit => Object::Commit,
         GitKind::Tag => Object::Tag,
@@ -323,8 +373,10 @@ impl Repository {
   /// map, a commit's tree or a tag's object, a commit as its preserved commit
   /// (`named` gives the ID a command shows).
   fn built_on(&self, id: &NativeId) -> GitResult<NativeId> {
-    if self.store.held(id).map_err(store_error)? == Some(Type::NativeCommit) {
-      return Ok(self.native_commit(id).map_err(store_error)?.tree);
+    match self.store.held(id).map_err(store_error)? {
+      Some(Type::NativeCommit) => return Ok(self.native_commit(id).map_err(store_error)?.tree),
+      Some(Type::NativeTag) => return Ok(self.native_tag(id).map_err(store_error)?.target),
+      _ => {}
     }
     let preserved = self.preserved(id)?;
     let first = preserved.header_ids().into_iter().find(|header| header.first);
@@ -385,7 +437,7 @@ impl Repository {
           id = self.built_on(&id)?;
           kind = self.kind(&id)?;
         }
-        Some(Object::Commit) => return Ok((self.named(id)?, kind)),
+        Some(Object::Commit | Object::Tag) => return Ok((self.named(id)?, kind)),
         _ => return Ok((id, kind)),
       }
     }
