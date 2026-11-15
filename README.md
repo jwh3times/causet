@@ -909,23 +909,26 @@ every object a Git repository's refs reach into a new native repository, and
 records every ref in a snapshot: a directory holding `.cst/`, in the format of
 [the native store contract](docs/native-store/README.md). Commits and tags
 are kept in Git's encoding, byte for byte, and each commit a branch, a tag or
-a remote-tracking ref reaches also becomes a native commit
+a remote-tracking ref reaches also becomes a native commit, and each
+annotated tag one reaches a native tag
 ([native history](docs/native-history/commits.md#5-import),
 [ADR-0047](docs/adr/0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md));
-a commit only other refs reach, such as the notes' history, does not. A new
+a commit or tag only other refs reach, such as the notes' history, does not. A new
 version of a file of 1 MiB or more may be stored as a zstd delta against the
 file's previous version,
 when that is smaller than its chunks. Importing the same history again
 writes the same bytes. Importing into an existing native repository adds only
-what it does not hold, with the native commits its history still lacks, then
-replaces its snapshot. A shallow clone, a partial clone,
+what it does not hold, with the native commits and tags its history still
+lacks, then replaces its snapshot. A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history
 differently from what it stores, and so is one with a ref, or another
 worktree's `HEAD`, naming an object it does not hold: import names the first
 such ref and writes nothing. So is one with a symbolic ref whose name is not
 UTF-8: Git cannot be given that name to say which ref it points to. So is
 one whose refs reach a commit Git's `log` cannot read either: one whose first
-line names no tree, or whose tree or a parent is an object of the wrong type.
+line names no tree, or whose tree or a parent is an object of the wrong type;
+and so is one whose refs reach an annotated tag whose first line names no
+object.
 In a
 native repository,
 `cst cat-file (-p | -t | -s) <object>`, `cst ls-tree`, `cst rev-parse` and
@@ -947,7 +950,8 @@ and `--batch`'s content is the object's Git bytes, Git IDs included, the size
 command implemented so far, listed by `cst --help` there, and refuses the rest
 by name. `cst log [<revision>...]` prints the history of the revisions given,
 `HEAD` by default, walked as Git walks them, ranges, `-n`, `--skip`,
-`--reverse`, `--first-parent` and `--merges` included, and `cst show [-s]
+`--reverse`, `--first-parent`, `--merges`, `--no-merges` and `--date`
+included, and `cst show [-s]
 [<object>...]` prints commits and annotated tags. With `--format` each prints
 as `git log --format` and `git show -s --format` do, byte for byte, every
 placeholder whose source native history holds; without it they print cst's
@@ -972,10 +976,11 @@ so it pays for the store's size once rather than for a read per lookup.
 `cst log` and `cst show` read every container's index and every native
 commit, once per command. The other reads above check only the parts of the store they touch
 and verify each object they read by its ID, so their cost does not grow with the store's
-object count, except where they name a commit: finding the native commit
-import stored straight after a commit's preserved object reads every
-container's index whole, once per command, and a commit with none, such as
-a carrier, costs a read of every native commit too. A read that misses, or
+object count, except where they name a commit or a tag: finding the native
+commit or tag import stored straight after its preserved object reads every
+container's index whole, once per command, and one with none, such as a
+carrier commit, costs a read of every native commit, or every native tag,
+too. A read that misses, or
 resolves an abbreviation, first reads the files it searched whole, once per command, so damage is reported rather
 than answered as a missing object
 ([storage.md §4.1](docs/native-store/storage.md#41-the-index)).

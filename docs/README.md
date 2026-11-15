@@ -28,8 +28,8 @@ the versioned record of delivered behavior.
 - [Native history contract](native-history/README.md) — the byte-level format
   of a native repository's history (ADR-0047): native commits and tags, their
   signatures and actors, facts and the fact log, names and the operation log,
-  and how import derives them, published before its code, with no
-  compatibility promised yet.
+  how import derives them, and what `cst log` and `cst show` print of them,
+  published before its code, with no compatibility promised yet.
 - [Structured-document adapter contract](structured-document-adapters.md) —
   acceptance requirements for formats and the current Markdown worked example.
 - [Semantic-merge conformance](semantic-conformance/README.md) — shared merge

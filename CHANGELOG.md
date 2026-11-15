@@ -4,6 +4,53 @@
 
 No unreleased changes.
 
+## [0.29.0] - 2026-11-15
+
+- **Experimental: `cst log` and `cst show` read native history the way Git
+  reads it** (#417, ADR-0046 decision 2, ADR-0047 decision 12). In a native
+  repository:
+  - **`--format`** prints byte for byte what `git log --format` and `git show
+    -s --format` print on the Git-backed original, IDs translated. That holds
+    for every placeholder a native commit's own fields answer:
+    - every author and committer form, `%ad` in each implemented `--date`
+      mode;
+    - `%B %f %e %x`, `%m`, and `%(trailers)` with all its options;
+    - the `%+`, `%-` and space prefixes, padding, truncation and `%w()`
+      wrapping;
+    - `%C` colours, printed as Git prints them off a terminal: as nothing.
+
+    Non-UTF-8 and malformed commits print exactly. A placeholder whose source
+    native history does not hold yet is refused before anything prints:
+    - decorations, which wait on names (#418);
+    - `%N`, which waits on facts (#419);
+    - the reflog, Git signatures and the mailmap;
+    - human dates and `%C(always,…)`.
+  - **`cst log`** walks as Git's revision walk does, newest first. It takes
+    `<rev>`, `^<rev>` and `<a>..<b>`, a range marked as Git's `limit_list`
+    marks it, and `-n`, `--skip`, `--reverse`, `--first-parent`, `--merges`,
+    `--no-merges` and `--date`.
+  - **`cst show`** prints commits and annotated tags, a tag of a tag down to
+    its commit, each commit once.
+  - **Without `--format`** both print cst's own human output, with each
+    commit's change identity, lineage and actors. With `--json` they print the
+    new `causet.log/v1` and `causet.show/v1` documents.
+  - **Refused:**
+    - `show --format` without `-s`, since Git would follow it with a patch;
+    - a patch, paths, `a...b`, and Git's named formats such as `--oneline`;
+    - every other option.
+
+    Each is refused with a registered code, and under `--json` as the failure
+    envelope.
+
+  Import now also writes a native tag, store type `07`, straight after each
+  annotated tag a name reaches, and a later import adds the ones a store from
+  an earlier build lacks. `cst fsck` re-derives each imported tag. Every
+  native command names an annotated tag by its native tag, as it names a
+  commit by its native commit. `docs/native-history/reading.md` is the new
+  contract for both commands, including the few places Git itself cannot be
+  matched. Like every native command, all of this needs
+  `CAUSET_EXPERIMENTAL=native` and is not a contract.
+
 ## [0.28.1] - 2026-11-14
 
 - **cst's records are read through one record source** (#415). `cst
