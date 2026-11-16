@@ -702,8 +702,11 @@ metadata, so the large-file corpus is within 6 KB of its version 0 store.
 native commit after each preserved commit a name reaches, and on git/git the
 store grew to 126,093,364 B, over Git's pack. From
 [#417](https://github.com/jwh3times/causet/issues/417) it writes a native tag
-after each preserved annotated tag a name reaches too. Native commits and
-tags are N2's objects, and N1's gate counts N1's alone
+after each preserved annotated tag a name reaches too. From
+[#419](https://github.com/jwh3times/causet/issues/419) it also writes the
+fact log: a fact for each record the history of `refs/notes/causet` holds,
+and an entry for each of its commits. Native commits and tags, facts and
+fact-log entries are N2's objects, and N1's gate counts N1's alone
 ([ADR-0044's amendment of 2026-11-11](../adr/0044-define-the-exit-regime-every-native-phase-must-meet.md#amendment-2026-11-11-which-bytes-a-phases-storage-gate-counts)).
 So the check gates an import written without native history, and each
 job's summary reports what native history adds, never checked, until N2's

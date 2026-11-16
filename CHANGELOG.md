@@ -4,6 +4,43 @@
 
 No unreleased changes.
 
+## [0.31.0] - 2026-11-15
+
+- **Experimental: import writes the fact log, and `cst provenance` and
+  `cst receipts` read it** (#419, ADR-0047 decisions 5–8). In a native
+  repository:
+  - **Import** reads the history of `refs/notes/causet` into the fact log's
+    shared chain, with one entry per notes commit (store type `09`). Each
+    entry adds the facts its notes tree gives that are not current at its
+    parents, and retires those it no longer gives. Its actor and time come
+    from the notes commit's committer line.
+  - **A fact** (store type `08`) is a record import can take, in canonical
+    JSON. Its object IDs are the native IDs of what they name, at the fields
+    its family's published schema marks.
+  - **Parked facts.** A note import cannot read, a record it cannot take
+    and a repeated copy are kept as parked facts, which no reader is
+    handed. Records it cannot take include those of an unknown version,
+    invalid ones, and those naming objects the store lacks or holding a
+    fraction, as every reconciliation's timings do.
+  - **Roots.** The commits records name, such as a landing's absorbed
+    commits, get native commits too.
+  - **`cst fsck`** checks every fact and entry: a fact's record is
+    canonical, and its names are its object IDs and its subject. An entry
+    keeps the log's rules of parents, scope, adds and retires.
+  - **`cst provenance [<revision>] [--all]` and `cst receipts`**, with and
+    without `--json`, answer as they answer in the Git-backed original, IDs
+    translated, and start no Git process. `cst provenance declare` is
+    refused.
+
+  Recording a fact changes no native commit's ID. Until the operation log
+  holds them (#423), a chain's heads are the entries no other names as a
+  parent. The local chain of disputed copies and dispositions, the legacy
+  `refs/notes/vcs-lab` name, and `cst metadata status` and `validate` are
+  #420's. `docs/native-history/facts.md` is the contract, and
+  `native/model` now lists each note-record family's object-ID fields, held
+  to the published schemas by a test. Like every native command, all of this
+  needs `CAUSET_EXPERIMENTAL=native` and is not a contract.
+
 ## [0.30.0] - 2026-11-15
 
 - **Experimental: `cst branch` and `cst tag` list a native repository's

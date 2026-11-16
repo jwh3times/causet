@@ -913,7 +913,8 @@ a remote-tracking ref reaches also becomes a native commit, and each
 annotated tag one reaches a native tag
 ([native history](docs/native-history/commits.md#5-import),
 [ADR-0047](docs/adr/0047-build-n2-as-native-history-with-a-fact-log-and-an-operation-log.md));
-a commit or tag only other refs reach, such as the notes' history, does not. A new
+a commit or tag only other refs reach, such as the notes' history, does not,
+unless one of cst's records names it (below). A new
 version of a file of 1 MiB or more may be stored as a zstd delta against the
 file's previous version,
 when that is smaller than its chunks. Importing the same history again
@@ -977,12 +978,17 @@ a record it cannot take kept as a parked fact
 landing's absorbed commits, get native commits too. `cst provenance
 [<revision>] [--all]` and `cst receipts` read those facts and answer as they
 answer in the Git-backed original, IDs translated, without Git; neither
-records a fact yet.
+records a fact yet, so `cst provenance declare` is refused. A native
+repository imported before the fact log existed holds no facts until it is
+imported into again, so they find no records there.
 `cst fsck` verifies the store: every
 copy of every object in every container, and content absent by promise or by
 policy, which it reports by state rather than as corruption. It also checks
 each native commit and tag by the rules of native history, deriving an
-imported one again from its Git commit or tag.
+imported one again from its Git commit or tag, and each fact and fact-log
+entry: a fact's record must be canonical JSON of the schema it names, naming
+only objects the store holds, and each entry must keep the fact log's rules
+([facts.md §8](docs/native-history/facts.md#8-verification)).
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
 ID, also without Git. Those two, `cst cat-file --batch` and
@@ -990,7 +996,8 @@ ID, also without Git. Those two, `cst cat-file --batch` and
 alias files and every container's index whole: a batch names many objects,
 so it pays for the store's size once rather than for a read per lookup.
 `cst log` and `cst show` read every container's index and every native
-commit, once per command. The other reads above check only the parts of the store they touch
+commit, once per command; `cst receipts` reads every container's index and
+every fact-log entry, and `cst provenance` every native commit too. The other reads above check only the parts of the store they touch
 and verify each object they read by its ID, so their cost does not grow with the store's
 object count, except where they name a commit or a tag: finding the native
 commit or tag import stored straight after its preserved object reads every

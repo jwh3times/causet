@@ -724,6 +724,13 @@ catalog document, records produced by the real CLI must satisfy their documents
 and the model's validator, and a note record the validator rejects for a
 missing field must be rejected by its document too. A new or changed record
 family is not complete until its catalog document passes these checks.
+`cargo test` holds the other side of the object-ID pattern:
+`native/model/tests/object_id_fields.rs` requires `object_id_fields` in
+`native/model/src/schemas.rs`, the members import translates to native IDs
+when a record becomes a fact
+([facts.md §3.2](native-history/facts.md#32-the-record)), to be exactly the
+members each note-record family's document gives that pattern, so a family
+that adds or moves an object ID changes both.
 `test/canonical-json.test.js` verifies the frozen canonical-JSON profile
 against the shared vectors in `docs/canonical-json/vectors.json`; a future
 native implementation must pass the same vector file byte for byte.
@@ -865,6 +872,9 @@ the real-repository check reports each import's cost (#347):
   - `reach` and `walk`;
   - `content`: writing the blobs;
   - `metadata`: encoding trees, commits and tags into the held file;
+  - `facts`: writing the fact log's facts and entries from the history of
+    `refs/notes/causet`, only when the snapshot has that ref and import
+    writes native history;
   - `finish`: writing the held records into the container in path order,
     then the snapshot, the alias file and the index, and putting the store
     in place.
@@ -876,8 +886,8 @@ the real-repository check reports each import's cost (#347):
   (`import.objects`, #405).
 
 `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1`, inert unless it is set exactly, makes
-`cst import` write no native history: no native commit or native tag, and
-no later N2 object either. The store holds N1's objects alone, which is what the
+`cst import` write no native history: no native commit, native tag, fact
+or fact-log entry, and no later N2 object either. The store holds N1's objects alone, which is what the
 real-repository check gates (#437).
 
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
