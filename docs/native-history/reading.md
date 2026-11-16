@@ -53,7 +53,7 @@ terminal:
 | Placeholder | Why |
 | --- | --- |
 | `%d %D %S %(decorate) %(describe)` | They read names, beside a `HEAD` that is no name (#455). |
-| `%N` | Notes become facts (#419). |
+| `%N` | A native repository holds records as facts, and a fact keeps no note's bytes (facts.md §6). |
 | `%g…` | A native repository keeps no reflog. |
 | `%G…` | Native history carries no Git signatures (commits.md §7.1). |
 | `%aN %aE %aL`, `%cN %cE %cL` | No mailmap is read. |

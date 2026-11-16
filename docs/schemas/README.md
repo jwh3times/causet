@@ -37,7 +37,10 @@ and rebase timing snapshots include and exclude.
   dropped.
 - Object IDs are Git OIDs of the repository's object format: 40 hex
   characters for SHA-1, 64 for SHA-256. The documents accept either length;
-  the runtime validators enforce the repository's actual format.
+  the runtime validators enforce the repository's actual format. In a
+  native repository, what `cst provenance` and `cst receipts` print carries
+  native IDs instead, 64 hex characters whatever the original's format
+  ([facts](../native-history/facts.md#32-the-record)).
 - Documents are open: unknown members are tolerated, and `required` lists
   only what the current writer always emits. What may change inside one
   version, which versions each family reads and writes, what a reader does
@@ -220,6 +223,7 @@ rendering at all.
 | `cst log` in a native repository | `causet.log/v1` (experimental, behind `CAUSET_EXPERIMENTAL=native`; ADR-0047 decision 12) |
 | `cst show` in a native repository | `causet.show/v1` (experimental, as `cst log`) |
 | `cst branch` and `cst tag` in a native repository | `causet.names/v1` (experimental, as `cst log`) |
+| `cst provenance` and `cst receipts` in a native repository | As in a Git-backed repository, with native IDs where Git's stand (experimental, as `cst log`) |
 | `cst workspace forecast` | `causet.forecast/v2` (with `workspaceComparison` populated) |
 | `cst spec index` | Projection `{manifestPath, manifest, changes, entityCount, cacheHit, cacheMode, contentRead, written, ...}`; `--all` wraps per-file results in a summary projection |
 | `cst spec show` | Projection `{manifestPath, manifest}` with a materialized manifest view (adds `sourceBytes`, `sourceLines`, `blocks`); stored v1/v2/v3/v4 schema and parser semantics are retained |

@@ -1150,3 +1150,41 @@ fn human_tag(out: &mut Vec<u8>, id: &NativeId, tag: &Tag, options: &Options) {
   human_actors(out, &tag.actors);
   human_message(out, &tag.message);
 }
+
+/// The native commit a revision names, as `cst log` resolves one (#419).
+pub(crate) fn commit_named(repository: &Repository, revision: &str) -> GitResult<NativeId> {
+  let history = History {
+    repository,
+    commits: repository.commits().map_err(store_error)?,
+  };
+  history.commit_named(revision.as_bytes())
+}
+
+/// `git rev-list <revision>`: the commits `cst log <revision>` walks, in its
+/// order (#419).
+pub(crate) fn reachable(repository: &Repository, revision: &str) -> GitResult<Vec<NativeId>> {
+  let request = parse(Command::Log, &[OsString::from(revision)])?;
+  let history = History {
+    repository,
+    commits: repository.commits().map_err(store_error)?,
+  };
+  let mut starts = Vec::new();
+  for revision in &request.revisions {
+    starts.extend(history.range(revision)?);
+  }
+  history.walk(&starts, &request)
+}
+
+/// A native commit's subject, as `%s` prints it (#419).
+pub(crate) fn subject(repository: &Repository, id: &NativeId) -> GitResult<String> {
+  let commits = repository.commits().map_err(store_error)?;
+  let commit = commits.by_id.get(id).ok_or_else(|| old_import(&id.hex(), "commit"))?;
+  let format = Format::parse(b"format:%s").map_err(unsupported)?;
+  let abbreviate = |id: &NativeId| Ok::<_, GitError>(id.hex());
+  match format.render(commit, id, &abbreviate) {
+    Ok(text) => Ok(String::from_utf8_lossy(&text).into_owned()),
+    Err(Failure::Unimplemented(what)) => Err(unsupported(what)),
+    Err(Failure::Fatal(why)) => Err(GitError::new("not-found", why)),
+    Err(Failure::Abbreviation(error)) => Err(error),
+  }
+}

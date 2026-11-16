@@ -47,6 +47,10 @@ pub enum Object {
   Tag,
   Snapshot,
   Annotation,
+  /// A fact (docs/native-history/facts.md §3).
+  Fact,
+  /// A fact-log entry (facts.md §4).
+  FactLogEntry,
 }
 
 impl Object {
@@ -58,6 +62,8 @@ impl Object {
       Object::Tag => "tag",
       Object::Snapshot => "snapshot",
       Object::Annotation => "annotation",
+      Object::Fact => "fact",
+      Object::FactLogEntry => "fact-log-entry",
     }
   }
 }
@@ -355,6 +361,8 @@ impl Repository {
       Some(Type::Annotation) => Object::Annotation,
       Some(Type::NativeCommit) => Object::Commit,
       Some(Type::NativeTag) => Object::Tag,
+      Some(Type::Fact) => Object::Fact,
+      Some(Type::FactLogEntry) => Object::FactLogEntry,
       Some(Type::Preserved) => match self.preserved(id)?.kind {
         GitKind::Commit => Object::Commit,
         GitKind::Tag => Object::Tag,

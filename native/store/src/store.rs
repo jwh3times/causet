@@ -728,6 +728,17 @@ impl StoreWriter {
     Ok(id)
   }
 
+  /// Stores a body of native history that no Git object becomes, such as a
+  /// fact or a fact-log entry (docs/native-history/facts.md §1), in form
+  /// `00`, with no alias row.
+  pub fn put_metadata(&mut self, kind: Type, body: &[u8]) -> Result<NativeId, StoreError> {
+    let id = NativeId::of(kind, body);
+    if !self.present.contains(&id) {
+      self.hold(&id, kind, Form::Body, body, None)?;
+    }
+    Ok(id)
+  }
+
   /// Records that the Git object with this digest is the native object `id`.
   pub fn alias(&mut self, git_digest: Vec<u8>, id: NativeId) {
     self.aliases.push((git_digest, id));

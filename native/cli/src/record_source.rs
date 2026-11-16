@@ -1,8 +1,8 @@
 //! Where the readers of cst's records get them (#415): one source between the
 //! commands that read records (`provenance`, `receipts` and `metadata
 //! status`/`validate` among them) and the storage that holds the records, so
-//! that a native repository can later hand the same containers over from its
-//! fact log (ADR-0047, decisions 5-8) without any reader's parsing,
+//! that a native repository hands the same containers over from its fact log
+//! (`native_facts`; ADR-0047, decisions 5-8) without any reader's parsing,
 //! validation or formatting changing.
 //!
 //! The unit is a container of records with what it is attached to. Readers

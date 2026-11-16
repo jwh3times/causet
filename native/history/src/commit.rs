@@ -231,6 +231,24 @@ pub fn lift(message: &[u8], name: &str) -> Option<String> {
   extract_trailer(trim(&String::from_utf8_lossy(message)), name)
 }
 
+/// What an identity line claims as an actor (§5.2): the line up to its last
+/// `>`, or all of it with none, and nothing when that is empty.
+pub fn claimed(line: &[u8]) -> Option<String> {
+  let claimed = match line.iter().rposition(|&byte| byte == b'>') {
+    Some(at) => &line[..=at],
+    None => line,
+  };
+  (!claimed.is_empty()).then(|| String::from_utf8_lossy(claimed).into_owned())
+}
+
+/// The last header line of a commit that begins with `word`, without it.
+pub fn last_line(header: &[u8], word: &[u8]) -> Option<Vec<u8>> {
+  header_lines(header)
+    .filter_map(|line| line.strip_prefix(word))
+    .last()
+    .map(<[u8]>::to_vec)
+}
+
 /// The native commit import derives from a Git commit's payload (§5.2),
 /// given the native forms of its tree and parents and its preserved object.
 pub fn derive(
@@ -240,12 +258,7 @@ pub fn derive(
   parents: Vec<NativeId>,
 ) -> Commit {
   let (header, message) = split(payload);
-  let last = |word: &[u8]| {
-    header_lines(header)
-      .filter_map(|line| line.strip_prefix(word))
-      .last()
-      .map(<[u8]>::to_vec)
-  };
+  let last = |word: &[u8]| last_line(header, word);
   let author_line = last(b"author ");
   let signature = |line: &Option<Vec<u8>>| {
     line
@@ -258,12 +271,7 @@ pub fn derive(
     .filter(|value| !value.is_empty() && !value.contains(&0x00));
   let actors = author_line
     .as_deref()
-    .map(|line| match line.iter().rposition(|&byte| byte == b'>') {
-      Some(at) => &line[..=at],
-      None => line,
-    })
-    .map(|claimed| String::from_utf8_lossy(claimed).into_owned())
-    .filter(|claimed| !claimed.is_empty())
+    .and_then(claimed)
     .map(|claimed| Actor {
       role: Role::Authored,
       actor: claimed,

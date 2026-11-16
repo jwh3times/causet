@@ -3,10 +3,14 @@
 //! from Git's, and how a reader prints them as Git does.
 #![forbid(unsafe_code)]
 
+pub mod action;
 pub mod actor;
 pub mod commit;
 pub mod date;
+pub mod fact;
+pub mod fact_log;
 pub mod names;
+pub mod notes;
 pub mod pretty;
 pub mod signature;
 pub mod tag;

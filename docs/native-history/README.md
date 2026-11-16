@@ -20,8 +20,9 @@ of a re-import (ADR-0047, Constraints).
   tag, the actors they carry, how import derives them from Git's commits and
   tags, which commits get one, and what the Git bridge needs from them.
 - [Facts and the fact log](facts.md): the fact, a thin envelope around one
-  of cst's records, the fact-log entry, which facts a reader uses, and how
-  import builds them from the notes and disputed copies.
+  of cst's records, the fact-log entry, which facts a reader uses, how
+  import builds them from the notes and disputed copies, and which facts
+  `cst provenance` and `cst receipts` read (§4.2).
 - [Names and operations](operations.md): branches, tags and remote-tracking
   names, conflicted names, the operation log and its 3-way merge, which refs
   import makes names, what `cst branch` and `cst tag` list, and reachability.
