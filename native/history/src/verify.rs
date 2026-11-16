@@ -4,9 +4,14 @@
 //! exactly what import derives from its preserved commit, whose tree and
 //! parents it names through the alias map; and each native tag decodes,
 //! names an object a tag may name (§4.2), and, when it was imported, is
-//! exactly what import derives from its preserved tag.
+//! exactly what import derives from its preserved tag. Each fact decodes,
+//! holds canonical JSON of the schema it names, and names only objects the
+//! store holds, and each fact-log entry decodes and keeps the log's rules
+//! (facts.md §8).
 
 use crate::commit::{Commit, derive};
+use crate::fact::Fact;
+use crate::fact_log::{self, Entry};
 use crate::tag::{self, Tag};
 use causet_store::StoreError;
 use causet_store::id::{NativeId, Type};
@@ -19,6 +24,8 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
   let mut problems = Vec::new();
   let mut commits = Vec::new();
   let mut tags = Vec::new();
+  let mut facts = HashMap::new();
+  let mut entries = HashMap::new();
   for (id, kind, _) in store.present()? {
     match kind {
       Type::NativeCommit => match Commit::decode(&store.read(&id)?.body) {
@@ -28,6 +35,21 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
       Type::NativeTag => match Tag::decode(&store.read(&id)?.body) {
         Ok(tag) => tags.push((id, tag)),
         Err(why) => problems.push(format!("the native tag {id}: {why}")),
+      },
+      Type::Fact => match Fact::decode(&store.read(&id)?.body) {
+        Ok(fact) => {
+          if let Err(why) = check_fact(store, &fact)? {
+            problems.push(format!("the fact {id}: {why}"));
+          }
+          facts.insert(id, fact.scope());
+        }
+        Err(why) => problems.push(format!("the fact {id}: {why}")),
+      },
+      Type::FactLogEntry => match Entry::decode(&store.read(&id)?.body) {
+        Ok(entry) => {
+          entries.insert(id, entry);
+        }
+        Err(why) => problems.push(format!("the fact-log entry {id}: {why}")),
       },
       _ => {}
     }
@@ -50,7 +72,52 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
       problems.push(format!("the native tag {id}: {why}"));
     }
   }
+  for (id, why) in fact_log::problems(&entries, &|fact| facts.get(fact).copied()) {
+    problems.push(format!("the fact-log entry {id}: {why}"));
+  }
   Ok(problems)
+}
+
+/// A fact's problem, or a read that failed: a record that is not the
+/// canonical JSON of the schema it names, names that are not its record's
+/// object IDs and its subject (§3.2), or a name the store does not hold.
+fn check_fact(store: &Store, fact: &Fact) -> Result<Result<(), String>, StoreError> {
+  let Fact::Record { schema, subject, names, record, .. } = fact else {
+    return Ok(Ok(()));
+  };
+  let parsed = std::str::from_utf8(record).ok().and_then(|text| causet_model::json::parse(text).ok());
+  let Some(parsed) = parsed else {
+    return Ok(Err("its record is not JSON".into()));
+  };
+  if causet_model::canonical::canonical_json(&parsed).ok().as_deref().map(str::as_bytes) != Some(record.as_slice()) {
+    return Ok(Err("its record is not in the canonical JSON profile".into()));
+  }
+  let named = match causet_model::js::get(Some(&parsed), "schema") {
+    Some(causet_model::json::Value::String(units)) => causet_model::json::lossy(units).into_bytes(),
+    _ => Vec::new(),
+  };
+  if named != *schema {
+    return Ok(Err("its schema is not its record's".into()));
+  }
+  let mut expected: Vec<NativeId> = Vec::new();
+  for (field, id) in crate::notes::object_ids(&parsed) {
+    match NativeId::from_hex(&id) {
+      Some(id) => expected.push(id),
+      None => return Ok(Err(format!("its record's {field} is no native ID"))),
+    }
+  }
+  expected.extend(subject.iter().copied());
+  expected.sort();
+  expected.dedup();
+  if expected != *names {
+    return Ok(Err("its names are not its record's object IDs and its subject".into()));
+  }
+  for name in names {
+    if store.held(name)?.is_none() {
+      return Ok(Err(format!("it names {name}, which the store does not hold")));
+    }
+  }
+  Ok(Ok(()))
 }
 
 /// A native tag's problem, or a read that failed.

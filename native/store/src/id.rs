@@ -22,6 +22,10 @@ pub enum Type {
   /// A native tag (docs/native-history/commits.md §4): metadata that no
   /// Git object becomes, so it has no alias row.
   NativeTag = 7,
+  /// A fact (docs/native-history/facts.md §3): metadata, with no alias row.
+  Fact = 8,
+  /// A fact-log entry (facts.md §4): metadata, with no alias row.
+  FactLogEntry = 9,
 }
 
 impl Type {
@@ -34,6 +38,8 @@ impl Type {
       5 => Type::Annotation,
       6 => Type::NativeCommit,
       7 => Type::NativeTag,
+      8 => Type::Fact,
+      9 => Type::FactLogEntry,
       _ => return None,
     })
   }

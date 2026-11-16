@@ -20,6 +20,7 @@
 //! bytes (#405).
 #![forbid(unsafe_code)]
 
+mod facts;
 mod git;
 
 use causet_engine::errors::{GitError, GitResult};
@@ -182,6 +183,11 @@ struct Importer<'a> {
   /// The native tags of the store an import adds to, by the preserved tag
   /// each derives from: read once, when one is first asked for.
   held_tags: Option<HashMap<NativeId, NativeId>>,
+  /// The note blobs this import reads, which the fact log (`facts`) reads
+  /// again: their Git IDs, known before they are stored.
+  note_blobs_wanted: HashSet<String>,
+  /// Their bytes, kept as each is stored.
+  note_blobs: HashMap<String, Vec<u8>>,
   imported: Imported,
   /// The first lookup of the existing store that failed. The writer read
   /// that store whole, with every check, when it opened, so only the file
@@ -247,6 +253,15 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   })
 }
 
+/// The test hook `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1`: the import writes
+/// no native history, only N1's objects, which is what N1's storage gate
+/// measures on a real repository (ADR-0044 item 2, #437). Native commits and
+/// tags, facts and the fact log all stay out under it. Nothing outside the
+/// suites sets it.
+fn without_history() -> bool {
+  causet_engine::environment::test_hook("CAUSET_TEST_IMPORT_WITHOUT_HISTORY").as_deref() == Some("1")
+}
+
 /// Finishes `store` with `snapshot`. The held files' sizes are read first:
 /// they have only grown until now, and finishing removes them.
 fn finish(store: StoreWriter, mut imported: Imported, snapshot: &Snapshot) -> GitResult<Imported> {
@@ -310,6 +325,8 @@ fn write(
     tag_history: HashSet::new(),
     tags: HashMap::new(),
     held_tags: None,
+    note_blobs_wanted: HashSet::new(),
+    note_blobs: HashMap::new(),
     git: HashMap::new(),
     imported: Imported {
       algorithm: algorithm.name(),
@@ -338,15 +355,29 @@ fn write(
       ),
     ));
   }
+  let notes = importer.notes_history(&refs)?;
+  if let Some(notes) = &notes {
+    importer.note_blobs_wanted = notes.blobs();
+  }
   importer.content(&walk.content, &bases)?;
   phases.end("content");
-  let (held, held_tags) = importer.history(&refs)?;
+  // The commits records name are roots too (facts.md §5.5), so they get
+  // native commits before the facts that name them are written.
+  let roots = match &notes {
+    Some(notes) => importer.fact_roots(notes)?,
+    None => Vec::new(),
+  };
+  let (held, held_tags) = importer.history(&refs, roots)?;
   importer.derive_held(held)?;
   importer.derive_held_tags(held_tags)?;
   for (id, path) in &walk.metadata {
     importer.metadata(id, path)?;
   }
   phases.end("metadata");
+  if let Some(notes) = &notes {
+    importer.fact_log(notes)?;
+    phases.end("facts");
+  }
   let mut recorded = Vec::with_capacity(refs.len());
   for listed in refs {
     let target = match (listed.symbolic, &listed.id) {
@@ -496,7 +527,12 @@ impl Importer<'_> {
           GitKind::Tree => "tree",
         }
       }
-      Type::Snapshot | Type::Annotation | Type::NativeCommit | Type::NativeTag => return None,
+      Type::Snapshot
+      | Type::Annotation
+      | Type::NativeCommit
+      | Type::NativeTag
+      | Type::Fact
+      | Type::FactLogEntry => return None,
     })
   }
 
@@ -803,6 +839,9 @@ impl Importer<'_> {
       drop(base);
       self.record(id, native)?;
       self.imported.blobs += 1;
+      if self.note_blobs_wanted.contains(id) {
+        self.note_blobs.insert(id.to_string(), body.clone());
+      }
       if wanted.contains(id) {
         last = Some((id.to_string(), body));
       }
@@ -899,20 +938,21 @@ impl Importer<'_> {
   /// carrier alone, or one before native history, left them. A held commit
   /// with one already ends the walk, since its ancestors have theirs.
   ///
-  /// The test hook `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1` finds none, so the
-  /// import writes no native history, only N1's objects: what N1's storage
-  /// gate measures on a real repository (ADR-0044 item 2, #437). Native
-  /// commits and tags are N2's only objects so far; each later one stays out
-  /// under it too. Nothing outside the suites sets it.
-  fn history(&mut self, refs: &[git::Listed]) -> GitResult<(Vec<String>, Vec<String>)> {
+  /// `roots` are the objects the records name (facts.md §5.5): each commit
+  /// or tag among them is reached as a name's is.
+  ///
+  /// Under `without_history` it finds none, so the import writes no native
+  /// history, only N1's objects.
+  fn history(&mut self, refs: &[git::Listed], roots: Vec<String>) -> GitResult<(Vec<String>, Vec<String>)> {
     const NAMES: [&[u8]; 3] = [b"refs/heads/", b"refs/tags/", b"refs/remotes/"];
-    if causet_engine::environment::test_hook("CAUSET_TEST_IMPORT_WITHOUT_HISTORY").as_deref() == Some("1") {
+    if without_history() {
       return Ok((Vec::new(), Vec::new()));
     }
     let mut pending: Vec<String> = refs
       .iter()
       .filter(|entry| entry.symbolic.is_none() && NAMES.iter().any(|prefix| entry.name.starts_with(prefix)))
       .filter_map(|entry| entry.id.clone())
+      .chain(roots)
       .collect();
     let mut seen = HashSet::new();
     let mut held = Vec::new();

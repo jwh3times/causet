@@ -12,6 +12,7 @@
 use crate::environment;
 use crate::native::report;
 use crate::native_inspection;
+use crate::native_facts;
 use crate::native_log;
 use crate::native_names;
 use crate::native_revision::Repository;
@@ -70,6 +71,11 @@ Usage:
                                             --format does, and without it, cst's own
   cst tag [--json | --format=<format>] [(-l | --list) [<pattern>...]]
                                             list the tags, as cst branch does
+  cst provenance [<revision>] [--all] [--json]
+                                            the declared provenance of commits,
+                                            read from the fact log
+  cst receipts [--json]                     every causal record the fact log
+                                            holds, as cst receipts lists them
   cst fsck                                  verify the store: every copy of
                                             every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
@@ -172,6 +178,7 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i3
     "rev-parse" => native_inspection::rev_parse(args, root),
     "for-each-ref" => native_inspection::for_each_ref(args, root),
     "fsck" => native_inspection::fsck(args, root),
+    "provenance" | "receipts" => native_facts::records_command(command, args, root),
     "branch" => native_names::branch(args, root),
     "tag" => native_names::tag(args, root),
     "log" => native_log::log(args, root),
@@ -756,6 +763,8 @@ pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
     // and a native tag as its preserved tag.
     Type::NativeCommit => "commit",
     Type::NativeTag => "tag",
+    Type::Fact => "fact",
+    Type::FactLogEntry => "fact-log-entry",
   })
 }
 

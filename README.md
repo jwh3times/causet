@@ -970,6 +970,14 @@ print as `git branch --format` and `git tag --format` do, byte for byte;
 without it, cst's own listing, and with `--json` the `causet.names/v1`
 document ([listing names](docs/native-history/operations.md#23-listing-names)).
 Neither writes a name yet.
+Import also reads the history of `refs/notes/causet` into the fact log: one
+entry per notes commit, each record a fact whose object IDs are native, and
+a record it cannot take kept as a parked fact
+([facts](docs/native-history/facts.md)). Commits a record names, such as a
+landing's absorbed commits, get native commits too. `cst provenance
+[<revision>] [--all]` and `cst receipts` read those facts and answer as they
+answer in the Git-backed original, IDs translated, without Git; neither
+records a fact yet.
 `cst fsck` verifies the store: every
 copy of every object in every container, and content absent by promise or by
 policy, which it reports by state rather than as corruption. It also checks

@@ -238,8 +238,21 @@ closed under parents.
 ### 4.2 Which facts a reader uses
 
 A reader reads the facts current at both chains' heads in the current view
-(operations.md §3). A current fact of state `00` is **used** when the
-record is valid and its logical ID is not conflicted:
+(operations.md §3). Until the operation log holds a view (#423), a chain's
+heads are every entry the store holds of its scope that no other names as a
+parent. So a notes ref rewritten between two imports, which leaves its old
+history's entries held, leaves their facts current too, though the
+Git-backed reader reads the new tip alone.
+
+The record source hands `cst provenance` and `cst receipts` every current
+fact of state `00` that a note held, one `causet.note/v1` container per
+subject, as the Git-backed source hands over every record a note holds:
+neither command judges records, there or here. A container lists its
+records in order of `createdAt`, then of their bytes, since a fact keeps
+no position in its note. The readers that judge records, such as
+`cst metadata validate`, apply this section's rule. A current fact of
+state `00` is **used** when the record is valid and its logical ID is not
+conflicted:
 
 - **Valid** means `native/model`'s validators accept the fact's Git record
   (§6), with its attachment, in the Git algorithm of the import's snapshot,
@@ -299,7 +312,10 @@ and no longer current.
 
 ### 5.1 The notes
 
-Import builds the shared chain from the notes history (ADR-0047, decision 8):
+Import builds the shared chain from the notes history (ADR-0047, decision 8).
+The shared chain of `refs/notes/causet` is built; the legacy names below
+are #420's, so until then a repository with only `refs/notes/vcs-lab` gets
+an empty shared chain.
 
 - **The notes ref** is `refs/notes/causet`, or `refs/notes/vcs-lab` in a
   repository that uses the **legacy names**: one whose snapshot holds neither
@@ -352,7 +368,8 @@ validators reject it, as the Git-backed reader's do (§4.2).
 
 ### 5.3 Local facts
 
-Import writes the local chain as **one entry with no parents**, no actor and
+The local chain is #420's; until then import writes none. Import writes the
+local chain as **one entry with no parents**, no actor and
 no time, holding:
 
 - a parked fact of reason `04` for each ref under `refs/causet/quarantine/`,

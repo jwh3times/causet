@@ -19,6 +19,35 @@ use causet_model::schemas::canonical_schema;
 pub const PROVENANCE_SCHEMA: &str = "causet.provenance/v1";
 const AGENT_ENV: &str = "CAUSET_AGENT";
 
+/// What `cst provenance` reads of the commits it inspects, besides their
+/// records: through Git in a Git-backed repository, and from native history
+/// in a native one (#419).
+pub trait CommitReads {
+  /// The commit a revision names, as `resolveRevision` resolves it.
+  fn resolve(&self, revision: &str) -> GitResult<String>;
+  /// `git rev-list <revision>`: the commits it reaches, in Git's order.
+  fn reachable(&self, revision: &str) -> GitResult<Vec<String>>;
+  /// A commit's subject.
+  fn subject(&self, commit: &str) -> GitResult<String>;
+}
+
+/// A Git-backed repository's commits, read through the engine seam.
+pub struct GitCommits<'a>(pub &'a str);
+
+impl CommitReads for GitCommits<'_> {
+  fn resolve(&self, revision: &str) -> GitResult<String> {
+    engine::resolve_revision(revision, self.0)
+  }
+
+  fn reachable(&self, revision: &str) -> GitResult<Vec<String>> {
+    engine::reachable_commits(revision, self.0)
+  }
+
+  fn subject(&self, commit: &str) -> GitResult<String> {
+    engine::commit_subject(commit, self.0)
+  }
+}
+
 /// `provenanceFor(commits)`: every provenance record the source attaches to
 /// each commit.
 fn provenance_for(commits: &[String], source: &dyn RecordSource) -> GitResult<Vec<(String, Vec<Value>)>> {
@@ -64,7 +93,7 @@ fn or_value(value: Option<&Value>, fallback: Value) -> Value {
 
 /// The entries `cst provenance` reports, in commit order: the source's
 /// records, with each commit's subject.
-fn entries(commits: &[String], source: &dyn RecordSource, cwd: &str) -> GitResult<Vec<Value>> {
+fn entries(commits: &[String], source: &dyn RecordSource, reads: &dyn CommitReads) -> GitResult<Vec<Value>> {
   let found = provenance_for(commits, source)?;
   let mut entries = Vec::new();
   for commit in commits {
@@ -75,7 +104,7 @@ fn entries(commits: &[String], source: &dyn RecordSource, cwd: &str) -> GitResul
       let member = |name: &str| get(Some(record), name);
       let mut entry = Object::new();
       entry.set("commit", string(commit));
-      entry.set("subject", string(&engine::commit_subject(commit, cwd)?));
+      entry.set("subject", string(&reads.subject(commit)?));
       if let Some(id) = member("id") {
         entry.set("id", id.clone());
       }
@@ -187,8 +216,8 @@ fn format_provenance(entries: &[Value]) -> GitResult<String> {
 }
 
 /// `cst provenance [revision] [--all] [--json]`, over the records `source`
-/// holds.
-pub fn provenance(parsed: &Parsed, source: &dyn RecordSource, cwd: &str) -> GitResult<Value> {
+/// holds and the commits `reads` reads.
+pub fn provenance(parsed: &Parsed, source: &dyn RecordSource, reads: &dyn CommitReads) -> GitResult<Value> {
   // `positionals[0] ?? "HEAD"`: an empty argument stays empty.
   let revision = parsed
     .positionals
@@ -196,11 +225,11 @@ pub fn provenance(parsed: &Parsed, source: &dyn RecordSource, cwd: &str) -> GitR
     .cloned()
     .unwrap_or_else(|| "HEAD".into());
   let commits = if parsed.truthy("all") {
-    engine::reachable_commits(&revision, cwd)?
+    reads.reachable(&revision)?
   } else {
-    vec![engine::resolve_revision(&revision, cwd)?]
+    vec![reads.resolve(&revision)?]
   };
-  let entries = entries(&commits, source, cwd)?;
+  let entries = entries(&commits, source, reads)?;
   if parsed.truthy("json") {
     let mut report = Object::new();
     report.set("revision", string(&revision));
