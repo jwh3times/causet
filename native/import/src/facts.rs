@@ -16,7 +16,7 @@ use causet_history::fact_log::{Entry, Scope, State};
 use causet_history::notes::{Note, facts_of_notes, notes_commit_action, roots_of_notes};
 use causet_store::id::{NativeId, Type};
 use causet_store::objects::GitKind;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// The notes ref the shared chain is built from (§5.1).
 const NOTES_REF: &[u8] = b"refs/notes/causet";
@@ -245,6 +245,11 @@ impl Importer<'_> {
     }
     let mut entries: HashMap<String, NativeId> = HashMap::new();
     let mut states: HashMap<String, State> = HashMap::new();
+    // Written once the chain is derived, in the store's order for them
+    // (storage.md §3.2): every fact in byte order of ID, then the entries in
+    // the order the walk leaves their notes commits.
+    let mut facts: BTreeMap<NativeId, Vec<u8>> = BTreeMap::new();
+    let mut bodies: Vec<Vec<u8>> = Vec::with_capacity(history.commits.len());
     for commit in &history.commits {
       let joined = State::join(commit.parents.iter().filter_map(|parent| states.get(parent)));
       let mut given: HashMap<NativeId, &Fact> = HashMap::new();
@@ -259,14 +264,15 @@ impl Importer<'_> {
       adds.sort();
       retires.sort();
       for id in &adds {
-        self.store.put_metadata(Type::Fact, &given[id].encode()).map_err(store_error)?;
+        facts.entry(*id).or_insert_with(|| given[id].encode());
       }
       let mut parents: Vec<NativeId> = commit.parents.iter().filter_map(|parent| entries.get(parent).copied()).collect();
       parents.sort();
       parents.dedup();
       let (actor, time) = notes_commit_action(&commit.payload);
       let entry = Entry { scope: Scope::Shared, parents, adds, retires, actor, time };
-      let id = self.store.put_metadata(Type::FactLogEntry, &entry.encode()).map_err(store_error)?;
+      let id = entry.id();
+      bodies.push(entry.encode());
       entries.insert(commit.id.clone(), id);
       states.insert(commit.id.clone(), joined.apply(id, &entry));
       for parent in &commit.parents {
@@ -277,6 +283,12 @@ impl Importer<'_> {
           }
         }
       }
+    }
+    for body in facts.values() {
+      self.store.put_metadata(Type::Fact, body).map_err(store_error)?;
+    }
+    for body in &bodies {
+      self.store.put_metadata(Type::FactLogEntry, body).map_err(store_error)?;
     }
     Ok(())
   }
