@@ -793,6 +793,50 @@ pub fn validate_note_record(record: Option<&Value>, format: &str) -> Vec<FieldEr
   errors.0
 }
 
+/// Whether a value is a SHA-256 digest as cst writes one: 64 lowercase hex.
+fn is_digest(value: Option<&Value>) -> bool {
+  as_str(value).is_some_and(|units| {
+    units.len() == 64 && units.iter().all(|unit| matches!(*unit, 0x30..=0x39 | 0x61..=0x66))
+  })
+}
+
+/// The structural faults of one disposition, an entry of
+/// `<common dir>/causet/dispositions.json`, by its published schema
+/// (`docs/schemas/disposition.v1.schema.json`): what import tests before a
+/// disposition becomes a fact (docs/native-history/facts.md §5.3).
+pub fn validate_disposition(record: Option<&Value>, format: &str) -> Vec<FieldError> {
+  let mut errors = Errors(Vec::new());
+  let e = &mut errors;
+  e.check(is_plain_object(record), "$", "object");
+  if !is_plain_object(record) {
+    return errors.0;
+  }
+  let schema = as_str(get(record, "schema")).map(|units| canonical_schema(&lossy(units)));
+  e.check(schema.as_deref() == Some("causet.disposition/v1"), "schema", "causet.disposition/v1");
+  for field in ["id", "recordId"] {
+    let ok = as_str(get(record, field)).is_some_and(|units| units.len() >= 4);
+    e.check(ok, field, "string of at least 4 characters");
+  }
+  e.check(one_of(get(record, "outcome"), &["keep-local", "replace-local"]), "outcome", "keep-local or replace-local");
+  for field in ["sourceLineage", "parkedRef", "reason"] {
+    let value = get(record, field);
+    e.check(
+      value.is_none() || matches!(value, Some(Value::Null | Value::String(_))),
+      field,
+      "string or null",
+    );
+  }
+  if get(record, "attachment").is_some() {
+    e.oid(record, "attachment", format);
+  }
+  e.check(is_digest(get(record, "keptDigest")), "keptDigest", "SHA-256 digest");
+  let rejected = matches!(get(record, "rejectedDigests"), Some(Value::Array(items)) if items.iter().all(|item| is_digest(Some(item))));
+  e.check(rejected, "rejectedDigests", "array of SHA-256 digests");
+  let decided = as_str(get(record, "decidedAt")).is_some_and(|units| crate::dates::parses(&lossy(units)));
+  e.check(decided, "decidedAt", "ISO-compatible timestamp");
+  errors.0
+}
+
 /// The members of each note-record family that hold an object ID, as dotted
 /// paths with arrays not counted: where its published schema gives a member
 /// the object-ID pattern, directly or through a `$ref`
@@ -942,6 +986,8 @@ pub fn object_id_fields(schema: &str) -> &'static [&'static str] {
       "resultBlob",
       "theirs.blob",
     ],
+    // The one family of the local chain (facts.md §3.4).
+    "causet.disposition/v1" => &["attachment"],
     _ => &[],
   }
 }

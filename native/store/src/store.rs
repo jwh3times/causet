@@ -1353,6 +1353,20 @@ impl Store {
     )
   }
 
+  /// Every object of one type the store holds present, once, in byte order
+  /// of ID: `present` for one type, without its order of storage.
+  pub fn present_of(&self, kind: Type) -> Result<Vec<NativeId>, StoreError> {
+    let mut found = BTreeSet::new();
+    for index in self.indexes()?.iter() {
+      for (name, record) in index.names.iter().zip(&index.records) {
+        if record.state == PRESENT && record.kind == kind {
+          found.insert(NativeId(*name));
+        }
+      }
+    }
+    Ok(found.into_iter().collect())
+  }
+
   /// A content object's chunk list, as stored: what it names, unresolved.
   pub fn chunk_list(&self, id: &NativeId) -> Result<ChunkList, StoreError> {
     match self.record(id)? {

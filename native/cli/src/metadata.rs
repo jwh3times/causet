@@ -59,7 +59,7 @@ fn bound(name: &str) -> u64 {
 }
 
 /// One diagnostic: `{ code, severity, scope, subject, message, ...extra }`.
-struct Diagnostic {
+pub(crate) struct Diagnostic {
   code: String,
   severity: &'static str,
   scope: &'static str,
@@ -84,7 +84,7 @@ impl Diagnostic {
 }
 
 #[derive(Default)]
-struct Diagnostics(Vec<Diagnostic>);
+pub(crate) struct Diagnostics(Vec<Diagnostic>);
 
 impl Diagnostics {
   fn add(
@@ -394,6 +394,149 @@ pub(crate) fn parsed_parked_ref(name: &str) -> Option<(String, String)> {
     .then(|| (parts[0].to_string(), parts[1].to_string()))
 }
 
+/// The reads the metadata inventory makes of a repository beyond its
+/// records, which a `RecordSource` hands over. A Git-backed repository's are
+/// Git's, made in the order and the processes the JavaScript CLI made them;
+/// a native repository answers them from its store and its fact log
+/// (`native_metadata`, #420).
+pub(crate) trait Inventory {
+  fn root(&self) -> &str;
+  fn object_format(&self) -> &str;
+  /// The names the records are kept under.
+  fn names(&self) -> GitResult<causet_engine::locations::Names>;
+  /// `objectLookup(expressions)`: each unique expression, read.
+  fn objects(&self, expressions: Vec<String>) -> GitResult<HashMap<String, ObjectRecord>>;
+  /// `readGitObjects(ids)`: each object, with its content, in order.
+  fn read_objects(&self, ids: &[String]) -> GitResult<Vec<ObjectRecord>>;
+  /// The metadata module's `listRefs(<refs root>/<family>)`: sorted, and
+  /// empty when the refs cannot be listed.
+  fn family_refs(&self, family: &str) -> GitResult<Vec<RefEntry>>;
+  /// The commit each ref peels to, by ref name, or `None` when it peels to
+  /// none.
+  fn peeled_commits(&self, refs: &[RefEntry]) -> GitResult<HashMap<String, Option<String>>>;
+  /// `parkedRecordIds(cwd)`: the identifiers a parked dispute names.
+  fn parked_ids(&self) -> GitResult<BTreeSet<String>>;
+  /// Every ref under `<refs root>/quarantine/`, in no order.
+  fn quarantine_refs(&self) -> GitResult<Vec<RefEntry>>;
+  /// `localRef(ref)`.
+  fn local_ref(&self, name: &str) -> GitResult<String>;
+  /// `readDispositions(cwd)`: the registry, or the refusal it raises.
+  fn dispositions(&self) -> GitResult<Value>;
+  /// Where the disposition registry is.
+  fn dispositions_path(&self) -> GitResult<String>;
+  /// `validateSpecs`.
+  fn tracked(&self, diagnostics: &mut Diagnostics) -> GitResult<Value>;
+  /// The workspace registry of `validateSharedLocal`.
+  fn workspace_registry(&self, diagnostics: &mut Diagnostics) -> GitResult<Value>;
+  /// `inspectPrivateState`.
+  fn private_state(&self, diagnostics: &mut Diagnostics) -> GitResult<Value>;
+  /// `inspectMigration`.
+  fn migration(&self, diagnostics: &mut Diagnostics) -> GitResult<()>;
+  /// `repositoryLineage(cwd)`.
+  fn lineage(&self) -> GitResult<Value>;
+  /// The digests of the records the source hands over that no reader uses
+  /// although the validators accept them: in a native repository, the
+  /// parked facts' (facts.md §3.3). A Git-backed repository has none.
+  fn unused(&self) -> HashMap<String, String> {
+    HashMap::new()
+  }
+  /// The report as this repository prints it.
+  fn present(&self, report: Value) -> GitResult<Value> {
+    Ok(report)
+  }
+}
+
+/// A Git-backed repository's reads.
+pub(crate) struct GitInventory<'a> {
+  pub context: &'a RepoContext,
+}
+
+impl Inventory for GitInventory<'_> {
+  fn root(&self) -> &str {
+    &self.context.root
+  }
+
+  fn object_format(&self) -> &str {
+    &self.context.object_format
+  }
+
+  fn names(&self) -> GitResult<causet_engine::locations::Names> {
+    names(&self.context.root)
+  }
+
+  fn objects(&self, expressions: Vec<String>) -> GitResult<HashMap<String, ObjectRecord>> {
+    object_lookup(expressions, &self.context.root)
+  }
+
+  fn read_objects(&self, ids: &[String]) -> GitResult<Vec<ObjectRecord>> {
+    Ok(engine::read_git_objects(ids, &self.context.root)?.records)
+  }
+
+  fn family_refs(&self, family: &str) -> GitResult<Vec<RefEntry>> {
+    let root = &self.context.root;
+    Ok(list_refs(&ref_family(family, root)?, root))
+  }
+
+  fn peeled_commits(&self, refs: &[RefEntry]) -> GitResult<HashMap<String, Option<String>>> {
+    if refs.is_empty() {
+      return Ok(HashMap::new());
+    }
+    let expressions: Vec<String> = refs.iter().map(|entry| format!("{}^{{commit}}", entry.oid)).collect();
+    let objects = engine::inspect_git_objects(&expressions, &self.context.root)?;
+    Ok(
+      refs
+        .iter()
+        .zip(objects.records)
+        .map(|(entry, object)| {
+          let commit = (object.exists && object.kind.as_deref() == Some("commit")).then_some(object.oid).flatten();
+          (entry.name.clone(), commit)
+        })
+        .collect(),
+    )
+  }
+
+  fn parked_ids(&self) -> GitResult<BTreeSet<String>> {
+    parked_record_ids(&self.context.root)
+  }
+
+  fn quarantine_refs(&self) -> GitResult<Vec<RefEntry>> {
+    let root = &engine::repo_context(&self.context.root)?.root;
+    engine::list_refs(&format!("{}/", ref_family("quarantine", root)?), root)
+  }
+
+  fn local_ref(&self, name: &str) -> GitResult<String> {
+    local_ref(name, &self.context.root)
+  }
+
+  fn dispositions(&self) -> GitResult<Value> {
+    read_dispositions(self.context)
+  }
+
+  fn dispositions_path(&self) -> GitResult<String> {
+    Ok(text::join(&runtime_directory(&self.context.common_dir, &self.context.root)?, "dispositions.json"))
+  }
+
+  fn tracked(&self, diagnostics: &mut Diagnostics) -> GitResult<Value> {
+    validate_specs(self.context, diagnostics)
+  }
+
+  fn workspace_registry(&self, diagnostics: &mut Diagnostics) -> GitResult<Value> {
+    workspace_registry(self.context, diagnostics)
+  }
+
+  fn private_state(&self, diagnostics: &mut Diagnostics) -> GitResult<Value> {
+    inspect_private_state(self.context, diagnostics)
+  }
+
+  fn migration(&self, diagnostics: &mut Diagnostics) -> GitResult<()> {
+    inspect_migration(self.context, diagnostics)
+  }
+
+  fn lineage(&self) -> GitResult<Value> {
+    repository_lineage(&self.context.root)
+  }
+}
+
 struct Structural {
   record: Value,
   raw: Value,
@@ -424,17 +567,16 @@ pub(crate) struct NoteChecks {
 const ALL_CHECKS: NoteChecks = NoteChecks { attachments: true, references: true };
 
 fn validate_portable_notes(
-  context: &RepoContext,
+  inv: &dyn Inventory,
   source: &dyn RecordSource,
   diagnostics: &mut Diagnostics,
   parked: &BTreeSet<String>,
   checks: NoteChecks,
 ) -> GitResult<Portable> {
-  let root = &context.root;
-  let repository_names = names(root)?;
+  let repository_names = inv.names()?;
   let containers = sorted_containers(source)?;
   let target_objects = if checks.attachments {
-    object_lookup(containers.iter().map(|container| container.target.clone()).collect(), root)?
+    inv.objects(containers.iter().map(|container| container.target.clone()).collect())?
   } else {
     HashMap::new()
   };
@@ -465,7 +607,7 @@ fn validate_portable_notes(
     let schema = get(Some(&record), "schema");
     let schema_text = as_string(schema);
     let classification = schema_classification(schema_text.as_deref());
-    let errors = validate_note_record(Some(&record), &context.object_format);
+    let errors = validate_note_record(Some(&record), inv.object_format());
     let subject = || {
       let id = get(Some(&record), "id");
       if nullish(id) {
@@ -537,33 +679,15 @@ fn validate_portable_notes(
     .map(|reference| lossy(&reference.oid))
     .collect();
   let referenced = if checks.references {
-    object_lookup(references, root)?
+    inv.objects(references)?
   } else {
     HashMap::new()
   };
-  let resolution_refs = list_refs(&ref_family("resolutions", root)?, root);
-  let peeled: HashMap<String, Option<String>> = if resolution_refs.is_empty() {
-    HashMap::new()
-  } else {
-    let expressions: Vec<String> = resolution_refs
-      .iter()
-      .map(|entry| format!("{}^{{commit}}", entry.oid))
-      .collect();
-    let objects = engine::inspect_git_objects(&expressions, root)?;
-    resolution_refs
-      .iter()
-      .zip(objects.records)
-      .map(|(entry, object)| {
-        let commit = (object.exists && object.kind.as_deref() == Some("commit"))
-          .then_some(object.oid)
-          .flatten();
-        (entry.name.clone(), commit)
-      })
-      .collect()
-  };
+  let resolution_refs = inv.family_refs("resolutions")?;
+  let peeled = inv.peeled_commits(&resolution_refs)?;
   let is_resolution =
     |record: &Value| strict_equals(get(Some(record), "type"), Some(&string("resolution")));
-  let retained_objects = object_lookup(
+  let retained_objects = inv.objects(
     structural
       .iter()
       .filter(|entry| {
@@ -578,9 +702,9 @@ fn validate_portable_notes(
         )
       })
       .collect(),
-    root,
   )?;
 
+  let unused = inv.unused();
   let mut summaries = Vec::new();
   let mut accepted: Vec<(String, Value, String)> = Vec::new();
   let mut diagnosed_conflicts: BTreeSet<String> = BTreeSet::new();
@@ -644,7 +768,7 @@ fn validate_portable_notes(
         valid = false;
       }
       let named = as_string(member("ref")).unwrap_or_default();
-      let local = local_ref(&named, root)?;
+      let local = inv.local_ref(&named)?;
       let peeled_commit = peeled.get(&local).cloned().flatten();
       if peeled_commit.as_deref() != as_string(member("resolutionCommit")).as_deref()
         || peeled_commit.is_none()
@@ -714,6 +838,20 @@ fn validate_portable_notes(
       codes.push(code.into());
       valid = false;
     }
+    // A record the validators accept that no reader uses: a native
+    // repository's parked fact (facts.md §3.3).
+    if valid && let Some(reason) = unused.get(&entry.digest) {
+      diagnostics.add(
+        "parked-fact",
+        "warning",
+        "shared-portable",
+        member("id").cloned().unwrap_or_else(|| string(&entry.attachment)),
+        format!("Import could not take this record as a fact ({reason}), so it is parked and no reader uses it."),
+        vec![("attachment", string(&entry.attachment))],
+      );
+      codes.push("parked-fact".into());
+      valid = false;
+    }
     codes.sort_by(|left, right| text::compare(left, right));
     codes.dedup();
     let mut summary = Object::new();
@@ -740,7 +878,7 @@ fn validate_portable_notes(
   let mut accepted_resolution_refs: Vec<String> = Vec::new();
   for (_, raw, _) in &accepted {
     if is_resolution(raw) {
-      let local = local_ref(&as_string(get(Some(raw), "ref")).unwrap_or_default(), root)?;
+      let local = inv.local_ref(&as_string(get(Some(raw), "ref")).unwrap_or_default())?;
       if !accepted_resolution_refs.contains(&local) {
         accepted_resolution_refs.push(local);
       }
@@ -791,7 +929,7 @@ fn validate_portable_notes(
   let mut resolutions = Object::new();
   resolutions.set(
     "namespace",
-    string(&format!("{}/*", ref_family("resolutions", root)?)),
+    string(&format!("{}/resolutions/*", repository_names.refs_root)),
   );
   resolutions.set("refCount", number(resolution_refs.len()));
   resolutions.set("acceptedRefCount", number(accepted_resolution_refs.len()));
@@ -944,12 +1082,8 @@ fn validate_specs(context: &RepoContext, diagnostics: &mut Diagnostics) -> GitRe
   Ok(Value::Object(result))
 }
 
-/// `validateSharedLocal(context, diagnostics, localDigests)`.
-fn validate_shared_local(
-  context: &RepoContext,
-  diagnostics: &mut Diagnostics,
-  local_digests: &HashMap<String, Vec<String>>,
-) -> GitResult<Value> {
+/// The workspace registry of `validateSharedLocal`.
+fn workspace_registry(context: &RepoContext, diagnostics: &mut Diagnostics) -> GitResult<Value> {
   let root = &context.root;
   let runtime = runtime_directory(&context.common_dir, root)?;
   let workspace_path = text::join(&runtime, "workspaces.json");
@@ -1094,11 +1228,20 @@ fn validate_shared_local(
       }
     }
   }
-  let checkpoint_refs = list_refs(&ref_family("checkpoints", root)?, root);
-  let history_refs = list_refs(&ref_family("checkpoint-history", root)?, root);
+  Ok(registry)
+}
+
+/// `validateSharedLocal(context, diagnostics, localDigests)`.
+fn validate_shared_local(
+  inv: &dyn Inventory,
+  diagnostics: &mut Diagnostics,
+  local_digests: &HashMap<String, Vec<String>>,
+) -> GitResult<Value> {
+  let registry = inv.workspace_registry(diagnostics)?;
+  let checkpoint_refs = inv.family_refs("checkpoints")?;
+  let history_refs = inv.family_refs("checkpoint-history")?;
   let all: Vec<&RefEntry> = checkpoint_refs.iter().chain(&history_refs).collect();
-  let checkpoint_objects =
-    object_lookup(all.iter().map(|entry| entry.oid.clone()).collect(), root)?;
+  let checkpoint_objects = inv.objects(all.iter().map(|entry| entry.oid.clone()).collect())?;
   for checkpoint in &all {
     if !is_commit(checkpoint_objects.get(&checkpoint.oid)) {
       diagnostics.add(
@@ -1122,21 +1265,20 @@ fn validate_shared_local(
   shared.set("checkpoints", Value::Object(checkpoints));
   shared.set(
     "quarantine",
-    inspect_quarantine(context, diagnostics, local_digests)?,
+    inspect_quarantine(inv, diagnostics, local_digests)?,
   );
-  shared.set("dispositions", inspect_dispositions(context, diagnostics)?);
+  shared.set("dispositions", inspect_dispositions(inv, diagnostics)?);
   Ok(Value::Object(shared))
 }
 
 /// `inspectQuarantine` over `listParkedRecords`.
 fn inspect_quarantine(
-  context: &RepoContext,
+  inv: &dyn Inventory,
   diagnostics: &mut Diagnostics,
   local_digests: &HashMap<String, Vec<String>>,
 ) -> GitResult<Value> {
-  let root = &engine::repo_context(&context.root)?.root;
-  let namespace = ref_family("quarantine", root)?;
-  let mut refs: Vec<RefEntry> = engine::list_refs(&format!("{namespace}/"), root)?
+  let mut refs: Vec<RefEntry> = inv
+    .quarantine_refs()?
     .into_iter()
     .filter(|entry| parsed_parked_ref(&entry.name).is_some())
     .collect();
@@ -1144,14 +1286,7 @@ fn inspect_quarantine(
   let objects = if refs.is_empty() {
     Vec::new()
   } else {
-    engine::read_git_objects(
-      &refs
-        .iter()
-        .map(|entry| entry.oid.clone())
-        .collect::<Vec<_>>(),
-      root,
-    )?
-    .records
+    inv.read_objects(&refs.iter().map(|entry| entry.oid.clone()).collect::<Vec<_>>())?
   };
   let mut records = Vec::new();
   for (entry, object) in refs.iter().zip(objects) {
@@ -1224,7 +1359,7 @@ fn inspect_quarantine(
   let mut quarantine = Object::new();
   quarantine.set(
     "namespace",
-    string(&format!("{}/*", ref_family("quarantine", &context.root)?)),
+    string(&format!("{}/quarantine/*", inv.names()?.refs_root)),
   );
   quarantine.set("refCount", number(records.len()));
   quarantine.set("records", Value::Array(records));
@@ -1276,14 +1411,11 @@ pub(crate) fn read_dispositions(context: &RepoContext) -> GitResult<Value> {
 }
 
 /// `inspectDispositions(context, diagnostics)`.
-fn inspect_dispositions(context: &RepoContext, diagnostics: &mut Diagnostics) -> GitResult<Value> {
-  let registry = match read_dispositions(context) {
+fn inspect_dispositions(inv: &dyn Inventory, diagnostics: &mut Diagnostics) -> GitResult<Value> {
+  let registry = match inv.dispositions() {
     Ok(registry) => registry,
     Err(error) => {
-      let subject = text::join(
-        &runtime_directory(&context.common_dir, &context.root)?,
-        "dispositions.json",
-      );
+      let subject = inv.dispositions_path()?;
       diagnostics.add(
         if error.code == "unknown-schema-version" {
           "unknown-schema"
@@ -1460,7 +1592,8 @@ pub(crate) fn inspection_records(root: &str) -> GitResult<Vec<(String, Value, St
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
     let checks = NoteChecks { attachments: false, references: false };
-    let portable = validate_portable_notes(&context, &Notes::at(&context.root), &mut diagnostics, &parked, checks)?;
+    let inv = GitInventory { context: &context };
+    let portable = validate_portable_notes(&inv, &Notes::at(&context.root), &mut diagnostics, &parked, checks)?;
     repository_lineage(&context.root)?;
     Ok(portable.records)
   })
@@ -1471,7 +1604,8 @@ pub(crate) fn portable_snapshot(cwd: &str) -> GitResult<PortableSnapshot> {
   with_object_session(&context.root, || -> GitResult<PortableSnapshot> {
     let mut diagnostics = Diagnostics::default();
     let parked = parked_record_ids(&context.root)?;
-    let portable = validate_portable_notes(&context, &Notes::at(&context.root), &mut diagnostics, &parked, ALL_CHECKS)?;
+    let inv = GitInventory { context: &context };
+    let portable = validate_portable_notes(&inv, &Notes::at(&context.root), &mut diagnostics, &parked, ALL_CHECKS)?;
     // The snapshot states the lineage, though retention does not report it.
     repository_lineage(&context.root)?;
     Ok(PortableSnapshot {
@@ -1499,49 +1633,59 @@ pub(crate) struct FullSnapshot {
 
 /// `source` holds the portable records the snapshot validates.
 pub(crate) fn full_snapshot(context: &RepoContext, source: &dyn RecordSource) -> GitResult<FullSnapshot> {
-  with_object_session(&context.root, || -> GitResult<FullSnapshot> {
-    let mut diagnostics = Diagnostics::default();
-    let parked = parked_record_ids(&context.root)?;
-    let portable = validate_portable_notes(context, source, &mut diagnostics, &parked, ALL_CHECKS)?;
-    let tracked = validate_specs(context, &mut diagnostics)?;
-    let mut local_digests: HashMap<String, Vec<String>> = HashMap::new();
-    for summary in &portable.summaries {
-      if let Some(id) = as_string(get(Some(summary), "id")) {
-        local_digests
-          .entry(id)
-          .or_default()
-          .push(as_string(get(Some(summary), "digest")).unwrap_or_default());
-      }
+  with_object_session(&context.root, || snapshot_of(&GitInventory { context }, source))
+}
+
+/// `metadataSnapshot` over `inv`'s reads: every scope.
+pub(crate) fn snapshot_of(inv: &dyn Inventory, source: &dyn RecordSource) -> GitResult<FullSnapshot> {
+  let mut diagnostics = Diagnostics::default();
+  let parked = inv.parked_ids()?;
+  let portable = validate_portable_notes(inv, source, &mut diagnostics, &parked, ALL_CHECKS)?;
+  let tracked = inv.tracked(&mut diagnostics)?;
+  let mut local_digests: HashMap<String, Vec<String>> = HashMap::new();
+  for summary in &portable.summaries {
+    if let Some(id) = as_string(get(Some(summary), "id")) {
+      local_digests
+        .entry(id)
+        .or_default()
+        .push(as_string(get(Some(summary), "digest")).unwrap_or_default());
     }
-    let shared = validate_shared_local(context, &mut diagnostics, &local_digests)?;
-    let private = inspect_private_state(context, &mut diagnostics)?;
-    inspect_migration(context, &mut diagnostics)?;
-    let lineage = repository_lineage(&context.root)?;
-    let quarantined = get(Some(&portable.notes), "quarantinedCount")
-      .cloned()
-      .unwrap_or(Value::Null);
-    let mut shared_portable = Object::new();
-    shared_portable.set("notes", portable.notes);
-    shared_portable.set("resolutions", portable.resolutions);
-    let mut scopes = Object::new();
-    scopes.set("sharedPortable", Value::Object(shared_portable));
-    scopes.set("trackedPortable", tracked);
-    scopes.set("sharedLocal", shared);
-    scopes.set("worktreePrivate", private);
-    Ok(FullSnapshot {
-      scopes: Value::Object(scopes),
-      diagnostics,
-      accepted: portable.accepted,
-      quarantined,
-      lineage,
-      records: portable.records,
-    })
+  }
+  let shared = validate_shared_local(inv, &mut diagnostics, &local_digests)?;
+  let private = inv.private_state(&mut diagnostics)?;
+  inv.migration(&mut diagnostics)?;
+  let lineage = inv.lineage()?;
+  let quarantined = get(Some(&portable.notes), "quarantinedCount")
+    .cloned()
+    .unwrap_or(Value::Null);
+  let mut shared_portable = Object::new();
+  shared_portable.set("notes", portable.notes);
+  shared_portable.set("resolutions", portable.resolutions);
+  let mut scopes = Object::new();
+  scopes.set("sharedPortable", Value::Object(shared_portable));
+  scopes.set("trackedPortable", tracked);
+  scopes.set("sharedLocal", shared);
+  scopes.set("worktreePrivate", private);
+  Ok(FullSnapshot {
+    scopes: Value::Object(scopes),
+    diagnostics,
+    accepted: portable.accepted,
+    quarantined,
+    lineage,
+    records: portable.records,
   })
 }
 
 pub fn metadata_report(source: &dyn RecordSource, cwd: &str, schema: &str) -> GitResult<Value> {
   let context = engine::repo_context(cwd)?;
-  let FullSnapshot { scopes, mut diagnostics, accepted, quarantined, lineage, .. } = full_snapshot(&context, source)?;
+  let snapshot = full_snapshot(&context, source)?;
+  report_of(&GitInventory { context: &context }, snapshot, schema)
+}
+
+/// `publicStatus` of a snapshot taken over `inv`'s reads, as `inv`'s
+/// repository prints it.
+pub(crate) fn report_of(inv: &dyn Inventory, snapshot: FullSnapshot, schema: &str) -> GitResult<Value> {
+  let FullSnapshot { scopes, mut diagnostics, accepted, quarantined, lineage, .. } = snapshot;
   diagnostics.0.sort_by(|left, right| {
     locale_compare(&left.code, &right.code)
       .then_with(|| locale_compare(left.scope, right.scope))
@@ -1564,8 +1708,8 @@ pub fn metadata_report(source: &dyn RecordSource, cwd: &str, schema: &str) -> Gi
     .filter(|item| item.severity == "warning")
     .count();
   let mut repository = Object::new();
-  repository.set("root", string(&context.root));
-  repository.set("objectFormat", string(&context.object_format));
+  repository.set("root", string(inv.root()));
+  repository.set("objectFormat", string(inv.object_format()));
   repository.set("lineage", lineage);
   let mut summary = Object::new();
   summary.set("valid", Value::Bool(errors == 0));
@@ -1593,7 +1737,7 @@ pub fn metadata_report(source: &dyn RecordSource, cwd: &str, schema: &str) -> Gi
     Value::Array(diagnostics.0.iter().map(Diagnostic::to_value).collect()),
   );
   report.set("trust", Value::Object(trust));
-  Ok(Value::Object(report))
+  inv.present(Value::Object(report))
 }
 
 /// `formatTrustState(trust)`.
@@ -1755,8 +1899,19 @@ pub fn metadata(
   source: &dyn RecordSource,
   cwd: &str,
 ) -> GitResult<(Value, i32)> {
+  metadata_with(subcommand, strict, json, &|schema| metadata_report(source, cwd, schema))
+}
+
+/// `cst metadata status` and `cst metadata validate` over the report
+/// `report` makes for a schema.
+pub(crate) fn metadata_with(
+  subcommand: &str,
+  strict: bool,
+  json: bool,
+  report: &dyn Fn(&str) -> GitResult<Value>,
+) -> GitResult<(Value, i32)> {
   if subcommand == "status" {
-    let result = metadata_report(source, cwd, METADATA_STATUS_SCHEMA)?;
+    let result = report(METADATA_STATUS_SCHEMA)?;
     let output = if json {
       result
     } else {
@@ -1764,7 +1919,7 @@ pub fn metadata(
     };
     return Ok((output, 0));
   }
-  let mut result = metadata_report(source, cwd, METADATA_VALIDATION_SCHEMA)?;
+  let mut result = report(METADATA_VALIDATION_SCHEMA)?;
   let errors = get(get(Some(&result), "summary"), "errors").cloned();
   let warnings = get(get(Some(&result), "summary"), "warnings").cloned();
   let valid = matches!(errors, Some(Value::Number(count)) if count == 0.0)

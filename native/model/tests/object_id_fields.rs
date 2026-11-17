@@ -80,7 +80,9 @@ fn every_note_record_familys_object_id_fields_are_those_its_published_schema_giv
   let catalog = catalog();
   let mut checked = 0;
   for (id, document) in &catalog {
-    if text(get(Some(document), "x-causet-scope")).as_deref() != Some("note-record") {
+    // The note-record families, and the disposition, the one family of the
+    // local chain (facts.md §3.4).
+    if text(get(Some(document), "x-causet-scope")).as_deref() != Some("note-record") && id != "causet.disposition/v1" {
       continue;
     }
     let mut found = BTreeSet::new();
