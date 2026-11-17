@@ -4,6 +4,46 @@
 
 No unreleased changes.
 
+## [0.32.0] - 2026-11-17
+
+- **Experimental: import writes the local chain, and `cst metadata status`
+  and `cst metadata validate` read the fact log** (#420, ADR-0047 decisions
+  7, 8, 11 and 12). In a native repository:
+  - **Disputes and dispositions.** Import writes the fact log's local chain,
+    which is never exchanged. Each disputed copy under
+    `refs/causet/quarantine/` becomes a parked fact. Each disposition in
+    `dispositions.json` becomes a fact, its `attachment` translated to a
+    native ID.
+  - **Settling on re-import.** Each import writes at most one local entry,
+    whose parents are the chain's heads. So a dispute settled on the
+    original after an import is settled on the copy by the next import. An
+    import that changes nothing writes nothing.
+  - **Legacy names.** A repository that keeps its records under the legacy
+    names (`refs/notes/vcs-lab`, `refs/vcs-lab/*`, `.git/vcs-lab/`) is
+    read under them alike. Its facts are the ones its current names would
+    give.
+  - **Not imported.** `refs/causet/retention` stays in the snapshot, and
+    nothing is derived from it. `workspaces.json` and `migration.json` are
+    not imported.
+  - **`cst metadata status` and `cst metadata validate [--strict]`**, with
+    and without `--json`, answer as they answer on the Git-backed original,
+    and start no Git process:
+    - Git IDs are shown as native IDs. Record digests and the lineage ID
+      stay the original's.
+    - Records are reported under the current names.
+    - Spec manifests, the workspace registry and worktree-private state are
+      reported empty, since a native repository has no working copy yet.
+  - **The `parked-fact` warning.** A parked note or record is reported where
+    the original held it, so the original's diagnostics arise. One that the
+    validators accept but import parked, such as a record holding a
+    fraction (#459), is reported unused with a new `parked-fact` warning.
+  - **Refused.** The other `cst metadata` commands are refused.
+
+  The Git-backed `cst metadata status` and `validate` are unchanged, and run
+  the same Git processes. `docs/native-history/facts.md` §5.3 and §5.6 are
+  the contract. Like every native command, all of this needs
+  `CAUSET_EXPERIMENTAL=native` and is not a contract.
+
 ## [0.31.0] - 2026-11-15
 
 - **Experimental: import writes the fact log, and `cst provenance` and
