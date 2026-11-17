@@ -76,6 +76,9 @@ Usage:
                                             read from the fact log
   cst receipts [--json]                     every causal record the fact log
                                             holds, as cst receipts lists them
+  cst metadata (status | validate [--strict]) [--json]
+                                            the metadata inventory, read from
+                                            the fact log and the ref snapshot
   cst fsck                                  verify the store: every copy of
                                             every object, and absent content
   cst import --verify [<native-repo>]       check that every imported object
@@ -179,6 +182,7 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i3
     "for-each-ref" => native_inspection::for_each_ref(args, root),
     "fsck" => native_inspection::fsck(args, root),
     "provenance" | "receipts" => native_facts::records_command(command, args, root),
+    "metadata" => crate::native_metadata::metadata_command(args, root),
     "branch" => native_names::branch(args, root),
     "tag" => native_names::tag(args, root),
     "log" => native_log::log(args, root),

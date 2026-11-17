@@ -40,6 +40,8 @@ pub struct Source {
   /// is of it, so a linked worktree's refs and `HEAD` are its main
   /// worktree's (objects.md §6).
   git_dir: Option<String>,
+  /// Its common directory, where cst keeps its shared-local files.
+  common_dir: std::path::PathBuf,
   pub format: String,
 }
 
@@ -121,6 +123,7 @@ impl Source {
     let mut source = Source {
       path: path.to_string(),
       git_dir: None,
+      common_dir: std::path::PathBuf::new(),
       format: String::new(),
     };
     let shape = run_git(
@@ -174,6 +177,7 @@ impl Source {
           .ok()
           .is_some_and(|a| std::fs::canonicalize(path_of(b)).ok() == Some(a))
     };
+    source.common_dir = path_of(common);
     if !same(git_dir, common) {
       let common = std::str::from_utf8(common).map_err(|_| {
         refused(
@@ -230,6 +234,12 @@ impl Source {
     }
     let target = read.bytes.strip_suffix(b"\n").unwrap_or(&read.bytes);
     Ok(Some(target.to_vec()))
+  }
+
+  /// A file of cst's shared-local state, `<common dir>/<runtime>/<name>`, or
+  /// `None` when it cannot be read.
+  pub fn shared_local_file(&self, runtime: &str, name: &str) -> Option<Vec<u8>> {
+    std::fs::read(self.common_dir.join(runtime).join(name)).ok()
   }
 
   /// Every ref `for-each-ref` lists, and `HEAD`: each name with the object it

@@ -21,6 +21,7 @@
 #![forbid(unsafe_code)]
 
 mod facts;
+pub use facts::uses_legacy_names;
 mod git;
 
 use causet_engine::errors::{GitError, GitResult};
@@ -359,14 +360,21 @@ fn write(
   if let Some(notes) = &notes {
     importer.note_blobs_wanted = notes.blobs();
   }
+  let local = importer.local_sources(&refs);
+  if let Some(local) = &local {
+    importer.note_blobs_wanted.extend(local.blobs());
+  }
   importer.content(&walk.content, &bases)?;
   phases.end("content");
   // The commits records name are roots too (facts.md §5.5), so they get
   // native commits before the facts that name them are written.
-  let roots = match &notes {
+  let mut roots = match &notes {
     Some(notes) => importer.fact_roots(notes)?,
     None => Vec::new(),
   };
+  if let Some(local) = &local {
+    roots.extend(importer.local_roots(local));
+  }
   let (held, held_tags) = importer.history(&refs, roots)?;
   importer.derive_held(held)?;
   importer.derive_held_tags(held_tags)?;
@@ -376,6 +384,12 @@ fn write(
   phases.end("metadata");
   if let Some(notes) = &notes {
     importer.fact_log(notes)?;
+  }
+  let wrote_local = match &local {
+    Some(local) => importer.local_chain(local)?,
+    None => false,
+  };
+  if notes.is_some() || wrote_local {
     phases.end("facts");
   }
   let mut recorded = Vec::with_capacity(refs.len());

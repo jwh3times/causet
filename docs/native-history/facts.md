@@ -313,9 +313,6 @@ and no longer current.
 ### 5.1 The notes
 
 Import builds the shared chain from the notes history (ADR-0047, decision 8).
-The shared chain of `refs/notes/causet` is built; the legacy names below
-are #420's, so until then a repository with only `refs/notes/vcs-lab` gets
-an empty shared chain.
 
 - **The notes ref** is `refs/notes/causet`, or `refs/notes/vcs-lab` in a
   repository that uses the **legacy names**: one whose snapshot holds neither
@@ -368,9 +365,7 @@ validators reject it, as the Git-backed reader's do (§4.2).
 
 ### 5.3 Local facts
 
-The local chain is #420's; until then import writes none. Import writes the
-local chain as **one entry with no parents**, no actor and
-no time, holding:
+The local chain holds the original's **local facts**, which are:
 
 - a parked fact of reason `04` for each ref under `refs/causet/quarantine/`,
   or `refs/vcs-lab/quarantine/` with the legacy names (§5.1), whose
@@ -379,14 +374,26 @@ no time, holding:
   Git-backed reader parks a record by the ref's name alone. Other refs there
   are snapshot only;
 - a fact for each disposition in `causet/dispositions.json` under the
-  original's common directory (decision 8), so the copy settles what its
+  original's common directory, or `vcs-lab/dispositions.json` with the legacy
+  names (decision 8), so the copy settles what its
   original settled. A file import cannot read, and a disposition it cannot
   take by §5.2's tests, give nothing: the Git-backed reader reports and
   ignores them, and no reader's answer depends on a disposition (§4.2).
+  A disposition's tests are those of its published schema,
+  [`causet.disposition/v1`](../schemas/disposition.v1.schema.json), and its
+  one object ID is its `attachment`, which a reader translates as a record's
+  (§3.2). Each object a disposition names is a root of import's walk, as a
+  record's is (§5.5).
 
-The entry depends on the original's state alone, so an incremental import
-writes the same entry as a full one. With no local facts there is no entry,
-and the local chain is empty.
+Each import writes **at most one local entry**, with no actor and no time.
+Its parents are the local chain's heads in the store it adds to (§4.2), none
+in a new one. It adds each local fact not current there, and retires each
+fact current there that the original no longer gives, as the shared chain's
+entries do (§5.1). So the facts current in the local chain are always the
+original's local facts, and a dispute settled on the original after an import
+is settled on the copy by the next. An import that would change nothing
+writes no entry. A fresh import with no local facts writes none either, and
+the local chain is empty.
 
 ### 5.4 What is not imported
 
@@ -413,6 +420,37 @@ another root reaches it.
 Import therefore reads the records before it derives commits: the object IDs
 in the records it can take are roots, and each record is translated once the
 roots' native commits exist.
+
+### 5.6 The metadata inventory
+
+`cst metadata status` and `cst metadata validate` on a native copy make the
+Git-backed report with the same validators, over the same records:
+
+- **The records** are the shared chain's current facts, each as its Git
+  record (§6) in a note container on its attachment, and its parked facts of
+  reasons `01`–`03` as their bytes at their place, so a note or record the
+  original reports is reported alike. A parked fact of reason `02` or `03`
+  that the validators accept, such as a record holding a fraction, is
+  reported unused with a `parked-fact` warning naming its reason, since no
+  reader uses it (§3.3).
+- **The quarantine** is the local chain's parked facts of reason `04`, and
+  **the dispositions** its disposition facts, as Git records, in order of
+  `decidedAt`, then of `id`, in a registry of `causet.dispositions/v1`. A
+  registry or disposition import could not take gave no fact (§5.3), so the
+  copy lists only those it took, and reports no diagnostic for the rest. A
+  disputed copy whose fact holds no bytes is reported as a missing parked
+  blob, whether its ref named no content or empty content. Resolution and checkpoint refs are read from the
+  snapshot, and the lineage from the root commits its branches, tags and
+  remote-tracking names reach, by their Git IDs, so it is the original's.
+- **What a native repository does not have is reported empty**: tracked
+  specification manifests and worktree-private state, which wait for N3's
+  working copy, and the workspace registry, which is not imported (§5.4).
+  No migration warning arises.
+- **Names.** Records are reported under the current names, whichever names
+  the original kept them under: a native repository has no migration window.
+- **IDs.** Each Git ID the report shows is shown as the native ID of what it
+  names, as `cst provenance` shows it; record digests are Git digests (§4.2),
+  and the lineage's ID is the original's.
 
 ## 6. The bridge
 

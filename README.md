@@ -971,14 +971,26 @@ print as `git branch --format` and `git tag --format` do, byte for byte;
 without it, cst's own listing, and with `--json` the `causet.names/v1`
 document ([listing names](docs/native-history/operations.md#23-listing-names)).
 Neither writes a name yet.
-Import also reads the history of `refs/notes/causet` into the fact log: one
-entry per notes commit, each record a fact whose object IDs are native, and
-a record it cannot take kept as a parked fact
+Import also reads the history of `refs/notes/causet`, or of
+`refs/notes/vcs-lab` in a repository with only the legacy names, into the
+fact log: one entry per notes commit, each record a fact whose object IDs
+are native, and a record it cannot take kept as a parked fact
 ([facts](docs/native-history/facts.md)). Commits a record names, such as a
-landing's absorbed commits, get native commits too. `cst provenance
-[<revision>] [--all]` and `cst receipts` read those facts and answer as they
-answer in the Git-backed original, IDs translated, without Git; neither
-records a fact yet, so `cst provenance declare` is refused. A native
+landing's absorbed commits, get native commits too. Into the fact log's
+local chain it writes the original's disputed copies under
+`refs/causet/quarantine/` and the dispositions of its
+`causet/dispositions.json`, brought to the original's again by each import,
+so a dispute settled on the original is settled on the copy by the next
+([facts.md §5.3](docs/native-history/facts.md#53-local-facts)). `cst
+provenance [<revision>] [--all]` and `cst receipts` read those facts and
+answer as they answer in the Git-backed original, IDs translated, without
+Git. `cst metadata status` and `cst metadata validate [--strict]` make the
+Git-backed report from them, Git IDs shown as native IDs and records under
+the current names, and report empty what a native repository does not have:
+tracked specification manifests, the workspace registry and worktree-private
+state ([facts.md §5.6](docs/native-history/facts.md#56-the-metadata-inventory)).
+None of them records a fact yet, so `cst provenance declare` is refused, as
+is every other `cst metadata` command. A native
 repository imported before the fact log existed holds no facts until it is
 imported into again, so they find no records there.
 `cst fsck` verifies the store: every
@@ -997,7 +1009,9 @@ alias files and every container's index whole: a batch names many objects,
 so it pays for the store's size once rather than for a read per lookup.
 `cst log` and `cst show` read every container's index and every native
 commit, once per command; `cst receipts` reads every container's index and
-every fact-log entry, and `cst provenance` every native commit too. The other reads above check only the parts of the store they touch
+every fact-log entry, `cst provenance` every native commit too, and `cst
+metadata status` and `validate` every native commit the branches, tags and
+remote-tracking names reach as well. The other reads above check only the parts of the store they touch
 and verify each object they read by its ID, so their cost does not grow with the store's
 object count, except where they name a commit or a tag: finding the native
 commit or tag import stored straight after its preserved object reads every

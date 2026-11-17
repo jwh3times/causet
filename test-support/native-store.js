@@ -226,6 +226,11 @@ export function nativeTags(store) {
   return nativeObjects(store, TYPES.nativeTag, decodeNativeTag);
 }
 
+/** Every object of one type the store holds present, by ID (hex): its `body`. */
+export function heldBodies(store, type) {
+  return new Map([...nativeObjects(store, type, () => ({}))].map(([id, { body }]) => [id, body]));
+}
+
 function nativeObjects(store, type, decode) {
   const found = new Map();
   for (const file of containers(store)) {

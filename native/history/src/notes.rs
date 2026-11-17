@@ -206,7 +206,7 @@ fn fact_of_record(
 
 /// A record with the object ID at each of `fields` (dotted paths, arrays
 /// not counted) replaced by the text form of the native ID of what it names.
-fn translate(value: &Value, path: &str, fields: &HashSet<String>, natives: &HashMap<String, NativeId>) -> Value {
+pub(crate) fn translate(value: &Value, path: &str, fields: &HashSet<String>, natives: &HashMap<String, NativeId>) -> Value {
   match value {
     Value::String(units) if fields.contains(path) => {
       json::string(&natives[&json::lossy(units).to_ascii_lowercase()].hex())

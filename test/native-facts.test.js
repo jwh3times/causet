@@ -17,7 +17,7 @@ import path from "node:path";
 import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
-import { TYPES, addContainer, containers, names, readContainer } from "../test-support/native-store.js";
+import { TYPES, addContainer, containers, heldBodies, names, readContainer } from "../test-support/native-store.js";
 
 const created = [];
 
@@ -236,4 +236,311 @@ test("a record import cannot take is a parked fact, held and handed to no reader
   assert.equal(JSON.parse(history.original("receipts", "--json")).length, before + 1);
   assert.equal(listed(), before);
   assert.equal(heldOfType(history.native, TYPES.fact).size, heldFacts + 1);
+});
+
+/**
+ * A Git-backed repository with disputes (ADR-0030): a peer clone altered two
+ * provenance records under their IDs and exported them, this repository
+ * imported the envelope with `--park-conflicts`, which parked both copies
+ * under `refs/causet/quarantine/`, and settled the first with `--keep-local`,
+ * which removed its parked copy and recorded a disposition. One dispute stays
+ * open, so its record and the parked copy are both unused.
+ */
+function makeDisputes(format = "sha1") {
+  const root = scratch();
+  const peer = path.join(root, "peer");
+  const repo = path.join(root, "source");
+  fs.mkdirSync(peer);
+  const runIn = (cwd, command, args, input) => {
+    const result = spawnSync(command, args, { cwd, env: testEnv({}), encoding: "utf8", input });
+    assert.equal(result.status, 0, `${command} ${args.join(" ")}: ${result.stderr}${result.stdout}`);
+    return result.stdout.trim();
+  };
+  const gitIn = (cwd, ...args) => runIn(cwd, "git", args);
+  const cstIn = (cwd, ...args) => runIn(cwd, cstCommand, [...cstPrefix(), ...args]);
+  const configure = (cwd) => {
+    gitIn(cwd, "config", "user.name", "C O Mitter");
+    gitIn(cwd, "config", "user.email", "committer@example.com");
+  };
+  gitIn(peer, "init", "-q", "-b", "main", `--object-format=${format}`);
+  configure(peer);
+  cstIn(peer, "init");
+  for (const name of ["a", "b"]) {
+    fs.writeFileSync(path.join(peer, `${name}.txt`), `${name}\n`);
+    gitIn(peer, "add", "-A");
+    cstIn(peer, "commit", "-m", `add ${name}`, "--authored-by", "A U Thor <author@example.com>");
+  }
+  gitIn(root, "clone", "--no-local", "--quiet", peer, repo);
+  configure(repo);
+  gitIn(repo, "fetch", "-q", "origin", "refs/notes/causet:refs/notes/causet");
+  cstIn(repo, "init");
+  // The peer's copies now say something else under the same IDs.
+  const ids = [];
+  for (const commit of [gitIn(peer, "rev-parse", "HEAD~1"), gitIn(peer, "rev-parse", "HEAD")]) {
+    const container = JSON.parse(gitIn(peer, "notes", "--ref=causet", "show", commit));
+    container.records = container.records.map((record) => ({ ...record, createdAt: "2001-01-01T00:00:00.000Z" }));
+    ids.push(container.records[0].id);
+    runIn(peer, "git", ["notes", "--ref=causet", "add", "-f", "-F", "-", commit], `${JSON.stringify(container, null, 2)}\n`);
+  }
+  const envelope = path.join(root, "envelope");
+  cstIn(peer, "metadata", "export", envelope);
+  cstIn(repo, "metadata", "import", envelope, "--apply", "--park-conflicts");
+  cstIn(repo, "metadata", "dispose", ids[0], "--keep-local", "--reason", "the peer altered our record");
+  // A checkpoint ref, which the inventory reads from the snapshot.
+  gitIn(repo, "update-ref", "refs/causet/checkpoints/ws_one", gitIn(repo, "rev-parse", "HEAD"));
+  const imported = cst(root, ["import", "source", "native"]);
+  assert.equal(imported.status, 0, imported.stderr);
+  return {
+    root, repo, native: path.join(root, "native"), format, ids,
+    git: (...args) => gitIn(repo, ...args), original: (...args) => cstIn(repo, ...args),
+  };
+}
+
+/** A fact's body, read as facts.md §3.1 lays it out, enough to tell its kind. */
+function factOf(body) {
+  const bytesAt = (at) => {
+    let length = 0;
+    let shift = 0;
+    for (;;) {
+      const byte = body[at++];
+      length += (byte & 0x7f) * 2 ** shift;
+      shift += 7;
+      if (byte < 0x80) break;
+    }
+    return [body.subarray(at, at + length), at + length];
+  };
+  if (body[0] === 0x00) return { state: 0, schema: bytesAt(1)[0].toString() };
+  const [place, next] = bytesAt(2);
+  return { state: 1, reason: body[1], place: place.toString(), id: body[next] === 1 ? bytesAt(next + 1)[0].toString() : null };
+}
+
+test("import writes the local chain: a parked fact for each disputed copy, a fact for each disposition, and one entry with no parents", () => {
+  const history = makeDisputes();
+  const facts = [...heldBodies(history.native, TYPES.fact).values()].map(factOf);
+  const disputed = facts.filter((fact) => fact.state === 1 && fact.reason === 0x04);
+  // The open dispute's copy, parked under the peer's lineage; the settled
+  // one's copy was removed when it was disposed of.
+  assert.equal(disputed.length, 1);
+  assert.equal(disputed[0].id, history.ids[1]);
+  assert.match(disputed[0].place, new RegExp(`^lineage_[0-9a-f]{64}/${history.ids[1]}$`));
+  assert.equal(facts.filter((fact) => fact.state === 0 && fact.schema === "causet.disposition/v1").length, 1);
+  const local = [...heldBodies(history.native, TYPES.factLogEntry).values()].filter((body) => body[0] === 0x02);
+  assert.equal(local.length, 1);
+  assert.equal(local[0][1], 0x00, "the local entry has no parents");
+  for (const args of [["fsck"], ["import", "--verify"]]) {
+    const answered = cst(history.native, args);
+    assert.equal(answered.status, 0, `${args.join(" ")}: ${answered.stderr}${answered.stdout}`);
+  }
+});
+
+/**
+ * Moves a repository's records to the names used before causet: its notes
+ * ref, the refs under `refs/causet/`, and its shared-local directory, as a
+ * build older than causet kept them, so the Git-backed cst refuses it until
+ * `cst migrate`.
+ */
+function toLegacyNames(history) {
+  const listed = history.git("for-each-ref", "--format=%(refname) %(objectname)", "refs/notes/causet", "refs/causet/");
+  for (const line of listed.split("\n").filter(Boolean)) {
+    const [name, id] = line.split(" ");
+    const legacy = name.replace(/^refs\/notes\/causet$/, "refs/notes/vcs-lab").replace(/^refs\/causet\//, "refs/vcs-lab/");
+    history.git("update-ref", legacy, id);
+    history.git("update-ref", "-d", name);
+  }
+  const common = path.join(history.repo, ".git");
+  fs.renameSync(path.join(common, "causet"), path.join(common, "vcs-lab"));
+}
+
+/** Every fact and fact-log entry a store holds, by ID. */
+function factLog(store) {
+  return {
+    facts: [...heldBodies(store, TYPES.fact).keys()].sort(),
+    entries: [...heldBodies(store, TYPES.factLogEntry).keys()].sort(),
+  };
+}
+
+test("a repository with the legacy names gives the facts and fact log its current names give", () => {
+  const history = makeDisputes();
+  const current = factLog(history.native);
+  assert.ok(current.facts.length > 3 && current.entries.length > 3);
+  toLegacyNames(history);
+  const refused = cst(history.repo, ["receipts"], {});
+  assert.equal(refused.status, 1, "the Git-backed cst refuses the legacy names");
+  const imported = cst(history.root, ["import", "source", "legacy"]);
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.deepEqual(factLog(path.join(history.root, "legacy")), current);
+});
+
+test("refs/causet/retention stays in the snapshot, and nothing is derived from it", () => {
+  const history = makeDisputes();
+  const before = factLog(history.native);
+  // It updates the ref, and exits 1 for the open dispute's diagnostics.
+  cst(history.repo, ["metadata", "retain", "--apply"], {});
+  const retained = history.git("rev-parse", "refs/causet/retention");
+  const again = cst(history.root, ["import", "source", "native"]);
+  assert.equal(again.status, 0, again.stderr);
+  assert.deepEqual(factLog(history.native), before);
+  const listed = cstWithoutGit(history.native, ["rev-parse", "--git-id", "refs/causet/retention"]);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.equal(listed.stdout.trim(), retained);
+});
+
+/** What the original answers and its exit status, translated, and what the copy answers without Git. */
+function bothWithStatus(history, translate, args) {
+  const expected = cst(history.repo, args, {});
+  const answered = cstWithoutGit(history.native, args);
+  assert.equal(answered.status, expected.status, `${args.join(" ")}: ${answered.stderr}${answered.stdout}`);
+  return { expected: translate(expected.stdout), answered: answered.stdout };
+}
+
+/**
+ * The original's report as the copy gives it: the copy's root, and no
+ * worktree-private state, since a native repository has no working copy
+ * until N3 (facts.md §5.4).
+ */
+function asCopy(report, history) {
+  report.repository.root = history.native;
+  report.scopes.worktreePrivate = { worktreeCount: 0, pendingOperationCount: 0, forecastCount: 0, worktrees: [] };
+  return report;
+}
+
+for (const format of ["sha1", "sha256"]) {
+  test(`cst metadata status and validate on the native copy answer as on the original, IDs translated, without Git (${format})`, () => {
+    const history = makeDisputes(format);
+    const translate = translator(history);
+    for (const args of [["metadata", "status", "--json"], ["metadata", "validate", "--json"], ["metadata", "validate", "--strict", "--json"]]) {
+      const { expected, answered } = bothWithStatus(history, translate, args);
+      assert.deepEqual(JSON.parse(answered), asCopy(JSON.parse(expected), history), args.join(" "));
+    }
+    for (const args of [["metadata", "status"], ["metadata", "validate"]]) {
+      const { expected, answered } = bothWithStatus(history, translate, args);
+      assert.equal(answered, expected.replace(`repository   ${history.repo}`, `repository   ${history.native}`), args.join(" "));
+    }
+  });
+}
+
+/** Adds a note holding `text` to `commit` of the original, and imports the original again. */
+function noteAndImport(history, commit, text) {
+  const added = spawnSync("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", commit], { cwd: history.repo, env: testEnv({}), input: text });
+  assert.equal(added.status, 0, String(added.stderr));
+  const again = cst(history.root, ["import", "source", "native"]);
+  assert.equal(again.status, 0, again.stderr);
+}
+
+test("parked notes and records are reported on the native copy as the original reports them", () => {
+  const history = makeHistory();
+  // A note that is not JSON, and one holding a record of an unknown version.
+  noteAndImport(history, history.git("rev-parse", "HEAD"), "not json\n");
+  const unknown = {
+    schema: "causet.note/v1",
+    records: [{ schema: "causet.provenance/v9", type: "provenance", id: "prov_unknown", commit: history.git("rev-parse", "HEAD~1"), createdAt: "2026-01-01T00:00:00.000Z" }],
+  };
+  noteAndImport(history, history.git("rev-parse", "HEAD~1"), `${JSON.stringify(unknown)}\n`);
+  // A note holding the same record twice: one fact, and a repeated copy that
+  // keeps its ID conflicted, as the original counts both.
+  const twice = JSON.parse(history.git("notes", "--ref=causet", "show", "HEAD~2"));
+  const repeated = { ...twice, records: [twice.records[0], twice.records[0]] };
+  noteAndImport(history, history.git("rev-parse", "HEAD~2"), `${JSON.stringify(repeated)}\n`);
+  const translate = translator(history);
+  for (const args of [["metadata", "status", "--json"], ["metadata", "validate", "--strict", "--json"]]) {
+    const { expected, answered } = bothWithStatus(history, translate, args);
+    const report = JSON.parse(answered);
+    assert.deepEqual(report, asCopy(JSON.parse(expected), history), args.join(" "));
+    assert.ok(report.diagnostics.some((item) => item.code === "malformed-record"));
+    assert.ok(report.diagnostics.some((item) => item.code === "unknown-schema"));
+    assert.ok(report.diagnostics.some((item) => item.code === "record-id-conflict"));
+  }
+});
+
+test("a record the validators accept but import parks, such as one holding a fraction, is reported and used by no reader", () => {
+  const history = makeHistory();
+  const head = history.git("rev-parse", "HEAD");
+  const record = {
+    schema: "causet.provenance/v1", type: "provenance", id: "prov_fraction0001", commit: head, changeId: null,
+    origin: "declared", carriedFrom: [], actors: [{ role: "authored", actor: "A U Thor <author@example.com>" }],
+    createdAt: "2026-01-01T00:00:00.000Z", weight: 0.5,
+  };
+  noteAndImport(history, head, `${JSON.stringify({ schema: "causet.note/v1", records: [record] })}\n`);
+  const original = JSON.parse(history.original("metadata", "status", "--json"));
+  const copy = JSON.parse(cstWithoutGit(history.native, ["metadata", "status", "--json"]).stdout);
+  const summary = (report) => report.scopes.sharedPortable.notes.records.find((item) => item.id === "prov_fraction0001");
+  assert.equal(summary(original).valid, true, "the original accepts it");
+  assert.equal(summary(copy).valid, false);
+  assert.deepEqual(summary(copy).diagnostics, ["parked-fact"]);
+  assert.equal(summary(copy).digest, summary(original).digest, "its digest is its Git record's");
+  assert.equal(copy.summary.acceptedPortableRecords, original.summary.acceptedPortableRecords - 1);
+  const parked = copy.diagnostics.filter((item) => item.code === "parked-fact");
+  assert.equal(parked.length, 1);
+  assert.equal(parked[0].severity, "warning");
+  assert.equal(parked[0].subject, "prov_fraction0001");
+  assert.match(parked[0].message, /reason 02/);
+  // A warning: validate passes, and --strict refuses it.
+  assert.equal(cstWithoutGit(history.native, ["metadata", "validate"]).status, 0);
+  assert.equal(cstWithoutGit(history.native, ["metadata", "validate", "--strict"]).status, 1);
+  assert.equal(cstWithoutGit(history.native, ["provenance", "HEAD", "--json"]).status, 0);
+  assert.deepEqual(JSON.parse(cstWithoutGit(history.native, ["provenance", "HEAD", "--json"]).stdout).entries, []);
+});
+
+test("the copy of a repository with the legacy names reports what the original reports once migrated", () => {
+  const history = makeDisputes();
+  toLegacyNames(history);
+  const imported = cst(history.root, ["import", "source", "legacy"]);
+  assert.equal(imported.status, 0, imported.stderr);
+  history.original("migrate");
+  const copy = { ...history, native: path.join(history.root, "legacy") };
+  const translate = translator(copy);
+  for (const args of [["metadata", "status", "--json"], ["metadata", "validate", "--json"]]) {
+    const { expected, answered } = bothWithStatus(copy, translate, args);
+    assert.deepEqual(JSON.parse(answered), asCopy(JSON.parse(expected), copy), args.join(" "));
+  }
+});
+
+test("cst metadata in a native repository refuses what it does not implement", () => {
+  const history = makeHistory();
+  for (const subcommand of [["export", "envelope"], ["retain", "--apply"], ["dispose", "prov_x", "--keep-local"]]) {
+    const refused = cst(history.native, ["metadata", ...subcommand, "--json"]);
+    assert.equal(refused.status, 1, subcommand.join(" "));
+    assert.equal(JSON.parse(refused.stdout).code, "unsupported-feature", subcommand.join(" "));
+  }
+  const withoutOptIn = cst(history.native, ["metadata", "status"], {});
+  assert.equal(withoutOptIn.status, 1);
+  assert.match(withoutOptIn.stderr, /CAUSET_EXPERIMENTAL=native/);
+});
+
+test("workspaces.json and migration.json are not imported", () => {
+  const history = makeDisputes();
+  const before = factLog(history.native);
+  const runtime = path.join(history.repo, ".git", "causet");
+  fs.writeFileSync(path.join(runtime, "workspaces.json"), `${JSON.stringify({ schema: "causet.workspaces/v1", workspaces: [{ id: "ws_1", name: "one", path: history.repo }] })}\n`);
+  const original = JSON.parse(history.original("metadata", "status", "--json"));
+  assert.equal(original.scopes.sharedLocal.workspaceRegistry.count, 1);
+  // The marker `cst migrate` leaves: a native repository has no migration window.
+  fs.writeFileSync(path.join(runtime, "migration.json"), `${JSON.stringify({ schema: "causet.migration/v1", migratedAt: "2026-01-01T00:00:00.000Z" })}\n`);
+  const again = cst(history.root, ["import", "source", "native"]);
+  assert.equal(again.status, 0, again.stderr);
+  assert.deepEqual(factLog(history.native), before);
+  const copy = JSON.parse(cstWithoutGit(history.native, ["metadata", "status", "--json"]).stdout);
+  assert.deepEqual(copy.scopes.sharedLocal.workspaceRegistry, { present: false, schema: null, count: 0, workspaces: [] });
+});
+
+test("a dispute settled on the original after an import is settled on the copy by the next import", () => {
+  const history = makeDisputes();
+  const before = JSON.parse(cstWithoutGit(history.native, ["metadata", "status", "--json"]).stdout);
+  assert.equal(before.scopes.sharedLocal.quarantine.refCount, 1);
+  history.original("metadata", "dispose", history.ids[1], "--replace-local", "--reason", "the peer was right");
+  const again = cst(history.root, ["import", "source", "native"]);
+  assert.equal(again.status, 0, again.stderr);
+  const translate = translator(history);
+  for (const args of [["metadata", "status", "--json"], ["metadata", "validate", "--strict", "--json"]]) {
+    const { expected, answered } = bothWithStatus(history, translate, args);
+    const report = JSON.parse(answered);
+    assert.deepEqual(report, asCopy(JSON.parse(expected), history), args.join(" "));
+    assert.equal(report.scopes.sharedLocal.quarantine.refCount, 0);
+    assert.equal(report.scopes.sharedLocal.dispositions.count, 2);
+  }
+  // An import that finds nothing new writes no local entry.
+  const entries = factLog(history.native).entries;
+  const third = cst(history.root, ["import", "source", "native"]);
+  assert.equal(third.status, 0, third.stderr);
+  assert.deepEqual(factLog(history.native).entries, entries);
 });

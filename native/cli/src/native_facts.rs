@@ -36,31 +36,48 @@ impl<'a> FactLog<'a> {
     FactLog { repository }
   }
 
-  /// Every held entry of the shared chain.
-  fn shared_entries(&self) -> GitResult<HashMap<NativeId, Entry>> {
-    let store = &self.repository.store;
-    let mut entries = HashMap::new();
-    for (id, kind, _) in store.present().map_err(store_error)? {
-      if kind != Type::FactLogEntry {
-        continue;
-      }
-      let entry = Entry::decode(&store.read(&id).map_err(store_error)?.body)
-        .map_err(|why| crate::native_repository::corrupt(format!("the fact-log entry {id}: {why}")))?;
-      if entry.scope == Scope::Shared {
-        entries.insert(id, entry);
-      }
-    }
-    Ok(entries)
-  }
+}
 
-  /// The shared chain's heads: until the operation log holds them (#423),
-  /// every held entry no other names as a parent.
-  fn heads(entries: &HashMap<NativeId, Entry>) -> Vec<NativeId> {
-    let parents: HashSet<&NativeId> = entries.values().flat_map(|entry| entry.parents.iter()).collect();
-    let mut heads: Vec<NativeId> = entries.keys().filter(|id| !parents.contains(id)).copied().collect();
-    heads.sort();
-    heads
+/// Every held entry of one chain.
+fn entries_of(repository: &Repository, scope: Scope) -> GitResult<HashMap<NativeId, Entry>> {
+  let store = &repository.store;
+  let mut entries = HashMap::new();
+  for id in store.present_of(Type::FactLogEntry).map_err(store_error)? {
+    let entry = Entry::decode(&store.read(&id).map_err(store_error)?.body)
+      .map_err(|why| crate::native_repository::corrupt(format!("the fact-log entry {id}: {why}")))?;
+    if entry.scope == scope {
+      entries.insert(id, entry);
+    }
   }
+  Ok(entries)
+}
+
+/// A chain's heads: until the operation log holds them (#423), every held
+/// entry no other names as a parent.
+fn heads(entries: &HashMap<NativeId, Entry>) -> Vec<NativeId> {
+  let parents: HashSet<&NativeId> = entries.values().flat_map(|entry| entry.parents.iter()).collect();
+  let mut heads: Vec<NativeId> = entries.keys().filter(|id| !parents.contains(id)).copied().collect();
+  heads.sort();
+  heads
+}
+
+/// The facts current at a chain's heads (facts.md §4.2), in byte order of
+/// ID.
+pub(crate) fn current(repository: &Repository, scope: Scope) -> GitResult<Vec<(NativeId, Fact)>> {
+  let entries = entries_of(repository, scope)?;
+  let state = State::at(&heads(&entries), |id| {
+    entries
+      .get(id)
+      .cloned()
+      .ok_or_else(|| crate::native_repository::corrupt(format!("the fact-log entry {id} is not held")))
+  })?;
+  let mut facts = Vec::new();
+  for id in state.current() {
+    let body = repository.store.read(&id).map_err(store_error)?.body;
+    let fact = Fact::decode(&body).map_err(|why| crate::native_repository::corrupt(format!("the fact {id}: {why}")))?;
+    facts.push((id, fact));
+  }
+  Ok(facts)
 }
 
 /// A record's `createdAt`, by which a container lists its records.
@@ -80,18 +97,8 @@ impl RecordSource for FactLog<'_> {
   /// subject's Git ID as Git lists notes, its records in order of
   /// `createdAt`, then of their bytes.
   fn containers(&self) -> GitResult<Vec<Container>> {
-    let entries = self.shared_entries()?;
-    let heads = FactLog::heads(&entries);
-    let state = State::at(&heads, |id| {
-      entries
-        .get(id)
-        .cloned()
-        .ok_or_else(|| crate::native_repository::corrupt(format!("the fact-log entry {id} is not held")))
-    })?;
     let mut by_subject: BTreeMap<NativeId, Vec<Vec<u8>>> = BTreeMap::new();
-    for id in state.current() {
-      let body = self.repository.store.read(&id).map_err(store_error)?.body;
-      let fact = Fact::decode(&body).map_err(|why| crate::native_repository::corrupt(format!("the fact {id}: {why}")))?;
+    for (_, fact) in current(self.repository, Scope::Shared)? {
       if let Fact::Record { subject: Some(subject), record, .. } = fact {
         by_subject.entry(subject).or_default().push(record);
       }

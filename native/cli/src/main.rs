@@ -26,6 +26,7 @@ mod migration;
 mod native;
 mod native_inspection;
 mod native_facts;
+mod native_metadata;
 mod native_log;
 mod native_names;
 mod native_repository;

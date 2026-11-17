@@ -264,6 +264,15 @@ impl Repository {
     Ok(None)
   }
 
+  /// The ID a command names the object a whole Git ID names by (commits.md
+  /// §6), or `None` when the store has no alias row for it.
+  pub fn git_named(&self, hex: &str) -> GitResult<Option<NativeId>> {
+    match self.git_object(&hex.to_ascii_lowercase())? {
+      Some(id) => Ok(Some(self.named(id)?)),
+      None => Ok(None),
+    }
+  }
+
   /// The objects a prefix of an ID may name, of at least 4 lowercase hex
   /// digits: every object the store holds present but ref snapshots,
   /// annotations and the preserved commits no command names. Native commits

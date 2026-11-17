@@ -5,21 +5,60 @@
 //! records name are roots of import's walk (§5.5), so the facts can name
 //! their native commits.
 //!
-//! The local chain, disputed copies and dispositions, and the legacy notes
-//! ref are #420's: a repository whose snapshot has no `refs/notes/causet`
-//! gets an empty fact log.
+//! The local chain (§5.3) gets at most one entry per import, whose parents
+//! are its heads, bringing what is current there to the original's local
+//! facts: a parked fact for each disputed copy under
+//! `refs/causet/quarantine/` and a fact for each disposition of
+//! `dispositions.json`. A repository that keeps its records
+//! under the legacy names (§5.1) is read under them alike.
 
 use crate::{Importer, store_error};
 use causet_engine::errors::{GitError, GitResult};
+use causet_engine::locations::{CURRENT_NAMES, LEGACY_NAMES, Names};
 use causet_history::fact::Fact;
 use causet_history::fact_log::{Entry, Scope, State};
+use causet_history::local::{disposition_roots, dispositions, disputed, local_entry};
 use causet_history::notes::{Note, facts_of_notes, notes_commit_action, roots_of_notes};
 use causet_store::id::{NativeId, Type};
+use causet_store::StoreError;
 use causet_store::objects::GitKind;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-/// The notes ref the shared chain is built from (§5.1).
-const NOTES_REF: &[u8] = b"refs/notes/causet";
+/// Whether a snapshot whose refs have these names keeps cst's records under
+/// the legacy names (§5.1): when it holds neither `refs/notes/causet` nor a
+/// ref under `refs/causet/`. A migrated repository holds both, and is read
+/// under the current names.
+pub fn uses_legacy_names<'a>(mut names: impl Iterator<Item = &'a [u8]>) -> bool {
+  let root = format!("{}/", CURRENT_NAMES.refs_root);
+  !names.any(|name| name == CURRENT_NAMES.notes_ref.as_bytes() || name.starts_with(root.as_bytes()))
+}
+
+/// The names in use (§5.1).
+fn record_names(refs: &[crate::git::Listed]) -> Names {
+  if uses_legacy_names(refs.iter().map(|entry| entry.name.as_slice())) { LEGACY_NAMES } else { CURRENT_NAMES }
+}
+
+/// A disputed copy (§5.3): its ref's name after the quarantine prefix, and
+/// the Git ID of what the ref names.
+struct Dispute {
+  remainder: Vec<u8>,
+  object: String,
+}
+
+/// What the local chain is built from (§5.3): the disputed copies, and the
+/// `dispositions.json` registry, when there is one.
+pub(crate) struct LocalSources {
+  disputes: Vec<Dispute>,
+  dispositions: Option<Vec<u8>>,
+}
+
+impl LocalSources {
+  /// The objects the disputed copies' refs name, whose bytes the parked
+  /// facts keep.
+  pub(crate) fn blobs(&self) -> HashSet<String> {
+    self.disputes.iter().map(|dispute| dispute.object.clone()).collect()
+  }
+}
 
 /// One note of a notes tree: the Git ID of what it is attached to, in
 /// lowercase hex, and the Git ID of what the note is.
@@ -70,14 +109,16 @@ fn fan_out(name: &[u8]) -> bool {
 
 impl Importer<'_> {
   /// The commits of the notes history and their notes (§5.1, §5.2), or
-  /// `None` when the snapshot has no `refs/notes/causet` to read.
+  /// `None` when the snapshot has no notes ref to read under the names in
+  /// use.
   pub(crate) fn notes_history(&self, refs: &[crate::git::Listed]) -> GitResult<Option<NotesHistory>> {
     if crate::without_history() {
       return Ok(None);
     }
+    let notes_ref = record_names(refs).notes_ref.as_bytes();
     let Some(tip) = refs
       .iter()
-      .find(|entry| entry.name == NOTES_REF && entry.symbolic.is_none())
+      .find(|entry| entry.name == notes_ref && entry.symbolic.is_none())
       .and_then(|entry| entry.id.clone())
     else {
       return Ok(None);
@@ -97,7 +138,7 @@ impl Importer<'_> {
       if !seen.insert(id.clone()) {
         continue;
       }
-      let (parents, payload) = self.commit_parts(&id)?;
+      let (parents, payload) = self.commit_parts(&id, notes_ref)?;
       stack.push((id.clone(), true));
       for parent in parents.iter().rev() {
         if !seen.contains(parent) {
@@ -111,7 +152,7 @@ impl Importer<'_> {
 
   /// A notes commit's parents, as Git parses them, and its payload, from
   /// what this import read or what the store held already.
-  fn commit_parts(&self, id: &str) -> GitResult<(Vec<String>, Vec<u8>)> {
+  fn commit_parts(&self, id: &str, notes_ref: &[u8]) -> GitResult<(Vec<String>, Vec<u8>)> {
     if self.held_at.contains_key(id) {
       let payload = self.body(id).ok_or_else(|| self.lost(id))?;
       return Ok((self.parents.get(id).cloned().unwrap_or_default(), payload));
@@ -120,7 +161,7 @@ impl Importer<'_> {
     if kept.kind != GitKind::Commit {
       return Err(GitError::new(
         "unsupported-repository-shape",
-        format!("{} reaches {id}, which is not a commit", String::from_utf8_lossy(NOTES_REF)),
+        format!("{} reaches {id}, which is not a commit", String::from_utf8_lossy(notes_ref)),
       ));
     }
     let parents = kept
@@ -203,6 +244,79 @@ impl Importer<'_> {
       return Some(native);
     }
     Some(preserved)
+  }
+
+  /// The disputed copies and the dispositions the local chain is built from
+  /// (§5.3), or `None` under `without_history`.
+  pub(crate) fn local_sources(&self, refs: &[crate::git::Listed]) -> Option<LocalSources> {
+    if crate::without_history() {
+      return None;
+    }
+    let names = record_names(refs);
+    let quarantine = format!("{}/quarantine/", names.refs_root);
+    let disputes = refs
+      .iter()
+      .filter(|entry| entry.symbolic.is_none())
+      .filter_map(|entry| {
+        let remainder = entry.name.strip_prefix(quarantine.as_bytes())?.to_vec();
+        Some(Dispute { remainder, object: entry.id.clone()? })
+      })
+      .collect();
+    Some(LocalSources { disputes, dispositions: self.source.shared_local_file(names.runtime, "dispositions.json") })
+  }
+
+  /// The objects the dispositions import can take name (§5.5).
+  pub(crate) fn local_roots(&self, sources: &LocalSources) -> Vec<String> {
+    match &sources.dispositions {
+      Some(file) => disposition_roots(file, self.algorithm.name(), |id| self.reads_or_holds(id)),
+      None => Vec::new(),
+    }
+  }
+
+  /// Writes the local chain's entry for this import (§5.3), and the facts
+  /// it adds, when it changes what is current; whether it wrote one.
+  pub(crate) fn local_chain(&mut self, sources: &LocalSources) -> GitResult<bool> {
+    let mut facts = Vec::new();
+    for dispute in &sources.disputes {
+      let bytes = self.note_bytes(&dispute.object)?.unwrap_or_default();
+      facts.extend(disputed(&dispute.remainder, bytes));
+    }
+    if let Some(file) = &sources.dispositions {
+      let format = self.algorithm.name();
+      facts.extend(dispositions(file, format, |id| self.fact_name(id)));
+    }
+    let (heads, current) = self.held_local_chain()?;
+    let Some(entry) = local_entry(&heads, &current, &facts) else {
+      return Ok(false);
+    };
+    let bodies: BTreeMap<NativeId, Vec<u8>> = facts.iter().map(|fact| (fact.id(), fact.encode())).collect();
+    for id in &entry.adds {
+      self.store.put_metadata(Type::Fact, &bodies[id]).map_err(store_error)?;
+    }
+    self.store.put_metadata(Type::FactLogEntry, &entry.encode()).map_err(store_error)?;
+    Ok(true)
+  }
+
+  /// The local chain of the store this import adds to: its heads, every
+  /// held local entry no other names as a parent, and the facts current at
+  /// them. Both are empty for a new store.
+  fn held_local_chain(&self) -> GitResult<(Vec<NativeId>, BTreeSet<NativeId>)> {
+    let Some(store) = self.store.existing() else {
+      return Ok((Vec::new(), BTreeSet::new()));
+    };
+    let corrupt = |id: &NativeId, why: String| store_error(StoreError::Corrupt(format!("the fact-log entry {id}: {why}")));
+    let mut entries: HashMap<NativeId, Entry> = HashMap::new();
+    for id in store.present_of(Type::FactLogEntry).map_err(store_error)? {
+      let entry = Entry::decode(&store.read(&id).map_err(store_error)?.body).map_err(|why| corrupt(&id, why))?;
+      if entry.scope == Scope::Local {
+        entries.insert(id, entry);
+      }
+    }
+    let named: HashSet<NativeId> = entries.values().flat_map(|entry| entry.parents.iter().copied()).collect();
+    let mut heads: Vec<NativeId> = entries.keys().filter(|id| !named.contains(id)).copied().collect();
+    heads.sort();
+    let state = State::at(&heads, |id| entries.get(id).cloned().ok_or_else(|| corrupt(id, "it is not held".into())))?;
+    Ok((heads, state.current()))
   }
 
   /// Writes the shared chain: each notes commit's facts, then its entry,
