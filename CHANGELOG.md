@@ -4,6 +4,25 @@
 
 No unreleased changes.
 
+## [0.32.1] - 2026-11-17
+
+- **Agents read this repository's working lessons from the tree.** Three
+  guides join the settings in `docs/agents/`, so Codex, Claude Code and any
+  other harness read the same rules. `landing.md` covers committing with
+  `cst commit --generated-by`, branching before the first commit, the traps
+  of landing, and what promotion and npm publishing leave to the owner.
+  `local-runs.md` covers running suites, qualification chains and
+  measurements on a development machine without touching this checkout, and
+  the environmental failures that look like regressions. `verification.md`
+  covers checking a claim before reporting it: controls, broader validation
+  patterns, issue comments over stale bodies, performance against the
+  process floor, and when whole-store cost needs the corpora. `AGENTS.md`
+  now requires every work-branch commit, `ship`'s included, to be a
+  `cst commit`. `docs/agents/dev-flow.md` records the owner's steps per
+  ticket and how to present a decision, and `docs/agents/issue-tracker.md`
+  notes that board writes need `gh`'s `project` scope. Nothing changes for
+  `cst` or its packages.
+
 ## [0.32.0] - 2026-11-17
 
 - **Experimental: import writes the local chain, and `cst metadata status`

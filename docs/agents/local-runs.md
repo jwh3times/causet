@@ -36,9 +36,6 @@ line per mode to a summary file, and watch that file:
 - **Pass the chain's arguments in a launcher script.** On Windows, a `Start-Process` argument list
   splits a `-c` string at spaces, so a script given arguments that way ran with none and finished at
   once. Put the arguments in a small launcher script and pass only its path.
-- **One suite per temporary directory.** Never run two Windows suites at once in one `%TEMP%`: the
-  repository-scale benchmark test snapshots `causet-scale-benchmark-*` before and after, and another
-  suite's fixture fails it. Linux containers each have their own `/tmp`.
 - **Don't change what the chain runs.** Each suite file is a separate `node` process that loads
   `test-support/` when it starts, so editing `test-support/` or a test mid-chain changes what later
   files load. Never run `npm run build:native` while a chain runs: it replaces the binary under test.
