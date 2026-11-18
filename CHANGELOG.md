@@ -4,6 +4,21 @@
 
 No unreleased changes.
 
+## [0.32.2] - 2026-11-17
+
+- **All source control in this repository goes through `cst`.** `AGENTS.md`
+  states the rule for every contributor and agent: where a skill or procedure
+  says `git <command>`, run `cst <command>`. A new section of
+  `docs/agents/landing.md` names the command for each operation: committing,
+  starting a branch, fetching, pulling, pushing, catching a branch up with
+  `main`, landing and cloning. Each comes with the Git form it replaces and
+  the records that form would drop. It lists the few places where Git's own
+  form, run as `cst git <command>`, is right, and lets a shared skill's
+  read-only snippets run as written. The guide's remaining commands, and
+  `docs/agents/local-runs.md`'s steps for catching up a machine, now use
+  `cst`. Pushing a work branch from the Windows checkout now follows the same
+  route as pushing `main`. Nothing changes for `cst` or its packages.
+
 ## [0.32.1] - 2026-11-17
 
 - **Agents read this repository's working lessons from the tree.** Three

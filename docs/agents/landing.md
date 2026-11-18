@@ -5,6 +5,35 @@ that cannot be made again. The wiki's landing procedure
 ([Human-action-19](https://github.com/jwh3times/causet/wiki/Human-action-19)) is the full sequence.
 This file holds what agents have got wrong running it.
 
+## All source control goes through `cst`
+
+This repository dogfoods `cst`, so every source-control command run here is a `cst` command, never
+a bare `git` one. Where a skill, a procedure or a habit says `git <command>`, run
+`cst <command>`. A command `cst` doesn't define runs Git with the same arguments, so `cst add`,
+`cst switch`, `cst status` and the rest lose nothing. The commands it does define are the forms
+that keep the records:
+
+| To | Run | Not |
+| --- | --- | --- |
+| Commit | `cst commit -m "<subject>" --generated-by <model id>` | `git commit`, which records no provenance |
+| Start a branch | `cst fetch origin`, then `cst branch <branch> origin/main`, which also switches to it | `git switch -c` |
+| Fetch or pull | `cst fetch origin`, `cst pull --ff-only` | `git fetch`, `git pull`, which bring no records |
+| Push a branch | `cst push -u origin <branch>` (the Windows checkout: see "Pushing from the Windows checkout") | `git push`, which carries no records |
+| Catch a branch up with `main` | `cst git merge --ff-only origin/main`, or `cst git merge origin/main` when it can't fast-forward | `cst merge origin/main`, which records a landing on the branch |
+| Land | `cst merge <branch> --compact` on `main` | GitHub's merge button, `git merge` |
+| Clone | `cst clone <url>` | `git clone` |
+
+`cst git <command>` runs Git's own form of a command `cst` defines. A command `cst` defines
+(`init`, `commit`, `branch`, `merge`, `rebase`, `cherry-pick`) refuses a Git option it doesn't
+take, so `cst branch -d` fails and names `cst git branch`. Use `cst git` only where this file
+says to, for an operation that must not write records: catching a branch up, pushing the notes
+from the Windows checkout, removing a stale landing's note, deleting a landed branch, and a
+throwaway branch that will never be merged.
+
+Read-only inspection writes nothing, so a shared skill's snippet that only reads (`git diff`,
+`git log`, `git merge-base`, `git ls-remote`, `git rev-parse`) may run as written. A snippet that
+writes a commit, a branch, a merge or a remote ref runs through `cst`.
+
 ## Every commit is `cst commit`
 
 Every commit on a ticket branch is
@@ -19,13 +48,13 @@ here.
 - `cst commit` takes only `-m`. Pass a message file as `-m "$(cat <file>)"`.
 - Never declare `--reviewed-by` as yourself. A provenance entry is a claim by whoever runs the
   command, and at commit time no review has happened.
-- A throwaway branch that will never be merged, such as one exercising a workflow, uses plain
-  `git commit` (see "Exercising a new workflow").
+- A throwaway branch that will never be merged, such as one exercising a workflow, uses
+  `cst git commit`, Git's own commit (see "Exercising a new workflow").
 
 ## Branch before the first commit
 
 After a landing the checkout is on `main`. Before the next change's first commit, create its branch
-and check `git branch --show-current` is not `main`.
+with `cst branch <branch> origin/main` and check `git branch --show-current` is not `main`.
 
 When a push fails, investigate with read-only commands (`git status -sb`,
 `git branch --show-current`, `git ls-remote origin`). Never retry with another refspec, and never
@@ -49,8 +78,9 @@ owner says to land:
   `cst fetch origin` imports origin's records and writes a merge, after which the push is a fast
   forward. Fast-forward local `main` to `origin/main` before `cst merge`.
 - **Another landing got there first.** If another session lands while yours is unpushed, both
-  pushes are rejected. Remove your stale landing's note (`git notes --ref=causet remove <landing>`)
-  so its record doesn't reach origin, reset `main` to `origin/main`, pull, and merge again. The tree
+  pushes are rejected. Remove your stale landing's note (`cst git notes --ref=causet remove <landing>`)
+  so its record doesn't reach origin, reset `main` to `origin/main` (`cst git reset --hard
+  origin/main`, on the clean `main` checkout only), `cst pull --ff-only`, and merge again. The tree
   no longer equals the branch's, so check instead that `git diff origin/main HEAD` equals the
   branch's own diff from its base.
 - **The main checkout is busy.** When the main checkout holds a branch with someone's work in it,
@@ -59,9 +89,10 @@ owner says to land:
 - **Stacked pull requests.** Land the base, retarget the child with `gh pr edit --base main`, then
   land the child. Its earlier CI result still holds when the landing tree equals the reviewed tree.
 - **Pushing from the Windows checkout.** Its `refs/causet/retention` diverged from origin's, so
-  until the owner decides, push the notes with `git push origin refs/notes/causet`, then
-  `cst push --no-records origin main`. A plain `cst push` there would publish that history, which
-  can't cleanly be taken back. The wiki's step 3 has the details. `cst metadata validate` there
+  until the owner decides, push the notes with `cst git push origin refs/notes/causet`, then
+  `cst push --no-records origin main`. A work branch goes the same way:
+  `cst push --no-records -u origin <branch>`, then the notes. A plain `cst push` there would publish
+  that history, which can't cleanly be taken back. The wiki's step 3 has the details. `cst metadata validate` there
   reports two `workspace-path-missing` warnings for old `vlab-evidence` paths: they come from that
   machine's local registry, not the landing.
 
@@ -79,7 +110,7 @@ owner says to land:
 - Never delete the branch as part of a landing or of the bookkeeping after it: deleting it is a
   separate step that needs the owner's own words. GitHub already deletes a merged PR's remote
   branch, so check `git ls-remote origin 'refs/heads/<branch>'` first; usually only
-  `git branch -d <branch>` is left.
+  `cst git branch -d <branch>` is left.
 
 ## Promotion and npm
 
@@ -101,7 +132,7 @@ When asked for the npm publish command, give `scripts/publish-npm.ps1` after `np
 A workflow's `workflow_dispatch` can't be started until the file is on `main`. Exercise a new one
 from a throwaway branch off `main` with a temporary `push:` trigger:
 
-- Commit there with plain `git commit`: it is never merged, so it gets no records.
+- Commit there with `cst git commit`, Git's own commit: it is never merged, so it gets no records.
 - Pin its inputs in the branch (a fixed seed, a small count), so it can't collide with a real run,
   and force any failure you need in `test-support/`.
 - Exercise a second path, such as a comment on an existing issue or reopening a closed one, by

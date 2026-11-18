@@ -19,7 +19,8 @@ Independent reviews follow the same rule: give the reviewer a disposable reposit
 
 The owner works on two machines. When work resumes on one after time on the other:
 
-- `git fetch origin refs/notes/causet` and fast-forward the local ref: a pull doesn't bring notes.
+- `cst fetch origin`, then `cst pull --ff-only`: they bring origin's notes in with the branches, and
+  a plain `git pull` doesn't.
 - `npm run build:native` (about 35 s) before any test run. A stale `cst` fails the version checks
   in install-script, integration, native-cli and release-packaging, which looks like a regression.
 - On Windows, `cargo` comes from `%USERPROFILE%\.cargo\bin`, which has to be on the user `PATH`.

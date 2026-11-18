@@ -174,10 +174,17 @@ squash and rebase merging are off; land only with `cst merge --compact` and
 never force-push `main` or move a release tag. See "Repository rules" in
 `docs/testing.md`.
 
-Every commit on a work branch, the `ship` commit included, is
-`cst commit -m "<subject>" --generated-by <your exact model id>`, never plain
-`git commit`: provenance cannot be added after the fact. Before committing,
-pushing or landing, read [committing and landing](docs/agents/landing.md); the
+All source control in this repository goes through `cst`, never bare `git`:
+where a skill or procedure says `git <command>`, run `cst <command>`. Every
+commit on a work branch, the `ship` commit included, is
+`cst commit -m "<subject>" --generated-by <your exact model id>`, because
+provenance cannot be added after the fact. Branches start with
+`cst branch <branch> origin/main`, remotes are reached with `cst fetch`,
+`cst pull`, `cst push` and `cst clone`, which carry the records a plain
+`git fetch` or `git push` drops, and landings are `cst merge --compact`.
+Before committing, pushing or landing, read
+[committing and landing](docs/agents/landing.md), which lists the commands and
+the few places Git's own form (`cst git <command>`) is right; the
 owner approves each step of a ticket separately
 ([the owner's steps](docs/agents/dev-flow.md#the-owners-steps-per-ticket)).
 
