@@ -82,6 +82,9 @@ facts from settings files beside them: [workspace](agents/workspace.md),
 [human follow-ups](agents/human-follow-up.md), plus the issue tracker
 configuration; "Shared skills" in [AGENTS.md](../AGENTS.md) installs them.
 Edit these files directly when repository conventions change.
+Three guides every agent reads sit beside them:
+[committing and landing](agents/landing.md), [local runs](agents/local-runs.md) and
+[verification](agents/verification.md).
 See [agent and skill mirrors](agents/mirrors.md) for authored sources,
 generated outputs, and regeneration rules.
 

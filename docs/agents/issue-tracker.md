@@ -31,6 +31,8 @@ from. GitHub shares one number space across issues and PRs, so a bare `#42` may 
 with `gh pr view 42` and fall back to `gh issue view 42`.
 
 Use a temporary UTF-8 file for multiline bodies.
+Board writes need `gh`'s `project` scope: check that `gh auth status` lists `project`, not only
+`read:project`, before relying on a board edit.
 Run authenticated GitHub commands and remote Git operations outside
 the Windows sandbox. Keep authentication tokens out of output,
 workspace files, and environment variables.

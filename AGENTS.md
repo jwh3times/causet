@@ -153,7 +153,9 @@ which runs the Rust build; never spawn a CLI directly, so that
 `CAUSET_CLI=<executable> npm test` can run the same suites against another
 implementation of the CLI (ADR-0037). No numeric coverage threshold is
 defined; preserve the behavioral and failure-safety guarantees in
-`docs/testing.md`.
+`docs/testing.md`. Before running several modes or a measurement locally, read
+[local runs](docs/agents/local-runs.md); before reporting a reproduction or a
+performance finding, read [verification](docs/agents/verification.md).
 
 ## Commit & Pull Request Guidelines
 
@@ -171,6 +173,13 @@ clarifies behavior.
 squash and rebase merging are off; land only with `cst merge --compact` and
 never force-push `main` or move a release tag. See "Repository rules" in
 `docs/testing.md`.
+
+Every commit on a work branch, the `ship` commit included, is
+`cst commit -m "<subject>" --generated-by <your exact model id>`, never plain
+`git commit`: provenance cannot be added after the fact. Before committing,
+pushing or landing, read [committing and landing](docs/agents/landing.md); the
+owner approves each step of a ticket separately
+([the owner's steps](docs/agents/dev-flow.md#the-owners-steps-per-ticket)).
 
 ## Work Tracking
 
