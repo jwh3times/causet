@@ -38,14 +38,17 @@
   `docs/semantic-conformance/`, `docs/native-store/`, `docs/native-history/` — published contracts
   the suites check, which the development flow counts as code. `owner-only`: report drift; a change
   goes through an issue.
-- `docs/agents/*.md` — conventions and settings the installed skills read. **When:** a convention or
-  setting changes.
+- `docs/agents/*.md` — conventions and settings the installed skills read, plus three guides every
+  agent reads: `landing.md` (committing, landing and promotion), `local-runs.md` (running suites
+  and measurements on a development machine) and `verification.md` (checking a claim before
+  reporting it). **When:** a convention or setting changes; a lesson is learned that a script or
+  test can't enforce.
 - `docs/agents/mirrors.md` — how agent and skill sources are mirrored and linted, and which scripts
   are copies of the canonical ones. **When:** `scripts/sync-agents.mjs` or
   `scripts/lint-agent-neutrality.mjs` changes, or a canonical script is added.
 - `docs/agents/dev-flow.md` — what this repository adds to the shared development flow: the
-  published contracts that are code, and its bump, release and linking details. **When:** one of those
-  changes.
+  owner's steps per ticket, how to present a decision, the published contracts that are code, and
+  its bump, release and linking details. **When:** one of those changes.
 - The public wiki's usage pages (`https://github.com/jwh3times/causet.wiki.git`) — operational
   walkthroughs such as benchmark host baselines and the landing procedure. **When:** the command or
   procedure they walk through changes. Dated audit findings there stay historical; link them to the
