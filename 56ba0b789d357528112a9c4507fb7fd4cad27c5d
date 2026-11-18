@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwmrte1lc65ef26fe44c",
+      "mode": "compact",
+      "sourceRef": "chore/fewer-permission-prompts",
+      "sourceHead": "caa04c83effa9ff522422b2bfbeda283261ce5e5",
+      "sourceSubject": "docs: update docs and changelog for v0.32.3",
+      "targetBefore": "1a9471dfc9891f9333a83aea6eaf4378152e9c74",
+      "landingCommit": "56ba0b789d357528112a9c4507fb7fd4cad27c5d",
+      "base": "1a9471dfc9891f9333a83aea6eaf4378152e9c74",
+      "absorbedCommits": [
+        "78f680f081beaa27b5dc5c5211d1315f953d8881",
+        "caa04c83effa9ff522422b2bfbeda283261ce5e5"
+      ],
+      "absorbedChanges": [
+        "ch_0mwmf2yn9ebd73519c36d",
+        "ch_0mwmf5tkxeaf94bd94cd9"
+      ],
+      "resultTree": "f2a79f9dc7a24e3c63ea7f2126e2916ff695595f",
+      "createdAt": "2026-11-18T23:47:01.653Z"
+    }
+  ]
+}
