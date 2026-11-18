@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwlmy0xze5b27d71a5d5",
+      "mode": "compact",
+      "sourceRef": "docs/source-control-through-cst",
+      "sourceHead": "270d4cdb10ce033a140444593af2745e66bfa5c0",
+      "sourceSubject": "docs: update docs and changelog for v0.32.2",
+      "targetBefore": "202707390b15d3f37d0f005c1d186038bb9d39d9",
+      "landingCommit": "1a9471dfc9891f9333a83aea6eaf4378152e9c74",
+      "base": "202707390b15d3f37d0f005c1d186038bb9d39d9",
+      "absorbedCommits": [
+        "c805cda66c6b6aa590f8bdf6a941b08f678410b2",
+        "270d4cdb10ce033a140444593af2745e66bfa5c0"
+      ],
+      "absorbedChanges": [
+        "ch_0mwlmgu1q3d6a4e21e4fb",
+        "ch_0mwlmkoj5f68f13ade1f9"
+      ],
+      "resultTree": "ad674588a6011ca02f965ab8132b78a5a0f3714c",
+      "createdAt": "2026-11-18T04:42:53.695Z"
+    }
+  ]
+}
