@@ -39,9 +39,9 @@
   the suites check, which the development flow counts as code. `owner-only`: report drift; a change
   goes through an issue.
 - `docs/agents/*.md` — conventions and settings the installed skills read, plus three guides every
-  agent reads: `landing.md` (committing, landing and promotion), `local-runs.md` (running suites
-  and measurements on a development machine) and `verification.md` (checking a claim before
-  reporting it). **When:** a convention or setting changes; a lesson is learned that a script or
+  agent reads: `landing.md` (every source-control command through `cst`, committing, landing and
+  promotion), `local-runs.md` (running suites and measurements on a development machine) and
+  `verification.md` (checking a claim before reporting it). **When:** a convention or setting changes; a lesson is learned that a script or
   test can't enforce.
 - `docs/agents/mirrors.md` — how agent and skill sources are mirrored and linted, and which scripts
   are copies of the canonical ones. **When:** `scripts/sync-agents.mjs` or
