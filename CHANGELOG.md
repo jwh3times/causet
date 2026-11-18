@@ -4,6 +4,20 @@
 
 No unreleased changes.
 
+## [0.32.3] - 2026-11-18
+
+- **Claude Code asks less often for read-only commands in this repository.**
+  A new project `.claude/settings.json` allows, without a prompt, the reads
+  agents run most here: the board, label and run-watch forms of `gh`; the
+  check-only npm scripts `sync:agents:check`, `lint:agents` and `test:docs`;
+  and the read-only `cst` forms (`status`, `log`, `diff`, `show`,
+  `--version`, `provenance` of `HEAD`, and `metadata validate` and
+  `metadata status`). Claude Code already allows Git's own read-only
+  commands, but now that all source control here goes through `cst`, those
+  reads would otherwise prompt each time. Commands that write, and
+  `cst provenance declare`, still ask. Nothing changes for `cst` or its
+  packages.
+
 ## [0.32.2] - 2026-11-17
 
 - **All source control in this repository goes through `cst`.** `AGENTS.md`
