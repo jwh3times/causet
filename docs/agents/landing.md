@@ -23,10 +23,12 @@ that keep the records:
 | Land | `cst merge <branch> --compact` on `main` | GitHub's merge button, `git merge` |
 | Clone | `cst clone <url>` | `git clone` |
 
-`cst git <command>` runs Git's own form of a command `cst` defines. Use it only where this file
+`cst git <command>` runs Git's own form of a command `cst` defines. A command `cst` defines
+(`init`, `commit`, `branch`, `merge`, `rebase`, `cherry-pick`) refuses a Git option it doesn't
+take, so `cst branch -d` fails and names `cst git branch`. Use `cst git` only where this file
 says to, for an operation that must not write records: catching a branch up, pushing the notes
-from the Windows checkout, removing a stale landing's note, and a throwaway branch that will never
-be merged.
+from the Windows checkout, removing a stale landing's note, deleting a landed branch, and a
+throwaway branch that will never be merged.
 
 Read-only inspection writes nothing, so a shared skill's snippet that only reads (`git diff`,
 `git log`, `git merge-base`, `git ls-remote`, `git rev-parse`) may run as written. A snippet that
@@ -108,7 +110,7 @@ owner says to land:
 - Never delete the branch as part of a landing or of the bookkeeping after it: deleting it is a
   separate step that needs the owner's own words. GitHub already deletes a merged PR's remote
   branch, so check `git ls-remote origin 'refs/heads/<branch>'` first; usually only
-  `git branch -d <branch>` is left.
+  `cst git branch -d <branch>` is left.
 
 ## Promotion and npm
 
