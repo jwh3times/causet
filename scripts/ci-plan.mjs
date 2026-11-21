@@ -22,6 +22,8 @@ function nativeCode(file) {
 function documentationOnly(file) {
   return ["README.md", "CHANGELOG.md", "AGENTS.md", "CLAUDE.md"].includes(file)
     || (file.startsWith("docs/") && file.endsWith(".md"))
+    // A changelog fragment is where a branch's changelog entries go (ADR-0049).
+    || /^changelog\.d\/[^/]+\.md$/.test(file)
     || ((file.startsWith(".agents/skills/") || file.startsWith(".claude/skills/"))
       && file.endsWith(".md"));
 }

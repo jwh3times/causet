@@ -10,4 +10,6 @@
   landings, and a Dependabot landing gets a section of its own. A landing whose build fails now
   keeps its tag but gets no release, which `promote.yml` already refuses. ADR-0049 records the move
   and amends ADR-0048; `docs/agents/releases.md`, `landing.md`, `dev-flow.md`, the docs map,
-  `docs/testing.md` and `AGENTS.md` describe it. Nothing changes for `cst` or its packages.
+  `docs/testing.md` and `AGENTS.md` describe it. A `changelog.d/` fragment counts as
+  documentation, so a documentation-only pull request still skips the suites. Nothing changes for
+  `cst` or its packages.

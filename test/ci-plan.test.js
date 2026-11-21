@@ -40,8 +40,10 @@ test("only known documentation paths omit automatic suites", () => {
   for (const event of ["push", "pull_request"]) {
     assert.equal(planCi(event, ["README.md", "AGENTS.md", "CLAUDE.md", "CHANGELOG.md",
       "docs/testing.md", "docs/adr/example.md", ".agents/skills/end-session/SKILL.md",
-      ".claude/skills/end-session/SKILL.md"]).include.length, 0);
+      ".claude/skills/end-session/SKILL.md", "changelog.d/docs-12-example.md", "changelog.d/README.md"])
+      .include.length, 0);
     for (const files of [null, [], ["README.md", "native/cli/src/main.rs"], ["docs/conformance/fixtures.json"],
+      ["changelog.d/nested/example.md"], ["changelog.d/example.txt"],
       ["docs/schemas/new.schema.json"], ["package.json"], ["test/fixture.md"], ["unknown.md"],
       [".github/workflows/ci.yml"], [".agents/skills/example/script.mjs"], ["scripts/ci-plan.mjs"]]) {
       assert.ok(planCi(event, files).include.length > 0, JSON.stringify({ event, files }));

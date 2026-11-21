@@ -1680,9 +1680,9 @@ start after those checks pass.
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.
-Only root guides, Markdown under `docs/`, and Markdown agent skills qualify as
-documentation-only. Schemas, conformance fixtures, scripts, tests, workflows,
-and unknown paths still run suites. Renames consider both paths; a missing
+Only root guides, Markdown under `docs/`, `changelog.d/` fragments, and
+Markdown agent skills qualify as documentation-only. Schemas, conformance
+fixtures, scripts, tests, workflows, and unknown paths still run suites. Renames consider both paths; a missing
 comparison commit or empty diff conservatively runs the routine suites. The
 native-kind mode runs for anything under `native/`, and under `test/` and
 `test-support/`, because the suites and their harness decide which
