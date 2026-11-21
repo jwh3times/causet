@@ -20,7 +20,7 @@ that keep the records:
 | Fetch or pull | `cst fetch origin`, `cst pull --ff-only` | `git fetch`, `git pull`, which bring no records |
 | Push a branch | `cst push -u origin <branch>` (the Windows checkout: see "Pushing from the Windows checkout") | `git push`, which carries no records |
 | Catch a branch up with `main` | `cst git merge --ff-only origin/main`, or `cst git merge origin/main` when it can't fast-forward | `cst merge origin/main`, which records a landing on the branch |
-| Land | `cst merge <branch> --compact` on `main` | GitHub's merge button, `git merge` |
+| Land | `cst merge <branch> --compact -m "<PR title> (#<N>)"` on `main` | GitHub's merge button, `git merge` |
 | Clone | `cst clone <url>` | `git clone` |
 
 `cst git <command>` runs Git's own form of a command `cst` defines. A command `cst` defines
@@ -80,8 +80,15 @@ owner says to land:
   after that run finishes (`gh run list --workflow version.yml`), from `cst pull --ff-only`. A
   landing pushed while it runs is either rejected, as in "Another landing got there first" below,
   or lands first, and then the stamp's push is refused harmlessly and the next run versions both.
+- **Name the landing after its PR.** Pass `-m "<PR title> (#<N>)"` to `cst merge`. For a branch
+  that added no `changelog.d/` fragment, `version.yml` writes the landing's subject into its
+  changelog section as the one entry, so without `-m` the section reads
+  "Compact merge <branch>", as v0.32.9's does.
 - **Check the tree after merging.** `git diff --quiet <branch> HEAD` must succeed before anything is
-  pushed, and `cst provenance HEAD` must show a `carried` entry.
+  pushed, and `cst provenance HEAD` must show a `carried` entry. The exception is a
+  `chore/take-skills` branch opened by the `jwh3times/skills` Consumers workflow: the workflow
+  commits with plain Git, so its landing has nothing to carry and `cst provenance HEAD` printing
+  "No provenance has been declared for the commits inspected." is expected.
 - **Diverged notes.** When the local `refs/notes/causet` and origin's have both moved,
   `cst fetch origin` imports origin's records and writes a merge, after which the push is a fast
   forward. Fast-forward local `main` to `origin/main` before `cst merge`.
