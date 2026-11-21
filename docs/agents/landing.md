@@ -114,7 +114,11 @@ owner says to land:
   release-packaging. Run `npm run build:native` before the next full run.
 - `Closes #N` closes the issue when the landing reaches `main`, before a closing comment can be
   posted. Use `Part of #N` unless the PR really finishes the issue, and post the closing comment
-  separately when it does.
+  separately when it does. GitHub reads a closing keyword anywhere in the PR body, not only in the
+  link line. "Close #469 by hand" in a decision's heading closed #469 when #470 landed, even
+  though the body opened with `Part of #469`. So never write `close`, `fix` or `resolve` (or
+  `closes`, `fixed` and the like) directly before `#N` in a PR body. Write "close the issue by
+  hand" or "#N stays open" instead.
 - Never delete the branch as part of a landing or of the bookkeeping after it: deleting it is a
   separate step that needs the owner's own words. GitHub already deletes a merged PR's remote
   branch, so check `git ls-remote origin 'refs/heads/<branch>'` first; usually only
