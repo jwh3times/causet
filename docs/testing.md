@@ -1706,8 +1706,9 @@ releases it, so each push to `main` has a group of its own. Manual
 qualification is independent of automatic runs.
 For a pull request, a `changelog` job runs `node scripts/check-changelog.mjs`:
 the branch's `changelog.d/` fragment must parse, and the branch must not add,
-remove or renumber a version section, add entries to `[Unreleased]`, or edit
-or delete a fragment already on `main` ("Releases"). It never requires a
+remove or renumber a version section (the one section it may add backfills a
+version already tagged with none), add entries to `[Unreleased]`, or edit or
+delete a fragment already on `main` ("Releases"). It never requires a
 fragment, so Dependabot's pull requests run it too.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
 
