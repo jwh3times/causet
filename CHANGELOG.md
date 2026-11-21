@@ -9,6 +9,12 @@ included, gets a section from its title (ADR-0049). `[Unreleased]` stays empty.
 
 No unreleased changes.
 
+## [0.32.9] - 2026-11-21
+
+### Changed
+
+- Compact merge origin/chore/take-skills
+
 ## [0.32.8] - 2026-11-21
 
 ### Changed
