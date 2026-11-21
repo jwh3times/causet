@@ -9,6 +9,16 @@ included, gets a section from its title (ADR-0049). `[Unreleased]` stays empty.
 
 No unreleased changes.
 
+## [0.32.6] - 2026-11-21
+
+### Fixed
+
+- **The landing guide's command for reading a finished job's log works again.**
+  `docs/agents/landing.md` now gives
+  `gh api --allow-escape-sequences repos/jwh3times/causet/actions/jobs/<job id>/logs`. Without
+  the flag, `gh` prints only a refusal when the log contains terminal escape sequences, which
+  Actions logs do. Nothing changes for `cst` or its packages.
+
 ## [0.32.5] - 2026-11-21
 
 ### Changed
