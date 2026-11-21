@@ -1,5 +1,4 @@
 ---
-# GENERATED — do not edit. Source: .agents/skills/end-session/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: end-session
 description: Close out a work session — capture what was learned into memory, bring GitHub issues, the board, human follow-ups and docs up to date, and clean the local workspace. Use when the user says "end session", "wrap up" or "done for the day", or when the handoff skill reaches its end-session step.
 metadata:
@@ -132,8 +131,11 @@ For each issue the session touched:
   is invisible to the next session.
 
 Then run `board.mjs audit`, with `--repo` for the `Public repository` and again for the
-`Private issue repository` when there is one. Set Done on each `closedNotDone` item the session's
-work closed; report the rest of `closedNotDone`, every `openDone` item and every `missing` issue
+`Private issue repository` when there is one. When the `Board fields` setting records finished work
+in a field other than `Status`, or with an option other than `Done`, add
+`--status-field "<field>" --done "<option>"` naming them; the defaults are `Status` and `Done`. Its
+`status` names the pair it used. Set that option on each `closedNotDone` item the session's work
+closed; report the rest of `closedNotDone`, every `openDone` item and every `missing` issue
 rather than fixing what the session never touched. The private tracker's results stay out of
 anything public.
 
