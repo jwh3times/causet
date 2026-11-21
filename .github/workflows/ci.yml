@@ -3,7 +3,8 @@
 #
 # promote.yml calls it on the tag of the version it promotes, with the full
 # matrix, and release.yml waits for its run on each push to main before it
-# tags and publishes that landing (#440).
+# publishes that landing at the version version.yml tagged it with (#440,
+# ADR-0049).
 name: ci
 
 on:

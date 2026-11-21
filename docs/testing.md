@@ -1529,8 +1529,8 @@ first writes that version into `package.json` and `package-lock.json`
 version from the manifest when it is built and `main`'s manifest names only
 the release line. A pull request that touches the packaging and a manual
 dispatch build the version the merge would mint and stop there; so does
-`promote.yml`'s call, on the tag it promotes. A landing also tags the
-commit, attests the archives and the scripts
+`promote.yml`'s call, on the tag it promotes. A landing, already tagged by
+`version.yml`, also attests the archives and the scripts
 (`gh attestation verify <file> --repo jwh3times/causet`), publishes a GitHub
 prerelease with them, the npm tarballs and `SHA256SUMS`, and publishes to npm
 under the `next` dist-tag through trusted publishing when the repository
@@ -1648,9 +1648,14 @@ both), so the package it publishes installs without `cst`.
 packed by `pack-release.mjs` and a stub `npm`, so it never reaches the
 registry.
 
-**What the automation needs** (one-time human steps, #440): the
-"release tags are created by maintainers" ruleset is removed, so the
-workflow's token can create a `v*` tag, and `NPM_PUBLISH` is `false` while
+**What the automation needs** (one-time human steps, #440, #469): the
+"release tags are created by maintainers" ruleset is removed, so any
+workflow may create a `v*` tag; the release GitHub App is installed on the
+repository with Contents write and is an "Always allow" bypass actor on
+"main: changes arrive by pull request with static checks", with its client
+ID in the `RELEASE_APP_CLIENT_ID` variable and its private key in the
+`RELEASE_APP_PRIVATE_KEY` secret, so `version.yml` can push the stamp
+commit and the tag; and `NPM_PUBLISH` is `false` while
 npm/cli#9969 is open. Before
 `NPM_PUBLISH` goes back to `true`, the `npm-promote` environment needs an
 `NPM_TOKEN` secret, a granular npm token with read and write access to the
