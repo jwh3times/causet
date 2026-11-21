@@ -1,0 +1,31 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwpw166b31c01d5ed760",
+      "mode": "compact",
+      "sourceRef": "chore/469-stamp-on-tag",
+      "sourceHead": "8f2c9a1f18c1b6889afa5a71e4865e0007f0028f",
+      "sourceSubject": "fix: count changelog fragments as documentation in the CI plan",
+      "targetBefore": "56ba0b789d357528112a9c4507fb7fd4cad27c5d",
+      "landingCommit": "2a3924ffe7b234271122f9180c5eca7746acba05",
+      "base": "56ba0b789d357528112a9c4507fb7fd4cad27c5d",
+      "absorbedCommits": [
+        "041250e6526c11bcb3c2ce01c782994cbfe3b098",
+        "64db328c6b733e595e9dc3d5769ba84e479f8819",
+        "b5f14b6453ebd42035e5cbe0b8d93dc22e9bf47b",
+        "8f2c9a1f18c1b6889afa5a71e4865e0007f0028f"
+      ],
+      "absorbedChanges": [
+        "ch_0mwpt8f9k2b59c17d188a",
+        "ch_0mwptpf55ece45f00bbc7",
+        "ch_0mwptq8wu8afae8fd219c",
+        "ch_0mwpttbvk5b690a841395"
+      ],
+      "resultTree": "cdaa0007edf2b613a166eb7145ad57c6c4f8969f",
+      "createdAt": "2026-11-21T04:08:21.704Z"
+    }
+  ]
+}
