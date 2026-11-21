@@ -81,7 +81,10 @@ owner says to land:
   landing pushed while it runs is either rejected, as in "Another landing got there first" below,
   or lands first, and then the stamp's push is refused harmlessly and the next run versions both.
 - **Check the tree after merging.** `git diff --quiet <branch> HEAD` must succeed before anything is
-  pushed, and `cst provenance HEAD` must show a `carried` entry.
+  pushed, and `cst provenance HEAD` must show a `carried` entry. The exception is a
+  `chore/take-skills` branch opened by the `jwh3times/skills` Consumers workflow: the workflow
+  commits with plain Git, so its landing has nothing to carry and `cst provenance HEAD` printing
+  "No provenance has been declared for the commits inspected." is expected.
 - **Diverged notes.** When the local `refs/notes/causet` and origin's have both moved,
   `cst fetch origin` imports origin's records and writes a merge, after which the push is a fast
   forward. Fast-forward local `main` to `origin/main` before `cst merge`.
