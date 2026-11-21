@@ -135,7 +135,8 @@ When asked for the npm publish command, give `scripts/publish-npm.ps1` after `np
   PR CI, so a test added since the last full run can fail a promotion. For a change that adds tests
   touching object ids or refs, run those modes locally or dispatch `ci.yml` before landing.
 - `gh run view --log-failed` refuses while a run is still in progress. Read a finished job's log
-  with `gh api repos/jwh3times/causet/actions/jobs/<job id>/logs`.
+  with `gh api --allow-escape-sequences repos/jwh3times/causet/actions/jobs/<job id>/logs`. Without
+  the flag, gh prints only a refusal when the log contains terminal escape sequences.
 - A Windows corpus job can hit its 90-minute timeout on a slow runner even when nothing hangs.
   Compare its duration with the same job on the PR run before treating it as a regression.
 
