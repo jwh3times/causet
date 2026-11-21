@@ -1,5 +1,10 @@
 # Changelog
 
+Every landing on `main` is a version, with one dated section here. Branches never edit this file:
+each writes its entries to `changelog.d/`, and after the landing `version.yml` stamps them into
+the section for the version it mints and tags the landing; a landing with none, Dependabot's
+included, gets a section from its title (ADR-0049). `[Unreleased]` stays empty.
+
 ## [Unreleased]
 
 No unreleased changes.

@@ -72,6 +72,14 @@ owner says to land:
   branch.
 - **Check `main` right before merging.** Run `git ls-remote origin refs/heads/main`. If it moved
   since review, stop and ask, even after "land it": approval to land covers the reviewed state.
+  When the only move is `version.yml`'s `chore(release): v<x.y.z> [skip ci]` commit by
+  `release-stamper[bot]`, which touches only `CHANGELOG.md` and `changelog.d/`, say so in the
+  question.
+- **Wait for the previous landing's stamp.** About a minute after each landing, `version.yml`
+  pushes that commit and the landing's tag (ADR-0049), so `main` moves again. Land the next branch
+  after that run finishes (`gh run list --workflow version.yml`), from `cst pull --ff-only`. A
+  landing pushed while it runs is either rejected, as in "Another landing got there first" below,
+  or lands first, and then the stamp's push is refused harmlessly and the next run versions both.
 - **Check the tree after merging.** `git diff --quiet <branch> HEAD` must succeed before anything is
   pushed, and `cst provenance HEAD` must show a `carried` entry.
 - **Diverged notes.** When the local `refs/notes/causet` and origin's have both moved,

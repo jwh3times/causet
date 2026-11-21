@@ -1,6 +1,6 @@
 # ADR-0048: Version every landing, and promote a version to stable by dispatch
 
-- **Status:** Accepted (owner, 2026-11-13, after v0.26.0, v0.26.1 and v0.27.0 released themselves on landing and v0.27.0 became the stable release by `promote.yml`)
+- **Status:** Accepted (owner, 2026-11-13, after v0.26.0, v0.26.1 and v0.27.0 released themselves on landing and v0.27.0 became the stable release by `promote.yml`); decisions 1, 2 and 4 amended by [ADR-0049](0049-stamp-each-landings-changelog-section-and-tag-after-it-lands.md) (2026-11-20)
 - **Date:** 2026-11-12
 - **Owners:** Repository maintainers
 - **Amends:** [ADR-0038](0038-deliver-the-rust-cli-through-per-platform-npm-packages-linked-without-node.md)

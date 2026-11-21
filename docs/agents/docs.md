@@ -5,9 +5,15 @@
 - `README.md` — the user-facing entry point: install, usage and the command overview. **When:** a
   command, flag, install step or supported platform changes.
 - `CHANGELOG.md` — the versioned record of delivered behavior: each landing gets a dated
-  `## [x.y.z] - date` section for the version it mints (`Scheme: per-merge`, ADR-0048), and
-  `Unreleased` stays an empty placeholder between landings. `ship-owned`. **When:** a user-visible
-  behavior or contract changes.
+  `## [x.y.z] - date` section for the version it mints, stamped by `version.yml` after it lands
+  (`Scheme: stamp-on-tag`, ADR-0049), and `Unreleased` stays an empty placeholder. `frozen`: no
+  branch edits it.
+- `changelog.d/README.md` — the fragment format and how fragments are stamped. **When:** the
+  fragment rules in `scripts/check-changelog.mjs` or the stamping in `scripts/stamp-changelog.mjs`
+  change.
+- `changelog.d/*.md` — each branch's changelog fragment (every file there but the README), stamped
+  into `CHANGELOG.md` after its landing and checked by the `changelog` CI job. `ship-owned`.
+  **When:** a user-visible behavior or contract changes.
 - `AGENTS.md` — durable rules for working in this repository: structure, commands, style, testing,
   commits, tracking, the development flow. **When:** one of those rules, or a command it quotes,
   changes.

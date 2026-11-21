@@ -1368,7 +1368,7 @@ A version is eligible to become the stable release only when:
 6. expected-failure cases leave protected refs and worktrees unchanged;
 7. no causet Node or Git process remains after completion;
 8. the tag, the executable's `--version`, the package metadata and the
-   changelog's section for the version agree;
+   changelog's section for the version, read from `main`, agree;
 9. both ways of installing work outside the source checkout: the package set
    of ADR-0038 and the install scripts each install on a Windows and a Linux
    runner, and the installed `cst` runs with Node absent from `PATH`;
@@ -1421,7 +1421,7 @@ is the record of what they are and why:
 | Ruleset | Applies to | Rule | Bypass |
 | --- | --- | --- | --- |
 | main: history is never rewritten or deleted | `main` | No force push, no deletion | None |
-| main: changes arrive by pull request with static checks | `main` | A pull request, and a passing `static checks` job | Repository admins |
+| main: changes arrive by pull request with static checks | `main` | A pull request, and a passing `static checks` job | Repository admins; the release GitHub App |
 | release tags are immutable | `v*` tags | No deletion, no update | None |
 
 - **Admins bypass the pull-request rule because of how this project lands.**
@@ -1429,6 +1429,12 @@ is the record of what they are and why:
   pushes it to `main`. No CI run has seen that commit, so a rule without the
   bypass would reject every landing. Its tree is checked against the reviewed
   branch's before the push instead (see the landing procedure on the wiki).
+- **The release GitHub App bypasses it too, to push the changelog.** After
+  each landing, `version.yml` pushes a `chore(release): v<x.y.z> [skip ci]`
+  commit with the landing's section, and the landing's tag, with the App's
+  token (ADR-0049). `GITHUB_TOKEN` cannot bypass a ruleset. The App's client
+  ID is the `RELEASE_APP_CLIENT_ID` variable and its key the
+  `RELEASE_APP_PRIVATE_KEY` secret; it is installed with Contents write.
 - **Only `static checks` is required.** The suite jobs do not run for a
   documentation-only pull request, and a required check that never runs
   blocks forever.
@@ -1436,11 +1442,11 @@ is the record of what they are and why:
 - **Who may create a release tag is not restricted** (ADR-0048, #441). A
   fourth ruleset, "release tags are created by maintainers", let only
   admins create a `v*` tag, because a pushed tag started a publish. Since
-  #440 a pushed tag starts nothing: `release.yml` tags each landing itself,
-  with the workflow's token, and GitHub does not accept the GitHub Actions
-  integration as a bypass actor on a repository a personal account owns. The
-  ruleset was removed on 2026-11-12; the owner is the only collaborator.
-  Every tag, the workflow's included, is still immutable.
+  #440 a pushed tag starts nothing, and GitHub does not accept the GitHub
+  Actions integration as a bypass actor on a repository a personal account
+  owns. The ruleset was removed on 2026-11-12; the owner is the only
+  collaborator. Since ADR-0049, `version.yml` tags each landing with the
+  release App's token. Every tag is still immutable.
 - **A release tag cannot be moved or deleted, by anyone.** To correct a tag
   placed on the wrong commit before anything was published, an admin
   disables "release tags are immutable" in the repository settings, fixes the
@@ -1523,8 +1529,8 @@ first writes that version into `package.json` and `package-lock.json`
 version from the manifest when it is built and `main`'s manifest names only
 the release line. A pull request that touches the packaging and a manual
 dispatch build the version the merge would mint and stop there; so does
-`promote.yml`'s call, on the tag it promotes. A landing also tags the
-commit, attests the archives and the scripts
+`promote.yml`'s call, on the tag it promotes. A landing, already tagged by
+`version.yml`, also attests the archives and the scripts
 (`gh attestation verify <file> --repo jwh3times/causet`), publishes a GitHub
 prerelease with them, the npm tarballs and `SHA256SUMS`, and publishes to npm
 under the `next` dist-tag through trusted publishing when the repository
@@ -1534,24 +1540,32 @@ publish was manual, from a run's artifacts (#139).
 ## Releases
 
 Every landing on `main` is a version, and one dispatch makes a version the
-stable release (ADR-0048, #440).
+stable release (ADR-0048, #440; ADR-0049).
 
-**A landing releases itself.** `docs/agents/releases.md` sets
-`Scheme: per-merge`: `ship` writes each branch's changelog as a dated
-`## [x.y.z]` section for the version its landing will mint, which
-`node scripts/next-version.mjs` computes, and `ci.yml`'s `changelog` job fails
-a pull request whose newest section names another. When `ci.yml` passes on
-the push of a landing to `main`, `release.yml`:
+**A landing versions itself.** `docs/agents/releases.md` sets
+`Scheme: stamp-on-tag`: `ship` writes each branch's entries to its own
+`changelog.d/<branch-slug>.md` fragment and never edits `CHANGELOG.md`, and
+`ci.yml`'s `changelog` job checks the fragment. On the push of a landing to
+`main`, `version.yml` runs `node scripts/stamp-changelog.mjs`, which writes
+the landing's dated `## [x.y.z]` section from its fragments (or one bullet
+from its title when it added none, as a Dependabot landing does), computes
+its version as `node scripts/next-version.mjs` does from the release line
+`package.json` declares, and tags the landing `v<version>`. The section's
+`chore(release): v<x.y.z> [skip ci]` commit and the tag are pushed together
+with the release GitHub App's token, the `main` ruleset's bypass actor for
+it, about a minute after the landing. That commit starts no workflow, and
+cst records no provenance for it: Git writes it, and it touches only the
+changelog.
 
-1. reads the version from the landing's newest changelog section
-   (`node scripts/release-plan.mjs landing`), refusing one off the release
-   line `package.json` declares. A landing with no section of its own (a
-   Dependabot pull request's, or one whose number another landing took
-   first) gets the next version instead, and the next pull request's
-   `changelog` job then requires a section for it (`Skipped tags: backfill`);
+**A landing releases itself.** When `ci.yml` passes on the push of a landing
+to `main`, `release.yml`:
+
+1. reads the version from the landing's tag
+   (`node scripts/release-plan.mjs landing`), waiting up to ten minutes for
+   `version.yml` to push it. It never pushes a tag itself;
 2. builds and installs that version's set on both runners;
-3. only then tags the landing `v<version>`, attests the assets, and
-   publishes a GitHub prerelease whose notes are the changelog section;
+3. attests the assets and publishes a GitHub prerelease whose notes are the
+   section `version.yml` stamped on `main`;
 4. publishes every npm package under `next`, or under `superseded` when a
    newer landing's build is already `next`, decided just before each
    publish. Two releases publishing in the same seconds can still leave
@@ -1584,20 +1598,19 @@ landing releases `x.y.0`.
 
 **When a landing is not released:**
 
-- **`main`'s CI failed.** Nothing runs. A flaky failure is re-run, and the
-  release follows the passing run. A real one is fixed forward: the fix's
-  landing takes the next number, and the failed landing's section names a
-  version that was never released.
-- **The release run failed after CI passed.** Re-run its failed jobs. The tag
-  is pushed only after the set installs, and every step from the tag on
-  skips what an earlier attempt finished: a tag already on this landing is
-  kept, an existing GitHub release gets its assets re-uploaded, and a version
-  npm already has is not published again. When the tag step reports the
-  version is another commit's (two landings without sections of their own
-  released at once), re-run all jobs instead, which plans the landing again.
-- **The plan refused the landing.** Its newest section is off the release
-  line, which the `changelog` job should have caught. Correct the section in
-  a new pull request; that landing releases the corrected number.
+- **`main`'s CI failed.** `release.yml` does not run. A flaky failure is
+  re-run, and the release follows the passing run. A real one is fixed
+  forward: the fix's landing takes the next number, and the failed landing
+  keeps its tag and its section for a version that was never released;
+  `promote.yml` refuses it, since it has no GitHub release.
+- **The release run failed after CI passed.** Re-run its failed jobs. Every
+  publishing step skips what an earlier attempt finished: an existing GitHub
+  release gets its assets re-uploaded, and a version npm already has is not
+  published again.
+- **The plan found no tag.** `version.yml`'s run on the landing failed or has
+  not finished. Fix or re-run it, then re-run the release run. A `version`
+  run that found `main` moved ends green with a notice; the run behind it
+  versions both landings.
 
 `promote.yml` calls the workflows as they are on `main`, against the tag's
 code, so a gate added since the version landed applies to it too. Versions
@@ -1635,9 +1648,14 @@ both), so the package it publishes installs without `cst`.
 packed by `pack-release.mjs` and a stub `npm`, so it never reaches the
 registry.
 
-**What the automation needs** (one-time human steps, #440): the
-"release tags are created by maintainers" ruleset is removed, so the
-workflow's token can create a `v*` tag, and `NPM_PUBLISH` is `false` while
+**What the automation needs** (one-time human steps, #440, #469): the
+"release tags are created by maintainers" ruleset is removed, so any
+workflow may create a `v*` tag; the release GitHub App is installed on the
+repository with Contents write and is an "Always allow" bypass actor on
+"main: changes arrive by pull request with static checks", with its client
+ID in the `RELEASE_APP_CLIENT_ID` variable and its private key in the
+`RELEASE_APP_PRIVATE_KEY` secret, so `version.yml` can push the stamp
+commit and the tag; and `NPM_PUBLISH` is `false` while
 npm/cli#9969 is open. Before
 `NPM_PUBLISH` goes back to `true`, the `npm-promote` environment needs an
 `NPM_TOKEN` secret, a granular npm token with read and write access to the
@@ -1662,9 +1680,9 @@ start after those checks pass.
 
 The selector in `scripts/ci-plan.mjs` compares the checked-out PR merge commit
 with its base, or the pushed commit with the event's previous main commit.
-Only root guides, Markdown under `docs/`, and Markdown agent skills qualify as
-documentation-only. Schemas, conformance fixtures, scripts, tests, workflows,
-and unknown paths still run suites. Renames consider both paths; a missing
+Only root guides, Markdown under `docs/`, `changelog.d/` fragments, and
+Markdown agent skills qualify as documentation-only. Schemas, conformance
+fixtures, scripts, tests, workflows, and unknown paths still run suites. Renames consider both paths; a missing
 comparison commit or empty diff conservatively runs the routine suites. The
 native-kind mode runs for anything under `native/`, and under `test/` and
 `test-support/`, because the suites and their harness decide which
@@ -1687,10 +1705,11 @@ the same event and ref, except a push to `main`: each landing's run is what
 releases it, so each push to `main` has a group of its own. Manual
 qualification is independent of automatic runs.
 For a pull request, a `changelog` job runs `node scripts/check-changelog.mjs`:
-the newest `## [x.y.z]` section must name the version the merge will mint,
-and every released version must have a section ("Releases"). Dependabot's
-pull requests are exempt, since a bot writes no entry; the next human pull
-request backfills their sections.
+the branch's `changelog.d/` fragment must parse, and the branch must not add,
+remove or renumber a version section (the one section it may add backfills a
+version already tagged with none), add entries to `[Unreleased]`, or edit or
+delete a fragment already on `main` ("Releases"). It never requires a
+fragment, so Dependabot's pull requests run it too.
 Static jobs have a five-minute timeout and suites a 50-minute timeout.
 
 `promote.yml` runs full qualification on every version it makes stable. Run
