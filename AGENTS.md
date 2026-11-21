@@ -53,8 +53,13 @@ no npm dependencies.
   mode on both platforms plus the Node 24 floor; use it for high-risk
   platform qualification as described in `docs/testing.md`, and
   `promote.yml` calls it the same way on the tag it promotes. A PR's
-  `changelog` job requires its newest section to name the version its merge
-  will mint. The per-host benchmark remains local.
+  `changelog` job checks its `changelog.d/` fragment, which version.yml
+  stamps into the landing's section. The per-host benchmark remains local.
+- `.github/workflows/version.yml` versions every landing (ADR-0049): on each
+  push to `main`, `scripts/stamp-changelog.mjs` writes the landing's dated
+  `CHANGELOG.md` section from its `changelog.d/` fragments (or its title when
+  it added none), and the workflow pushes that `[skip ci]` commit and the
+  landing's `v<x.y.z>` tag together with the release GitHub App's token.
 - `.github/workflows/perf.yml` runs `scripts/perf-checkpoint.mjs` on hosted
   Windows and Ubuntu runners: on manual dispatch, weekly on `main`, and for PRs
   touching `native/`, the harness, or the workflow. It reports only what a
@@ -76,11 +81,11 @@ no npm dependencies.
   (`scripts/rotating-corpus.mjs`).
 - `.github/workflows/release.yml` releases every landing (ADR-0048): when
   `ci.yml` passes on a push to `main`, it builds the `cst` executable per
-  platform at the version the landing's newest changelog section names, packs
+  platform at the version version.yml tagged the landing with, packs
   the ADR-0038 package set with `scripts/pack-release.mjs`, installs it on
   each runner by npm and by `scripts/install.sh` or `scripts/install.ps1`, and
-  then tags the landing, publishes a GitHub prerelease and, when the
-  repository variable `NPM_PUBLISH` is `true`, publishes to npm under `next`.
+  then publishes a GitHub prerelease with the stamped section as its notes and,
+  when the repository variable `NPM_PUBLISH` is `true`, publishes to npm under `next`.
   Pull requests touching the packaging and manual dispatch are dry runs.
   `scripts/release-plan.mjs` makes its decisions. See "Releases" in
   `docs/testing.md`.
@@ -314,8 +319,9 @@ node scripts/sync-agents.mjs
 ```
 
 `scripts/sync-agents.mjs`, `lint-agent-neutrality.mjs`, `check-docs.mjs`, `check-skills.mjs`, and
-`sync-main.mjs`, `next-version.mjs` and `check-changelog.mjs` where this repository carries them, are
-canonical in `jwh3times/skills` with their tests: fix them there, then copy them here.
+`sync-main.mjs`, `next-version.mjs`, `check-changelog.mjs` and `stamp-changelog.mjs` where this
+repository carries them, are canonical in `jwh3times/skills` with their tests: fix them there, then
+copy them here.
 `sync-agents.mjs` also writes the marked blocks in this file: change them in `jwh3times/skills`, not
 here.
 

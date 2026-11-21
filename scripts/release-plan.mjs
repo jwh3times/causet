@@ -1,9 +1,9 @@
-// Decides what the release workflows do with a version (#440): the version a landing is tagged
+// Decides what the release workflows do with a version (#440): the version a landing was tagged
 // with, the npm dist-tag a build is published under, and whether a version may be promoted to
 // stable. The decisions are pure functions over data the workflows look up, so they are tested
 // without a registry or GitHub (test/release-plan.test.js); the CLI below does the lookups.
 
-//   node scripts/release-plan.mjs landing                       version=, tag=  (the checked-out landing)
+//   node scripts/release-plan.mjs landing                       version=        (the checked-out landing)
 //   node scripts/release-plan.mjs dry-run                       version=        (what this merge would mint)
 //   node scripts/release-plan.mjs dist-tag --version <v>        dist-tag=       (asks the npm registry)
 //   node scripts/release-plan.mjs promote --version <v> [--allow-older] [--github-only]
@@ -18,7 +18,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { documentedVersions, releasedVersions } from "./check-changelog.mjs";
+import { releasedVersions } from "./check-changelog.mjs";
 import { computeNextVersion, declaredVersion, gitTags, refreshTags } from "./next-version.mjs";
 
 const RELEASE_TAG = /^v(\d+\.\d+\.\d+)$/;
@@ -26,31 +26,18 @@ const RELEASE_TAG = /^v(\d+\.\d+\.\d+)$/;
 // tags predate the workflows a promotion runs on them.
 const FIRST_PER_MERGE_VERSION = "0.26.0";
 
-// A landing's version is the newest section of its changelog. The per-merge changelog check held
-// that section to `next-version.mjs`'s answer when the pull request ran, so reading it back here,
-// rather than computing again, cannot race a second landing whose release is running beside it.
-// A landing with no section of its own, a Dependabot pull request's or one whose number another
-// landing took first, is still a version: the next one `next-version.mjs` gives, which the next
-// pull request's changelog check then requires a section for (`Skipped tags: backfill`).
-export function planLanding({ changelog, declared, tags, tagsAtCommit }) {
+// A landing's version is the tag `version.yml` put on it (`Scheme: stamp-on-tag`, ADR-0049): on
+// each push to main, `scripts/stamp-changelog.mjs` writes the landing's dated section from its
+// `changelog.d/` fragments, or from its title when it added none, computes its version as
+// `next-version.mjs` does, and pushes the section's commit and the landing's tag together. Reading
+// the tag back cannot race a second landing, because the stamps take turns. A landing with no tag
+// yet is refused rather than tagged here: a tag the release workflow pushed would be one the stamp
+// never wrote a section for.
+export function planLanding({ tagsAtCommit }) {
   const released = releasedVersions(tagsAtCommit);
-  if (released.length > 0) return { version: released[0], tag: false };
-  const version = documentedVersions(changelog)[0];
-  if (!version) {
-    throw new Error("CHANGELOG.md has no `## [x.y.z]` section, so this landing names no version.");
-  }
-  const [line, section] = [parse(declared), parse(version)];
-  if (section[0] !== line[0] || section[1] !== line[1]) {
-    throw new Error(`The newest section, [${version}], is not on the release line ${line[0]}.${line[1]} ` +
-      "that package.json declares.");
-  }
-  if (compareVersions(version, declared) < 0) {
-    throw new Error(`The newest section, [${version}], is below the declared version ${declared}.`);
-  }
-  if (releasedVersions(tags).includes(version)) {
-    return { version: computeNextVersion(declared, tags), tag: true };
-  }
-  return { version, tag: true };
+  if (released.length > 0) return { version: released[0] };
+  throw new Error("This landing has no version tag yet. version.yml tags every landing when it " +
+    "stamps its changelog section; wait for that run to finish, then re-run this one.");
 }
 
 // A dry run builds the version the merge would mint, or one past it when that is package.json's
@@ -184,13 +171,8 @@ export function main(argv, root = process.cwd()) {
   let outputs;
   if (options.command === "landing") {
     refreshTags(root);
-    const plan = planLanding({
-      changelog: readFileSync(path.join(root, "CHANGELOG.md"), "utf8"),
-      declared: String(declaredVersion(root)).trim(),
-      tags: gitTags(root),
-      tagsAtCommit: git(root, ["tag", "--points-at", "HEAD"]),
-    });
-    outputs = { version: plan.version, tag: plan.tag };
+    const plan = planLanding({ tagsAtCommit: git(root, ["tag", "--points-at", "HEAD"]) });
+    outputs = { version: plan.version };
   } else if (options.command === "dry-run") {
     refreshTags(root);
     outputs = { version: dryRunVersion({ declared: declaredVersion(root), tags: gitTags(root) }) };

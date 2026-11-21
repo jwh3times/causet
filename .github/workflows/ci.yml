@@ -73,12 +73,14 @@ jobs:
         run: git diff --check "$(git mktree </dev/null)" HEAD
 
   changelog:
-    # Every merge to main mints a version (Scheme: per-merge), so a pull
-    # request's newest changelog section must name the version its merge will
-    # mint. A bot cannot write an entry, so Dependabot's pull requests are
-    # exempt; the next human pull request backfills their sections.
+    # Every landing is a version (Scheme: stamp-on-tag, ADR-0049): a pull
+    # request writes its entries to its own `changelog.d/` fragment, and
+    # version.yml stamps them into the landing's section. This checks the
+    # fragment parses and that the pull request leaves CHANGELOG.md's sections
+    # and other landings' fragments alone. It never requires a fragment: a
+    # landing with none, Dependabot's included, gets a section from its title.
     name: changelog
-    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -88,7 +90,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 26
-      - name: The newest section names the version this merge will mint
+      - name: The changelog fragment is valid
         run: node scripts/check-changelog.mjs
 
   suite:

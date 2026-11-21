@@ -1,14 +1,15 @@
 name: release
 
 # Builds the package set of ADR-0038 and installs it the way a user does, and
-# releases every landing (#440, ADR-0048).
+# releases every landing (#440, ADR-0048, amended by ADR-0049).
 #
-# - Each push to main is a landing, and each landing is a version. When ci.yml
-#   passes on it, this workflow tags the landing with the version its newest
-#   changelog section names, builds and smoke-tests that version's set,
-#   attests the archives and the install scripts, publishes a GitHub
-#   prerelease with every asset, and publishes every npm package under the
-#   `next` dist-tag when the repository variable NPM_PUBLISH is `true`. npm's
+# - Each push to main is a landing, and each landing is a version. version.yml
+#   stamps the landing's changelog section and tags it as soon as it lands.
+#   When ci.yml passes on it, this workflow reads that tag, builds and
+#   smoke-tests that version's set, attests the archives and the install
+#   scripts, publishes a GitHub prerelease with every asset and the stamped
+#   section as its notes, and publishes every npm package under the `next`
+#   dist-tag when the repository variable NPM_PUBLISH is `true`. npm's
 #   `latest` and the GitHub latest release move only by promote.yml.
 # - promote.yml calls it on the tag of the version it promotes, which builds
 #   and smoke-tests that version's set again without publishing (release gates
@@ -16,9 +17,10 @@ name: release
 # - A pull request that touches the packaging, and a manual dispatch, are dry
 #   runs for the version the merge would mint.
 #
-# The tag is pushed only after the set built and installed, so a landing whose
-# build fails is never tagged; re-running the failed jobs retries it, and
-# every step after the tag skips what an earlier attempt already did.
+# The tag is version.yml's, pushed before this workflow builds anything, so a
+# landing whose build fails is tagged but has no release; re-running the
+# failed jobs retries it, and every publishing step skips what an earlier
+# attempt already did. This workflow never pushes a tag (ADR-0049).
 
 on:
   workflow_run:
@@ -68,11 +70,11 @@ jobs:
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Up to ten minutes waiting for version.yml's tag, then the plan itself.
+    timeout-minutes: 15
     outputs:
       ref: ${{ steps.plan.outputs.ref }}
       version: ${{ steps.plan.outputs.version }}
-      tag: ${{ steps.plan.outputs.tag }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
@@ -89,16 +91,32 @@ jobs:
         run: |
           echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # version.yml tags the landing about a minute after it lands, and
+            # ci.yml usually takes longer, so the tag is normally already here.
+            deadline=$(( $(date +%s) + 10 * 60 ))
+            until git tag --points-at HEAD | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; do
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::After 10 minutes this landing still has no version tag. Check version.yml's run on it, then re-run this one."
+                exit 1
+              fi
+              sleep 15
+              git fetch --tags --quiet origin || true
+            done
             node scripts/release-plan.mjs landing
             echo "publish=true" >> "$GITHUB_OUTPUT"
           elif [ -n "$CALLED_VERSION" ]; then
-            # Gate 8: the tag, the changelog and the version agree.
+            # Gate 8: the tag, the changelog and the version agree. A version's
+            # section is stamped in the commit after its landing (ADR-0049), so
+            # it is read from main, which holds every version's section.
             test "$(git rev-parse "v$CALLED_VERSION^{commit}")" = "$(git rev-parse HEAD)"
-            awk -v heading="## [$CALLED_VERSION]" 'index($0, heading) == 1 { found = 1 } END { exit !found }' CHANGELOG.md
-            printf 'version=%s\ntag=false\npublish=false\n' "$CALLED_VERSION" >> "$GITHUB_OUTPUT"
+            git fetch --no-tags --quiet origin main
+            git show origin/main:CHANGELOG.md > "$RUNNER_TEMP/main-changelog.md"
+            awk -v heading="## [$CALLED_VERSION]" 'index($0, heading) == 1 { found = 1 } END { exit !found }' \
+              "$RUNNER_TEMP/main-changelog.md"
+            printf 'version=%s\npublish=false\n' "$CALLED_VERSION" >> "$GITHUB_OUTPUT"
           else
             node scripts/release-plan.mjs dry-run
-            printf 'tag=false\npublish=false\n' >> "$GITHUB_OUTPUT"
+            printf 'publish=false\n' >> "$GITHUB_OUTPUT"
           fi
           cat "$GITHUB_OUTPUT"
 
@@ -253,15 +271,13 @@ jobs:
           fi
 
   publish:
-    name: tag, attest and release the landing, and publish to npm when enabled
+    name: attest and release the landing, and publish to npm when enabled
     if: needs.plan.outputs.publish == 'true'
     needs: [plan, package, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      # Pushing the tag (no ruleset restricts who creates a v* tag; none may
-      # move or delete one) and
-      # the GitHub release.
+      # The GitHub release. The tag is version.yml's (ADR-0049).
       contents: write
       # Trusted publishing and attestation: this run's OIDC token is exchanged
       # for a short-lived credential, so no npm token is stored anywhere.
@@ -282,25 +298,6 @@ jobs:
         with:
           name: release-set
           path: dist
-      - name: Tag the landing
-        if: needs.plan.outputs.tag == 'true'
-        run: |
-          # A re-run of failed jobs keeps the plan's tag=true, so the tag may
-          # already be there: it is this landing's, or another landing took
-          # the number first (re-run all jobs to plan again).
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
-            git fetch --no-tags origin "+refs/tags/v$VERSION:refs/tags/v$VERSION"
-            if [ "$(git rev-parse "v$VERSION^{commit}")" != "$(git rev-parse HEAD)" ]; then
-              echo "v$VERSION is another commit's tag; re-run all jobs to plan this landing again." >&2
-              exit 1
-            fi
-            echo "v$VERSION is already this landing's tag."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "v$VERSION" -m "causet $VERSION" HEAD
-            git push origin "refs/tags/v$VERSION"
-          fi
       - name: Attest what a user downloads
         # `gh attestation verify <file> --repo jwh3times/causet` checks these.
         uses: actions/attest-build-provenance@v2
@@ -311,8 +308,18 @@ jobs:
             dist/install.ps1
       - name: Publish the GitHub prerelease with every asset
         run: |
-          # The release notes are the version's changelog section.
-          awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { on = 1; next } on && /^## \[/ { exit } on' CHANGELOG.md > notes.md
+          # The release notes are the version's changelog section, which
+          # version.yml stamped on main in the commit after this landing.
+          # A file, not a pipe: awk stops at the next section, and under
+          # pipefail the SIGPIPE that gives `git show` would fail the step.
+          git fetch --no-tags --quiet origin main
+          git show origin/main:CHANGELOG.md > "$RUNNER_TEMP/main-changelog.md"
+          awk -v heading="## [$VERSION]" 'index($0, heading) == 1 { on = 1; next } on && /^## \[/ { exit } on' \
+            "$RUNNER_TEMP/main-changelog.md" > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::main's CHANGELOG.md has no section for $VERSION; check version.yml's run on this landing." >&2
+            exit 1
+          fi
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release upload "v$VERSION" dist/* --clobber
           else

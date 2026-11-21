@@ -15,78 +15,19 @@ const changelog = (...versions) => [
   ...versions.flatMap((version) => [`## [${version}] - 2026-11-12`, "", "- An entry.", ""]),
 ].join("\n");
 
-test("a landing is tagged with the version its newest changelog section names", () => {
-  assert.deepEqual(planLanding({
-    changelog: changelog("0.26.3", "0.26.2"),
-    declared: "0.26.0",
-    tags: ["v0.25.1", "v0.26.0", "v0.26.1", "v0.26.2"],
-    tagsAtCommit: [],
-  }), { version: "0.26.3", tag: true });
+test("a landing is released as the version its tag names", () => {
+  assert.deepEqual(planLanding({ tagsAtCommit: ["v0.26.3"] }), { version: "0.26.3" });
 });
 
-test("a landing that already carries its tag is not tagged again, so a re-run can publish it", () => {
-  assert.deepEqual(planLanding({
-    changelog: changelog("0.26.3", "0.26.2"),
-    declared: "0.26.0",
-    tags: ["v0.26.2", "v0.26.3"],
-    tagsAtCommit: ["v0.26.3"],
-  }), { version: "0.26.3", tag: false });
-});
-
-test("a landing with no section of its own is released as the next version, for a later section to backfill", () => {
-  // A Dependabot landing writes no section, and a pull request that was not renumbered names a
-  // version another landing took; either way the landing is still a version (Skipped tags: backfill).
-  assert.deepEqual(planLanding({
-    changelog: changelog("0.26.3", "0.26.2"),
-    declared: "0.26.0",
-    tags: ["v0.26.2", "v0.26.3"],
-    tagsAtCommit: [],
-  }), { version: "0.26.4", tag: true });
-});
-
-test("a re-run keeps the version a landing was already released as, whatever its newest section", () => {
-  // The first run gave a landing with no section of its own the next version.
-  assert.deepEqual(planLanding({
-    changelog: changelog("0.26.3", "0.26.2"),
-    declared: "0.26.0",
-    tags: ["v0.26.3", "v0.26.4"],
-    tagsAtCommit: ["v0.26.4"],
-  }), { version: "0.26.4", tag: false });
-});
-
-test("a landing with no versioned changelog section is refused", () => {
-  assert.throws(() => planLanding({
-    changelog: "# Changelog\n\n## [Unreleased]\n\n- An entry.\n",
-    declared: "0.26.0",
-    tags: [],
-    tagsAtCommit: [],
-  }), /no `## \[x\.y\.z\]` section/);
-});
-
-test("a landing whose version is off the declared release line or below its floor is refused", () => {
-  for (const version of ["0.27.0", "0.25.9", "1.26.0"]) {
-    assert.throws(() => planLanding({
-      changelog: changelog(version),
-      declared: "0.26.0",
-      tags: [],
-      tagsAtCommit: [],
-    }), /not on the release line 0\.26/, version);
-  }
-  assert.throws(() => planLanding({
-    changelog: changelog("0.26.1"),
-    declared: "0.26.2",
-    tags: [],
-    tagsAtCommit: [],
-  }), /below the declared version 0\.26\.2/);
+test("a landing with no version tag yet is refused, never tagged by the release workflow", () => {
+  // version.yml tags every landing when it stamps its section; a tag pushed here would have none.
+  assert.throws(() => planLanding({ tagsAtCommit: [] }), /no version tag yet/);
 });
 
 test("other tags at the landing commit do not count as a release", () => {
-  assert.deepEqual(planLanding({
-    changelog: changelog("0.26.0"),
-    declared: "0.26.0",
-    tags: ["v0.25.1", "v1.1.1.3"],
-    tagsAtCommit: ["v1.1.1.3", "checkpoint"],
-  }), { version: "0.26.0", tag: true });
+  assert.throws(() => planLanding({ tagsAtCommit: ["v1.1.1.3", "checkpoint", "v0.27.0-rc1"] }),
+    /no version tag yet/);
+  assert.deepEqual(planLanding({ tagsAtCommit: ["v1.1.1.3", "v0.26.0"] }), { version: "0.26.0" });
 });
 
 test("a build is published as npm's next unless a newer build already is", () => {
@@ -156,15 +97,14 @@ test("the CLI writes the landing's version and the dry run's as Actions outputs"
     });
     return { ...ran, outputs: fs.readFileSync(output, "utf8").trim().split("\n").filter(Boolean) };
   };
-  assert.deepEqual(run("landing").outputs, ["version=0.26.1", "tag=true"]);
   assert.deepEqual(run("dry-run").outputs, ["version=0.26.1"]);
-
-  fs.writeFileSync(path.join(cwd, "CHANGELOG.md"), changelog("0.27.0", "0.26.0"));
-  git("commit", "-am", "a section off the declared line");
   const refused = run("landing");
   assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /release-plan: The newest section, \[0\.27\.0\], is not on the release line 0\.26/);
+  assert.match(refused.stderr, /release-plan: This landing has no version tag yet/);
   assert.deepEqual(refused.outputs, []);
+
+  git("tag", "v0.26.1");
+  assert.deepEqual(run("landing").outputs, ["version=0.26.1"]);
 });
 
 test("a dry run builds a version package.json does not name, so the stamp is always exercised", () => {
