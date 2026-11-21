@@ -9,6 +9,12 @@ included, gets a section from its title (ADR-0049). `[Unreleased]` stays empty.
 
 No unreleased changes.
 
+## [0.32.7] - 2026-11-21
+
+### Changed
+
+- chore: take the latest shared skills and scripts from jwh3times/skills (#473)
+
 ## [0.32.6] - 2026-11-21
 
 ### Fixed
