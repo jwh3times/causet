@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwqxclgc90411ce47bb7",
+      "mode": "compact",
+      "sourceRef": "docs/landing-bot-provenance",
+      "sourceHead": "2223fc15efb59186db41e7084c7445764f94c2af",
+      "sourceSubject": "docs: update docs and changelog fragment",
+      "targetBefore": "541ef8c7f89135f61aceb9884837d46e350c7fbc",
+      "landingCommit": "d35070b3de3b52e8f85b182f1e29173403a79825",
+      "base": "541ef8c7f89135f61aceb9884837d46e350c7fbc",
+      "absorbedCommits": [
+        "1e127c144017cfb974eea392b04d0e8628b69307",
+        "2223fc15efb59186db41e7084c7445764f94c2af"
+      ],
+      "absorbedChanges": [
+        "ch_0mwqwxtvfe4ea21570ca1",
+        "ch_0mwqx1ax409d7f54c9e2a"
+      ],
+      "resultTree": "66d1a7eae0af6b3387800a8d79328c30b290972d",
+      "createdAt": "2026-11-21T21:33:00.562Z"
+    }
+  ]
+}
