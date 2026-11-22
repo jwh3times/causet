@@ -133,6 +133,21 @@ owner says to land:
   branch, so check `git ls-remote origin 'refs/heads/<branch>'` first; usually only
   `cst git branch -d <branch>` is left.
 
+## Reds that are not the code
+
+Failures with a known cause outside the change, and what clears them. Each remedy is tried once;
+a second red is reported with its log, not tried again.
+
+- **`release.yml`'s "Attest what a user downloads" fails with `error fetching tlog entry - (404)
+  Not Found`.** `actions/attest-build-provenance` wrote the attestation to Sigstore's public
+  transparency log and could not read the entry back. v0.32.13's release run hit it after every
+  earlier job had passed, and re-running the failed job once cleared it. Nothing is published
+  before that step, and the publish step is safe to repeat: it uploads to a release that already
+  exists, and npm skips a version already published. The remedy is
+  `gh run rerun <run id> --failed`. `release.yml` is a deploy, which `land` never re-runs, so the
+  owner runs it: `land` reports this red with that command, then confirms the prerelease with
+  `gh release view v<version>`.
+
 ## Promotion and npm
 
 A landing releases a prerelease by itself ("Releases" in `docs/testing.md`). Choosing which version
