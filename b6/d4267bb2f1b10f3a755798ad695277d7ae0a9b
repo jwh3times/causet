@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mws53j0w669d44b13207",
+      "mode": "compact",
+      "sourceRef": "docs/dependabot-skill-lists",
+      "sourceHead": "763dc9580ea080806a69e7f3445780ebf9aa311d",
+      "sourceSubject": "docs: list the dependabot skill with the shared skills",
+      "targetBefore": "33aa24b80d598a6098aca7ebea459e9f60bfbe78",
+      "landingCommit": "b6d4267bb2f1b10f3a755798ad695277d7ae0a9b",
+      "base": "33aa24b80d598a6098aca7ebea459e9f60bfbe78",
+      "absorbedCommits": [
+        "763dc9580ea080806a69e7f3445780ebf9aa311d"
+      ],
+      "absorbedChanges": [
+        "ch_0mws3uaqw88143d8240e1"
+      ],
+      "resultTree": "49616bba43f8e737991f529953d04b90eb6564d8",
+      "createdAt": "2026-11-22T17:57:40.550Z"
+    }
+  ]
+}
