@@ -3,7 +3,9 @@
 This repository lands its own work with `cst`, so a commit or a push done the Git way loses records
 that cannot be made again. The wiki's landing procedure
 ([Human-action-19](https://github.com/jwh3times/causet/wiki/Human-action-19)) is the full sequence.
-This file holds what agents have got wrong running it.
+This file holds what agents have got wrong running it. The `land` skill reads it as its guide
+([merging settings](merging.md)): `land` waits for the checks and confirms the release, and this
+file's "Landing" section is how it merges.
 
 ## All source control goes through `cst`
 
