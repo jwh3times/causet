@@ -52,6 +52,9 @@
 - `docs/agents/mirrors.md` — how agent and skill sources are mirrored and linted, and which scripts
   are copies of the canonical ones. **When:** `scripts/sync-agents.mjs` or
   `scripts/lint-agent-neutrality.mjs` changes, or a canonical script is added.
+- `docs/agents/guard.md` — the commands and paths `scripts/guard.mjs` stops here, on top of its
+  shared rules: bare `git` forms of the commands `cst` defines, and the landing steps that need the
+  owner. **When:** `landing.md`'s command table, a never-run command or a never-remove path changes.
 - `docs/agents/dev-flow.md` — what this repository adds to the shared development flow: the
   owner's steps per ticket, how to present a decision, the published contracts that are code, and
   its bump, release and linking details. **When:** one of those changes.
