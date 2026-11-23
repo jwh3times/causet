@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwtoxtkg136d0dd0dafd",
+      "mode": "compact",
+      "sourceRef": "docs/guard-rules",
+      "sourceHead": "d2c17dd994a966905fcaacdf40f1b6c799375bb7",
+      "sourceSubject": "docs: add this repository's guard rules",
+      "targetBefore": "9c486cba68ed74d04d6ed875e48ad9e9efa491c9",
+      "landingCommit": "0414c06843882233b74b85cdd2413fa18290fa5f",
+      "base": "9c486cba68ed74d04d6ed875e48ad9e9efa491c9",
+      "absorbedCommits": [
+        "d2c17dd994a966905fcaacdf40f1b6c799375bb7"
+      ],
+      "absorbedChanges": [
+        "ch_0mwtov415311d5872465e"
+      ],
+      "resultTree": "903d037c692101c4cebe3b29a8545dbf3ba85f16",
+      "createdAt": "2026-11-23T20:00:52.821Z"
+    }
+  ]
+}
