@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwu1qvd071ba9af7ed0e",
+      "mode": "compact",
+      "sourceRef": "docs/test-proof",
+      "sourceHead": "7864d8252cceca17e267db0bec4fcf0ce62d5950",
+      "sourceSubject": "Merge remote-tracking branch 'origin/main' into docs/test-proof",
+      "targetBefore": "d6ee199edf58f667c46af6b4bf1094c2bf6c8832",
+      "landingCommit": "0c96226fe31f460bd15d4f8876a72b889945e474",
+      "base": "d6ee199edf58f667c46af6b4bf1094c2bf6c8832",
+      "absorbedCommits": [
+        "d329822b7aad8559aca1453a1d9d1ef82a0173cb",
+        "7864d8252cceca17e267db0bec4fcf0ce62d5950"
+      ],
+      "absorbedChanges": [
+        "ch_0mwu0xo9wf44e15eceb9e",
+        "git:7864d8252cceca17e267db0bec4fcf0ce62d5950"
+      ],
+      "resultTree": "b4917d7a0d59e85bb8298399cfc339d681119c3b",
+      "createdAt": "2026-11-24T01:59:23.522Z"
+    }
+  ]
+}
