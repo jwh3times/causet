@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwu9ux8k10b675f6089d",
+      "mode": "compact",
+      "sourceRef": "chore/take-skills",
+      "sourceHead": "08d21340684a59e301796781ecbfc66ad39c147c",
+      "sourceSubject": "docs: point this repository's own text at open-pr",
+      "targetBefore": "24f930cc854a44e3d7ff65441c4d7c7c7cf358da",
+      "landingCommit": "0043a9b06091a4d8ecd28d52a41181e16038cd8e",
+      "base": "24f930cc854a44e3d7ff65441c4d7c7c7cf358da",
+      "absorbedCommits": [
+        "d5307000f3e37feb696faeb0f36bb52ca879e4d0",
+        "08d21340684a59e301796781ecbfc66ad39c147c"
+      ],
+      "absorbedChanges": [
+        "git:d5307000f3e37feb696faeb0f36bb52ca879e4d0",
+        "ch_0mwu94kkf69a4d1890887"
+      ],
+      "resultTree": "2225711091fc077ad8805fea998f2cc55bdf8dd7",
+      "createdAt": "2026-11-24T05:46:29.512Z"
+    }
+  ]
+}
