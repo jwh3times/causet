@@ -1543,7 +1543,7 @@ Every landing on `main` is a version, and one dispatch makes a version the
 stable release (ADR-0048, #440; ADR-0049).
 
 **A landing versions itself.** `docs/agents/releases.md` sets
-`Scheme: stamp-on-tag`: `ship` writes each branch's entries to its own
+`Scheme: stamp-on-tag`: `open-pr` writes each branch's entries to its own
 `changelog.d/<branch-slug>.md` fragment and never edits `CHANGELOG.md`, and
 `ci.yml`'s `changelog` job checks the fragment. On the push of a landing to
 `main`, `version.yml` runs `node scripts/stamp-changelog.mjs`, which writes
@@ -1593,7 +1593,7 @@ version.
 **Starting a release line.** `package.json`'s major and minor on `main` are
 the release line and its build is the floor; landings advance the build. A
 branch that adds capability or breaks a contract moves the line through
-`ship`, with the owner's approval (`Ask before bumping: always`), and its
+`open-pr`, with the owner's approval (`Ask before bumping: always`), and its
 landing releases `x.y.0`.
 
 **When a landing is not released:**

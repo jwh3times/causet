@@ -40,7 +40,7 @@ writes a commit, a branch, a merge or a remote ref runs through `cst`.
 
 Every commit on a ticket branch is
 `cst commit -m "<subject>" --generated-by <your exact model id>`. That includes the docs and
-changelog commit `ship` makes, and docs-only tickets. A skill that says "commit" means `cst commit`
+changelog commit `open-pr` makes, and docs-only tickets. A skill that says "commit" means `cst commit`
 here.
 
 - Provenance is recorded when the commit is written. It cannot honestly be added later, so a landing

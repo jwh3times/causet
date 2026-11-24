@@ -168,7 +168,7 @@ Recent history uses concise imperative subjects with conventional prefixes:
 `feat:`, `fix:`, `docs:`, and `chore:`. Keep each commit scoped to one coherent
 change. Pull requests should explain intent and compatibility impact, link
 their issue as
-[the development flow](.agents/skills/ship/settings/dev-flow.md#linking-work-to-its-issue)
+[the development flow](.agents/skills/open-pr/settings/dev-flow.md#linking-work-to-its-issue)
 requires and any relevant ADR, list validation commands and results, and
 update the README, changelog, or durable docs when contracts change. Screenshots are
 normally unnecessary for this CLI; include focused terminal output when it
@@ -181,7 +181,7 @@ never force-push `main` or move a release tag. See "Repository rules" in
 
 All source control in this repository goes through `cst`, never bare `git`:
 where a skill or procedure says `git <command>`, run `cst <command>`. Every
-commit on a work branch, the `ship` commit included, is
+commit on a work branch, the `open-pr` commit included, is
 `cst commit -m "<subject>" --generated-by <your exact model id>`, because
 provenance cannot be added after the fact. Branches start with
 `cst branch <branch> origin/main`, remotes are reached with `cst fetch`,
