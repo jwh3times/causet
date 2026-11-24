@@ -1,7 +1,7 @@
 # Changelog fragments
 
 Each branch writes its changelog entries here, in one file named for the branch with each `/`
-replaced by `-` (`feat/470-cst-tag-list` → `feat-470-cst-tag-list.md`). `/ship` writes it; never
+replaced by `-` (`feat/470-cst-tag-list` → `feat-470-cst-tag-list.md`). `/open-pr` writes it; never
 edit `CHANGELOG.md` on a branch.
 
 A fragment holds only category headings and their bullets, with no version or date, using Keep a

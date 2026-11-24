@@ -1,6 +1,6 @@
 # Development flow
 
-The flow itself is `.agents/skills/ship/settings/dev-flow.md`, and `AGENTS.md` summarizes it. This file
+The flow itself is `.agents/skills/open-pr/settings/dev-flow.md`, and `AGENTS.md` summarizes it. This file
 holds what this repository adds.
 
 ## Reading a ready issue
@@ -21,7 +21,7 @@ words, and approving one step never covers the next.
 1. `/implement <n>`, or `/diagnosing-bugs <n>` for a bug.
 2. Build, then an independent review, in disposable repositories only
    ([local runs](local-runs.md)).
-3. `/ship`. The PR body carries a "Decisions for the owner" section, each decision with a
+3. `/open-pr`. The PR body carries a "Decisions for the owner" section, each decision with a
    recommendation.
 4. CI green. Wait for it and report it without being asked.
 5. "grill me": a round on those decisions, with recommendations, plus anything CI raised.
@@ -66,7 +66,7 @@ The published contracts the suites check are code, Markdown included:
   Today the dependencies are the Rust crates in `native/Cargo.toml` and
   `native/Cargo.lock` and the toolchain pin in `native/rust-toolchain.toml`;
   there are no npm dependencies.
-- **Release prep** is what `ship` writes on each branch under
+- **Release prep** is what `open-pr` writes on each branch under
   `Scheme: stamp-on-tag` (ADR-0049): the branch's `changelog.d/` fragment,
   which version.yml stamps into the landing's dated section, and, on a branch
   that starts a new release line with the owner's approval, the version bump

@@ -63,7 +63,7 @@
   procedure they walk through changes. Dated audit findings there stay historical; link them to the
   current instructions.
 - `.agents/skills/*/**` — skills, mirrored to `.claude/skills/`. Every skill `skills-lock.json`
-  lists is installed (`end-session`, `handoff`, `lets-go`, `ship`, `land`, `dependabot`,
+  lists is installed (`end-session`, `handoff`, `lets-go`, `open-pr`, `land`, `dependabot`,
   `docs-updater` and `what-next` from `jwh3times/skills`, the rest from `mattpocock/skills`):
   `frozen` here, since a reinstall overwrites local edits; fix them upstream.
 

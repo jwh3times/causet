@@ -1,7 +1,7 @@
 # Guard
 
 The commands and paths `scripts/guard.mjs` stops in this repository, on top of the rules it applies
-everywhere; the format is defined in `.agents/skills/ship/settings/guard.md`. The command rules hold
+everywhere; the format is defined in `.agents/skills/open-pr/settings/guard.md`. The command rules hold
 the table in [landing.md](landing.md#all-source-control-goes-through-cst): read-only Git (`git diff`,
 `git log`, `git status`, `git show`, `git merge-base`, `git ls-remote`, `git rev-parse`,
 `git branch --show-current`) stays allowed.
