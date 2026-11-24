@@ -96,6 +96,8 @@ jwh3times 7
 - `Area`: `Rebase and workspaces`, `Structured documents`, `Identity and provenance`,
   `Proof and verification`, `Trust and protocol`, `Native core and performance`,
   `Docs and process`, `Defect`.
+- `Due` (date): set only when the action has a real deadline (an expiry, a renewal, an
+  offer's end, a date someone else set), never an aspirational one; empty otherwise.
 
 ## Priority order
 
