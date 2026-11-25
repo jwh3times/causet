@@ -1,3 +1,12 @@
+### Changed
+
+- **Pull requests that touch native code or a suite now run the SHA-256 suite mode on Ubuntu.**
+  It used to run only on a manual `ci.yml` dispatch and at promotion. The rule is the one that
+  already adds the native-kind mode: a change under `native/`, `test/` or `test-support/`, or an
+  unknown change set. A suite or fixture that assumes SHA-1 now fails before it lands, not when a
+  version is promoted. Pushes to `main` don't repeat it, and nothing changes for `cst` or its
+  packages.
+
 ### Fixed
 
 - **The sha256 suite mode passes again.** The `cst log` placeholder test on commits Git reads but

@@ -20,12 +20,15 @@ test("routine code changes use two PR suites and one main suite", () => {
   ]);
 });
 
-test("a change to native code, a suite or the harness adds the native-kind mode beside each default suite", () => {
+test("a change to native code, a suite or the harness adds the native-kind mode beside each default suite, and the sha256 mode on a pull request's Ubuntu", () => {
   for (const files of [["native/engine/src/git.rs"], ["README.md", "native/store/src/delta.rs"],
     ["test-support/native-kind.js"], ["test-support/git-environment.js"], ["test/integration.test.js"], null, []]) {
+    // The sha256 mode runs on pull requests too, not only at promotion, so a
+    // suite that assumes SHA-1 fails before it lands (#462).
     assert.deepEqual(planCi("pull_request", files).include, [
       { os: "ubuntu-latest", node: 26, mode: "default" },
       { os: "ubuntu-latest", node: 26, mode: "kind-native" },
+      { os: "ubuntu-latest", node: 26, mode: "sha256" },
       { os: "windows-latest", node: 26, mode: "default" },
       { os: "windows-latest", node: 26, mode: "kind-native" },
     ], JSON.stringify(files));
@@ -119,7 +122,7 @@ test("the CLI writes usable Actions outputs for documentation, code and manual r
   git("commit", "-m", "docs");
   for (const [eventName, event, count] of [["push", { before }, 0],
     ["pull_request", { pull_request: { base: { sha: before } } }, 0],
-    ["pull_request", {}, 4], ["workflow_dispatch", {}, 20]]) {
+    ["pull_request", {}, 5], ["workflow_dispatch", {}, 20]]) {
     const eventPath = path.join(cwd, "event.json");
     const outputPath = path.join(cwd, "output.txt");
     const summaryPath = path.join(cwd, "summary.md");

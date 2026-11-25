@@ -49,13 +49,20 @@ export function planCi(eventName, changedFiles) {
     return { reason: "Documentation-only change", include: [] };
   }
   // An unknown change set conservatively counts as native code too.
-  const modes = !changedFiles?.length || changedFiles.some(nativeCode) ? ["default", "kind-native"] : ["default"];
+  const native = !changedFiles?.length || changedFiles.some(nativeCode);
+  const modes = native ? ["default", "kind-native"] : ["default"];
+  // A pull request touching native code or a suite also runs the sha256 mode
+  // on Ubuntu, so a suite that assumes SHA-1 fails before it lands rather
+  // than at promotion (#462). Every landing comes through such a PR, so main
+  // does not repeat it.
+  const pullRequest = eventName === "pull_request";
+  const extra = (os) => (pullRequest && native && os === "ubuntu-latest" ? ["sha256"] : []);
   return {
-    reason: eventName === "pull_request" ? "Routine pull request" : "Main integration",
-    include: (eventName === "pull_request"
+    reason: pullRequest ? "Routine pull request" : "Main integration",
+    include: (pullRequest
       ? ["ubuntu-latest", "windows-latest"]
       : ["ubuntu-latest"]
-    ).flatMap((os) => modes.map((mode) => ({ os, node: CURRENT_NODE, mode }))),
+    ).flatMap((os) => [...modes, ...extra(os)].map((mode) => ({ os, node: CURRENT_NODE, mode }))),
   };
 }
 
