@@ -109,12 +109,12 @@ function makeHistory(format) {
  * in ISO-8859-1 and in bytes no encoding gives, and trailers. `ascii` is the
  * commit before the first whose text is not ASCII.
  */
-function makeOddHistory() {
+function makeOddHistory(format) {
   const root = scratch();
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
   const git = (args, input) => execFileSync("git", args, { cwd: repo, env: testEnv({}), input }).toString().trim();
-  git(["init", "-q", "-b", "main"]);
+  git(["init", "-q", "-b", "main", `--object-format=${format}`]);
   const tree = git(["mktree"], `100644 blob ${git(["hash-object", "-w", "--stdin"], "x")}\tf\n`);
   let parent = null;
   const commit = (headers, message) => {
@@ -143,7 +143,7 @@ function makeOddHistory() {
   git(["symbolic-ref", "HEAD", "refs/heads/main"]);
   const imported = cst(root, ["import", "source", "native"]);
   assert.equal(imported.status, 0, imported.stderr.toString());
-  return { repo, native: path.join(root, "native"), format: "sha1", git };
+  return { repo, native: path.join(root, "native"), format, git };
 }
 
 /**
@@ -338,24 +338,28 @@ const LAID_OUT = [
   "%<(10)%x00x",
 ];
 
-test("every placeholder prints what Git prints, on commits Git reads that no Git writes, without Git", () => {
-  const history = makeOddHistory();
-  const translate = translator(history);
-  // Git's `%B` of a commit with no message reads past the end of its buffer
-  // and prints what follows it, so it is printed for the other commits.
-  for (const template of TEMPLATES) same(history, translate, ["main", `--format=${template}`]);
-  same(history, translate, ["main~3..main", "--format=[%B]"]);
-  for (const template of LAID_OUT) {
-    same(history, translate, ["ascii", `--format=${template}`]);
-    same(history, translate, ["main~1..main", `--format=${template}`]);
-  }
-  for (const mode of ["default", "relative", "short", "iso", "iso8601", "iso-strict", "iso8601-strict", "rfc", "rfc2822", "raw", "unix"]) {
-    same(history, translate, ["main", `--date=${mode}`, "--format=[%ad][%cd]"]);
-  }
-  same(history, translate, ["main", "--date", "short", "--format=%ad"]);
-  same(history, translate, ["main", "--relative-date", "--format=%ad"]);
-  same(history, translate, ["main", "--pretty=tformat:%h %s"]);
-});
+// Each format states itself, so the test does not follow `GIT_DEFAULT_HASH`
+// (#462).
+for (const format of ["sha1", "sha256"]) {
+  test(`every placeholder prints what Git prints, on commits Git reads that no Git writes, without Git (${format})`, () => {
+    const history = makeOddHistory(format);
+    const translate = translator(history);
+    // Git's `%B` of a commit with no message reads past the end of its buffer
+    // and prints what follows it, so it is printed for the other commits.
+    for (const template of TEMPLATES) same(history, translate, ["main", `--format=${template}`]);
+    same(history, translate, ["main~3..main", "--format=[%B]"]);
+    for (const template of LAID_OUT) {
+      same(history, translate, ["ascii", `--format=${template}`]);
+      same(history, translate, ["main~1..main", `--format=${template}`]);
+    }
+    for (const mode of ["default", "relative", "short", "iso", "iso8601", "iso-strict", "iso8601-strict", "rfc", "rfc2822", "raw", "unix"]) {
+      same(history, translate, ["main", `--date=${mode}`, "--format=[%ad][%cd]"]);
+    }
+    same(history, translate, ["main", "--date", "short", "--format=%ad"]);
+    same(history, translate, ["main", "--relative-date", "--format=%ad"]);
+    same(history, translate, ["main", "--pretty=tformat:%h %s"]);
+  });
+}
 
 test("cst log walks as Git walks: ranges, exclusions, counts, skips, reversal, first parents and merges", () => {
   const history = makeHistory("sha1");
