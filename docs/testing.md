@@ -1673,7 +1673,7 @@ start after those checks pass.
 
 | Trigger | Suite jobs after static checks | Purpose |
 | --- | --- | --- |
-| Code pull request | Default mode on Ubuntu and Windows, Node 26, and the native-kind mode beside each when native code or a suite changes | Routine behavior and both platform defaults; ADR-0044 item 7 |
+| Code pull request | Default mode on Ubuntu and Windows, Node 26; when native code or a suite changes, the native-kind mode beside each and the SHA-256 mode on Ubuntu | Routine behavior and both platform defaults; ADR-0044 item 7; a suite that assumes SHA-1 fails before it lands (#462) |
 | Code push to `main` | Default mode on Ubuntu, Node 26, and the native-kind mode when native code or a suite changes | Integration check without repeating the Windows matrix |
 | Known documentation-only PR or main push | None | Static checks still run |
 | Manual `workflow_dispatch`, or `promote.yml`'s call on a tag | All nine modes, the reftable and SHA-256 modes among them, on Ubuntu and Windows, Node 26; default and session-on on Ubuntu, Node 24, the floor | Full platform and minimum-Node qualification |
@@ -1686,7 +1686,11 @@ fixtures, scripts, tests, workflows, and unknown paths still run suites. Renames
 comparison commit or empty diff conservatively runs the routine suites. The
 native-kind mode runs for anything under `native/`, and under `test/` and
 `test-support/`, because the suites and their harness decide which
-repositories it imports; an unknown change set counts too.
+repositories it imports; an unknown change set counts too. The same changes
+add the SHA-256 mode to a pull request, on Ubuntu only. A suite or fixture
+that assumes SHA-1 passed every pull request until a promotion ran this mode
+(#462). `main` does not repeat it, since every landing comes through such a
+pull request.
 `.github/workflows/corpora.yml` runs the heavy corpora of ADR-0044 item 7,
 the generated-history corpus and the real repositories, on Ubuntu and
 Windows: weekly on `main`, on manual dispatch, from `release-gates.yml` when a
