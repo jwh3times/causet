@@ -277,6 +277,16 @@ pub fn decide(
         true,
       );
     }
+    // Git prints a command's help on standard output too, so help has no
+    // JSON form either (#499). It is read from what Git will be given.
+    let for_git: Vec<&str> = args[1..].iter().copied().filter(|item| !own(item)).collect();
+    if json && crate::sync::asks_for_help(command, &for_git) {
+      return fail(
+        format!("Unknown option '--json' for 'cst {command} --help': Git prints its help on standard output, so help has no JSON form. Run 'cst {command} --help'."),
+        "usage-unknown-option",
+        true,
+      );
+    }
     if command != "clone" && unmigrated(&settings) {
       return Outcome::Unmigrated { json };
     }

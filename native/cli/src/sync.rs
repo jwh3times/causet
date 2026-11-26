@@ -93,6 +93,58 @@ fn positionals(args: &[String], value_options: &[&[&str]]) -> Vec<String> {
   found
 }
 
+/// The options of a sync command's Git command that take a value.
+fn value_options(command: &str) -> &'static [&'static [&'static str]] {
+  match command {
+    "fetch" => &[FETCH_VALUE_OPTIONS],
+    "pull" => &[FETCH_VALUE_OPTIONS, PULL_VALUE_OPTIONS],
+    "push" => &[PUSH_VALUE_OPTIONS],
+    "clone" => &[CLONE_VALUE_OPTIONS],
+    _ => &[],
+  }
+}
+
+/// Whether these arguments ask Git for the command's help or usage, as
+/// Git's option parser reads them (#499): `--help`, `--help-all`, `-h`, or a
+/// cluster of short options that reaches `h` (`-qh`). An option's value is
+/// not a request (`push -o -h` and `push -oh` pass `-h` and `h` as push
+/// options), and neither is anything after `--`, which is a path or a
+/// refspec.
+pub fn asks_for_help<S: AsRef<str>>(command: &str, args: &[S]) -> bool {
+  let lists = value_options(command);
+  let takes_value = |option: &str| lists.iter().any(|list| list.contains(&option));
+  let mut index = 0;
+  while index < args.len() {
+    let item = args[index].as_ref();
+    index += 1;
+    if item == "--" {
+      return false;
+    }
+    if matches!(item, "--help" | "--help-all" | "-h") {
+      return true;
+    }
+    if takes_value(item) {
+      index += 1;
+    } else if item.len() > 2 && item.starts_with('-') && !item.starts_with("--") {
+      // A cluster: each letter is a flag until one takes a value, which is
+      // the rest of the cluster or, at its end, the next argument.
+      let letters: Vec<char> = item[1..].chars().collect();
+      for (position, letter) in letters.iter().enumerate() {
+        if *letter == 'h' {
+          return true;
+        }
+        if takes_value(&format!("-{letter}")) {
+          if position + 1 == letters.len() {
+            index += 1;
+          }
+          break;
+        }
+      }
+    }
+  }
+  false
+}
+
 fn current_branch(cwd: &str) -> GitResult<Option<String>> {
   engine::symbolic_ref("HEAD", cwd, true)
 }
@@ -674,6 +726,14 @@ pub fn run(command: &str, args: &[String], json: bool, records: bool, cwd: &str)
   };
   let mut git_args = vec![command.to_string()];
   git_args.extend(args.iter().cloned());
+
+  // Help is Git's own, and asking for it moves no records either way (#499):
+  // a push would otherwise publish them before Git showed its help, and a
+  // fetch, pull or clone would carry them after Git's help exited 0.
+  if asks_for_help(command, args) {
+    let status = git_inherited(&git_args, cwd);
+    return finish(status, reports, None);
+  }
 
   if command == "push" {
     if records && has(args, &["--mirror"]) {
