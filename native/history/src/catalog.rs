@@ -246,19 +246,14 @@ fn decode(bytes: &[u8], print: &[u8; 32]) -> Option<Map> {
   if reader.take(32).ok()? != print {
     return None;
   }
+  // Nor does the order of keys and IDs: a file whose checksum holds and
+  // whose fingerprint matches is this build's own encoding of a sorted map.
   let mut map = Map::new();
   for _ in 0..reader.varint().ok()? {
     let key = reader.bytes().ok()?.to_vec();
-    if map.keys().next_back().is_some_and(|last| *last >= key) {
-      return None;
-    }
     let mut ids: Vec<NativeId> = Vec::new();
     for _ in 0..reader.varint().ok()? {
-      let id = NativeId::read(&mut reader).ok()?;
-      if ids.last().is_some_and(|last| *last >= id) {
-        return None;
-      }
-      ids.push(id);
+      ids.push(NativeId::read(&mut reader).ok()?);
     }
     map.insert(key, ids);
   }
