@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
-import { testEnv } from "../test-support/git-environment.js";
+import { isolatedGitConfig, testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 
 const created = [];
@@ -31,8 +31,8 @@ const identity = {
   GIT_COMMITTER_EMAIL: "causet-remote@example.invalid",
 };
 
-function run(program, args, cwd) {
-  const result = spawnSync(program, args, { cwd, encoding: "utf8", env: testEnv(identity) });
+function run(program, args, cwd, env = {}) {
+  const result = spawnSync(program, args, { cwd, encoding: "utf8", env: testEnv({ ...identity, ...env }) });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -47,6 +47,9 @@ function ok(result, label) {
 const json = (result, label) => JSON.parse(ok(result, label));
 const refs = (cwd) => ok(git(cwd, "for-each-ref", "--format=%(refname)"), "for-each-ref").split("\n").filter(Boolean);
 const target = (cwd, name) => ok(git(cwd, "rev-parse", name), name).trim();
+/** The refs `cst push` carries to a remote. */
+const carried = (cwd) => refs(cwd).filter((name) =>
+  name === "refs/notes/causet" || name === "refs/causet/retention" || name.startsWith("refs/causet/resolutions/"));
 
 /** A bare hub, and clone `a` of it with a base commit pushed by plain Git. */
 function hubWithClone() {
@@ -230,6 +233,124 @@ test("Git's own outcome comes back, and a failed Git command carries nothing", (
   const deleted = cst(a, "push", "-q", "--json", "origin", "--delete", "no-such-branch");
   assert.notEqual(deleted.status, 0);
   assert.deepEqual(JSON.parse(deleted.stdout).records, [], "a delete carries no records");
+});
+
+/**
+ * A Git configuration under which `git <command> --help` shows its page
+ * through a browser that only echoes it, over stand-in pages, so the help
+ * exits 0 on every platform without opening anything, whatever
+ * documentation is installed (Git for Windows opens a real browser).
+ */
+function helpEnvironment(parent) {
+  const pages = path.join(parent, "help-pages");
+  fs.mkdirSync(pages, { recursive: true });
+  for (const page of ["git", "git-fetch", "git-pull", "git-push", "git-clone"]) {
+    fs.writeFileSync(path.join(pages, `${page}.html`), "");
+  }
+  // The suite's isolated global file, with the help settings added.
+  const config = path.join(parent, "help-gitconfig");
+  fs.writeFileSync(config, [
+    fs.readFileSync(isolatedGitConfig, "utf8"),
+    "[help]", "\tformat = web", `\thtmlPath = ${pages.replaceAll("\\", "/")}`,
+    "[web]", "\tbrowser = causet-test",
+    '[browser "causet-test"]', "\tcmd = echo",
+    "",
+  ].join("\n"));
+  return { GIT_CONFIG_GLOBAL: config };
+}
+
+/** The spellings Git's option parser reads as a request for help or usage. */
+const HELP = ["--help", "-h", "-qh", "--help-all"];
+
+test("asking a push for help hands to Git's help and pushes no records", () => {
+  const { parent, hub, a } = hubWithClone();
+  land(a, "feature", "agent-a");
+  assert.ok(carried(a).length >= 2, "the clone has records to push");
+  const env = helpEnvironment(parent);
+  for (const help of HELP) {
+    const asked = run(cstCommand, [...cstPrefix(), "push", help], a, env);
+    const plain = run("git", ["push", help], a, env);
+    assert.equal(asked.status, plain.status, `cst push ${help} exits as git push ${help} does\n${asked.stderr}`);
+    assert.equal(asked.stdout, plain.stdout, `cst push ${help} prints Git's help`);
+    assert.doesNotMatch(asked.stderr, /records/, `cst push ${help} reports no records`);
+    assert.deepEqual(carried(hub), [], `cst push ${help} left the hub without records`);
+  }
+  // Git prints its help on standard output, so help has no JSON form: cst
+  // refuses before Git runs, as it refuses 'cst pull --json' (ADR-0040).
+  const refused = run(cstCommand, [...cstPrefix(), "push", "--help", "--json"], a, env);
+  assert.equal(refused.status, 1);
+  const error = JSON.parse(refused.stdout);
+  assert.equal(error.code, "usage-unknown-option");
+  assert.match(error.message, /'cst push --help'/);
+  assert.deepEqual(carried(hub), [], "cst push --help --json left the hub without records");
+});
+
+test("asking a fetch or pull for help hands to Git's help and fetches no records", () => {
+  const { parent, hub, a } = hubWithClone();
+  land(a, "feature", "agent-a");
+  ok(cst(a, "push", "-q", "origin", "main"), "a pushes its records");
+  assert.ok(carried(hub).length >= 2, "the hub has records to fetch");
+  const b = path.join(parent, "b");
+  ok(git(parent, "clone", "-q", hub, b), "plain clone b");
+  ok(cst(b, "init"), "init b");
+  for (const name of carried(b)) ok(git(b, "update-ref", "-d", name), `remove ${name}`);
+  const before = refs(b);
+  const env = helpEnvironment(parent);
+  for (const command of ["fetch", "pull"]) {
+    for (const help of HELP) {
+      const asked = run(cstCommand, [...cstPrefix(), command, help], b, env);
+      const plain = run("git", [command, help], b, env);
+      assert.equal(asked.status, plain.status, `cst ${command} ${help} exits as git ${command} ${help} does\n${asked.stderr}`);
+      assert.equal(asked.stdout, plain.stdout, `cst ${command} ${help} prints Git's help`);
+      assert.doesNotMatch(asked.stderr, /records/, `cst ${command} ${help} reports no records`);
+      assert.deepEqual(refs(b), before, `cst ${command} ${help} fetched, staged and merged nothing`);
+    }
+  }
+});
+
+test("asking a clone for help creates nothing and reports no error", () => {
+  const { parent, hub } = hubWithClone();
+  const env = helpEnvironment(parent);
+  const empty = path.join(parent, "empty");
+  fs.mkdirSync(empty);
+  for (const help of HELP) {
+    const asked = run(cstCommand, [...cstPrefix(), "clone", help], empty, env);
+    const plain = run("git", ["clone", help], empty, env);
+    assert.equal(asked.status, plain.status, `cst clone ${help} exits as git clone ${help} does\n${asked.stderr}`);
+    assert.doesNotMatch(asked.stderr, /^cst:/m, `cst clone ${help} prints no cst error`);
+    assert.deepEqual(fs.readdirSync(empty), [], `cst clone ${help} created nothing`);
+  }
+  // Named with a directory, help still clones nothing into it.
+  const named = run(cstCommand, [...cstPrefix(), "clone", "--help", hub, path.join(empty, "c")], empty, env);
+  const plain = run("git", ["clone", "--help", hub, path.join(empty, "c")], empty, env);
+  assert.equal(named.status, plain.status, `cst clone --help <url> <dir> exits as Git does\n${named.stderr}`);
+  assert.doesNotMatch(named.stderr, /^cst:/m, "cst clone --help <url> <dir> prints no cst error");
+  assert.deepEqual(fs.readdirSync(empty), [], "cst clone --help <url> <dir> created nothing");
+});
+
+test("an option's value or an argument after -- is not a request for help", () => {
+  const { a, hub } = hubWithClone();
+  land(a, "feature", "agent-a");
+  ok(git(hub, "config", "receive.advertisePushOptions", "true"), "the hub takes push options");
+  const option = cst(a, "push", "-q", "-o", "-h", "origin", "main");
+  ok(option, "push -o -h");
+  assert.match(option.stderr, /records pushed/, "-h as -o's value is a push option, so the records go");
+  assert.ok(carried(hub).length >= 2, "the hub has the records");
+  // In a cluster, a letter that takes a value takes the rest of the cluster,
+  // or the next argument when it ends the cluster.
+  // A long option is never a cluster, though it may hold an `h`.
+  for (const args of [["-oh"], ["-qo", "-h"], ["-qo", "--help"], ["--thin"], ["--force-with-lease"]]) {
+    const pushed = cst(a, "push", "-q", ...args, "origin", "main");
+    ok(pushed, `push ${args.join(" ")}`);
+    assert.match(pushed.stderr, /records already on/, `push ${args.join(" ")} is a push, so the records step runs`);
+  }
+  // Help is read from what Git is given: cst's own --json between -o and
+  // its value leaves --help as -o's value, so the push goes, with a report.
+  const reported = json(cst(a, "push", "-q", "-o", "--json", "--help", "origin", "main"), "push -o --json --help");
+  assert.equal(reported.records[0].upToDate, true, "the records step ran");
+  const separated = cst(a, "push", "origin", "--", "-h");
+  assert.equal(separated.status, git(a, "push", "origin", "--", "-h").status, "the push fails as Git's does");
+  assert.match(separated.stderr, /records already on/, "-h after -- is a refspec, so the records step runs");
 });
 
 test("a remote named by a relative path means what it means to Git", () => {

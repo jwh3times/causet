@@ -193,7 +193,7 @@ substrate stays, and ADR-0001 is refined rather than superseded.
 | `native/cli/src/environment.rs` | The user-facing environment variables, read as `src/environment.js` reads them (ADR-0039 §5): `CAUSET_<name>` when present, even empty. | None |
 | `native/cli/src/export.rs` | `cst metadata export <directory>`: `exportMetadata` of `src/metadata-transfer.js` with the manifest of `src/metadata-envelope.js`. | `envelope`, `metadata`, `notes_write`, `record_source`, causet-engine, causet-model |
 | `native/cli/src/forecast.rs` | `cst forecast` and `cst workspace forecast`: `forecastReconciliation` and `forecastWorkspaces` of `src/forecasts.js`, the plan simulator they drive under either forecast engine (ADR-0016), and `formatForecast` of `src/cli.js`. | `envelope`, `export`, `host`, `plan`, `rebase_program`, `records`, `resolve`, `spec`, `target_overlay`, `workspaces`, causet-engine, causet-model |
-| `native/cli/src/front.rs` | The command front end: everything `main` in `src/cli.js` decides before a command touches the repository. | `parsed`, causet-model |
+| `native/cli/src/front.rs` | The command front end: everything `main` in `src/cli.js` decides before a command touches the repository. | `parsed`, `sync`, causet-model |
 | `native/cli/src/host.rs` | What the notes lock and record ids need from the operating system, as Node provides it: `os.hostname()`, `process.kill(pid, 0)`, `randomBytes`, and the test hooks of `src/faults.js`. | causet-model |
 | `native/cli/src/import.rs` | `cst metadata import <directory> --dry-run\|--apply [--park-conflicts]`: `importMetadata` of `src/metadata-transfer.js`, with the parking of `src/quarantine.js` (ADR-0030). | `envelope`, `export`, `lineage`, `metadata`, `notes_write`, `record_source`, causet-engine, causet-model |
 | `native/cli/src/json.rs` | The failure envelope (ADR-0021) for a front-end refusal, rendered by the shared record model so every command writes the same bytes. | `front`, causet-model |
@@ -390,8 +390,11 @@ parents of the local ones (a new commit with the local tree when the two
 differ), so the next push is a fast-forward. A push refuses while any parked
 conflict lacks a disposition, pushes the carried refs atomically and never
 forced, refetching and retrying when the remote's refs moved, and only then
-runs `git push` with the caller's arguments. A direct ref fetch with Git
-alone performs none of this validation.
+runs `git push` with the caller's arguments. Arguments that ask Git for the
+command's help, as Git's option parser reads them (`asks_for_help`), run Git
+alone and move no records, and the front end refuses help combined with
+`--json` (#499). A direct ref fetch with Git alone performs none of this
+validation.
 
 Every local JSON state file (journals, forecasts, registries) is written
 through a temporary file and same-directory rename (for example `write_journal`
