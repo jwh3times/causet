@@ -390,8 +390,11 @@ parents of the local ones (a new commit with the local tree when the two
 differ), so the next push is a fast-forward. A push refuses while any parked
 conflict lacks a disposition, pushes the carried refs atomically and never
 forced, refetching and retrying when the remote's refs moved, and only then
-runs `git push` with the caller's arguments. A direct ref fetch with Git
-alone performs none of this validation.
+runs `git push` with the caller's arguments. Arguments that ask Git for the
+command's help, as Git's option parser reads them (`asks_for_help`), run Git
+alone and move no records, and the front end refuses help combined with
+`--json` (#499). A direct ref fetch with Git alone performs none of this
+validation.
 
 Every local JSON state file (journals, forecasts, registries) is written
 through a temporary file and same-directory rename (for example `write_journal`

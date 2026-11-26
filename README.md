@@ -1108,6 +1108,10 @@ cst push -u origin feature                     # the records first, then git pus
 - **`--no-records`** runs Git's command alone. `--json` prints a report of the
   records moved (`cst fetch`, `cst push` and `cst clone`; `cst pull` prints
   Git's merge output on standard output and has no JSON form).
+- **Help** (`--help`, `--help-all`, `-h`, or a short-option cluster reaching
+  `h` such as `-qh`) is Git's: Git prints it and no records move. An option's
+  value (`cst push -o -h`) and anything after `--` are not help. Help has no
+  JSON form, so `--json` with it is refused with `usage-unknown-option`.
 - `cst push --mirror` is refused, because it would push the clone's local
   refs too; `cst git push --mirror` is Git's own. A plain `git fetch` or
   `git push` still carries no records.
