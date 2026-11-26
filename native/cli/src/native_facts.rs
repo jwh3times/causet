@@ -17,13 +17,14 @@ use crate::parsed::Parsed;
 use crate::provenance::CommitReads;
 use crate::record_source::{Container, RecordSource};
 use causet_engine::errors::{GitError, GitResult};
+use causet_history::catalog::Catalogs;
 use causet_history::fact::Fact;
-use causet_history::fact_log::{Entry, Scope, State};
+use causet_history::fact_log::{self, Scope};
 use causet_import::store_error;
 use causet_model::js::get;
 use causet_model::json::{self, Value};
-use causet_store::id::{NativeId, Type};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use causet_store::id::NativeId;
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 /// The fact log of a native repository, as a record source.
@@ -36,73 +37,10 @@ impl<'a> FactLog<'a> {
     FactLog { repository }
   }
 
-}
-
-/// Every held entry of one chain.
-fn entries_of(repository: &Repository, scope: Scope) -> GitResult<HashMap<NativeId, Entry>> {
-  let store = &repository.store;
-  let mut entries = HashMap::new();
-  for id in store.present_of(Type::FactLogEntry).map_err(store_error)? {
-    let entry = Entry::decode(&store.read(&id).map_err(store_error)?.body)
-      .map_err(|why| crate::native_repository::corrupt(format!("the fact-log entry {id}: {why}")))?;
-    if entry.scope == scope {
-      entries.insert(id, entry);
-    }
-  }
-  Ok(entries)
-}
-
-/// A chain's heads: until the operation log holds them (#423), every held
-/// entry no other names as a parent.
-fn heads(entries: &HashMap<NativeId, Entry>) -> Vec<NativeId> {
-  let parents: HashSet<&NativeId> = entries.values().flat_map(|entry| entry.parents.iter()).collect();
-  let mut heads: Vec<NativeId> = entries.keys().filter(|id| !parents.contains(id)).copied().collect();
-  heads.sort();
-  heads
-}
-
-/// The facts current at a chain's heads (facts.md §4.2), in byte order of
-/// ID.
-pub(crate) fn current(repository: &Repository, scope: Scope) -> GitResult<Vec<(NativeId, Fact)>> {
-  let entries = entries_of(repository, scope)?;
-  let state = State::at(&heads(&entries), |id| {
-    entries
-      .get(id)
-      .cloned()
-      .ok_or_else(|| crate::native_repository::corrupt(format!("the fact-log entry {id} is not held")))
-  })?;
-  let mut facts = Vec::new();
-  for id in state.current() {
-    let body = repository.store.read(&id).map_err(store_error)?.body;
-    let fact = Fact::decode(&body).map_err(|why| crate::native_repository::corrupt(format!("the fact {id}: {why}")))?;
-    facts.push((id, fact));
-  }
-  Ok(facts)
-}
-
-/// A record's `createdAt`, by which a container lists its records.
-fn created(record: &[u8]) -> String {
-  std::str::from_utf8(record)
-    .ok()
-    .and_then(|text| json::parse(text).ok())
-    .and_then(|value| match get(Some(&value), "createdAt") {
-      Some(Value::String(units)) => Some(json::lossy(units)),
-      _ => None,
-    })
-    .unwrap_or_default()
-}
-
-impl RecordSource for FactLog<'_> {
   /// One `causet.note/v1` container per subject, in byte order of the
   /// subject's Git ID as Git lists notes, its records in order of
   /// `createdAt`, then of their bytes.
-  fn containers(&self) -> GitResult<Vec<Container>> {
-    let mut by_subject: BTreeMap<NativeId, Vec<Vec<u8>>> = BTreeMap::new();
-    for (_, fact) in current(self.repository, Scope::Shared)? {
-      if let Fact::Record { subject: Some(subject), record, .. } = fact {
-        by_subject.entry(subject).or_default().push(record);
-      }
-    }
+  fn containers_of(&self, by_subject: BTreeMap<NativeId, Vec<Vec<u8>>>) -> GitResult<Vec<Container>> {
     let mut containers = Vec::with_capacity(by_subject.len());
     for (subject, mut records) in by_subject {
       records.sort_by(|a, b| (created(a), a).cmp(&(created(b), b)));
@@ -119,6 +57,64 @@ impl RecordSource for FactLog<'_> {
     }
     containers.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(containers.into_iter().map(|(_, container)| container).collect())
+  }
+}
+
+/// The facts current at a chain's heads (facts.md §4.2), in byte order of
+/// ID.
+pub(crate) fn current(repository: &Repository, scope: Scope) -> GitResult<Vec<(NativeId, Fact)>> {
+  fact_log::current(&repository.store, scope).map_err(store_error)
+}
+
+/// A record's `createdAt`, by which a container lists its records.
+fn created(record: &[u8]) -> String {
+  std::str::from_utf8(record)
+    .ok()
+    .and_then(|text| json::parse(text).ok())
+    .and_then(|value| match get(Some(&value), "createdAt") {
+      Some(Value::String(units)) => Some(json::lossy(units)),
+      _ => None,
+    })
+    .unwrap_or_default()
+}
+
+impl RecordSource for FactLog<'_> {
+  fn containers(&self) -> GitResult<Vec<Container>> {
+    let mut by_subject: BTreeMap<NativeId, Vec<Vec<u8>>> = BTreeMap::new();
+    for (_, fact) in current(self.repository, Scope::Shared)? {
+      if let Fact::Record { subject: Some(subject), record, .. } = fact {
+        by_subject.entry(subject).or_default().push(record);
+      }
+    }
+    self.containers_of(by_subject)
+  }
+
+  /// The containers of these subjects alone, found through the catalog of
+  /// the facts naming each object (ADR-0047 decision 14), so that reading
+  /// one commit's records reads no other fact.
+  fn containers_for(&self, objects: &[String]) -> GitResult<Vec<Container>> {
+    let catalogs = Catalogs::of(&self.repository.store);
+    let mut by_subject: BTreeMap<NativeId, Vec<Vec<u8>>> = BTreeMap::new();
+    for object in objects {
+      let Some(wanted) = NativeId::from_hex(object).filter(|id| id.hex() == *object) else {
+        continue;
+      };
+      if by_subject.contains_key(&wanted) {
+        continue;
+      }
+      // The catalog lists the current facts of both chains, but a local
+      // fact never has a subject (facts.md §5.3): a disposition has none,
+      // and a disputed copy is parked. So these are the shared records
+      // `containers` gives.
+      for id in catalogs.facts_naming(&wanted).map_err(store_error)? {
+        if let Fact::Record { subject: Some(subject), record, .. } = Fact::read(&self.repository.store, &id).map_err(store_error)?
+          && subject == wanted
+        {
+          by_subject.entry(subject).or_default().push(record);
+        }
+      }
+    }
+    self.containers_of(by_subject)
   }
 }
 

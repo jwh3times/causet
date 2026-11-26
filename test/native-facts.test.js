@@ -136,6 +136,35 @@ for (const format of ["sha1", "sha256"]) {
   });
 }
 
+test("cst provenance reads the facts naming each commit from a catalog, rebuilt when deleted and rewritten when damaged", () => {
+  // ADR-0047 decision 14 (#421). A catalog derived from objects the store
+  // no longer holds alone is covered by "recording a fact changes no native
+  // commit's ID": its second provenance read follows an import.
+  const history = makeHistory();
+  const translate = translator(history);
+  const catalogs = path.join(history.native, ".cst", "catalogs");
+  const catalog = path.join(catalogs, "by-object");
+  const answers = () => [["provenance", "HEAD~1", "--json"], ["provenance", "feature", "--json"], ["provenance", "main", "--all", "--json"]].map((args) => {
+    const { expected, answered } = both(history, translate, args);
+    assert.deepEqual(JSON.parse(answered), JSON.parse(expected), args.join(" "));
+    return answered;
+  });
+  assert.equal(fs.existsSync(catalogs), false, "import writes no catalog");
+  const first = answers();
+  assert.equal(fs.existsSync(catalog), true, "cst provenance writes the catalog it reads");
+  const fresh = fs.readFileSync(catalog);
+
+  fs.rmSync(catalogs, { recursive: true });
+  assert.deepEqual(answers(), first);
+  assert.ok(fs.readFileSync(catalog).equals(fresh), "the deleted catalog is rebuilt as it was");
+
+  const damaged = Buffer.from(fresh);
+  damaged[damaged.length >> 1] ^= 0x01;
+  fs.writeFileSync(catalog, damaged);
+  assert.deepEqual(answers(), first);
+  assert.ok(fs.readFileSync(catalog).equals(fresh), "the damaged catalog is rewritten from the objects");
+});
+
 /** The distinct objects of one type a store holds, by their IDs in hex. */
 function heldOfType(store, type) {
   const found = new Set();

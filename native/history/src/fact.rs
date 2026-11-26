@@ -3,9 +3,11 @@
 //! parked fact, what import could not take as a record, kept for the bridge.
 
 use crate::action::{ActionActor, present};
+use causet_store::StoreError;
 use causet_store::encoding::{Reader, put_bytes, put_varint};
 use crate::fact_log::Scope;
 use causet_store::id::{NativeId, Type};
+use causet_store::store::Store;
 
 /// The one family of the local chain (§3.4).
 const DISPOSITION_SCHEMA: &str = "causet.disposition/v1";
@@ -151,6 +153,12 @@ impl Fact {
 
   pub fn id(&self) -> NativeId {
     NativeId::of(Type::Fact, &self.encode())
+  }
+
+  /// The fact `id` names, read from the store; a body that does not decode
+  /// is corrupt.
+  pub fn read(store: &Store, id: &NativeId) -> Result<Fact, StoreError> {
+    Fact::decode(&store.read(id)?.body).map_err(|why| StoreError::Corrupt(format!("the fact {id}: {why}")))
   }
 
   /// The chain that records it (§3.4): a disposition and a disputed copy are

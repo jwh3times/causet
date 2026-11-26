@@ -5,6 +5,7 @@
 
 pub mod action;
 pub mod actor;
+pub mod catalog;
 pub mod commit;
 pub mod date;
 pub mod fact;
