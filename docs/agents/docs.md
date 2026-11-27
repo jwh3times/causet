@@ -54,7 +54,9 @@
   `scripts/lint-agent-neutrality.mjs` changes, or a canonical script is added.
 - `docs/agents/guard.md` — the commands and paths `scripts/guard.mjs` stops here, on top of its
   shared rules: bare `git` forms of the commands `cst` defines, and the landing steps that need the
-  owner. **When:** `landing.md`'s command table, a never-run command or a never-remove path changes.
+  owner; and the `cst` forms its shared git rules read as `git`. **When:** `landing.md`'s command
+  table, a never-run command, a never-remove path, or which `cst` commands pass their words to Git
+  changes.
 - `docs/agents/dev-flow.md` — what this repository adds to the shared development flow: the
   owner's steps per ticket, how to present a decision, the published contracts that are code, and
   its bump, release and linking details. **When:** one of those changes.
