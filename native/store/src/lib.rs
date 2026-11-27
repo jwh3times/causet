@@ -9,6 +9,7 @@ pub mod chunker;
 pub mod container;
 pub mod delta;
 pub mod encoding;
+pub mod heads;
 pub mod id;
 pub mod objects;
 mod positioned;

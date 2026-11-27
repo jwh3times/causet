@@ -25,7 +25,10 @@ pub use facts::uses_legacy_names;
 mod git;
 
 use causet_engine::errors::{GitError, GitResult};
-use causet_history::commit::{Commits, derive};
+use causet_history::commit::{Commit, Commits, derive};
+use causet_history::names;
+use causet_history::op_log::{self, Current};
+use causet_history::operation::{Operation, View};
 use causet_history::tag::{self, Tags};
 use causet_store::StoreError;
 use causet_store::delta;
@@ -74,7 +77,9 @@ pub struct Imported {
   pub refs: usize,
   pub symbolic: usize,
   pub snapshot: Option<NativeId>,
-  /// The object `HEAD` resolves to through the snapshot, unless it is unborn.
+  /// The object `HEAD` resolves to through the snapshot, unless it is
+  /// unborn, by the ID a command names it by: a commit's native commit
+  /// (commits.md §6).
   pub head: Option<NativeId>,
   /// What the import cost, reported and never checked (#347).
   pub cost: Cost,
@@ -190,6 +195,13 @@ struct Importer<'a> {
   /// Their bytes, kept as each is stored.
   note_blobs: HashMap<String, Vec<u8>>,
   imported: Imported,
+  /// The current operation of the store an import adds to, and its view:
+  /// what its fact-log heads and the import operation's parents come from
+  /// (operations.md §4.2). `None` for a new store.
+  current: Option<(NativeId, View)>,
+  /// The native form of each preserved commit and tag this import derived
+  /// one for, by the preserved object's ID.
+  formed: HashMap<NativeId, NativeId>,
   /// The first lookup of the existing store that failed. The writer read
   /// that store whole, with every check, when it opened, so only the file
   /// system can fail one; the import then fails before it finishes.
@@ -231,16 +243,15 @@ pub fn import(source: &str, destination: &Path) -> GitResult<Imported> {
   phases.end("source");
   if destination.join(".cst").join("format").is_file() {
     let mut store = StoreWriter::open(destination, algorithm).map_err(store_error)?;
-    let (imported, snapshot) = write(&source, algorithm, &mut store, refs, &mut phases)?;
-    let mut imported = finish(store, imported, &snapshot)?;
+    let written = write(&source, algorithm, &mut store, refs, &mut phases)?;
+    let mut imported = finish(store, written)?;
     imported.added = true;
     phases.close(&mut imported);
     return Ok(imported);
   }
   let existed = destination.exists();
   let mut store = StoreWriter::create(destination, algorithm).map_err(store_error)?;
-  let result = write(&source, algorithm, &mut store, refs, &mut phases)
-    .and_then(|(imported, snapshot)| finish(store, imported, &snapshot));
+  let result = write(&source, algorithm, &mut store, refs, &mut phases).and_then(|written| finish(store, written));
   if result.is_err() {
     let _ = if existed {
       std::fs::remove_dir_all(destination.join(".cst-import"))
@@ -263,25 +274,74 @@ fn without_history() -> bool {
   causet_engine::environment::test_hook("CAUSET_TEST_IMPORT_WITHOUT_HISTORY").as_deref() == Some("1")
 }
 
-/// Finishes `store` with `snapshot`. The held files' sizes are read first:
-/// they have only grown until now, and finishing removes them.
-fn finish(store: StoreWriter, mut imported: Imported, snapshot: &Snapshot) -> GitResult<Imported> {
+/// What `write` leaves for `finish`: the counts, the snapshot, and the
+/// import operation it stored with the heads it replaces, which an import
+/// without native history has none of.
+struct Written {
+  imported: Imported,
+  snapshot: Snapshot,
+  operation: Option<(NativeId, Vec<NativeId>)>,
+}
+
+/// Finishes `store` with the snapshot, and makes the import operation the
+/// head in place of its parents: import's last step (operations.md §4.2).
+/// The held files' sizes are read first: they have only grown until now,
+/// and finishing removes them.
+fn finish(store: StoreWriter, written: Written) -> GitResult<Imported> {
+  let Written { mut imported, snapshot, operation } = written;
   imported.cost.held_metadata = store.held_metadata();
   imported.cost.held_objects = store.held_objects();
-  store.finish(snapshot).map_err(store_error)?;
+  match &operation {
+    Some((head, parents)) => store.finish_with_head(&snapshot, head, parents),
+    None => store.finish(&snapshot),
+  }
+  .map_err(store_error)?;
   imported.snapshot = Some(NativeId::of(Type::Snapshot, &snapshot.encode()));
   Ok(imported)
 }
 
+/// A store's current operation and its view (operations.md §3.2), which
+/// every command reads and import adds to. A store imported before the
+/// operation log, which has no current view, is refused, as is one whose
+/// heads two writers left unmerged (#424).
+pub fn current_view(store: &Store) -> GitResult<(NativeId, View)> {
+  match op_log::current(store).map_err(store_error)? {
+    Current::One(id, operation) => Ok((id, operation.view)),
+    Current::Missing => Err(GitError::new(
+      "precondition-not-met",
+      format!(
+        "{} was imported by an earlier build, before native repositories kept an operation log, so it has no current view to read or add to. Import the Git repository again into a new directory (native formats promise no compatibility yet, ADR-0042).",
+        store.root.display()
+      ),
+    )),
+    Current::Several(heads) => Err(several_heads(&store.root, &heads)),
+  }
+}
+
+/// The refusal of a clone whose operation heads have not been merged: two
+/// writers ran at once, and merging their operations is #424's.
+fn several_heads(root: &Path, heads: &[NativeId]) -> GitError {
+  let named: Vec<String> = heads.iter().map(|id| id.hex()[..12].to_string()).collect();
+  GitError::new(
+    "unsupported-feature",
+    format!(
+      "{} has {} operation heads, {}, because writers ran at once; merging them is not implemented yet (#424). Both operations are kept.",
+      root.display(),
+      heads.len(),
+      named.join(" and ")
+    ),
+  )
+}
+
 /// Writes the history `refs` reach, the source's refs in byte order of
-/// name, into `store`.
+/// name, into `store`, with the import operation last.
 fn write(
   source: &git::Source,
   algorithm: GitAlgorithm,
   store: &mut StoreWriter,
   refs: Vec<git::Listed>,
   phases: &mut Phases,
-) -> GitResult<(Imported, Snapshot)> {
+) -> GitResult<Written> {
   // The walk starts from the objects the refs that are not symbolic name, in
   // byte order of ref name, then from what only other worktrees' `HEAD`
   // names, which the snapshot does not record (objects.md §6, §9), in byte
@@ -311,6 +371,11 @@ fn write(
     Some(existing) => source.holding(&held_tips(existing, algorithm)?)?,
     None => Vec::new(),
   };
+  // Without native history there is no operation log to add to.
+  let current = match store.existing() {
+    Some(existing) if !without_history() => Some(current_view(existing)?),
+    _ => None,
+  };
   let mut importer = Importer {
     source,
     algorithm,
@@ -333,6 +398,8 @@ fn write(
       algorithm: algorithm.name(),
       ..Imported::default()
     },
+    current,
+    formed: HashMap::new(),
     failed: RefCell::new(None),
   };
   phases.end("open");
@@ -382,14 +449,15 @@ fn write(
     importer.metadata(id, path)?;
   }
   phases.end("metadata");
-  if let Some(notes) = &notes {
-    importer.fact_log(notes)?;
-  }
-  let wrote_local = match &local {
-    Some(local) => importer.local_chain(local)?,
-    None => false,
+  let notes_entry = match &notes {
+    Some(notes) => importer.fact_log(notes)?,
+    None => None,
   };
-  if notes.is_some() || wrote_local {
+  let local_entry = match &local {
+    Some(local) => importer.local_chain(local)?,
+    None => None,
+  };
+  if notes.is_some() || local_entry.is_some() {
     phases.end("facts");
   }
   let mut recorded = Vec::with_capacity(refs.len());
@@ -434,8 +502,45 @@ fn write(
     )
   })?;
   importer.imported.refs = snapshot.refs.len();
-  importer.imported.head = head(&snapshot);
-  Ok((importer.imported, snapshot))
+  importer.imported.head = match head(&snapshot) {
+    Some(id) => Some(importer.named_form(&id)?),
+    None => None,
+  };
+  let operation = if without_history() { None } else { importer.operation(&snapshot, notes_entry, local_entry)? };
+  Ok(Written { imported: importer.imported, snapshot, operation })
+}
+
+impl Importer<'_> {
+  /// Stores the import operation (operations.md §4.2): the snapshot's names;
+  /// the notes ref's entry as the shared chain's head, exactly, as the
+  /// Git-backed reader reads the ref's tip alone, so a rewritten notes ref
+  /// leaves no earlier tip's facts current; and the local chain's head: the
+  /// entry this import wrote, whose parents are the view's local heads, or
+  /// those heads unchanged. No actor, no time, the command `import`, and the
+  /// current head as its parent. Its ID and its parents; `None` when it
+  /// would leave the current view as it is, so that an import that finds
+  /// nothing new adds nothing (storage.md §4.2).
+  fn operation(
+    &mut self,
+    snapshot: &Snapshot,
+    notes_entry: Option<NativeId>,
+    local_entry: Option<NativeId>,
+  ) -> GitResult<Option<(NativeId, Vec<NativeId>)>> {
+    let names = names::from_snapshot(snapshot, |id| self.named_form(id))?;
+    let shared: Vec<NativeId> = notes_entry.into_iter().collect();
+    let (parents, local) = match (&self.current, local_entry) {
+      (None, entry) => (Vec::new(), entry.into_iter().collect()),
+      (Some((head, _)), Some(entry)) => (vec![*head], vec![entry]),
+      (Some((head, view)), None) => (vec![*head], view.local.clone()),
+    };
+    let view = View { shared, local, names };
+    if self.current.as_ref().is_some_and(|(_, current)| *current == view) {
+      return Ok(None);
+    }
+    let operation = Operation::import(parents.clone(), view);
+    let id = self.store.put_metadata(Type::Operation, &operation.encode()).map_err(store_error)?;
+    Ok(Some((id, parents)))
+  }
 }
 
 /// The Git IDs of the objects an existing store's current refs name.
@@ -546,7 +651,8 @@ impl Importer<'_> {
       | Type::NativeCommit
       | Type::NativeTag
       | Type::Fact
-      | Type::FactLogEntry => return None,
+      | Type::FactLogEntry
+      | Type::Operation => return None,
     })
   }
 
@@ -1093,6 +1199,7 @@ impl Importer<'_> {
     let commit = derive(payload, preserved, tree, parents);
     let native = self.store.put_native_commit(&commit.encode()).map_err(store_error)?;
     self.commits.insert(id.to_string(), native);
+    self.formed.insert(preserved, native);
     Ok(())
   }
 
@@ -1152,7 +1259,47 @@ impl Importer<'_> {
     let derived = tag::derive(payload, preserved, native);
     let native = self.store.put_native_tag(&derived.encode()).map_err(store_error)?;
     self.tags.insert(id.to_string(), native);
+    self.formed.insert(preserved, native);
     Ok(())
+  }
+
+  /// The ID a name targets for an object a ref names (operations.md §4.1):
+  /// a preserved commit's or tag's native form, which this import derived
+  /// or the store held already, and otherwise the object itself. A held one
+  /// is found where import puts it, straight after its preserved object
+  /// (storage.md §3.2), before every native commit or tag is read.
+  fn named_form(&mut self, id: &NativeId) -> GitResult<NativeId> {
+    if let Some(native) = self.formed.get(id) {
+      return Ok(*native);
+    }
+    let Some(store) = self.store.existing() else {
+      return Ok(*id);
+    };
+    if store.held(id).map_err(store_error)? != Some(Type::Preserved) {
+      return Ok(*id);
+    }
+    let kind = Preserved::decode(&store.read_known(id).map_err(store_error)?.body)
+      .map_err(|why| store_error(StoreError::Corrupt(format!("the preserved object {id}: {why}"))))?
+      .kind;
+    let following = store.following(id).map_err(store_error)?;
+    let found = match (kind, following) {
+      (GitKind::Commit, Some((next, Type::NativeCommit)))
+        if Commit::decode(&store.read_known(&next).map_err(store_error)?.body)
+          .is_ok_and(|commit| commit.preserved == Some(*id)) =>
+      {
+        Some(next)
+      }
+      (GitKind::Tag, Some((next, Type::NativeTag)))
+        if tag::Tag::decode(&store.read_known(&next).map_err(store_error)?.body)
+          .is_ok_and(|derived| derived.preserved == Some(*id)) =>
+      {
+        Some(next)
+      }
+      (GitKind::Commit, _) => self.held_commit(id)?,
+      (GitKind::Tag, _) => self.held_tag(id)?,
+      (GitKind::Tree, _) => None,
+    };
+    Ok(found.unwrap_or(*id))
   }
 
   /// The native tag of a tag a tag names: one this import wrote, or one the

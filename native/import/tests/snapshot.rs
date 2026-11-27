@@ -236,7 +236,11 @@ fn an_unborn_or_detached_head_is_recorded_as_it_is() {
     .find(|(name, _, _)| name == "HEAD")
     .unwrap();
   assert_eq!(head, ("HEAD".into(), Some(topic.clone()), None));
-  assert_eq!(hex(&store.git(GitAlgorithm::Sha1, &imported.head.unwrap()).unwrap().unwrap()), topic);
+  // `head` names HEAD's commit by its native commit, as every command does
+  // (commits.md §6), whose preserved commit is topic's.
+  let native = imported.head.unwrap();
+  let preserved = causet_history::commit::Commit::decode(&store.read(&native).unwrap().body).unwrap().preserved.unwrap();
+  assert_eq!(hex(&store.git(GitAlgorithm::Sha1, &preserved).unwrap().unwrap()), topic);
   std::fs::remove_dir_all(&root).unwrap();
 }
 

@@ -25,8 +25,15 @@ pub const CONTAINER_LIMIT: u64 = 1 << 30;
 /// zstd's level for every frame (§3).
 const LEVEL: i32 = 19;
 const NO_FRAME: u32 = 0xffff_ffff;
-/// The name a container is written under until it is named by its trailer.
-pub(crate) const TEMPORARY: &str = "writing.tmp";
+/// A name a container is written under until it is named by its trailer,
+/// which a reader ignores (§4). Each writer's is its own, process and count,
+/// since writers of operations take no lock and may write at once
+/// (docs/native-history/operations.md §3.2).
+fn temporary_name() -> String {
+  static WRITTEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+  let count = WRITTEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+  format!("writing-{}-{count}.tmp", std::process::id())
+}
 
 /// A record's stored form (§1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,7 +130,8 @@ fn io(path: &Path, error: std::io::Error) -> StoreError {
 
 impl ContainerWriter {
   pub fn create(directory: &Path) -> Result<ContainerWriter, StoreError> {
-    let temporary = directory.join(TEMPORARY);
+    let temporary = directory.join(temporary_name());
+    // Only a dead process can have left a file of this name.
     let file = File::create(&temporary).map_err(|error| io(&temporary, error))?;
     let mut writer = ContainerWriter {
       directory: directory.to_path_buf(),

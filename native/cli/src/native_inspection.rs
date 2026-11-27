@@ -702,7 +702,7 @@ impl RevParse<'_> {
   /// names `refs/tags/v1`.
   fn refs(&mut self, prefix: &[u8], strip: bool) -> GitResult<()> {
     let mut listed: Vec<(Vec<u8>, NativeId)> = Vec::new();
-    for entry in &self.repository.snapshot.refs {
+    for entry in &self.repository.refs {
       if !entry.name.starts_with(prefix) {
         continue;
       }
@@ -1164,7 +1164,7 @@ pub fn for_each_ref(args: &[OsString], root: &Path) -> GitResult<i32> {
   let repository = Repository::open(root)?;
   let head = repository.resolve_ref(b"HEAD").map(|(name, _)| name);
   let mut listed: Vec<RefRow> = Vec::new();
-  for entry in &repository.snapshot.refs {
+  for entry in &repository.refs {
     if !entry.name.starts_with(b"refs/")
       || !(patterns.is_empty() || patterns.iter().any(|pattern| matches_ref(pattern, &entry.name)))
     {
@@ -1581,7 +1581,12 @@ mod tests {
         vec![Ref { name: b"refs/heads/main".to_vec(), target: RefTarget::Direct(top) }],
       )
       .unwrap();
-      writer.finish(&snapshot).unwrap();
+      // The operation an import writes, naming the snapshot's one branch.
+      let names = causet_history::names::from_snapshot(&snapshot, |id| Ok::<_, ()>(*id)).unwrap();
+      let view = causet_history::operation::View { shared: Vec::new(), local: Vec::new(), names };
+      let operation = causet_history::operation::Operation::import(Vec::new(), view);
+      let head = writer.put_metadata(causet_store::id::Type::Operation, &operation.encode()).unwrap();
+      writer.finish_with_head(&snapshot, &head, &[]).unwrap();
       let repository = Repository::open(&root).unwrap();
       let listing = Listing {
         repository: &repository,

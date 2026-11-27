@@ -1,7 +1,7 @@
 //! Which refs of an imported snapshot become names, and what each names
 //! (docs/native-history/operations.md §4.1, ADR-0047 decision 9).
 
-use causet_history::names::{self, Kind, Name, Target};
+use causet_history::names::{self, Kind, Name, Target, Value};
 use causet_store::id::{GitAlgorithm, NativeId, Type};
 use causet_store::objects::{Ref, RefTarget, Snapshot};
 use std::convert::Infallible;
@@ -19,7 +19,7 @@ fn symbolic(name: &str, target: &str) -> Ref {
 }
 
 fn named(kind: Kind, name: &str, target: Target) -> Name {
-  Name { kind, name: name.as_bytes().to_vec(), local: false, target }
+  Name { kind, name: name.as_bytes().to_vec(), local: false, value: Value::Resolved(target) }
 }
 
 /// The derivation, with every object's native form `object("native " + …)`
@@ -110,7 +110,7 @@ fn a_name_need_not_be_utf8_and_keeps_its_bytes() {
   let commit = object("a commit");
   let refs = vec![Ref { name: b"refs/heads/caf\xe9".to_vec(), target: RefTarget::Direct(commit) }];
   let names = derived(refs, &[]);
-  assert_eq!(names, vec![Name { kind: Kind::Branch, name: b"caf\xe9".to_vec(), local: false, target: Target::Object(commit) }]);
+  assert_eq!(names, vec![Name { kind: Kind::Branch, name: b"caf\xe9".to_vec(), local: false, value: Value::Resolved(Target::Object(commit)) }]);
 }
 
 #[test]

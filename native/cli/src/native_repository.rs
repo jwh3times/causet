@@ -52,7 +52,8 @@ Usage:
                 [<rev>...]                  name objects, as git rev-parse does;
                                             --git-id prints their Git IDs
   cst for-each-ref [--format=<format>] [--sort=[-]refname] [--count=<n>]
-                   [<pattern>...]           list the refs of the snapshot
+                   [<pattern>...]           list the refs: the names, and the
+                                            snapshot's refs that are no name
   cst log [-<n> | -n <n> | --max-count=<n>] [--skip=<n>] [--reverse]
           [--first-parent] [--merges | --no-merges] [--date=<mode>]
           [--json | --format=<format>] [<revision>...]
@@ -69,8 +70,19 @@ Usage:
                                             remote-tracking names, -a both;
                                             --format prints as git branch
                                             --format does, and without it, cst's own
+  cst branch [--local] [-f | --force] <name> <start-point>
+  cst branch (-d | -D | --delete) <name>...
+  cst branch (--local | --no-local) <name>
+                                            create, move, delete or mark a
+                                            branch, each one operation; name
+                                            who ran it with --actor <name>
+                                            [--kind human|agent] [--for <name>],
+                                            or CAUSET_AGENT
   cst tag [--json | --format=<format>] [(-l | --list) [<pattern>...]]
                                             list the tags, as cst branch does
+  cst op log [-<n>] [--json]                the operation log, newest first
+  cst op show [<operation>] [--json]        an operation and the view it left,
+                                            the current one by default
   cst provenance [<revision>] [--all] [--json]
                                             the declared provenance of commits,
                                             read from the fact log
@@ -185,6 +197,7 @@ fn native_command(command: &str, args: &[OsString], root: &Path) -> GitResult<i3
     "metadata" => crate::native_metadata::metadata_command(args, root),
     "branch" => native_names::branch(args, root),
     "tag" => native_names::tag(args, root),
+    "op" => crate::native_operations::op(args, root),
     "log" => native_log::log(args, root),
     "show" => native_log::show(args, root),
     "git" => Err(GitError::new(
@@ -262,7 +275,7 @@ fn import(args: &[String]) -> GitResult<()> {
   // HEAD's commit, by its native commit, as every command names it
   // (commits.md §6).
   let head = match imported.head {
-    Some(id) => format!("HEAD is at {}.", Repository::open(root)?.named(id)?),
+    Some(id) => format!("HEAD is at {id}."),
     None => "HEAD is unborn.".into(),
   };
   let _ = writeln!(
@@ -769,6 +782,7 @@ pub(crate) fn type_name(kind: &Type, body: &[u8]) -> GitResult<&'static str> {
     Type::NativeTag => "tag",
     Type::Fact => "fact",
     Type::FactLogEntry => "fact-log-entry",
+    Type::Operation => "operation",
   })
 }
 

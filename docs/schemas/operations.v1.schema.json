@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "causet.operations/v1",
+  "title": "Native operation log",
+  "description": "What cst op log --json prints in a native repository (CLI output; native/cli/src/native_operations.rs, ADR-0047 decisions 10 and 12): the operations the current one reaches through parents, newest first, each before every operation it follows (docs/native-history/operations.md §3), as many as -n allows. cst op show --json prints one with its view (causet.operation/v1).",
+  "x-causet-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "operations"],
+  "properties": {
+    "schema": { "enum": ["causet.operations/v1", "vcs-lab.operations/v1"] },
+    "operations": {
+      "type": "array",
+      "items": { "$ref": "causet.operation/v1#/$defs/summary" }
+    }
+  }
+}

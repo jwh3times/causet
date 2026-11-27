@@ -232,42 +232,62 @@ pub fn problems(entries: &HashMap<NativeId, Entry>, facts: &impl Fn(&NativeId) -
   problems
 }
 
-/// Every entry of one chain the store holds.
-fn entries_of(store: &Store, scope: Scope) -> Result<HashMap<NativeId, Entry>, StoreError> {
-  let mut entries = HashMap::new();
-  for id in store.present_of(Type::FactLogEntry)? {
-    let entry = Entry::decode(&store.read(&id)?.body)
-      .map_err(|why| StoreError::Corrupt(format!("the fact-log entry {id}: {why}")))?;
-    if entry.scope == scope {
-      entries.insert(id, entry);
+/// Both chains' heads, as the current view names them (operations.md §3.1).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Heads {
+  pub shared: Vec<NativeId>,
+  pub local: Vec<NativeId>,
+}
+
+impl Heads {
+  /// One chain's heads.
+  pub fn of(&self, scope: Scope) -> &[NativeId] {
+    match scope {
+      Scope::Shared => &self.shared,
+      Scope::Local => &self.local,
     }
   }
-  Ok(entries)
 }
 
-/// A chain's heads: until the operation log holds them (#423), every held
-/// entry no other names as a parent. When it does, the catalogs derived
-/// from the current facts must count it among their sources
-/// (`catalog::Kind::sources`).
-fn heads(entries: &HashMap<NativeId, Entry>) -> Vec<NativeId> {
-  let parents: HashSet<&NativeId> = entries.values().flat_map(|entry| entry.parents.iter()).collect();
-  let mut heads: Vec<NativeId> = entries.keys().filter(|id| !parents.contains(id)).copied().collect();
-  heads.sort();
-  heads
+/// The fact-log entry `id`, which the store must hold as one.
+pub fn read_entry(store: &Store, id: &NativeId) -> Result<Entry, StoreError> {
+  let object = store.read(id)?;
+  if object.kind != Type::FactLogEntry {
+    return Err(StoreError::Corrupt(format!("{id} is not a fact-log entry")));
+  }
+  Entry::decode(&object.body).map_err(|why| StoreError::Corrupt(format!("the fact-log entry {id}: {why}")))
 }
 
-/// The facts current at a chain's heads (§4.2), in byte order of ID.
-pub fn current(store: &Store, scope: Scope) -> Result<Vec<(NativeId, Fact)>, StoreError> {
-  let entries = entries_of(store, scope)?;
-  let state = State::at(&heads(&entries), |id| {
-    entries
-      .get(id)
-      .cloned()
-      .ok_or_else(|| StoreError::Corrupt(format!("the fact-log entry {id} is not held")))
-  })?;
+/// The facts current at one chain's `heads` (§4.2), in byte order of ID: a
+/// reader gives the current view's.
+pub fn current(store: &Store, heads: &[NativeId]) -> Result<Vec<(NativeId, Fact)>, StoreError> {
+  let state = State::at(heads, |id| read_entry(store, id))?;
   let mut facts = Vec::new();
   for id in state.current() {
     facts.push((id, Fact::read(store, &id)?));
   }
   Ok(facts)
+}
+
+/// `heads` less any that is an ancestor of another, in byte order: a
+/// chain's heads once entries join them (operations.md §3.3, §4.2).
+pub fn without_ancestors(store: &Store, heads: &[NativeId]) -> Result<Vec<NativeId>, StoreError> {
+  let mut kept: Vec<NativeId> = heads.to_vec();
+  kept.sort();
+  kept.dedup();
+  if kept.len() < 2 {
+    return Ok(kept);
+  }
+  let mut reached: HashSet<NativeId> = HashSet::new();
+  let mut stack: Vec<NativeId> = Vec::new();
+  for head in &kept {
+    stack.extend(read_entry(store, head)?.parents);
+  }
+  while let Some(id) = stack.pop() {
+    if reached.insert(id) {
+      stack.extend(read_entry(store, &id)?.parents);
+    }
+  }
+  kept.retain(|head| !reached.contains(head));
+  Ok(kept)
 }

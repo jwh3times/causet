@@ -313,9 +313,9 @@ fn check_copy(
     // not decoded (objects.md §7).
     Type::Annotation => Annotation::decode(bytes).map(Names::Annotation),
     // Native history's encodings are its own crate's, which depends on this
-    // one, so a native commit, tag, fact or entry is checked here only as
-    // every type is.
-    Type::NativeCommit | Type::NativeTag | Type::Fact | Type::FactLogEntry => Ok(Names::Nothing),
+    // one, so a native commit, tag, fact, entry or operation is checked here
+    // only as every type is.
+    Type::NativeCommit | Type::NativeTag | Type::Fact | Type::FactLogEntry | Type::Operation => Ok(Names::Nothing),
   })
 }
 
@@ -353,5 +353,6 @@ fn type_name(kind: Type) -> &'static str {
     Type::NativeTag => "a native tag",
     Type::Fact => "a fact",
     Type::FactLogEntry => "a fact-log entry",
+    Type::Operation => "an operation",
   }
 }

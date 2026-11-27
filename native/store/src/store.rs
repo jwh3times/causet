@@ -749,7 +749,24 @@ impl StoreWriter {
   /// place: the commit point is renaming the new store into place, or
   /// replacing an existing one's `snapshot`. Each direct ref must name a
   /// stored object with an alias row (objects.md §6).
-  pub fn finish(mut self, snapshot: &Snapshot) -> Result<PathBuf, StoreError> {
+  pub fn finish(self, snapshot: &Snapshot) -> Result<PathBuf, StoreError> {
+    self.finish_with(snapshot, None)
+  }
+
+  /// Finishes as `finish` does, then makes the operation `head`, which this
+  /// writer stored, an operation head in place of `parents` (native
+  /// history's operations.md §4.2): import's last step. For a new store its
+  /// head file is written before the store is renamed into place, so the
+  /// store appears with it; for an existing one it follows the replacement of
+  /// `snapshot`, and then the parents' head files are removed.
+  pub fn finish_with_head(self, snapshot: &Snapshot, head: &NativeId, parents: &[NativeId]) -> Result<PathBuf, StoreError> {
+    if !self.present.contains(head) {
+      return Err(StoreError::Codec(format!("the operation {head} is not one this import stored")));
+    }
+    self.finish_with(snapshot, Some((head, parents)))
+  }
+
+  fn finish_with(mut self, snapshot: &Snapshot, head: Option<(&NativeId, &[NativeId])>) -> Result<PathBuf, StoreError> {
     // Every object it held is stored by now, and a new store must not take
     // the file into place.
     self.held_objects.discard();
@@ -820,6 +837,9 @@ impl StoreWriter {
       write(&file, &aliases)?;
       write(&named, snapshot_file.as_bytes())?;
       write(&self.staging.join("format"), FORMAT)?;
+      if let Some((head, _)) = head {
+        crate::heads::add(&self.staging, head)?;
+      }
       let store = self.root.join(".cst");
       std::fs::rename(&self.staging, &store).map_err(|error| StoreError::io(&store, error))?;
       return Ok(store);
@@ -848,6 +868,10 @@ impl StoreWriter {
       replace(&named, snapshot_file.as_bytes())?;
     }
     self.placed.snapshot = true;
+    if let Some((head, parents)) = head {
+      crate::heads::add(&self.staging, head)?;
+      crate::heads::remove(&self.staging, parents)?;
+    }
     Ok(self.staging.clone())
   }
 }
@@ -883,6 +907,44 @@ impl Drop for StoreWriter {
   }
 }
 
+/// Adds one container to the store of the native repository at `root`,
+/// holding these bodies of native history, each in form `00`: what a command
+/// that writes an operation puts in a new container before it adds the
+/// operation's head (docs/native-history/operations.md §3.2). It takes no
+/// lock, since a container never changes once written and a reader ignores
+/// one until it is named (storage.md §4, §4.2). Their IDs, in the order
+/// given.
+pub fn add_metadata(root: &Path, objects: &[(Type, &[u8])]) -> Result<Vec<NativeId>, StoreError> {
+  let directory = root.join(".cst").join("objects");
+  if let Some((kind, _)) = objects
+    .iter()
+    .find(|(kind, _)| !matches!(kind, Type::NativeCommit | Type::NativeTag | Type::Fact | Type::FactLogEntry | Type::Operation))
+  {
+    return Err(StoreError::Codec(format!("only native history's bodies are added this way, not {kind:?}")));
+  }
+  let mut container = ContainerWriter::create(&directory)?;
+  let mut ids = Vec::with_capacity(objects.len());
+  let mut added: HashSet<NativeId> = HashSet::new();
+  let mut written = Ok(());
+  for (kind, body) in objects {
+    let id = NativeId::of(*kind, body);
+    if added.insert(id) {
+      written = container.add(&id, *kind, Form::Body, body);
+      if written.is_err() {
+        break;
+      }
+    }
+    ids.push(id);
+  }
+  if let Err(error) = written {
+    container.abandon();
+    return Err(error);
+  }
+  container.finish()?;
+  sync_directory(&directory);
+  Ok(ids)
+}
+
 /// Where a file is written before it replaces the one at `path`.
 fn temporary(path: &Path) -> PathBuf {
   let mut name = path.file_name().unwrap_or_default().to_os_string();
@@ -907,7 +969,7 @@ fn replace(path: &Path, bytes: &[u8]) -> Result<(), StoreError> {
 }
 
 /// Makes a rename in this directory durable, where the platform allows it.
-fn sync_directory(directory: &Path) {
+pub(crate) fn sync_directory(directory: &Path) {
   #[cfg(unix)]
   if let Ok(handle) = std::fs::File::open(directory) {
     let _ = handle.sync_all();

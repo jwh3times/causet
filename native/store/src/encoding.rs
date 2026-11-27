@@ -35,6 +35,12 @@ impl<'a> Reader<'a> {
     self.at == self.data.len()
   }
 
+  /// How many bytes are left to read: a bound on how many encodings a count
+  /// can honestly promise, each taking at least one.
+  pub fn remaining(&self) -> usize {
+    self.data.len() - self.at
+  }
+
   pub fn rest(&mut self) -> &'a [u8] {
     let rest = &self.data[self.at..];
     self.at = self.data.len();

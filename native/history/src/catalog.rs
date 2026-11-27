@@ -9,16 +9,16 @@
 //! Each is derived from the objects alone and kept in its own file under
 //! `.cst/catalogs/`. It is never exchanged, and is no part of the store's
 //! contract: the store, import and `cst fsck` read none of it. A catalog
-//! file records a fingerprint of the objects it was derived from, the IDs of
-//! every object of its source types the store holds, and ends with a
-//! checksum of its bytes. A read that finds the file missing, unreadable, of
-//! another version, damaged or derived from other objects derives the
-//! catalog again and writes it back. One that cannot be written is derived
+//! file records a fingerprint of what it was derived from, the fact-log
+//! heads of the view it answers for or the IDs of every native commit the
+//! store holds, and ends with a checksum of its bytes. A read that finds the
+//! file missing, unreadable, of another version, damaged or derived from
+//! other objects derives the catalog again and writes it back. One that cannot be written is derived
 //! again by the next read: a catalog is a shortcut, never the authority.
 
 use crate::commit::Commit;
 use crate::fact::Fact;
-use crate::fact_log::{self, Scope};
+use crate::fact_log::{self, Heads, Scope};
 use causet_model::js::get;
 use causet_model::json::{self, Value};
 use causet_model::sha256::{Sha256, digest};
@@ -54,16 +54,12 @@ impl Kind {
     }
   }
 
-  /// The object types it is derived from, whose IDs its fingerprint holds.
-  /// Which facts are current follows from the entries held only while
-  /// every entry no other names as a parent is a head (`fact_log::current`):
-  /// once the operation log names the chains' heads (#423), its type joins
-  /// these, or a catalog of the same objects under another view is trusted.
-  fn sources(self) -> &'static [Type] {
-    match self {
-      Kind::ByChange => &[Type::NativeCommit],
-      Kind::ByObject | Kind::ByLogicalId => &[Type::Fact, Type::FactLogEntry],
-    }
+  /// Whether it is derived from the facts current at the view's heads, so
+  /// that its fingerprint holds those heads: the same objects are current
+  /// differently under another view (#423). Otherwise it is derived from
+  /// every native commit the store holds, whose IDs its fingerprint holds.
+  fn of_current_facts(self) -> bool {
+    matches!(self, Kind::ByObject | Kind::ByLogicalId)
   }
 }
 
@@ -71,15 +67,24 @@ impl Kind {
 /// asked, then answered from memory.
 pub struct Catalogs<'a> {
   store: &'a Store,
+  /// The fact log's heads in the view the catalogs answer for.
+  heads: Heads,
   by_change: OnceCell<Map>,
   by_object: OnceCell<Map>,
   by_logical_id: OnceCell<Map>,
 }
 
 impl<'a> Catalogs<'a> {
-  /// The catalogs of `store`, none read yet.
-  pub fn of(store: &'a Store) -> Catalogs<'a> {
-    Catalogs { store, by_change: OnceCell::new(), by_object: OnceCell::new(), by_logical_id: OnceCell::new() }
+  /// The catalogs of `store` in the view whose fact-log heads are `heads`,
+  /// none read yet.
+  pub fn of(store: &'a Store, heads: &Heads) -> Catalogs<'a> {
+    Catalogs {
+      store,
+      heads: heads.clone(),
+      by_change: OnceCell::new(),
+      by_object: OnceCell::new(),
+      by_logical_id: OnceCell::new(),
+    }
   }
 
   /// The native commits whose change ID is `change`, in byte order.
@@ -113,7 +118,7 @@ impl<'a> Catalogs<'a> {
     if let Some(map) = cell.get() {
       return Ok(map);
     }
-    let loaded = load(self.store, kind)?;
+    let loaded = load(self.store, &self.heads, kind)?;
     Ok(cell.get_or_init(|| loaded))
   }
 }
@@ -123,33 +128,41 @@ fn path_of(store: &Store, kind: Kind) -> PathBuf {
   store.root.join(".cst").join("catalogs").join(kind.file())
 }
 
-/// The digest of every object of the catalog's source types the store holds.
-fn fingerprint(store: &Store, kind: Kind) -> Result<[u8; 32], StoreError> {
+/// The digest of what a catalog is derived from: for a catalog of the
+/// current facts, the fact-log heads of its view, which with the
+/// content-addressed entries and facts they reach fix every current fact;
+/// otherwise every native commit the store holds.
+fn fingerprint(store: &Store, heads: &Heads, kind: Kind) -> Result<[u8; 32], StoreError> {
   let mut hasher = Sha256::new();
   hasher.update(MAGIC);
   hasher.update(&[kind as u8]);
-  for source in kind.sources() {
-    let ids = store.present_of(*source)?;
-    hasher.update(&[source.code()]);
+  let mut list = |code: u8, ids: &[NativeId]| {
+    hasher.update(&[code]);
     hasher.update(&(ids.len() as u64).to_be_bytes());
-    for id in &ids {
+    for id in ids {
       hasher.update(&id.0);
     }
+  };
+  if kind.of_current_facts() {
+    list(Scope::Shared as u8, &heads.shared);
+    list(Scope::Local as u8, &heads.local);
+  } else {
+    list(Type::NativeCommit.code(), &store.present_of(Type::NativeCommit)?);
   }
   Ok(hasher.finish())
 }
 
 /// The catalog as its file holds it, or as derived again when the file is
 /// not one to trust.
-fn load(store: &Store, kind: Kind) -> Result<Map, StoreError> {
-  let print = fingerprint(store, kind)?;
+fn load(store: &Store, heads: &Heads, kind: Kind) -> Result<Map, StoreError> {
+  let print = fingerprint(store, heads, kind)?;
   let path = path_of(store, kind);
   if let Ok(bytes) = std::fs::read(&path)
     && let Some(map) = decode(&bytes, &print)
   {
     return Ok(map);
   }
-  let map = derive(store, kind)?;
+  let map = derive(store, heads, kind)?;
   // A catalog that cannot be written, in a read-only repository say, is
   // derived again by the next read.
   let _ = replace(&path, &encode(&map, kind, &print));
@@ -157,7 +170,7 @@ fn load(store: &Store, kind: Kind) -> Result<Map, StoreError> {
 }
 
 /// The catalog from the objects alone.
-fn derive(store: &Store, kind: Kind) -> Result<Map, StoreError> {
+fn derive(store: &Store, heads: &Heads, kind: Kind) -> Result<Map, StoreError> {
   let mut map = Map::new();
   match kind {
     Kind::ByChange => {
@@ -171,7 +184,7 @@ fn derive(store: &Store, kind: Kind) -> Result<Map, StoreError> {
     }
     Kind::ByObject | Kind::ByLogicalId => {
       for scope in [Scope::Shared, Scope::Local] {
-        for (id, fact) in fact_log::current(store, scope)? {
+        for (id, fact) in fact_log::current(store, heads.of(scope))? {
           let keys = if kind == Kind::ByObject { named(&fact) } else { logical_id(&fact).into_iter().collect() };
           for key in keys {
             map.entry(key).or_default().push(id);

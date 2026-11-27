@@ -554,6 +554,11 @@ function scenario() {
   keep("native-show", JSON.parse(native(path.join(parent, "native"), "show", "--json", "chain", "HEAD~1")));
   keep("native-branches", JSON.parse(native(path.join(parent, "native"), "branch", "--all", "--json")));
   keep("native-tags", JSON.parse(native(path.join(parent, "native"), "tag", "--json")));
+  // The operation log (#423): a branch write, and the log and the operation.
+  keep("native-branch-write", JSON.parse(native(path.join(parent, "native"), "branch", "--actor", "claude-opus-5-5",
+    "--kind", "agent", "--for", "VCS Lab Schema Catalog Test", "--local", "operation-log", "HEAD~1", "--json")));
+  keep("native-op-log", JSON.parse(native(path.join(parent, "native"), "op", "log", "--json")));
+  keep("native-op-show", JSON.parse(native(path.join(parent, "native"), "op", "show", "--json")));
 
   // Every published note record, and one raw note container.
   captured.noteRecords = vlabJson(repo, "receipts", "--json");
@@ -610,6 +615,9 @@ test("live CLI records and outputs match their catalog documents", { timeout: 60
     ["causet.show/v1", "native-show"],
     ["causet.names/v1", "native-branches"],
     ["causet.names/v1", "native-tags"],
+    ["causet.operation/v1", "native-branch-write"],
+    ["causet.operations/v1", "native-op-log"],
+    ["causet.operation/v1", "native-op-show"],
   ];
   for (const [schemaId, outputName] of cases) {
     const value = state.outputs.get(outputName);

@@ -18,7 +18,7 @@ const INDEX_MAGIC = Buffer.from("CSTINDEX");
 const NO_FRAME = 0xffffffff;
 
 /** The type codes of objects.md §2. */
-export const TYPES = { content: 1, tree: 2, preserved: 3, snapshot: 4, annotation: 5, nativeCommit: 6, nativeTag: 7, fact: 8, factLogEntry: 9 };
+export const TYPES = { content: 1, tree: 2, preserved: 3, snapshot: 4, annotation: 5, nativeCommit: 6, nativeTag: 7, fact: 8, factLogEntry: 9, operation: 10 };
 
 const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest();
 

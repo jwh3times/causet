@@ -8,7 +8,7 @@ use causet_history::actor::{Actor, Role};
 use causet_history::catalog::Catalogs;
 use causet_history::commit::Commit;
 use causet_history::fact::{Fact, Reason};
-use causet_history::fact_log::{Entry, Scope};
+use causet_history::fact_log::{Entry, Heads, Scope};
 use causet_history::signature::Signature;
 use causet_store::id::{GitAlgorithm, NativeId, Type};
 use causet_store::objects::{Snapshot, Tree};
@@ -82,8 +82,19 @@ struct Held {
   landed: NativeId,
   disposition: NativeId,
   disputed: NativeId,
-  /// The shared chain's one head, its second entry.
+  retired: NativeId,
+  /// The shared chain's first entry, and its one head, the second.
+  first: NativeId,
   shared_head: NativeId,
+  /// The local chain's one entry.
+  local_head: NativeId,
+}
+
+impl Held {
+  /// The heads the store's current view names: each chain's last entry.
+  fn heads(&self) -> Heads {
+    Heads { shared: vec![self.shared_head], local: vec![self.local_head] }
+  }
 }
 
 impl Drop for Held {
@@ -116,9 +127,9 @@ fn small_store(name: &str) -> Held {
   let put_entry = |writer: &mut StoreWriter, entry: Entry| writer.put_metadata(Type::FactLogEntry, &entry.encode()).unwrap();
   let first = put_entry(&mut writer, entry(Scope::Shared, Vec::new(), vec![reviewed, retired], Vec::new()));
   let shared_head = put_entry(&mut writer, entry(Scope::Shared, vec![first], vec![landed], vec![retired]));
-  put_entry(&mut writer, entry(Scope::Local, Vec::new(), vec![disposition, disputed], Vec::new()));
+  let local_head = put_entry(&mut writer, entry(Scope::Local, Vec::new(), vec![disposition, disputed], Vec::new()));
   writer.finish(&no_refs()).unwrap();
-  Held { root, a, b, c, d, reviewed, landed, disposition, disputed, shared_head }
+  Held { root, a, b, c, d, reviewed, landed, disposition, disputed, retired, first, shared_head, local_head }
 }
 
 fn catalogs_dir(root: &Path) -> PathBuf {
@@ -129,7 +140,7 @@ fn catalogs_dir(root: &Path) -> PathBuf {
 /// was built to hold.
 fn assert_answers(held: &Held) {
   let store = Store::open(&held.root).unwrap();
-  let catalogs = Catalogs::of(&store);
+  let catalogs = Catalogs::of(&store, &held.heads());
   assert_eq!(catalogs.commits_of_change("ch_a").unwrap(), sorted(vec![held.a, held.b]));
   assert_eq!(catalogs.commits_of_change("ch_c").unwrap(), vec![held.c]);
   assert_eq!(catalogs.commits_of_change("ch_none").unwrap(), Vec::<NativeId>::new());
@@ -225,7 +236,7 @@ fn a_catalog_derived_from_other_objects_is_rebuilt_not_trusted() {
   assert_eq!(written(&held.root), stale, "the import leaves the catalogs as they were");
 
   let store = Store::open(&held.root).unwrap();
-  let catalogs = Catalogs::of(&store);
+  let catalogs = Catalogs::of(&store, &Heads { shared: vec![third], local: vec![held.local_head] });
   assert_eq!(catalogs.commits_of_change("ch_a").unwrap(), sorted(vec![held.a, held.b, e]));
   assert_eq!(catalogs.facts_naming(&held.d).unwrap(), vec![noted]);
   assert_eq!(catalogs.facts_naming(&held.c).unwrap(), Vec::<NativeId>::new(), "the landing is retired");
@@ -241,20 +252,46 @@ fn a_catalog_derived_from_other_objects_is_rebuilt_not_trusted() {
 
   // An entry that only retires, adding no fact, changes what is current too.
   let mut writer = StoreWriter::open(&held.root, GitAlgorithm::Sha1).unwrap();
-  writer
+  let fourth = writer
     .put_metadata(Type::FactLogEntry, &entry(Scope::Shared, vec![third], Vec::new(), vec![noted]).encode())
     .unwrap();
   writer.finish(&no_refs()).unwrap();
   let store = Store::open(&held.root).unwrap();
-  let catalogs = Catalogs::of(&store);
+  let catalogs = Catalogs::of(&store, &Heads { shared: vec![fourth], local: vec![held.local_head] });
   assert_eq!(catalogs.facts_naming(&held.d).unwrap(), Vec::<NativeId>::new(), "the noted record is retired");
   assert_eq!(catalogs.facts_carrying(b"prov_noted").unwrap(), Vec::<NativeId>::new());
+}
+
+#[test]
+fn a_catalog_written_under_one_view_is_rebuilt_not_trusted_under_another() {
+  let held = small_store("views");
+  assert_answers(&held);
+  let under_head = written(&held.root);
+  // The same objects, under a view whose shared chain ends at its first
+  // entry, as one undone to before the landing would (#425): the retired
+  // record is current there, and the landing is not.
+  let earlier = Heads { shared: vec![held.first], local: vec![held.local_head] };
+  let store = Store::open(&held.root).unwrap();
+  let catalogs = Catalogs::of(&store, &earlier);
+  assert_eq!(catalogs.facts_naming(&held.a).unwrap(), sorted(vec![held.reviewed, held.retired]));
+  assert_eq!(catalogs.facts_naming(&held.c).unwrap(), Vec::<NativeId>::new());
+  assert_eq!(catalogs.facts_carrying(b"land_one").unwrap(), Vec::<NativeId>::new());
+  assert_eq!(catalogs.facts_carrying(b"prov_retired").unwrap(), vec![held.retired]);
+  let under_first = written(&held.root);
+  assert_eq!(under_first[0], under_head[0], "by-change does not depend on the view");
+  assert_ne!(under_first[1], under_head[1], "by-object is derived again under the other view");
+  assert_ne!(under_first[2], under_head[2], "by-logical-id is derived again under the other view");
+  drop(catalogs);
+  drop(store);
+  // And back: the first view's catalogs are not trusted under the second's.
+  assert_answers(&held);
+  assert_eq!(written(&held.root), under_head);
 }
 
 /// Asks each catalog once, and says how many bytes the store read to answer.
 fn bytes_to_answer(held: &Held) -> u64 {
   let store = Store::open(&held.root).unwrap();
-  let catalogs = Catalogs::of(&store);
+  let catalogs = Catalogs::of(&store, &held.heads());
   catalogs.commits_of_change("ch_a").unwrap();
   catalogs.facts_naming(&held.a).unwrap();
   catalogs.facts_carrying(b"prov_reviewed").unwrap();

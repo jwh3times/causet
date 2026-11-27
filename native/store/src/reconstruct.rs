@@ -253,6 +253,7 @@ fn rebuild(
     Type::NativeTag => Err("it is a native tag, which no Git object becomes".into()),
     Type::Fact => Err("it is a fact, which no Git object becomes".into()),
     Type::FactLogEntry => Err("it is a fact-log entry, which no Git object becomes".into()),
+    Type::Operation => Err("it is an operation, which no Git object becomes".into()),
   }
 }
 
@@ -299,7 +300,8 @@ pub(crate) fn git_id_of(
     | Type::NativeCommit
     | Type::NativeTag
     | Type::Fact
-    | Type::FactLogEntry => {
+    | Type::FactLogEntry
+    | Type::Operation => {
       return Ok(Err("no Git object becomes it".into()));
     }
   };

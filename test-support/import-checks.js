@@ -45,6 +45,10 @@ export function storeObjects(store, format) {
     const { frames, objects } = readContainer(file);
     for (const object of objects) {
       const id = object.name.toString("hex");
+      // An incremental import equals a full one in every object but its
+      // operation, whose parents record the clone's own history
+      // (docs/native-history/operations.md §4.2).
+      if (object.type === TYPES.operation) continue;
       assert.ok(!found.named.has(id) && !found.chunks.has(id), `${store} holds ${id} twice`);
       if (object.type !== TYPES.content || rows.has(id)) found.named.set(id, object.form);
       else found.chunks.add(id);

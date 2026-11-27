@@ -16,11 +16,10 @@ use crate::{Importer, store_error};
 use causet_engine::errors::{GitError, GitResult};
 use causet_engine::locations::{CURRENT_NAMES, LEGACY_NAMES, Names};
 use causet_history::fact::Fact;
-use causet_history::fact_log::{Entry, Scope, State};
+use causet_history::fact_log::{Entry, Scope, State, read_entry};
 use causet_history::local::{disposition_roots, dispositions, disputed, local_entry};
 use causet_history::notes::{Note, facts_of_notes, notes_commit_action, roots_of_notes};
 use causet_store::id::{NativeId, Type};
-use causet_store::StoreError;
 use causet_store::objects::GitKind;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -274,8 +273,8 @@ impl Importer<'_> {
   }
 
   /// Writes the local chain's entry for this import (§5.3), and the facts
-  /// it adds, when it changes what is current; whether it wrote one.
-  pub(crate) fn local_chain(&mut self, sources: &LocalSources) -> GitResult<bool> {
+  /// it adds, when it changes what is current; the entry it wrote, if any.
+  pub(crate) fn local_chain(&mut self, sources: &LocalSources) -> GitResult<Option<NativeId>> {
     let mut facts = Vec::new();
     for dispute in &sources.disputes {
       let bytes = self.note_bytes(&dispute.object)?.unwrap_or_default();
@@ -287,41 +286,30 @@ impl Importer<'_> {
     }
     let (heads, current) = self.held_local_chain()?;
     let Some(entry) = local_entry(&heads, &current, &facts) else {
-      return Ok(false);
+      return Ok(None);
     };
     let bodies: BTreeMap<NativeId, Vec<u8>> = facts.iter().map(|fact| (fact.id(), fact.encode())).collect();
     for id in &entry.adds {
       self.store.put_metadata(Type::Fact, &bodies[id]).map_err(store_error)?;
     }
-    self.store.put_metadata(Type::FactLogEntry, &entry.encode()).map_err(store_error)?;
-    Ok(true)
+    Ok(Some(self.store.put_metadata(Type::FactLogEntry, &entry.encode()).map_err(store_error)?))
   }
 
-  /// The local chain of the store this import adds to: its heads, every
-  /// held local entry no other names as a parent, and the facts current at
-  /// them. Both are empty for a new store.
+  /// The local chain of the store this import adds to: its heads in the
+  /// current view (§4.2), and the facts current at them. Both are empty for a
+  /// new store.
   fn held_local_chain(&self) -> GitResult<(Vec<NativeId>, BTreeSet<NativeId>)> {
-    let Some(store) = self.store.existing() else {
+    let (Some(store), Some((_, view))) = (self.store.existing(), &self.current) else {
       return Ok((Vec::new(), BTreeSet::new()));
     };
-    let corrupt = |id: &NativeId, why: String| store_error(StoreError::Corrupt(format!("the fact-log entry {id}: {why}")));
-    let mut entries: HashMap<NativeId, Entry> = HashMap::new();
-    for id in store.present_of(Type::FactLogEntry).map_err(store_error)? {
-      let entry = Entry::decode(&store.read(&id).map_err(store_error)?.body).map_err(|why| corrupt(&id, why))?;
-      if entry.scope == Scope::Local {
-        entries.insert(id, entry);
-      }
-    }
-    let named: HashSet<NativeId> = entries.values().flat_map(|entry| entry.parents.iter().copied()).collect();
-    let mut heads: Vec<NativeId> = entries.keys().filter(|id| !named.contains(id)).copied().collect();
-    heads.sort();
-    let state = State::at(&heads, |id| entries.get(id).cloned().ok_or_else(|| corrupt(id, "it is not held".into())))?;
+    let heads = view.local.clone();
+    let state = State::at(&heads, |id| read_entry(store, id)).map_err(store_error)?;
     Ok((heads, state.current()))
   }
 
   /// Writes the shared chain: each notes commit's facts, then its entry,
-  /// parents first.
-  pub(crate) fn fact_log(&mut self, history: &NotesHistory) -> GitResult<()> {
+  /// parents first. The entry of the notes ref's own commit, the last.
+  pub(crate) fn fact_log(&mut self, history: &NotesHistory) -> GitResult<Option<NativeId>> {
     let format = self.algorithm.name();
     // The facts of each group of a tree's notes that share an attachment,
     // derived once: they depend on those notes alone, since a record's fact
@@ -401,9 +389,11 @@ impl Importer<'_> {
     for body in facts.values() {
       self.store.put_metadata(Type::Fact, body).map_err(store_error)?;
     }
+    let mut tip = None;
     for body in &bodies {
-      self.store.put_metadata(Type::FactLogEntry, body).map_err(store_error)?;
+      let id = self.store.put_metadata(Type::FactLogEntry, body).map_err(store_error)?;
+      tip = Some(id);
     }
-    Ok(())
+    Ok(tip)
   }
 }
