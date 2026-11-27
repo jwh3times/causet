@@ -151,8 +151,11 @@ exactly one operation (§3.2), whatever it changes:
   local mark unless `--local` or `--no-local` says otherwise.
 - **`-d`, `-D` or `--delete <name>...`** deletes each, in one operation, a
   name given twice once. A name that is not a branch is refused
-  (`not-found`), and nothing is deleted. A branch `HEAD` names may be
-  deleted: `HEAD` is the snapshot's, and is no name (§4.1).
+  (`not-found`), and nothing is deleted. So is the branch the snapshot's
+  `HEAD` names, following its symbolic refs (`no-match`), as Git refuses to
+  delete the branch it has checked out: `HEAD` would name nothing, and every
+  read that defaults to it would fail. N3 decides what a workspace's `HEAD`
+  protects (§4.1).
 - **`--local <name>` and `--no-local <name>`** mark an existing branch local,
   or not.
 - **The actor** is declared, never inferred: `--actor <name>`, with

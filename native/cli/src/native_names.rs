@@ -492,6 +492,27 @@ fn held<'a>(repository: &'a Repository, name: &[u8]) -> GitResult<&'a Name> {
     .ok_or_else(|| GitError::new("not-found", format!("No branch named '{}'.", lossy(name))))
 }
 
+/// The branches the snapshot's `HEAD` names, following its symbolic refs as
+/// `resolve_ref` does: the ones Git's `git branch -d` refuses to delete while
+/// they are checked out.
+fn head_branches(repository: &Repository) -> Vec<Vec<u8>> {
+  let mut branches = Vec::new();
+  let mut name = b"HEAD".to_vec();
+  for _ in 0..SYMREF_MAXDEPTH {
+    let Ok(at) = repository.refs.binary_search_by(|entry| entry.name.as_slice().cmp(&name)) else {
+      break;
+    };
+    let causet_store::objects::RefTarget::Symbolic(target) = &repository.refs[at].target else {
+      break;
+    };
+    if let Some(branch) = target.strip_prefix(b"refs/heads/") {
+      branches.push(branch.to_vec());
+    }
+    name = target.clone();
+  }
+  branches
+}
+
 /// What a branch held before a write, as human output shows it.
 fn was(name: &Name) -> String {
   match &name.value {
@@ -540,8 +561,18 @@ fn write_branch(write: Write, args: &[OsString], root: &Path) -> GitResult<i32> 
       view = view.with(Name { kind: Kind::Branch, name: name.clone(), local: mark, value: NameValue::Resolved(Target::Object(commit)) });
     }
     Change::Delete(names) => {
+      let checked_out = head_branches(&repository);
       for name in names {
         let existing = held(&repository, name)?;
+        if checked_out.iter().any(|branch| branch == name) {
+          return Err(GitError::new(
+            "no-match",
+            format!(
+              "The branch '{}' is the one HEAD names, so it is not deleted: HEAD would name nothing (docs/native-history/operations.md §2.4).",
+              lossy(name)
+            ),
+          ));
+        }
         // A name given twice is deleted once.
         if view.name(Kind::Branch, name).is_none() {
           continue;

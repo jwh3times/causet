@@ -18,7 +18,8 @@
     one operation, and prints a line for each change and the operation's ID, or the operation with
     `--json`. Its actor is declared, never inferred: `--actor <name>`, with `--kind human|agent`
     and `--for <name>`, or `CAUSET_AGENT`. A new name keeps Git's rules for a branch ref, and
-    names that would clash as directories, as `a` and `a/b` do, are refused.
+    names that would clash as directories, as `a` and `a/b` do, are refused. The branch `HEAD`
+    names is not deleted, as Git keeps the branch it has checked out.
   - **`cst op log`** lists the operations newest first, with `-<n>`, `-n <n>` and `--max-count`,
     and **`cst op show [<operation>]`** shows one and its view, the current one by default. Their
     `--json` documents are `causet.operations/v1` and `causet.operation/v1`.

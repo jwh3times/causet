@@ -295,6 +295,9 @@ test("a write is refused before it writes anything, each refusal with a register
   refused(["branch", "topic", "main"], "usage-missing-argument", /no actor was declared/);
   refused(["branch", ...ADA, "main", "side"], "already-exists", /already exists; move it with -f/);
   refused(["branch", ...ADA, "-d", "side", "gone"], "not-found", /No branch named 'gone'/);
+  // HEAD is symbolic to refs/heads/main: deleting main would leave it naming nothing.
+  refused(["branch", ...ADA, "-d", "side", "main"], "no-match", /The branch 'main' is the one HEAD names/);
+  refused(["branch", ...ADA, "-D", "main"], "no-match", /The branch 'main' is the one HEAD names/);
   refused(["branch", ...ADA, "--local", "gone"], "not-found", /No branch named 'gone'/);
   refused(["branch", ...ADA, "topic"], "usage-missing-argument", /needs a start point/);
   refused(["branch", ...ADA, "-f", "main"], "usage-missing-argument", /needs a start point/);
