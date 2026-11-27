@@ -4,7 +4,10 @@ The commands and paths `scripts/guard.mjs` stops in this repository, on top of t
 everywhere; the format is defined in `.agents/skills/open-pr/settings/guard.md`. The command rules hold
 the table in [landing.md](landing.md#all-source-control-goes-through-cst): read-only Git (`git diff`,
 `git log`, `git status`, `git show`, `git merge-base`, `git ls-remote`, `git rev-parse`,
-`git branch --show-current`) stays allowed.
+`git branch --show-current`) stays allowed. `Git wrappers` names the `cst` forms that run Git, so
+the shared git rules (force-pushes, pushes to `main`, branch and push deletes, discarding a dirty
+tree, `git rm` of a protected path) also read `cst git <arguments>` and `cst <arguments>` as
+`git <arguments>`; the rules here still match a command as written.
 
 ## Deny commands
 
