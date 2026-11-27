@@ -1,6 +1,0 @@
-[workspace]
-members = ["core", "binding", "cli", "model", "engine"]
-resolver = "2"
-
-[profile.release]
-panic = "unwind"
