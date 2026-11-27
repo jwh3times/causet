@@ -20,6 +20,24 @@
       "resolutions": [],
       "semanticMerges": [],
       "createdAt": "2026-11-27T01:25:04.918Z"
+    },
+    {
+      "schema": "causet.provenance/v1",
+      "type": "provenance",
+      "id": "prov_0mwyaubmw8715dbec4981",
+      "commit": "74d5818b062e7e7ca6c8680d9eed46eef61f0bfe",
+      "changeId": "ch_0mwyahvi0e4779cc85eeb",
+      "actors": [
+        {
+          "role": "generated",
+          "actor": "claude-opus-5-5"
+        }
+      ],
+      "origin": "carried",
+      "carriedFrom": [
+        "f73582837aba146619c5bdf69a85ff4229bbaff7"
+      ],
+      "createdAt": "2026-11-27T01:25:05.768Z"
     }
   ]
 }
