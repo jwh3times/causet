@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwybm8ll16eb81d9baf5",
+      "mode": "compact",
+      "sourceRef": "chore/guard-git-wrappers",
+      "sourceHead": "7deedc6a086c64958265c0c5600a860d9e04b684",
+      "sourceSubject": "docs: update docs and changelog fragment",
+      "targetBefore": "fe33ea2f01ffab655d882ec201da3bb8c3aed0a6",
+      "landingCommit": "40c3b1dd62824a62acbe7753c0330f1426ec38f5",
+      "base": "5bc3152ff56f656e218aac5aa140fa9c1c41b276",
+      "absorbedCommits": [
+        "74d5818b062e7e7ca6c8680d9eed46eef61f0bfe",
+        "7deedc6a086c64958265c0c5600a860d9e04b684"
+      ],
+      "absorbedChanges": [
+        "ch_0mwyahvi0e4779cc85eeb",
+        "ch_0mwyapd5ccb48fe3552c6"
+      ],
+      "resultTree": "24f6d223ef9166dfa350581d121e6d05fe42dc50",
+      "createdAt": "2026-11-27T01:46:48.269Z"
+    }
+  ]
+}
