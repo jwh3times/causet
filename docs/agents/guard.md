@@ -47,3 +47,8 @@ the table in [landing.md](landing.md#all-source-control-goes-through-cst): read-
 - `(^|/)[^/]*\.log$` — ignored logs the user may be keeping.
 - `^(causet|causal-vcs-lab)-[^/]*\.(bundle|zip|tgz)$` — packed artifacts, ignored, but the user may
   be keeping them.
+
+## Git wrappers
+
+- `cst git` — runs Git with whatever follows.
+- `cst` — runs Git for every first word it does not answer itself.
