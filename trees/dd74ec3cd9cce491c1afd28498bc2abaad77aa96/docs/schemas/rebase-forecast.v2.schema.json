@@ -1,0 +1,427 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vcs-lab.rebase-forecast/v2",
+  "title": "Causal rebase forecast",
+  "description": "Pinned causal-rebase simulation with caller invariants, stored worktree-private under .git/vcs-lab/forecasts/ and returned by vlab rebase-forecast --json (src/rebase-forecast.js). v2 pins a vcs-lab.rebase-plan/v2 plan and adds `recreatedMerges`; steps carry `kind` and, for a recreated merge, the parents it joined (ADR-0034). v1 is not readable: it pins a v1 plan fingerprint, which no v2 plan can match, so it is refused by version rather than reported as stale.",
+  "x-vcs-lab-scope": "worktree-private",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "mode",
+    "sourceRef",
+    "sourceHead",
+    "sourceTree",
+    "ontoRef",
+    "ontoHead",
+    "ontoTree",
+    "targetWorktree",
+    "scope",
+    "ignoredCallerDirtyFiles",
+    "acceptCandidates",
+    "candidateDecisionRequired",
+    "candidatePolicy",
+    "acceptedCandidates",
+    "planFingerprint",
+    "plan",
+    "status",
+    "blockedReason",
+    "steps",
+    "approvedResolutions",
+    "approvedSpecMerges",
+    "counts",
+    "simulatedChanges",
+    "remainingChanges",
+    "partialResultTree",
+    "predictedResultTree",
+    "exactStateEqualityAfter",
+    "engine",
+    "fallbacks",
+    "callerInvariants",
+    "timings",
+    "startedAt",
+    "createdAt",
+    "recreatedMerges"
+  ],
+  "properties": {
+    "schema": {
+      "const": "vcs-lab.rebase-forecast/v2"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^rebase_forecast_[a-z0-9]+$"
+    },
+    "mode": {
+      "enum": [
+        "linear",
+        "merge-preserving"
+      ]
+    },
+    "sourceRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "sourceTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ontoHead": {
+      "$ref": "#/$defs/oid"
+    },
+    "ontoTree": {
+      "$ref": "#/$defs/oid"
+    },
+    "targetWorktree": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "enum": [
+        "committed-heads",
+        "target-checkpoint"
+      ],
+      "description": "'committed-heads', or 'target-checkpoint' when the caller pinned one of its own checkpoints as an overlay with --target-checkpoint. A distinct value per overlay combination, so an approval cannot be read as covering a combination it was not made for (ADR-0028). Records written before the member existed carry only 'committed-heads'."
+    },
+    "ignoredCallerDirtyFiles": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "acceptCandidates": {
+      "type": "boolean"
+    },
+    "candidateDecisionRequired": {
+      "type": "boolean"
+    },
+    "candidatePolicy": {
+      "enum": [
+        "none",
+        "accepted",
+        "review-required"
+      ]
+    },
+    "acceptedCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "proof",
+          "decision"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "proof": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "decision": {
+            "const": "omit"
+          }
+        }
+      }
+    },
+    "planFingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "plan": {
+      "$ref": "vcs-lab.rebase-plan/v2"
+    },
+    "status": {
+      "type": "string",
+      "description": "'complete', 'blocked', 'review-required', or 'unsupported'."
+    },
+    "blockedReason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "vcs-lab.forecast/v2#/$defs/simulationStep"
+      }
+    },
+    "approvedResolutions": {
+      "type": "array",
+      "items": {
+        "$ref": "vcs-lab.forecast/v2#/$defs/approvedResolution"
+      }
+    },
+    "approvedSpecMerges": {
+      "type": "array",
+      "items": {
+        "$ref": "vcs-lab.forecast/v2#/$defs/approvedSpecMerge"
+      }
+    },
+    "counts": {
+      "$ref": "vcs-lab.forecast/v2#/$defs/simulationCounts"
+    },
+    "simulatedChanges": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "remainingChanges": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "partialResultTree": {
+      "$ref": "#/$defs/oidOrNull"
+    },
+    "predictedResultTree": {
+      "$ref": "#/$defs/oidOrNull"
+    },
+    "exactStateEqualityAfter": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "engine": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "'worktree' or 'merge-tree'; null when the plan topology is unsupported and no simulation ran."
+    },
+    "fallbacks": {
+      "type": "array",
+      "items": {
+        "$ref": "vcs-lab.forecast/v2#/$defs/engineFallback"
+      }
+    },
+    "callerInvariants": {
+      "type": "object",
+      "required": [
+        "preserved",
+        "head",
+        "tree",
+        "branch",
+        "indexDigest",
+        "statusDigest",
+        "worktreeListDigest"
+      ],
+      "properties": {
+        "preserved": {
+          "const": true
+        },
+        "head": {
+          "$ref": "#/$defs/oid"
+        },
+        "tree": {
+          "$ref": "#/$defs/oid"
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "indexDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "statusDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "worktreeListDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "timings": {
+      "type": "object",
+      "required": [
+        "forecastMs",
+        "phases",
+        "worktree",
+        "mergeTree",
+        "git"
+      ],
+      "properties": {
+        "forecastMs": {
+          "type": "number"
+        },
+        "phases": {
+          "type": "object"
+        },
+        "worktree": {
+          "$ref": "vcs-lab.forecast/v2#/$defs/phaseTimings"
+        },
+        "mergeTree": {
+          "$ref": "vcs-lab.forecast/v2#/$defs/phaseTimings"
+        },
+        "git": {
+          "$ref": "vcs-lab.forecast/v2#/$defs/gitMetrics"
+        }
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "quarantinedFacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Identifiers reachable from the target that the conflict rule excluded, so a reviewer can see that coverage was computed on reduced evidence (ADR-0030). Absent in records written before v0.15.0; an empty array means nothing was excluded. Deliberately outside every plan fingerprint."
+    },
+    "range": {
+      "type": "object",
+      "required": [
+        "base",
+        "tip",
+        "explicit"
+      ],
+      "description": "The source set this plan describes. Without --from, `base` is the physical merge base and `explicit` is false, so a v1 plan is unchanged. The plan fingerprint covers `base`, because it decides what would be replayed; it does not cover `explicit`, because naming the same base is the same range (ADR-0032). Absent in records written before v0.15.0.",
+      "properties": {
+        "baseRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The revision the caller named, as typed, or null when the base was implicit."
+        },
+        "base": {
+          "$ref": "#/$defs/oid"
+        },
+        "tip": {
+          "$ref": "#/$defs/oid"
+        },
+        "explicit": {
+          "type": "boolean"
+        }
+      }
+    },
+    "excludedByRange": {
+      "type": "array",
+      "description": "Commits between the physical merge base and the range base: work the caller declared out of the source set. They are listed and nothing else \u2014 never replayed, classified, absorbed, or covered, and no receipt claims them. The omission is declared, not proven (ADR-0032).",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "changeId",
+          "subject"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/$defs/oid"
+          },
+          "changeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "targetOverlay": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "checkpoint",
+        "tree",
+        "baseHead",
+        "draftChangeId"
+      ],
+      "description": "The overlay this rebase forecast approves: uncommitted work the caller captured in a checkpoint, carried through the rebase and put back afterwards (ADR-0028). The overlaid worktree is the source branch's own, because a rebase rewrites the branch the caller is standing on; the member keeps ADR-0028's name because the contract is the same one. It is identified by the checkpoint commit rather than by the checkpoint ref, which moves when the next checkpoint is captured. Null, or absent, when no overlay is in play.",
+      "properties": {
+        "checkpoint": {
+          "$ref": "#/$defs/oid"
+        },
+        "tree": {
+          "$ref": "#/$defs/oid"
+        },
+        "baseHead": {
+          "$ref": "#/$defs/oid"
+        },
+        "draftChangeId": {
+          "type": "string",
+          "pattern": "^draft_[0-9a-f]{64}$",
+          "description": "Display and audit only. It is not a plan entry, not a coverage input, and not a receipt subject: a receipt claims nothing about an uncommitted state."
+        },
+        "workspaceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspaceName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rematerialized": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Always 'uncommitted': the overlay never enters committed history through this path."
+        }
+      }
+    },
+    "predictedOverlayTree": {
+      "$ref": "#/$defs/oidOrNull",
+      "description": "The worktree tree predicted after the overlay is put back: a three-way merge of the source tree before the rebase started, the rewritten tip's tree, and the overlay tree. The prediction is pinned once per run, not once per pick. Application verifies the re-materialized tree against this before publishing anything. Null when there is no overlay, or when the overlay does not merge \u2014 in which case the forecast is not a complete approval."
+    },
+    "targetOverlayConflict": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Why the overlay could not be re-materialized, when it could not. Live bytes are never merged, so this is decided from trees alone."
+    },
+    "recreatedMerges": {
+      "type": "array",
+      "description": "Lifted out of the pinned plan so a reader sees the preserved topology without reading the plan. Empty for a linear forecast.",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    },
+    "oidOrNull": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$"
+    }
+  }
+}
