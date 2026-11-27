@@ -27,7 +27,8 @@ of a re-import (ADR-0047, Constraints).
   `cst metadata validate` report them (§5.6).
 - [Names and operations](operations.md): branches, tags and remote-tracking
   names, conflicted names, the operation log and its 3-way merge, which refs
-  import makes names, what `cst branch` and `cst tag` list, and reachability.
+  import makes names, what `cst branch` and `cst tag` list, how `cst branch`
+  writes, what `cst op log` and `cst op show` show, and reachability.
 - [Reading history](reading.md): what `cst log` and `cst show` print, Git's
   `--format` byte for byte, cst's own human output and their JSON documents,
   and what they refuse.

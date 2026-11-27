@@ -876,8 +876,9 @@ the real-repository check reports each import's cost (#347):
     `refs/notes/causet`, only when the snapshot has that ref and import
     writes native history;
   - `finish`: writing the held records into the container in path order,
-    then the snapshot, the alias file and the index, and putting the store
-    in place.
+    then the snapshot, the alias file and the index, putting the store in
+    place, and adding the import operation's head
+    ([operations.md §4.2](native-history/operations.md#42-the-import-operation)).
 - `peakMemory`: the process's peak in bytes. It and each phase's figure are
   `null` off Linux.
 - `heldMetadata`: the held metadata file's peak size in bytes.
@@ -888,7 +889,8 @@ the real-repository check reports each import's cost (#347):
 `CAUSET_TEST_IMPORT_WITHOUT_HISTORY=1`, inert unless it is set exactly, makes
 `cst import` write no native history: no native commit, native tag, fact
 or fact-log entry, and no later N2 object either. The store holds N1's objects alone, which is what the
-real-repository check gates (#437).
+real-repository check gates (#437). With no operation head it has no current
+view, so every command but `cst fsck` and `cst import --verify` refuses it.
 
 `test/error-envelope.test.js` covers the failure contract (ADR-0021). Two of
 its checks are **static**: they scan the Rust CLI, engine and model for every

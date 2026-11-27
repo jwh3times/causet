@@ -812,7 +812,11 @@ That file is the root marker ADR-0042's kind detection reads (decision 12).
   `78c68444e6ea2ca3d6da20db3e36bdf71ff3da61a55a3c47c5200fbdada776b5`.
 - **The commit point.** Import writes its objects and alias files first and
   replaces `snapshot` last. A reader therefore sees one import whole or not at
-  all. A `snapshot` naming an object the store does not hold is corrupt.
+  all. A `snapshot` naming an object the store does not hold is corrupt. An
+  import that changes the current view then adds its operation's head, after
+  `snapshot` (native history's
+  [operations.md §4.2](../native-history/operations.md#42-the-import-operation)),
+  which says what a reader sees between the two.
   - **A new store** is written in `.cst-import/` beside it, which is renamed to
     `.cst/` once whole.
   - **An import into an existing store** writes its container under a name

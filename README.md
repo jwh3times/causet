@@ -920,7 +920,12 @@ file's previous version,
 when that is smaller than its chunks. Importing the same history again
 writes the same bytes. Importing into an existing native repository adds only
 what it does not hold, with the native commits and tags its history still
-lacks, then replaces its snapshot. A shallow clone, a partial clone,
+lacks, then replaces its snapshot. Each import that changes the
+repository's names or facts records one operation in its operation log, and
+its names are the snapshot's, so a branch moved natively since the last
+import is moved back to the original's
+([the import operation](docs/native-history/operations.md#42-the-import-operation)).
+A shallow clone, a partial clone,
 or a repository with grafts is refused, since Git reads its history
 differently from what it stores, and so is one with a ref, or another
 worktree's `HEAD`, naming an object it does not hold: import names the first
@@ -959,18 +964,35 @@ placeholder whose source native history holds; without it they print cst's
 own human output, and with `--json` the `causet.log/v1` and `causet.show/v1`
 documents ([reading history](docs/native-history/reading.md)). They read
 native commits and tags alone, so `%H` and `%P` name native commits, and
-every `%h` they print resolves in the other commands. A native repository
-imported before native commits or tags existed has none until it is imported
-into again: `cst log` and `cst show` refuse it, and the other commands name
-its commits and tags by their preserved Git objects.
+every `%h` they print resolves in the other commands.
 `cst branch [-r | -a] [-l <pattern>...]` lists the branches, with `-r` the
 remote-tracking names, and `cst tag [-l <pattern>...]` the tags: the names
-import makes of the ref snapshot's `refs/heads/*`, `refs/tags/*` and
-`refs/remotes/*`, never cst's records or any other ref. With `--format` they
+of the repository's current view, which import makes of the ref snapshot's
+`refs/heads/*`, `refs/tags/*` and `refs/remotes/*`, never cst's records or
+any other ref. With `--format` they
 print as `git branch --format` and `git tag --format` do, byte for byte;
 without it, cst's own listing, and with `--json` the `causet.names/v1`
 document ([listing names](docs/native-history/operations.md#23-listing-names)).
-Neither writes a name yet.
+`cst branch <name> <start-point>` creates a branch, with `-f` creates or
+moves it, `-d <name>...` deletes branches, and `--local` or `--no-local
+<name>` marks one local or not, each invocation one operation that names
+who ran it: `--actor <name>`, with `--kind human|agent` and `--for <name>`,
+or the agent `CAUSET_AGENT` names, and without either the write is refused
+([writing branches](docs/native-history/operations.md#24-writing-branches)).
+Every command reads the names of the current view, so `main` in a revision
+names where `cst branch -f` moved it, while `HEAD` and every other ref that
+is no name stay the snapshot's. Only import writes tags and
+remote-tracking names yet. `cst op log [-n <n>]` lists the operations, newest first, and
+`cst op show [<operation>]` shows one, the current one by default, with the
+view it left; with `--json` they print the `causet.operations/v1` and
+`causet.operation/v1` documents
+([reading the operation log](docs/native-history/operations.md#25-reading-the-operation-log)).
+Writers take no lock, so two that run at once leave two current operations,
+which every command then refuses, naming them, until merging them is built.
+A native repository imported before the operation log existed has no current
+view: every command but `cst fsck` and `cst import --verify` refuses it, an
+import into it included, and the Git repository is imported again into a new
+directory.
 Import also reads the history of `refs/notes/causet`, or of
 `refs/notes/vcs-lab` in a repository with only the legacy names, into the
 fact log: one entry per notes commit, each record a fact whose object IDs
@@ -990,9 +1012,7 @@ the current names, and report empty what a native repository does not have:
 tracked specification manifests, the workspace registry and worktree-private
 state ([facts.md §5.6](docs/native-history/facts.md#56-the-metadata-inventory)).
 None of them records a fact yet, so `cst provenance declare` is refused, as
-is every other `cst metadata` command. A native
-repository imported before the fact log existed holds no facts until it is
-imported into again, so they find no records there.
+is every other `cst metadata` command.
 `cst fsck` verifies the store: every
 copy of every object in every container, and content absent by promise or by
 policy, which it reports by state rather than as corruption. It also checks
@@ -1000,7 +1020,9 @@ each native commit and tag by the rules of native history, deriving an
 imported one again from its Git commit or tag, and each fact and fact-log
 entry: a fact's record must be canonical JSON of the schema it names, naming
 only objects the store holds, and each entry must keep the fact log's rules
-([facts.md §8](docs/native-history/facts.md#8-verification)).
+([facts.md §8](docs/native-history/facts.md#8-verification)); and each
+operation and operation head, which must name only what the store holds
+([operations.md §7](docs/native-history/operations.md#7-verification)).
 `cst import --verify [<native-repo>]` rebuilds every imported object in Git's
 encoding from the store alone and checks that it hashes to its original Git
 ID, also without Git. Those two, `cst cat-file --batch` and
