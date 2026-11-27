@@ -1,0 +1,513 @@
+//! The bodies of the N1 object types (objects.md §3–§5): chunk lists, native
+//! trees and their Git encoding, and preserved Git objects, each with the
+//! rules a reader checks.
+
+use crate::encoding::{Reader, put_bytes, put_varint};
+use crate::id::{GitAlgorithm, GitId, NativeId};
+use std::cmp::Ordering;
+
+/// The chunker code of cst's FastCDC (storage.md §2).
+pub const CHUNKER_FASTCDC: u8 = 0x01;
+
+/// A content object stored in pieces (objects.md §3.3): a stored form, kept
+/// under the ID of the content it lists.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChunkList {
+  pub size: u64,
+  pub chunks: Vec<(NativeId, u64)>,
+}
+
+impl ChunkList {
+  pub fn encode(&self) -> Vec<u8> {
+    let mut out = vec![CHUNKER_FASTCDC];
+    out.extend_from_slice(&0u64.to_be_bytes());
+    put_varint(&mut out, self.size);
+    put_varint(&mut out, self.chunks.len() as u64);
+    for (id, length) in &self.chunks {
+      id.put(&mut out);
+      put_varint(&mut out, *length);
+    }
+    out
+  }
+
+  pub fn decode(record: &[u8]) -> Result<ChunkList, String> {
+    let mut reader = Reader::new(record);
+    let chunker = reader.u8()?;
+    if chunker != CHUNKER_FASTCDC {
+      return Err(format!(
+        "a chunk list names the chunker {chunker:02x}, which version 0 does not write"
+      ));
+    }
+    if reader.u64()? != 0 {
+      return Err("a chunk list has a seed, which version 0 does not write".into());
+    }
+    let size = reader.varint()?;
+    let count = reader.varint()?;
+    if count < 2 {
+      return Err("a chunk list has fewer than 2 chunks".into());
+    }
+    let mut chunks = Vec::new();
+    let mut total: u64 = 0;
+    for _ in 0..count {
+      let id = NativeId::read(&mut reader)?;
+      let length = reader.varint()?;
+      if length == 0 || length >= size {
+        return Err("a chunk list has a chunk of length 0, or no shorter than the content".into());
+      }
+      total = total
+        .checked_add(length)
+        .ok_or("a chunk list's lengths overflow")?;
+      chunks.push((id, length));
+    }
+    if total != size {
+      return Err(format!(
+        "a chunk list's lengths add up to {total}, not its size {size}"
+      ));
+    }
+    if !reader.is_empty() {
+      return Err("a chunk list has bytes after its last chunk".into());
+    }
+    Ok(ChunkList { size, chunks })
+  }
+}
+
+/// What a tree entry is (objects.md §4.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Kind {
+  File = 1,
+  Executable = 2,
+  Symlink = 3,
+  Tree = 4,
+  Submodule = 5,
+}
+
+impl Kind {
+  pub fn from_code(code: u8) -> Option<Kind> {
+    Some(match code {
+      1 => Kind::File,
+      2 => Kind::Executable,
+      3 => Kind::Symlink,
+      4 => Kind::Tree,
+      5 => Kind::Submodule,
+      _ => return None,
+    })
+  }
+
+  /// The Git mode, exactly as a canonical Git tree writes it.
+  pub fn git_mode(self) -> &'static [u8] {
+    match self {
+      Kind::File => b"100644",
+      Kind::Executable => b"100755",
+      Kind::Symlink => b"120000",
+      Kind::Tree => b"40000",
+      Kind::Submodule => b"160000",
+    }
+  }
+
+  pub fn from_git_mode(mode: &[u8]) -> Option<Kind> {
+    [
+      Kind::File,
+      Kind::Executable,
+      Kind::Symlink,
+      Kind::Tree,
+      Kind::Submodule,
+    ]
+    .into_iter()
+    .find(|kind| kind.git_mode() == mode)
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Target {
+  Native(NativeId),
+  Git(GitId),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Entry {
+  pub name: Vec<u8>,
+  pub kind: Kind,
+  pub target: Target,
+}
+
+/// A native tree, its entries in byte order of their names.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Tree {
+  pub entries: Vec<Entry>,
+}
+
+/// Whether `name` may name a tree entry: not empty, no NUL or `/`, and
+/// neither `.` nor `..`.
+pub fn valid_name(name: &[u8]) -> bool {
+  !name.is_empty()
+    && name != b"."
+    && name != b".."
+    && !name.iter().any(|&byte| byte == 0 || byte == b'/')
+}
+
+/// Git's order of tree records: a tree compares as its name followed by `/`.
+pub fn git_order(a: (&[u8], bool), b: (&[u8], bool)) -> Ordering {
+  fn key<'a>((name, is_tree): (&'a [u8], bool)) -> impl Iterator<Item = u8> + 'a {
+    name.iter().copied().chain(is_tree.then_some(b'/'))
+  }
+  key(a).cmp(key(b))
+}
+
+impl Tree {
+  /// A tree of these entries in any order, sorted into native order. A name
+  /// that is invalid or repeated, or a target that does not fit its kind,
+  /// makes no tree.
+  pub fn from_entries(mut entries: Vec<Entry>) -> Result<Tree, String> {
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    let tree = Tree { entries };
+    tree.check()?;
+    Ok(tree)
+  }
+
+  fn check(&self) -> Result<(), String> {
+    let mut algorithm = None;
+    for (index, entry) in self.entries.iter().enumerate() {
+      if !valid_name(&entry.name) {
+        return Err(format!(
+          "a tree has the entry name {:?}, which is not valid",
+          String::from_utf8_lossy(&entry.name)
+        ));
+      }
+      if index > 0 && self.entries[index - 1].name >= entry.name {
+        return Err("a tree's entries are not in byte order of their names, or repeat one".into());
+      }
+      match (&entry.kind, &entry.target) {
+        (Kind::Submodule, Target::Git(id)) => {
+          if algorithm.is_some_and(|known| known != id.algorithm) {
+            return Err("a tree names Git IDs of two algorithms".into());
+          }
+          algorithm = Some(id.algorithm);
+        }
+        (Kind::Submodule, Target::Native(_)) | (_, Target::Git(_)) => {
+          return Err("a tree entry's target does not fit its kind".into());
+        }
+        _ => {}
+      }
+    }
+    Ok(())
+  }
+
+  pub fn encode(&self) -> Vec<u8> {
+    let mut out = Vec::new();
+    put_varint(&mut out, self.entries.len() as u64);
+    for entry in &self.entries {
+      put_bytes(&mut out, &entry.name);
+      out.push(entry.kind as u8);
+      match &entry.target {
+        Target::Native(id) => id.put(&mut out),
+        Target::Git(id) => id.put(&mut out),
+      }
+    }
+    out
+  }
+
+  pub fn decode(body: &[u8]) -> Result<Tree, String> {
+    let mut reader = Reader::new(body);
+    let count = reader.varint()?;
+    let mut entries = Vec::new();
+    for _ in 0..count {
+      let name = reader.bytes()?.to_vec();
+      let code = reader.u8()?;
+      let kind = Kind::from_code(code)
+        .ok_or_else(|| format!("a tree entry has the kind {code:02x}, which is reserved"))?;
+      let target = match kind {
+        Kind::Submodule => Target::Git(GitId::read(&mut reader)?),
+        _ => Target::Native(NativeId::read(&mut reader)?),
+      };
+      entries.push(Entry { name, kind, target });
+    }
+    if !reader.is_empty() {
+      return Err("a tree has bytes after its last entry".into());
+    }
+    let tree = Tree { entries };
+    tree.check()?;
+    Ok(tree)
+  }
+
+  /// The entries in Git's order.
+  pub fn git_ordered(&self) -> Vec<&Entry> {
+    let mut entries: Vec<&Entry> = self.entries.iter().collect();
+    entries.sort_by(|a, b| {
+      git_order(
+        (&a.name, a.kind == Kind::Tree),
+        (&b.name, b.kind == Kind::Tree),
+      )
+    });
+    entries
+  }
+
+  /// The Git encoding (objects.md §4.2), given each native target's Git
+  /// digest in the algorithm being encoded for; `None` when one has none.
+  pub fn git_encoding(&self, git_digest: &dyn Fn(&NativeId) -> Option<Vec<u8>>) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    for entry in self.git_ordered() {
+      out.extend_from_slice(entry.kind.git_mode());
+      out.push(b' ');
+      out.extend_from_slice(&entry.name);
+      out.push(0);
+      match &entry.target {
+        Target::Native(id) => out.extend_from_slice(&git_digest(id)?),
+        Target::Git(id) => out.extend_from_slice(&id.digest),
+      }
+    }
+    Some(out)
+  }
+
+  /// The length of the Git encoding in an algorithm, without building it.
+  pub fn git_size(&self, algorithm: GitAlgorithm) -> usize {
+    self
+      .entries
+      .iter()
+      .map(|entry| entry.kind.git_mode().len() + entry.name.len() + 2 + algorithm.length())
+      .sum()
+  }
+}
+
+/// The Git kind of a preserved object (objects.md §5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GitKind {
+  Commit = 1,
+  Tag = 2,
+  Tree = 3,
+}
+
+impl GitKind {
+  pub fn name(self) -> &'static str {
+    match self {
+      GitKind::Commit => "commit",
+      GitKind::Tag => "tag",
+      GitKind::Tree => "tree",
+    }
+  }
+}
+
+/// A Git object kept in Git's encoding, for the bridge.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Preserved {
+  pub algorithm: GitAlgorithm,
+  pub kind: GitKind,
+  pub payload: Vec<u8>,
+}
+
+impl Preserved {
+  pub fn encode(&self) -> Vec<u8> {
+    let mut out = vec![self.algorithm.code(), self.kind as u8];
+    out.extend_from_slice(&self.payload);
+    out
+  }
+
+  pub fn decode(body: &[u8]) -> Result<Preserved, String> {
+    let mut reader = Reader::new(body);
+    let code = reader.u8()?;
+    let algorithm = GitAlgorithm::from_code(code).ok_or_else(|| {
+      format!("a preserved object has the Git algorithm {code:02x}, which is reserved")
+    })?;
+    let kind = match reader.u8()? {
+      1 => GitKind::Commit,
+      2 => GitKind::Tag,
+      3 => GitKind::Tree,
+      code => {
+        return Err(format!(
+          "a preserved object has the Git kind {code:02x}, which is reserved"
+        ));
+      }
+    };
+    Ok(Preserved {
+      algorithm,
+      kind,
+      payload: reader.rest().to_vec(),
+    })
+  }
+}
+
+/// One record of a Git tree, as Git wrote it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitEntry {
+  pub mode: Vec<u8>,
+  pub name: Vec<u8>,
+  pub digest: Vec<u8>,
+}
+
+/// A Git tree's records, in the order written; `None` when the bytes are not a
+/// sequence of `<mode> <name>\0<digest>` records.
+pub fn parse_git_tree(payload: &[u8], algorithm: GitAlgorithm) -> Option<Vec<GitEntry>> {
+  let mut entries = Vec::new();
+  let mut rest = payload;
+  while !rest.is_empty() {
+    let space = rest.iter().position(|&byte| byte == b' ')?;
+    let nul = space + 1 + rest[space + 1..].iter().position(|&byte| byte == 0)?;
+    let end = nul + 1 + algorithm.length();
+    if rest.len() < end {
+      return None;
+    }
+    entries.push(GitEntry {
+      mode: rest[..space].to_vec(),
+      name: rest[space + 1..nul].to_vec(),
+      digest: rest[nul + 1..end].to_vec(),
+    });
+    rest = &rest[end..];
+  }
+  Some(entries)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::id::{Type, hex, unhex};
+
+  fn content(bytes: &[u8]) -> NativeId {
+    NativeId::of(Type::Content, bytes)
+  }
+
+  #[test]
+  fn trees_are_the_contracts_examples() {
+    let empty = Tree::default();
+    assert_eq!(empty.encode(), [0x00]);
+    assert_eq!(
+      NativeId::of(Type::Tree, &empty.encode()).hex(),
+      "da296d2ac403c5b842b5ad9b5a423dc035e0f13bdfe464b6108e18f1ca6c78f1"
+    );
+    let hello = Tree::from_entries(vec![Entry {
+      name: b"hello.txt".to_vec(),
+      kind: Kind::File,
+      target: Target::Native(content(b"hello\n")),
+    }])
+    .unwrap();
+    let body = hello.encode();
+    assert_eq!(body.len(), 45);
+    assert_eq!(
+      hex(&body),
+      "010968656c6c6f2e7478740101c32f27e6a5e1d06a6c75540b1410f868f228ace6b7dcc3b3f1834c6dce1b1988"
+    );
+    assert_eq!(
+      NativeId::of(Type::Tree, &body).hex(),
+      "754a90b4c821bcf47f6441bdbed3bfe8eae725f9f72f50beafebf4c2b603680a"
+    );
+    assert_eq!(Tree::decode(&body).unwrap(), hello);
+    let blob = unhex("ce013625030ba8dba906f756967f9e9ca394464a").unwrap();
+    let git = hello.git_encoding(&|_| Some(blob.clone())).unwrap();
+    assert_eq!(git, [b"100644 hello.txt\0".as_slice(), &blob].concat());
+    assert_eq!(hello.git_size(GitAlgorithm::Sha1), git.len());
+  }
+
+  #[test]
+  fn git_order_puts_a_tree_after_a_name_it_prefixes() {
+    let tree = Tree::from_entries(vec![
+      Entry {
+        name: b"a.b".to_vec(),
+        kind: Kind::File,
+        target: Target::Native(content(b"x")),
+      },
+      Entry {
+        name: b"a".to_vec(),
+        kind: Kind::Tree,
+        target: Target::Native(content(b"y")),
+      },
+    ])
+    .unwrap();
+    assert_eq!(tree.entries[0].name, b"a");
+    let names: Vec<&[u8]> = tree
+      .git_ordered()
+      .iter()
+      .map(|entry| entry.name.as_slice())
+      .collect();
+    assert_eq!(names, [b"a.b".as_slice(), b"a"]);
+  }
+
+  #[test]
+  fn a_tree_breaking_a_rule_is_refused() {
+    let file = |name: &[u8]| Entry {
+      name: name.to_vec(),
+      kind: Kind::File,
+      target: Target::Native(content(b"")),
+    };
+    for names in [
+      vec![b"a".as_slice(), b"a"],
+      vec![b"."],
+      vec![b"a/b"],
+      vec![b""],
+      vec![b"a\0"],
+    ] {
+      assert!(Tree::from_entries(names.into_iter().map(file).collect()).is_err());
+    }
+    let unsorted = Tree {
+      entries: vec![file(b"b"), file(b"a")],
+    };
+    assert!(Tree::decode(&unsorted.encode()).is_err());
+  }
+
+  #[test]
+  fn chunk_lists_are_the_contracts_example() {
+    let list = ChunkList {
+      size: 6,
+      chunks: vec![(content(b"hel"), 3), (content(b"lo\n"), 3)],
+    };
+    assert_eq!(
+      content(b"hel").hex(),
+      "a77ca2722fdec8942eb8d8f2440b5dbe6dc40a52625103a896356aa1c169e639"
+    );
+    assert_eq!(
+      content(b"lo\n").hex(),
+      "36b41755fab71e5114ddd9a148ea92e47e16c5d5c68c7a725e70d8e1b2a6b80f"
+    );
+    let encoded = list.encode();
+    assert_eq!(
+      hex(&encoded),
+      [
+        "01",
+        "0000000000000000",
+        "06",
+        "02",
+        "01a77ca2722fdec8942eb8d8f2440b5dbe6dc40a52625103a896356aa1c169e639",
+        "03",
+        "0136b41755fab71e5114ddd9a148ea92e47e16c5d5c68c7a725e70d8e1b2a6b80f",
+        "03",
+      ]
+      .concat()
+    );
+    assert_eq!(ChunkList::decode(&encoded).unwrap(), list);
+    let mut short = list.clone();
+    short.chunks[1].1 = 2;
+    assert!(ChunkList::decode(&short.encode()).is_err());
+  }
+
+  #[test]
+  fn preserved_objects_are_the_contracts_examples() {
+    let commit = b"tree aaa96ced2d9a1c8e72c56b253a0e2fe78393feb7\n\
+author A U Thor <author@example.com> 1112911993 -0700\n\
+committer C O Mitter <committer@example.com> 1112911993 -0700\n\nAdd hello\n";
+    assert_eq!(commit.len(), 173);
+    let preserved = Preserved {
+      algorithm: GitAlgorithm::Sha1,
+      kind: GitKind::Commit,
+      payload: commit.to_vec(),
+    };
+    assert_eq!(
+      NativeId::of(Type::Preserved, &preserved.encode()).hex(),
+      "1ba8e668bdf6a1eb2a9393f5f658625f1f3ca733b6dc6648df2d62977c32ef96"
+    );
+    let body = unhex("010330343030303020737562004b825dc642cb6eb9a060e54bf8d69288fbee4904").unwrap();
+    let tree = Preserved::decode(&body).unwrap();
+    assert_eq!(
+      (tree.algorithm, tree.kind),
+      (GitAlgorithm::Sha1, GitKind::Tree)
+    );
+    assert_eq!(tree.encode(), body);
+    assert_eq!(
+      NativeId::of(Type::Preserved, &body).hex(),
+      "676df8b76c086c6d81d5c237307e5c9d39425ede8923bacbe34e0e92b78eed09"
+    );
+    let entries = parse_git_tree(&tree.payload, GitAlgorithm::Sha1).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+      (entries[0].mode.as_slice(), entries[0].name.as_slice()),
+      (b"040000".as_slice(), b"sub".as_slice())
+    );
+    assert_eq!(Kind::from_git_mode(&entries[0].mode), None);
+  }
+}
