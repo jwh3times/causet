@@ -13,6 +13,8 @@ pub mod fact_log;
 pub mod local;
 pub mod names;
 pub mod notes;
+pub mod op_log;
+pub mod operation;
 pub mod pretty;
 pub mod signature;
 pub mod tag;

@@ -6,12 +6,16 @@
 //! names an object a tag may name (§4.2), and, when it was imported, is
 //! exactly what import derives from its preserved tag. Each fact decodes,
 //! holds canonical JSON of the schema it names, and names only objects the
-//! store holds, and each fact-log entry decodes and keeps the log's rules
-//! (facts.md §8).
+//! store holds, never an operation, and each fact-log entry decodes and
+//! keeps the log's rules (facts.md §8). Each operation keeps
+//! operations.md §7's rules, and each head file names one.
 
 use crate::commit::{Commit, derive};
 use crate::fact::Fact;
-use crate::fact_log::{self, Entry};
+use crate::fact_log::{self, Entry, Scope};
+use crate::names::{Target, Value};
+use crate::op_log;
+use crate::operation::Operation;
 use crate::tag::{self, Tag};
 use causet_store::StoreError;
 use causet_store::id::{NativeId, Type};
@@ -26,6 +30,7 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
   let mut tags = Vec::new();
   let mut facts = HashMap::new();
   let mut entries = HashMap::new();
+  let mut operations = Vec::new();
   for (id, kind, _) in store.present()? {
     match kind {
       Type::NativeCommit => match Commit::decode(&store.read(&id)?.body) {
@@ -51,6 +56,10 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
         }
         Err(why) => problems.push(format!("the fact-log entry {id}: {why}")),
       },
+      Type::Operation => match Operation::decode(&store.read(&id)?.body) {
+        Ok(operation) => operations.push((id, operation)),
+        Err(why) => problems.push(format!("the operation {id}: {why}")),
+      },
       _ => {}
     }
   }
@@ -75,6 +84,7 @@ pub fn problems(store: &Store) -> Result<Vec<String>, StoreError> {
   for (id, why) in fact_log::problems(&entries, &|fact| facts.get(fact).copied()) {
     problems.push(format!("the fact-log entry {id}: {why}"));
   }
+  problems.extend(operation_problems(store, &operations)?);
   Ok(problems)
 }
 
@@ -113,11 +123,97 @@ fn check_fact(store: &Store, fact: &Fact) -> Result<Result<(), String>, StoreErr
     return Ok(Err("its names are not its record's object IDs and its subject".into()));
   }
   for name in names {
-    if store.held(name)?.is_none() {
-      return Ok(Err(format!("it names {name}, which the store does not hold")));
+    match store.held(name)? {
+      None => return Ok(Err(format!("it names {name}, which the store does not hold"))),
+      // An operation belongs to its clone and is never exchanged
+      // (operations.md §1), and a shared fact is: one naming an operation
+      // would carry the clone's own state with it.
+      Some(Type::Operation) => {
+        return Ok(Err(format!("it names the operation {name}, which belongs to its clone and is never exchanged")));
+      }
+      Some(_) => {}
     }
   }
   Ok(Ok(()))
+}
+
+/// Every problem of the operation log (operations.md §7): each operation
+/// against §2.2's and §3.1's rules, with every parent, head and target held,
+/// and each head file naming an operation the store holds.
+fn operation_problems(store: &Store, operations: &[(NativeId, Operation)]) -> Result<Vec<String>, StoreError> {
+  let mut problems = Vec::new();
+  for (id, operation) in operations {
+    let mut found = |why: String| problems.push(format!("the operation {id}: {why}"));
+    for parent in &operation.parents {
+      if store.held(parent)? != Some(Type::Operation) {
+        found(format!("its parent {parent} is no operation the store holds"));
+      }
+    }
+    if operation.parents.is_empty() && !operation.is_import() {
+      found("it has no parent, and only import's into a new store has none".into());
+    }
+    for (scope, heads) in [(Scope::Shared, &operation.view.shared), (Scope::Local, &operation.view.local)] {
+      let mut held = true;
+      for head in heads {
+        match store.held(head)? {
+          // An entry that does not decode is reported as itself, above.
+          Some(Type::FactLogEntry) => match fact_log::read_entry(store, head) {
+            Ok(entry) if entry.scope != scope => {
+              found(format!("its head {head} is an entry of the other chain"));
+              held = false;
+            }
+            Ok(_) => {}
+            Err(_) => held = false,
+          },
+          _ => {
+            found(format!("its head {head} is no fact-log entry the store holds"));
+            held = false;
+          }
+        }
+      }
+      // An entry missing below a head is the fact log's own problem, which
+      // its checks report.
+      if held && fact_log::without_ancestors(store, heads).is_ok_and(|kept| kept != *heads) {
+        found("one of its heads is an ancestor of another".into());
+      }
+    }
+    for name in &operation.view.names {
+      let targets: Vec<&Target> = match &name.value {
+        Value::Resolved(target) => vec![target],
+        Value::Conflicted { adds, removes } => adds.iter().chain(removes).flatten().collect(),
+      };
+      for target in targets {
+        let Target::Object(object) = target else { continue };
+        let fits = match store.held(object)? {
+          Some(Type::NativeCommit | Type::NativeTag | Type::Tree | Type::Content) => true,
+          // A preserved object that does not decode is the store's problem,
+          // which its own checks report; it is not the operation's.
+          Some(Type::Preserved) => {
+            Preserved::decode(&store.read(object)?.body).is_ok_and(|preserved| preserved.kind == GitKind::Tree)
+          }
+          _ => false,
+        };
+        if !fits {
+          found(format!(
+            "its {} {} names {object}, which is no native commit, native tag, tree or content the store holds",
+            name.kind.word(),
+            String::from_utf8_lossy(&name.name)
+          ));
+        }
+      }
+    }
+  }
+  if let Some((heads, strays)) = op_log::heads(store)? {
+    for head in heads {
+      if store.held(&head)? != Some(Type::Operation) {
+        problems.push(format!("the operation head {head} names no operation the store holds"));
+      }
+    }
+    for stray in strays {
+      problems.push(format!("{stray} in .cst/op-heads/ names no operation"));
+    }
+  }
+  Ok(problems)
 }
 
 /// A native tag's problem, or a read that failed.

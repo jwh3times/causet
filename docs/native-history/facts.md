@@ -238,11 +238,10 @@ closed under parents.
 ### 4.2 Which facts a reader uses
 
 A reader reads the facts current at both chains' heads in the current view
-(operations.md §3). Until the operation log holds a view (#423), a chain's
-heads are every entry the store holds of its scope that no other names as a
-parent. So a notes ref rewritten between two imports, which leaves its old
-history's entries held, leaves their facts current too, though the
-Git-backed reader reads the new tip alone.
+(operations.md §3.2). Import's view names the notes ref's entry as the
+shared head, exactly (operations.md §4.2), so a notes ref rewritten between
+two imports leaves its old history's entries held and their facts no longer
+current, as the Git-backed reader reads the new tip alone.
 
 The record source hands `cst provenance` and `cst receipts` every current
 fact of state `00` that a note held, one `causet.note/v1` container per
@@ -386,8 +385,8 @@ The local chain holds the original's **local facts**, which are:
   record's is (§5.5).
 
 Each import writes **at most one local entry**, with no actor and no time.
-Its parents are the local chain's heads in the store it adds to (§4.2), none
-in a new one. It adds each local fact not current there, and retires each
+Its parents are the local chain's heads in the current view of the store it
+adds to (§4.2), none in a new one. It adds each local fact not current there, and retires each
 fact current there that the original no longer gives, as the shared chain's
 entries do (§5.1). So the facts current in the local chain are always the
 original's local facts, and a dispute settled on the original after an import

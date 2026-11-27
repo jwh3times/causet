@@ -1,6 +1,8 @@
 //! Revisions in a native repository (N1, #304): the names `cst cat-file`,
 //! `cst ls-tree` and `cst rev-parse` take, resolved as Git's `get_oid`
-//! resolves them, from the store and its ref snapshot alone. A name is a ref
+//! resolves them, from the store alone: its current view's names, and its
+//! ref snapshot for every ref that is no name, such as `HEAD` (#423). A
+//! name is a ref
 //! (by Git's rules for short names), `HEAD` or `@`, a native ID or a unique
 //! prefix of one, or a Git ID, followed by any of `~<n>`, `^<n>` and
 //! `^{<type>}`, and optionally `:<path>`. What needs a reflog, an index or a
@@ -14,11 +16,13 @@
 use crate::native_repository::{Listed, alias, corrupt, listing};
 use causet_engine::errors::{GitError, GitResult};
 use causet_history::commit::{Commit, Commits};
+use causet_history::names;
+use causet_history::operation::View;
 use causet_history::tag::{Tag, Tags};
 use causet_import::store_error;
 use causet_store::StoreError;
 use causet_store::id::{NativeId, Type};
-use causet_store::objects::{GitKind, Preserved, RefTarget, Snapshot};
+use causet_store::objects::{GitKind, Preserved, Ref, RefTarget, Snapshot};
 use causet_store::store::{Object as Stored, Store};
 use std::cell::OnceCell;
 use std::path::Path;
@@ -51,6 +55,8 @@ pub enum Object {
   Fact,
   /// A fact-log entry (facts.md §4).
   FactLogEntry,
+  /// An operation (docs/native-history/operations.md §3).
+  Operation,
 }
 
 impl Object {
@@ -64,6 +70,7 @@ impl Object {
       Object::Annotation => "annotation",
       Object::Fact => "fact",
       Object::FactLogEntry => "fact-log-entry",
+      Object::Operation => "operation",
     }
   }
 }
@@ -78,10 +85,19 @@ pub enum Hint {
   Treeish,
 }
 
-/// A native repository opened for reading: its store and its ref snapshot.
+/// A native repository opened for reading: its store, its ref snapshot, and
+/// its current operation, whose view holds the names and the fact log's
+/// heads (docs/native-history/operations.md §3.2).
 pub struct Repository {
   pub store: Store,
   pub snapshot: Snapshot,
+  /// The current operation.
+  pub operation: NativeId,
+  /// The current view.
+  pub view: View,
+  /// The refs revisions resolve through: the view's names as full refs,
+  /// and the snapshot's refs that became no name (`names::refs_of`).
+  pub refs: Vec<Ref>,
   /// Every native commit, read only when one is not where import places it
   /// (`native_of`).
   commits: OnceCell<Commits>,
@@ -100,9 +116,14 @@ impl Repository {
   pub fn open(root: &Path) -> GitResult<Repository> {
     let store = Store::open(root).map_err(store_error)?;
     let snapshot = store.refs().map_err(store_error)?;
+    let (operation, view) = causet_import::current_view(&store)?;
+    let refs = names::refs_of(&snapshot, &view.names);
     Ok(Repository {
       store,
       snapshot,
+      operation,
+      view,
+      refs,
       commits: OnceCell::new(),
       tags: OnceCell::new(),
     })
@@ -299,12 +320,8 @@ impl Repository {
   pub fn resolve_ref(&self, name: &[u8]) -> Option<(Vec<u8>, NativeId)> {
     let mut name = name.to_vec();
     for _ in 0..SYMREF_MAXDEPTH {
-      let at = self
-        .snapshot
-        .refs
-        .binary_search_by(|entry| entry.name.as_slice().cmp(&name))
-        .ok()?;
-      match &self.snapshot.refs[at].target {
+      let at = self.refs.binary_search_by(|entry| entry.name.as_slice().cmp(&name)).ok()?;
+      match &self.refs[at].target {
         RefTarget::Direct(id) => return Some((name, *id)),
         RefTarget::Symbolic(target) => name = target.clone(),
       }
@@ -372,6 +389,7 @@ impl Repository {
       Some(Type::NativeTag) => Object::Tag,
       Some(Type::Fact) => Object::Fact,
       Some(Type::FactLogEntry) => Object::FactLogEntry,
+      Some(Type::Operation) => Object::Operation,
       Some(Type::Preserved) => match self.preserved(id)?.kind {
         GitKind::Commit => Object::Commit,
         GitKind::Tag => Object::Tag,

@@ -156,6 +156,8 @@ vocabulary is published in [errors.md](errors.md).
 | `causet.log/v1` | [log.v1.schema.json](log.v1.schema.json) |
 | `causet.show/v1` | [show.v1.schema.json](show.v1.schema.json) |
 | `causet.names/v1` | [names.v1.schema.json](names.v1.schema.json) |
+| `causet.operation/v1` | [operation.v1.schema.json](operation.v1.schema.json) |
+| `causet.operations/v1` | [operations.v1.schema.json](operations.v1.schema.json) |
 
 The catalog retains historical spec plan v1 and spec benchmark v2 documents.
 Current commands emit plan v2 and benchmark v3; see the command table below.
@@ -223,7 +225,8 @@ rendering at all.
 | `cst workspace prune` | `causet.workspace-prune/v1` |
 | `cst log` in a native repository | `causet.log/v1` (experimental, behind `CAUSET_EXPERIMENTAL=native`; ADR-0047 decision 12) |
 | `cst show` in a native repository | `causet.show/v1` (experimental, as `cst log`) |
-| `cst branch` and `cst tag` in a native repository | `causet.names/v1` (experimental, as `cst log`) |
+| `cst branch` and `cst tag` in a native repository | `causet.names/v1` (experimental, as `cst log`); a `cst branch` write prints `causet.operation/v1` |
+| `cst op log` and `cst op show` in a native repository | `causet.operations/v1` and `causet.operation/v1` (experimental, as `cst log`; [operations](../native-history/operations.md#3-operations)) |
 | `cst provenance` and `cst receipts` in a native repository | As in a Git-backed repository, with native IDs where Git's stand (experimental, as `cst log`) |
 | `cst metadata status` and `cst metadata validate` in a native repository | `causet.metadata-status/v1` and `causet.metadata-validation/v1`, with native IDs where Git's stand (experimental, as `cst log`; [facts](../native-history/facts.md#56-the-metadata-inventory)) |
 | `cst workspace forecast` | `causet.forecast/v2` (with `workspaceComparison` populated) |

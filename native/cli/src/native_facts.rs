@@ -60,10 +60,10 @@ impl<'a> FactLog<'a> {
   }
 }
 
-/// The facts current at a chain's heads (facts.md §4.2), in byte order of
-/// ID.
+/// The facts current at a chain's heads in the current view (facts.md §4.2),
+/// in byte order of ID.
 pub(crate) fn current(repository: &Repository, scope: Scope) -> GitResult<Vec<(NativeId, Fact)>> {
-  fact_log::current(&repository.store, scope).map_err(store_error)
+  fact_log::current(&repository.store, repository.view.heads().of(scope)).map_err(store_error)
 }
 
 /// A record's `createdAt`, by which a container lists its records.
@@ -93,7 +93,7 @@ impl RecordSource for FactLog<'_> {
   /// the facts naming each object (ADR-0047 decision 14), so that reading
   /// one commit's records reads no other fact.
   fn containers_for(&self, objects: &[String]) -> GitResult<Vec<Container>> {
-    let catalogs = Catalogs::of(&self.repository.store);
+    let catalogs = Catalogs::of(&self.repository.store, &self.repository.view.heads());
     let mut by_subject: BTreeMap<NativeId, Vec<Vec<u8>>> = BTreeMap::new();
     for object in objects {
       let Some(wanted) = NativeId::from_hex(object).filter(|id| id.hex() == *object) else {

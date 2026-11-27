@@ -399,7 +399,9 @@ test("a store imported before native tags gets them from a later import, and sho
   const history = makeHistory("sha1");
   for (const id of nativeTags(history.native).keys()) removeEntry(history.native, id);
   assert.equal(nativeTags(history.native).size, 0);
-  const refused = cst(history.native, ["show", "-s", "--format=%H", "v1"]);
+  // By its Git ID: the current view names v1's native tag (#423), which is
+  // gone, while the Git ID names the preserved tag that has none.
+  const refused = cst(history.native, ["show", "-s", "--format=%H", history.git(["rev-parse", "v1"])]);
   assert.equal(refused.status, 1);
   assert.match(refused.stderr.toString(), /holds no native tag for.*Import the Git repository into it again/);
   const again = cst(path.dirname(history.native), ["import", "source", "native"]);

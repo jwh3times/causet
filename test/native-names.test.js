@@ -244,15 +244,19 @@ test("cst branch and cst tag refuse what they do not implement with a registered
     }
   };
   const unimplemented = /is not implemented in a native repository yet/;
-  refused("branch", ["new"], "unsupported-feature", /Creating a branch/);
-  refused("branch", ["new", "main"], "unsupported-feature", /Creating a branch/);
-  for (const args of [["-d", "side"], ["-D", "side"], ["-m", "side", "other"], ["-f", "main"], ["-v"], ["-vv"],
+  // Writes are #423's (test/native-operations.test.js): without a start
+  // point or an actor they are refused before anything is written.
+  refused("branch", ["new"], "usage-missing-argument", /needs a start point/);
+  refused("branch", ["new", "main"], "usage-missing-argument", /no actor was declared/);
+  refused("branch", ["-d", "side"], "usage-missing-argument", /no actor was declared/);
+  refused("branch", ["-f", "main"], "usage-missing-argument", /needs a start point/);
+  for (const args of [["-m", "side", "other"], ["-v"], ["-vv"],
     ["--sort=refname"], ["--contains", "main"], ["--merged"], ["--points-at", "main"], ["--column"], ["-i"]]) {
     refused("branch", args, "unsupported-feature", unimplemented);
   }
   // Flags given together are each judged as alone.
   refused("branch", ["-lv"], "unsupported-feature", unimplemented);
-  refused("branch", ["-rd", "x"], "unsupported-feature", unimplemented);
+  refused("branch", ["-rd", "x"], "unsupported-feature", /written by import only/);
   refused("branch", ["-r", "origin/main"], "usage-conflicting-options", /take no branch name/);
   refused("branch", ["--format=%(subject)"], "unsupported-feature", /%\(subject\) of cst branch/);
   refused("branch", ["--bogus"], "usage-unknown-option", /Unknown option '--bogus' for 'cst branch'/);

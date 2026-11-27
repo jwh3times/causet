@@ -98,9 +98,16 @@ at all when that target is absent.
 
 `cst branch` and `cst tag` list names (ADR-0047 decision 12), behind
 `CAUSET_EXPERIMENTAL=native` as `log` is
-([reading.md](reading.md)). Until the operation log exists, a native
-repository's names are those its ref snapshot becomes (§4.1), read when a
-command runs. Neither command starts a Git process.
+([reading.md](reading.md)). A native repository's names are its current
+view's (§3.2), read when a command runs. Neither command starts a Git
+process.
+
+Every reader takes the names from the current view, so a revision such as
+`main` names what the current view's `main` names. A ref of the snapshot
+that became no name (§4.1), such as `HEAD` or `refs/notes/causet`, is read
+from the snapshot, and `HEAD`, symbolic to `refs/heads/main`, then follows
+the view's `main`. `cst for-each-ref` lists both, the view's names as their
+full refs.
 
 - **What each lists:** `cst branch` the branches, with `-r` or `--remotes`
   the remote-tracking names, and with `-a` or `--all` both. `cst tag` the
@@ -125,10 +132,61 @@ command runs. Neither command starts a Git process.
 - **Refused:** `--json` with `--format`, and a name given to `-r` or `-a`
   without `-l`, as Git refuses it (`usage-conflicting-options`); `%(HEAD)`,
   because `HEAD` is no name, and every field `cst for-each-ref` does not
-  implement, such as `%(subject)`; creating, moving, copying or deleting a
-  branch or tag, which #423 and #426 build; and Git's other options, such as
-  `-v`, `--sort` and `--contains` (`unsupported-feature`); every option Git does not have
+  implement, such as `%(subject)`; a conflicted name, which #424 shows;
+  writing a tag, which #426 builds, and copying or renaming a branch; and
+  Git's other options, such as `-v`, `--sort` and `--contains`
+  (`unsupported-feature`); every option Git does not have
   (`usage-unknown-option`).
+
+### 2.4 Writing branches
+
+`cst branch` writes branches (ADR-0047 decision 12), each invocation
+exactly one operation (§3.2), whatever it changes:
+
+- **`cst branch [--local] <name> <start-point>`** creates a branch at the
+  commit `<start-point>` names, through tags. One that exists is refused
+  (`already-exists`). The start point is required: `HEAD` is no name until N3
+  defines workspaces (§4.1).
+- **`-f` or `--force`** creates the branch or moves it there, keeping its
+  local mark unless `--local` or `--no-local` says otherwise.
+- **`-d`, `-D` or `--delete <name>...`** deletes each, in one operation, a
+  name given twice once. A name that is not a branch is refused
+  (`not-found`), and nothing is deleted. So is the branch the snapshot's
+  `HEAD` names, following its symbolic refs (`no-match`), as Git refuses to
+  delete the branch it has checked out: `HEAD` would name nothing, and every
+  read that defaults to it would fail. N3 decides what a workspace's `HEAD`
+  protects (§4.1).
+- **`--local <name>` and `--no-local <name>`** mark an existing branch local,
+  or not.
+- **The actor** is declared, never inferred: `--actor <name>`, with
+  `--kind human|agent` and `--for <name>`, or without `--actor` the agent
+  `CAUSET_AGENT` names. A write with neither is refused
+  (`usage-missing-argument`). `--for` needs an agent. The time is the
+  clock's, at offset `+0000`. The command is every argument after the
+  program's name, as given.
+- **A new name** keeps Git's rules for `refs/heads/<name>`
+  (`git check-ref-format --branch`), so the bridge can make a ref of it
+  (`invalid-identifier`), and is neither a directory of a branch held nor
+  held under one, as `a` and `a/b` would be (`already-exists`). A start
+  point that names no commit is refused (`no-match`).
+- **Output:** a line for each change, as `Moved branch main from <id> to
+  <id>.`, then `Operation <id>.`, IDs to 12 digits; with `--json`, the
+  operation as `cst op show --json` prints it.
+- **Refused:** a remote-tracking name, which import alone writes until N5
+  (`unsupported-feature`); `-d` with `-f` or `--local`, a write with `-l` or
+  `--format`, and more than a name and a start point
+  (`usage-conflicting-options`).
+
+### 2.5 Reading the operation log
+
+`cst op log [-<n> | -n <n> | --max-count=<n>] [--json]` lists the
+operations the current one reaches through parents, newest first, each
+before every operation it follows. Each shows its ID, `(current)` on the
+current one, and its actor, time and command, where it has them.
+`cst op show [<operation>] [--json]` shows one, the current one by default,
+or the one a prefix of at least 4 hex digits of its ID names, with its
+parents and its view: both chains' heads and every name. `--json` prints
+`causet.operations/v1` and `causet.operation/v1`. Both read the store alone.
 
 **Where Git cannot be matched:**
 
@@ -207,6 +265,15 @@ ancestor of another. With one, its view is the **current view**. With
 several, the current view is their merge (§3.3), which a reader computes
 without writing anything. The next operation has all of them as parents, and
 its view is that merge with its own change.
+
+Until that merge is built (#424), a command that finds several current heads
+is refused (`unsupported-feature`), naming them, and writes nothing; both
+operations stay held. A store with no `op-heads/`, which a build before the
+operation log imported, has no current view: it is refused
+(`precondition-not-met`), and is imported again into a new directory, as no
+format compatibility is promised ([README](README.md)). Each writer writes
+its container under a temporary name of its own, since writers take no lock
+([storage.md §4](../native-store/storage.md#4-containers)).
 
 This differs from ADR-0047's words, "the one mutable pointer: the current
 operation". A pointer replaced by renaming loses one of two concurrent
@@ -327,28 +394,43 @@ never shown as a name. No outcome but a name is ever shown as one.
 
 ### 4.2 The import operation
 
-Each import writes one operation, after its objects and its snapshot:
+An import that changes the current view writes one operation, after its
+objects and before its snapshot, in its container:
 
 - **Its view's names** are the snapshot's, by §4.1. They replace the names
   the clone had: a branch moved natively since the last import is moved back
   to the original's, as a re-import of a shadow should.
-- **Its shared heads** are the current view's shared heads with the notes
-  ref's entry, less any that is an ancestor of another, so facts recorded
-  natively stay.
-  **Its local heads** are the local entry alone
-  ([facts.md §5.3](facts.md#53-local-facts)), or none.
+- **Its shared head** is the notes ref's entry, exactly, or none without a
+  notes ref. The Git-backed reader reads the ref's tip alone, so a notes ref
+  rewritten between two imports leaves no earlier tip's facts current
+  (#423). How a fact recorded natively outlives a re-import is #426's.
+  **Its local head** is the local entry this import wrote
+  ([facts.md §5.3](facts.md#53-local-facts)), whose parents are the current
+  view's local heads, or those heads when it wrote none; none in a new store
+  without local facts.
 - **It has no actor and no time**, and its command is `import`, whatever
   arguments it was given.
 - **Its parents** are the current operation heads. Import into a new store
   has none,
   so a fresh import writes the same operation every time.
+- **An import that would leave the current view as it is writes no
+  operation,** so an import that finds nothing new adds nothing
+  ([storage.md §4.2](../native-store/storage.md#42-several-containers)).
 
 Adding its head file is import's last step: for an existing store it follows
 the replacement of `snapshot`
 ([objects.md §10](../native-store/objects.md#10-the-cst-directory)), and for
 a new store it precedes the rename of `.cst-import/`. An incremental import
 equals a full one in every object but its operation, whose parents record the
-clone's own history.
+clone's own history, and leaves the view the full one leaves. Import into a
+store with several current heads, or none, is refused as every command is
+(§3.2).
+
+An import into an existing store that stops after replacing `snapshot` and
+before adding its head leaves the new snapshot beside the old view: `HEAD`
+and every other snapshot-only ref are the new import's, and the names are
+the earlier view's. The next import of the same original writes the
+operation it did not, and leaves the two in agreement.
 
 ## 5. Reachability
 
@@ -398,3 +480,9 @@ shape of the field; `cst branch`'s options are N2's to define.
 an operation the store holds, and that every target, head and parent is
 held. A conflicted name is not corrupt: it is a state that `cst branch`
 resolves.
+
+It also checks that no fact names an operation. Only an operation's parents
+and the heads directory name one, and no name, entry, commit or tag can, so
+nothing an exchange sends (N5) reaches the operation log, as long as no fact
+does: a fact may name any object, and a shared one is exchanged
+(facts.md §3.4).

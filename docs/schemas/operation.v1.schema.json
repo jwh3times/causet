@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "causet.operation/v1",
+  "title": "Native operation",
+  "description": "What cst op show --json, and a cst branch write with --json, print in a native repository (CLI output; native/cli/src/native_operations.rs, ADR-0047 decisions 10 and 12): one operation of the clone's operation log (docs/native-history/operations.md §3), who ran it with what command, and the view it leaves, every name and both fact-log chains' heads. An operation belongs to its clone and is never exchanged.",
+  "x-causet-scope": "cli-output",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "parents",
+    "actor",
+    "time",
+    "command",
+    "view"
+  ],
+  "properties": {
+    "schema": {
+      "enum": [
+        "causet.operation/v1",
+        "vcs-lab.operation/v1"
+      ]
+    },
+    "id": {
+      "$ref": "causet.log/v1#/$defs/nativeId"
+    },
+    "parents": {
+      "type": "array",
+      "items": {
+        "$ref": "causet.log/v1#/$defs/nativeId"
+      },
+      "description": "The operations it follows, in byte order; none only for import's into a new store."
+    },
+    "actor": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "actor"
+      ],
+      "description": "Who ran it, as declared with --actor or CAUSET_AGENT: an action's actor (docs/native-history/facts.md §2.1), causet.provenance/v1's actor without a role; null for import's, which records none.",
+      "properties": {
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "description": "Absent is unstated, never a claim of either kind."
+        },
+        "for": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Who an agent acts for; present only with kind agent."
+        }
+      }
+    },
+    "time": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "When it ran, in ISO 8601 with its zone, as --date=iso-strict prints it; null for import's."
+    },
+    "command": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The command's arguments after the program's name, each decoded as UTF-8 with replacement: import's is [\"import\"]."
+    },
+    "view": {
+      "$ref": "#/$defs/view"
+    }
+  },
+  "$defs": {
+    "summary": {
+      "type": "object",
+      "description": "An operation as cst op log lists it: everything but its view.",
+      "required": [
+        "id",
+        "parents",
+        "actor",
+        "time",
+        "command"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/properties/id"
+        },
+        "parents": {
+          "$ref": "#/properties/parents"
+        },
+        "actor": {
+          "$ref": "#/properties/actor"
+        },
+        "time": {
+          "$ref": "#/properties/time"
+        },
+        "command": {
+          "$ref": "#/properties/command"
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "required": [
+        "shared",
+        "local",
+        "names"
+      ],
+      "properties": {
+        "shared": {
+          "type": "array",
+          "items": {
+            "$ref": "causet.log/v1#/$defs/nativeId"
+          },
+          "description": "The shared chain's heads, in byte order."
+        },
+        "local": {
+          "type": "array",
+          "items": {
+            "$ref": "causet.log/v1#/$defs/nativeId"
+          },
+          "description": "The local chain's heads, in byte order."
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "description": "Every name, in order of kind, then of name in byte order."
+        }
+      }
+    },
+    "name": {
+      "type": "object",
+      "description": "A name as causet.names/v1 holds one, with its target when it is resolved, or the sides and bases of a conflicted one (operations.md §2.1); exactly one of target and conflicted.",
+      "required": [
+        "kind",
+        "name",
+        "local"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "causet.names/v1#/$defs/kind"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nameHex": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{2})+$"
+        },
+        "local": {
+          "type": "boolean"
+        },
+        "target": {
+          "$ref": "causet.names/v1#/$defs/target"
+        },
+        "conflicted": {
+          "type": "object",
+          "required": [
+            "adds",
+            "removes"
+          ],
+          "properties": {
+            "adds": {
+              "type": "array",
+              "items": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "object": {
+                    "$ref": "causet.log/v1#/$defs/nativeId"
+                  },
+                  "type": {
+                    "enum": [
+                      "commit",
+                      "tag",
+                      "tree",
+                      "blob"
+                    ]
+                  },
+                  "kind": {
+                    "$ref": "causet.names/v1#/$defs/kind"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "nameHex": {
+                    "type": "string",
+                    "pattern": "^([0-9a-f]{2})+$"
+                  }
+                }
+              },
+              "description": "The sides, at least two, as causet.names/v1 holds a target; null is a side that deleted the name."
+            },
+            "removes": {
+              "type": "array",
+              "items": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "object": {
+                    "$ref": "causet.log/v1#/$defs/nativeId"
+                  },
+                  "type": {
+                    "enum": [
+                      "commit",
+                      "tag",
+                      "tree",
+                      "blob"
+                    ]
+                  },
+                  "kind": {
+                    "$ref": "causet.names/v1#/$defs/kind"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "nameHex": {
+                    "type": "string",
+                    "pattern": "^([0-9a-f]{2})+$"
+                  }
+                }
+              },
+              "description": "The bases the sides moved from, one fewer than the adds; null is a base that held no such name."
+            }
+          }
+        }
+      }
+    }
+  }
+}

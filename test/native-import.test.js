@@ -17,7 +17,7 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, aliases, changeFrame, containers, names, nativeCommits, nativeId, nativeTags, readContainer, storeFiles as files,
+  TYPES, aliases, changeFrame, containers, heldBodies, names, nativeCommits, nativeId, nativeTags, readContainer, storeFiles as files,
   storeObjects as objects,
 } from "../test-support/native-store.js";
 import { sameAsFull, storeState } from "../test-support/import-checks.js";
@@ -131,8 +131,11 @@ for (const format of ["sha1", "sha256"]) {
     imports(root, "source", "second");
     imports(root, "mirror", "third");
     const first = files(path.join(root, "first"));
+    // The one operation head is the import's operation, the same each time
+    // (operations.md §4.2).
+    const [operation] = heldBodies(path.join(root, "first"), TYPES.operation).keys();
     assert.deepEqual([...first.keys()].filter((name) => !name.startsWith("objects/")),
-      ["aliases/" + format, "format", "snapshot"]);
+      ["aliases/" + format, "format", `op-heads/${operation}`, "snapshot"]);
     for (const other of ["second", "third"]) {
       const written = files(path.join(root, other));
       assert.deepEqual([...written.keys()], [...first.keys()], other);
@@ -143,23 +146,26 @@ for (const format of ["sha1", "sha256"]) {
   });
 }
 
-test("an import without native history writes no native commit or tag, and every other object, the alias file and the snapshot as a full import does", () => {
+test("an import without native history writes no native commit, tag or operation, and every other object, the alias file and the snapshot as a full import does", () => {
   // What N1's storage gate measures on a real repository (ADR-0044 item 2,
   // #437): the store N1's objects alone take.
   const { root } = makeHistory();
   imports(root, "source", "with");
   imports(root, "source", "without", { CAUSET_TEST_IMPORT_WITHOUT_HISTORY: "1" });
   const [withHistory, without] = ["with", "without"].map((name) => path.join(root, name));
-  const history = new Map([...nativeCommits(withHistory), ...nativeTags(withHistory)]);
+  const history = new Map([...nativeCommits(withHistory), ...nativeTags(withHistory), ...heldBodies(withHistory, TYPES.operation)]);
+  assert.equal(heldBodies(withHistory, TYPES.operation).size, 1, "the full import has its operation");
+  assert.equal(heldBodies(without, TYPES.operation).size, 0);
   assert.ok(nativeCommits(withHistory).size > 0, "the full import has native commits");
   assert.ok(nativeTags(withHistory).size > 0, "the full import has native tags");
   assert.equal(nativeCommits(without).size, 0);
   assert.equal(nativeTags(without).size, 0);
   assert.deepEqual(sorted(objects(without)), sorted([...objects(withHistory)].filter((id) => !history.has(id))));
   const [full, kept] = [files(withHistory), files(without)];
-  for (const name of [...full.keys()].filter((file) => !file.startsWith("objects/"))) {
+  for (const name of [...full.keys()].filter((file) => !file.startsWith("objects/") && !file.startsWith("op-heads/"))) {
     assert.ok(kept.get(name)?.equals(full.get(name)), `${name} differs`);
   }
+  assert.equal([...kept.keys()].some((file) => file.startsWith("op-heads/")), false);
   const checked = cst(without, ["fsck"]);
   assert.equal(checked.status, 0, checked.stderr.toString());
 });
@@ -199,7 +205,7 @@ test("a container's trees are grouped by path, oldest first, then come its commi
   git(["tag", "-a", "-m", "the first", "v1", commits[0]]);
   imports(root, "source", "native");
   const native = path.join(root, "native");
-  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "snapshot"]);
+  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "op-heads", "snapshot"]);
 
   const [file] = containers(native);
   const stored = readContainer(file).objects
@@ -227,10 +233,13 @@ test("a container's trees are grouped by path, oldest first, then come its commi
   assert.equal(tag.target, derived[0]);
   assert.equal(tag.name.toString(), "v1");
   // The walk leaves each commit's `dir/sub` first, then `dir`, then its root.
+  // The import's operation, the last metadata it writes, precedes the
+  // snapshot (operations.md §4.2).
   const trees = (at) => commits.map((id) => nativeOf(`${id}:${at}`));
   assert.deepEqual(order, [
     ...trees("dir/sub"), ...trees("dir"), ...trees(""),
     ...commits.flatMap((id, at) => [nativeOf(id), derived[at]]), nativeOf("v1"), tagged.name.toString("hex"),
+    ...fs.readdirSync(path.join(native, ".cst", "op-heads")),
     fs.readFileSync(path.join(native, ".cst", "snapshot"), "utf8").trim(),
   ]);
 });
@@ -267,9 +276,17 @@ test("an import into a native repository adds what is new, and then holds what a
   assert.match(refs(native), /refs\/heads\/fresh/);
   assert.doesNotMatch(refs(native), /refs\/heads\/lone/);
 
-  // Every object and alias row of the full import, and the store's own.
-  const after = { objects: objects(native), aliases: aliases(native, "sha1") };
-  assert.deepEqual(sorted(after.objects), sorted(new Set([...before.objects, ...objects(full)])));
+  // Every object and alias row of the full import, and the store's own, but
+  // the operations: the incremental import's follows the first import's, and
+  // leaves the view the full import's leaves (operations.md §4.2).
+  const operationsOf = (store) => new Set(heldBodies(store, TYPES.operation).keys());
+  const others = (store) => new Set([...objects(store)].filter((id) => !operationsOf(store).has(id)));
+  const after = { objects: others(native), aliases: aliases(native, "sha1") };
+  assert.deepEqual(sorted(after.objects), sorted(new Set([...[...before.objects].filter((id) => !operationsOf(native).has(id)), ...others(full)])));
+  assert.equal(operationsOf(native).size, 2);
+  const shown = (store) => JSON.parse(cst(store, ["op", "show", "--json"]).stdout.toString());
+  assert.deepEqual(shown(native).view, shown(full).view);
+  assert.deepEqual(shown(native).parents, [...before.objects].filter((id) => operationsOf(native).has(id)));
   const fullRows = aliases(full, "sha1");
   assert.deepEqual(sorted(after.aliases), sorted(new Map([...before.aliases, ...fullRows])));
   for (const [git, id] of fullRows) assert.equal(after.aliases.get(git), id, git);
@@ -283,7 +300,7 @@ test("an import into a native repository adds what is new, and then holds what a
   for (const object of readContainer(added[0]).objects) {
     assert.equal(before.objects.has(object.name.toString("hex")), false, object.name.toString("hex"));
   }
-  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "snapshot"]);
+  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "op-heads", "snapshot"]);
 
   for (const check of [["fsck"], ["import", "--verify"]]) {
     const result = cst(native, check);
@@ -291,7 +308,7 @@ test("an import into a native repository adds what is new, and then holds what a
   }
 });
 
-test("an import that finds nothing new adds no container, and one that finds only new refs adds just their snapshot", () => {
+test("an import that finds nothing new adds no container, and one that finds only new refs adds just their snapshot and its operation", () => {
   const { root, git, two } = makeHistory();
   imports(root, "source", "native");
   const native = path.join(root, "native");
@@ -306,7 +323,11 @@ test("an import that finds nothing new adds no container, and one that finds onl
   imports(root, "source", "native");
   const added = containers(native).filter((file) => !before.has(`objects/${path.basename(file)}`));
   assert.equal(added.length, 1);
-  assert.deepEqual(readContainer(added[0]).objects.map((object) => object.type), [TYPES.snapshot]);
+  // The operation is held metadata, written before the snapshot (storage.md
+  // §3.2), and its head replaces the first import's.
+  assert.deepEqual(readContainer(added[0]).objects.map((object) => object.type), [TYPES.operation, TYPES.snapshot]);
+  const [operation] = readContainer(added[0]).objects.filter((object) => object.type === TYPES.operation);
+  assert.deepEqual(fs.readdirSync(path.join(native, ".cst", "op-heads")), [operation.name.toString("hex")]);
   const head = cst(native, ["rev-parse", "another"]).stdout.toString().trim();
   assert.equal(head, names(native, "sha1").get(two));
 });
@@ -396,7 +417,7 @@ test("import holds the objects it reads in import.objects only while it runs, an
   assert.equal(checked.status, 0, checked.stderr.toString());
   assert.match(imports(root, "source", "native"), /adding 1 blob, 1 tree, 1 commit, 0 tags to what it held/);
   assert.deepEqual(held(native), []);
-  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "snapshot"]);
+  assert.deepEqual(fs.readdirSync(path.join(native, ".cst")).sort(), ["aliases", "format", "objects", "op-heads", "snapshot"]);
   for (const check of [["fsck"], ["import", "--verify"]]) {
     const result = cst(native, check);
     assert.equal(result.status, 0, `${check.join(" ")}: ${result.stderr}`);

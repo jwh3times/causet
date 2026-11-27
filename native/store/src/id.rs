@@ -26,6 +26,9 @@ pub enum Type {
   Fact = 8,
   /// A fact-log entry (facts.md §4): metadata, with no alias row.
   FactLogEntry = 9,
+  /// An operation (docs/native-history/operations.md §3): metadata, with no
+  /// alias row, that belongs to its clone and is never exchanged.
+  Operation = 10,
 }
 
 impl Type {
@@ -40,6 +43,7 @@ impl Type {
       7 => Type::NativeTag,
       8 => Type::Fact,
       9 => Type::FactLogEntry,
+      10 => Type::Operation,
       _ => return None,
     })
   }

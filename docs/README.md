@@ -29,7 +29,8 @@ the versioned record of delivered behavior.
   of a native repository's history (ADR-0047): native commits and tags, their
   signatures and actors, facts and the fact log, names and the operation log,
   how import derives them, what `cst log` and `cst show` print of them,
-  what `cst branch` and `cst tag` list, and which facts `cst provenance`,
+  what `cst branch` and `cst tag` list, how `cst branch` writes branches,
+  what `cst op log` and `cst op show` show, and which facts `cst provenance`,
   `cst receipts` and `cst metadata status` and `validate` read, published
   before its code, with no compatibility promised yet.
 - [Structured-document adapter contract](structured-document-adapters.md) —

@@ -15,7 +15,7 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, markAbsent, names, nativeCommits, nativeId, nativeTags, removeEntry, setVersion,
+  TYPES, addAbsent, addContainer, aliasRows, aliases, annotation, containers, heldBodies, markAbsent, names, nativeCommits, nativeId, nativeTags, removeEntry, setVersion,
   sharingShort,
   writeAliases,
 } from "../test-support/native-store.js";
@@ -512,21 +512,20 @@ test("an annotation of an unknown type changes no content ID and no command's an
   assert.equal(cst(history.native, ["cat-file", "-t", own]).stdout.toString(), "annotation\n");
 });
 
-test("a store imported before native history names every commit and tag by its preserved object, and log asks for an import", () => {
+test("a store imported before native history, and so before the operation log, is refused with the way forward, and still verifies", () => {
   const history = makeHistory("sha1");
-  // Import before #416 wrote no native commits, and before #417 no native
-  // tags: take them out of the index.
-  for (const id of [...nativeCommits(history.native).keys(), ...nativeTags(history.native).keys()]) {
-    removeEntry(history.native, id);
-  }
+  // Import before #416 wrote no native commits, before #417 no native tags,
+  // and before #423 no operation: take them out.
+  const later = [...nativeCommits(history.native).keys(), ...nativeTags(history.native).keys(), ...heldBodies(history.native, TYPES.operation).keys()];
+  for (const id of later) removeEntry(history.native, id);
+  fs.rmSync(path.join(history.native, ".cst", "op-heads"), { recursive: true });
   assert.equal(nativeCommits(history.native).size, 0);
   assert.equal(nativeTags(history.native).size, 0);
-  const before = { ...history, translate: translator(history.aliased, "sha1") };
-  same(before, ["for-each-ref"]);
-  same(before, ["rev-parse", "HEAD", "HEAD~1", "v1^{}", "--all"]);
-  same(before, ["cat-file", "-p", "HEAD"]);
-  same(before, ["ls-tree", "-r", "HEAD"]);
-  const logged = cst(history.native, ["log", "--format=%H"]);
-  assert.equal(logged.status, 1);
-  assert.match(logged.stderr.toString(), /holds no native commit for.*Import the Git repository into it again/);
+  for (const args of [["for-each-ref"], ["rev-parse", "HEAD"], ["cat-file", "-p", "HEAD"], ["ls-tree", "-r", "HEAD"], ["log", "--format=%H"]]) {
+    const refused = cst(history.native, args);
+    assert.equal(refused.status, 1, args.join(" "));
+    assert.match(refused.stderr.toString(), /before native repositories kept an operation log.*Import the Git repository again into a new directory/s, args.join(" "));
+  }
+  const checked = cst(history.native, ["fsck"]);
+  assert.equal(checked.status, 0, checked.stderr.toString());
 });
