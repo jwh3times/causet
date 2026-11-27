@@ -1,0 +1,25 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwzlyxtwbbfbf5ae489b",
+      "mode": "compact",
+      "sourceRef": "chore/take-skills",
+      "sourceHead": "c8e6f47ef0adc27fff1f69fb03da43f59e9d8c37",
+      "sourceSubject": "chore: take the latest shared skills",
+      "targetBefore": "88548d79742630f6233a3754e37f027e12d93454",
+      "landingCommit": "941112c2da47973ce593819bed4920be529f80d4",
+      "base": "88548d79742630f6233a3754e37f027e12d93454",
+      "absorbedCommits": [
+        "c8e6f47ef0adc27fff1f69fb03da43f59e9d8c37"
+      ],
+      "absorbedChanges": [
+        "git:c8e6f47ef0adc27fff1f69fb03da43f59e9d8c37"
+      ],
+      "resultTree": "a3207207cbf21bd50c1e1d2fd9172c261b3fe391",
+      "createdAt": "2026-11-27T23:24:23.165Z"
+    }
+  ]
+}
