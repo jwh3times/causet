@@ -3,9 +3,11 @@
 //! parents, so the log is an observed-remove set.
 
 use crate::action::{ActionActor, Time};
-use crate::fact::{decode_ids, encode_ids};
+use crate::fact::{Fact, decode_ids, encode_ids};
+use causet_store::StoreError;
 use causet_store::encoding::Reader;
 use causet_store::id::{NativeId, Type};
+use causet_store::store::Store;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Which chain an entry belongs to (§3.4).
@@ -228,4 +230,44 @@ pub fn problems(entries: &HashMap<NativeId, Entry>, facts: &impl Fn(&NativeId) -
     states.insert(id, joined.apply(id, entry));
   }
   problems
+}
+
+/// Every entry of one chain the store holds.
+fn entries_of(store: &Store, scope: Scope) -> Result<HashMap<NativeId, Entry>, StoreError> {
+  let mut entries = HashMap::new();
+  for id in store.present_of(Type::FactLogEntry)? {
+    let entry = Entry::decode(&store.read(&id)?.body)
+      .map_err(|why| StoreError::Corrupt(format!("the fact-log entry {id}: {why}")))?;
+    if entry.scope == scope {
+      entries.insert(id, entry);
+    }
+  }
+  Ok(entries)
+}
+
+/// A chain's heads: until the operation log holds them (#423), every held
+/// entry no other names as a parent. When it does, the catalogs derived
+/// from the current facts must count it among their sources
+/// (`catalog::Kind::sources`).
+fn heads(entries: &HashMap<NativeId, Entry>) -> Vec<NativeId> {
+  let parents: HashSet<&NativeId> = entries.values().flat_map(|entry| entry.parents.iter()).collect();
+  let mut heads: Vec<NativeId> = entries.keys().filter(|id| !parents.contains(id)).copied().collect();
+  heads.sort();
+  heads
+}
+
+/// The facts current at a chain's heads (§4.2), in byte order of ID.
+pub fn current(store: &Store, scope: Scope) -> Result<Vec<(NativeId, Fact)>, StoreError> {
+  let entries = entries_of(store, scope)?;
+  let state = State::at(&heads(&entries), |id| {
+    entries
+      .get(id)
+      .cloned()
+      .ok_or_else(|| StoreError::Corrupt(format!("the fact-log entry {id} is not held")))
+  })?;
+  let mut facts = Vec::new();
+  for id in state.current() {
+    facts.push((id, Fact::read(store, &id)?));
+  }
+  Ok(facts)
 }
