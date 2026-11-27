@@ -1,0 +1,29 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mwzjtmdva16700e817b9",
+      "mode": "compact",
+      "sourceRef": "feat/423-operation-log",
+      "sourceHead": "2adf78242a53fcb5bb19d0bb83b6bcfa364caf6d",
+      "sourceSubject": "fix: refuse to delete the branch HEAD names in a native repository",
+      "targetBefore": "ce5957088a9bf2eec0833297aa94a731b518f68d",
+      "landingCommit": "829f84d1104b4ab0f934a4c821f69b6cb3ca4a40",
+      "base": "ce5957088a9bf2eec0833297aa94a731b518f68d",
+      "absorbedCommits": [
+        "fca31edd01f981340245944e66fc125269698663",
+        "3cd2aa55302ca7cf2a154c7444b7f87211748513",
+        "2adf78242a53fcb5bb19d0bb83b6bcfa364caf6d"
+      ],
+      "absorbedChanges": [
+        "ch_0mwz832nt9e89f6736c38",
+        "ch_0mwz9j3l444df06d62538",
+        "ch_0mwzfplku5cba322fd128"
+      ],
+      "resultTree": "a2b45d78c8d6c92ffeed8e57854437657ffa2b0d",
+      "createdAt": "2026-11-27T22:24:15.837Z"
+    }
+  ]
+}
