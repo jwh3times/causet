@@ -16,7 +16,7 @@
 use crate::native_repository::{Listed, alias, corrupt, listing};
 use causet_engine::errors::{GitError, GitResult};
 use causet_history::commit::{Commit, Commits};
-use causet_history::names;
+use causet_history::names::{self, Kind, Name, Value as NameValue};
 use causet_history::operation::View;
 use causet_history::tag::{Tag, Tags};
 use causet_import::store_error;
@@ -86,14 +86,15 @@ pub enum Hint {
 }
 
 /// A native repository opened for reading: its store, its ref snapshot, and
-/// its current operation, whose view holds the names and the fact log's
-/// heads (docs/native-history/operations.md §3.2).
+/// its current heads, whose view, or their merge, holds the names and the
+/// fact log's heads (docs/native-history/operations.md §3.2).
 pub struct Repository {
   pub store: Store,
   pub snapshot: Snapshot,
-  /// The current operation.
-  pub operation: NativeId,
-  /// The current view.
+  /// The current heads, in byte order: one operation, or several that two
+  /// writers left, which the next operation names as its parents.
+  pub heads: Vec<NativeId>,
+  /// The current view: the one head's, or the merge of several (§3.3).
   pub view: View,
   /// The refs revisions resolve through: the view's names as full refs,
   /// and the snapshot's refs that became no name (`names::refs_of`).
@@ -112,16 +113,51 @@ pub fn unsupported(what: impl std::fmt::Display) -> GitError {
   )
 }
 
+/// The refusal of a read that needs the one target of a conflicted name
+/// (operations.md §2.1): it names every side, and nothing guesses one. A
+/// branch `HEAD` names cannot be deleted (§2.4), so deleting is offered only
+/// when `deletable`.
+fn conflicted(name: &Name, deletable: bool) -> GitError {
+  let shown = String::from_utf8_lossy(&name.name);
+  let NameValue::Conflicted { adds, .. } = &name.value else {
+    unreachable!("only a conflicted name is refused as one")
+  };
+  let sides: Vec<String> =
+    adds.iter().map(|add| add.as_ref().map_or("nothing (deleted)".to_string(), crate::native_operations::shown_target)).collect();
+  let names = match sides.as_slice() {
+    [one, other] => format!("{one} on one side and {other} on the other"),
+    _ => format!("{} on its {} sides", sides.join(", "), sides.len()),
+  };
+  let choose = match name.kind {
+    Kind::Branch if deletable => {
+      format!("Choose a side with cst branch -f {shown} <commit>, or delete it with cst branch -d {shown}.")
+    }
+    Kind::Branch => format!("Choose a side with cst branch -f {shown} <commit>."),
+    Kind::Tag | Kind::RemoteTracking => "Importing the original again sets it.".to_string(),
+  };
+  GitError::new("ambiguous-match", format!("The {} {shown} is conflicted: it names {names}. {choose}", name.kind.word()))
+}
+
+/// What a ref's resolution reaches (`Repository::reach_ref`).
+enum Reached<'a> {
+  /// The name it ends at, and the object the snapshot records there.
+  Object(Vec<u8>, NativeId),
+  /// A conflicted name of the view, which names no one object.
+  Conflicted(&'a Name),
+  /// Nothing: no such ref, or a symbolic one to no ref.
+  Nothing,
+}
+
 impl Repository {
   pub fn open(root: &Path) -> GitResult<Repository> {
     let store = Store::open(root).map_err(store_error)?;
     let snapshot = store.refs().map_err(store_error)?;
-    let (operation, view) = causet_import::current_view(&store)?;
+    let (heads, view) = causet_import::current_view(&store)?;
     let refs = names::refs_of(&snapshot, &view.names);
     Ok(Repository {
       store,
       snapshot,
-      operation,
+      heads,
       view,
       refs,
       commits: OnceCell::new(),
@@ -318,15 +354,67 @@ impl Repository {
   /// the ID a command shows). A symbolic ref to a ref the snapshot does not
   /// hold resolves to nothing.
   pub fn resolve_ref(&self, name: &[u8]) -> Option<(Vec<u8>, NativeId)> {
+    match self.reach_ref(name) {
+      Reached::Object(name, id) => Some((name, id)),
+      Reached::Conflicted(_) | Reached::Nothing => None,
+    }
+  }
+
+  /// The branches the snapshot's `HEAD` names, following its symbolic refs as
+  /// `resolve_ref` does: the ones Git's `git branch -d` refuses to delete while
+  /// they are checked out, a conflicted one included.
+  pub fn head_branches(&self) -> Vec<Vec<u8>> {
+    let mut branches = Vec::new();
+    let mut name = b"HEAD".to_vec();
+    for _ in 0..SYMREF_MAXDEPTH {
+      let Ok(at) = self.refs.binary_search_by(|entry| entry.name.as_slice().cmp(&name)) else {
+        break;
+      };
+      let RefTarget::Symbolic(target) = &self.refs[at].target else {
+        break;
+      };
+      if let Some(branch) = target.strip_prefix(b"refs/heads/") {
+        branches.push(branch.to_vec());
+      }
+      name = target.clone();
+    }
+    branches
+  }
+
+  /// `resolve_ref`, telling a conflicted name of the view, which is no ref,
+  /// from no ref at all: it is a name that exists and names no one object.
+  fn reach_ref(&self, name: &[u8]) -> Reached<'_> {
     let mut name = name.to_vec();
     for _ in 0..SYMREF_MAXDEPTH {
-      let at = self.refs.binary_search_by(|entry| entry.name.as_slice().cmp(&name)).ok()?;
+      let Ok(at) = self.refs.binary_search_by(|entry| entry.name.as_slice().cmp(&name)) else {
+        return match Kind::of_reference(&name).and_then(|(kind, short)| self.view.name(kind, short)) {
+          Some(held) if held.resolved().is_none() => Reached::Conflicted(held),
+          _ => Reached::Nothing,
+        };
+      };
       match &self.refs[at].target {
-        RefTarget::Direct(id) => return Some((name, *id)),
+        RefTarget::Direct(id) => return Reached::Object(name, *id),
         RefTarget::Symbolic(target) => name = target.clone(),
       }
     }
-    None
+    Reached::Nothing
+  }
+
+  /// Git's `dwim_ref` for a revision: the object of the first ref a short
+  /// name means by `RULES`, refused when that is a conflicted name, which
+  /// shadows the later rules as a ref would.
+  fn dwim_object(&self, short: &[u8]) -> GitResult<Option<NativeId>> {
+    for (before, after) in RULES {
+      match self.reach_ref(&[before.as_bytes(), short, after.as_bytes()].concat()) {
+        Reached::Object(_, id) => return Ok(Some(id)),
+        Reached::Conflicted(name) => {
+          let deletable = name.kind != Kind::Branch || !self.head_branches().contains(&name.name);
+          return Err(conflicted(name, deletable));
+        }
+        Reached::Nothing => {}
+      }
+    }
+    Ok(None)
   }
 
   /// Git's `dwim_ref`: every ref a short name means by `RULES`, in their
@@ -672,8 +760,8 @@ impl Repository {
       )));
     }
     let short: &[u8] = if name == b"@" { b"HEAD" } else { name };
-    if let Some((_, id)) = self.dwim(short).first() {
-      return Ok(Some(*id));
+    if let Some(id) = self.dwim_object(short)? {
+      return Ok(Some(id));
     }
     // Git's `get_describe_name`: `<tag>-<n>-g<hex>`, as `git describe`
     // prints it, names the commit its hex is a prefix of.

@@ -139,7 +139,7 @@
     },
     "name": {
       "type": "object",
-      "description": "A name as causet.names/v1 holds one, with its target when it is resolved, or the sides and bases of a conflicted one (operations.md §2.1); exactly one of target and conflicted.",
+      "description": "A name as causet.names/v2 holds one, with its target when it is resolved, or the sides and bases of a conflicted one (operations.md §2.1); exactly one of target and conflicted.",
       "required": [
         "kind",
         "name",

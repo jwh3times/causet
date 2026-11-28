@@ -27,7 +27,7 @@ mod git;
 use causet_engine::errors::{GitError, GitResult};
 use causet_history::commit::{Commit, Commits, derive};
 use causet_history::names;
-use causet_history::op_log::{self, Current};
+use causet_history::op_log;
 use causet_history::operation::{Operation, View};
 use causet_history::tag::{self, Tags};
 use causet_store::StoreError;
@@ -195,10 +195,10 @@ struct Importer<'a> {
   /// Their bytes, kept as each is stored.
   note_blobs: HashMap<String, Vec<u8>>,
   imported: Imported,
-  /// The current operation of the store an import adds to, and its view:
-  /// what its fact-log heads and the import operation's parents come from
-  /// (operations.md §4.2). `None` for a new store.
-  current: Option<(NativeId, View)>,
+  /// The current heads of the store an import adds to, and its current
+  /// view: what its fact-log heads and the import operation's parents come
+  /// from (operations.md §4.2). `None` for a new store.
+  current: Option<(Vec<NativeId>, View)>,
   /// The native form of each preserved commit and tag this import derived
   /// one for, by the preserved object's ID.
   formed: HashMap<NativeId, NativeId>,
@@ -300,37 +300,21 @@ fn finish(store: StoreWriter, written: Written) -> GitResult<Imported> {
   Ok(imported)
 }
 
-/// A store's current operation and its view (operations.md §3.2), which
-/// every command reads and import adds to. A store imported before the
-/// operation log, which has no current view, is refused, as is one whose
-/// heads two writers left unmerged (#424).
-pub fn current_view(store: &Store) -> GitResult<(NativeId, View)> {
-  match op_log::current(store).map_err(store_error)? {
-    Current::One(id, operation) => Ok((id, operation.view)),
-    Current::Missing => Err(GitError::new(
+/// A store's current heads and its current view (operations.md §3.2), which
+/// every command reads and import adds to: one head's view, or the merge of
+/// several (§3.3), which the next operation names them all as parents of. A
+/// store imported before the operation log, which has no current view, is
+/// refused.
+pub fn current_view(store: &Store) -> GitResult<(Vec<NativeId>, View)> {
+  op_log::current(store).map_err(store_error)?.into_view().ok_or_else(|| {
+    GitError::new(
       "precondition-not-met",
       format!(
         "{} was imported by an earlier build, before native repositories kept an operation log, so it has no current view to read or add to. Import the Git repository again into a new directory (native formats promise no compatibility yet, ADR-0042).",
         store.root.display()
       ),
-    )),
-    Current::Several(heads) => Err(several_heads(&store.root, &heads)),
-  }
-}
-
-/// The refusal of a clone whose operation heads have not been merged: two
-/// writers ran at once, and merging their operations is #424's.
-fn several_heads(root: &Path, heads: &[NativeId]) -> GitError {
-  let named: Vec<String> = heads.iter().map(|id| id.hex()[..12].to_string()).collect();
-  GitError::new(
-    "unsupported-feature",
-    format!(
-      "{} has {} operation heads, {}, because writers ran at once; merging them is not implemented yet (#424). Both operations are kept.",
-      root.display(),
-      heads.len(),
-      named.join(" and ")
-    ),
-  )
+    )
+  })
 }
 
 /// Writes the history `refs` reach, the source's refs in byte order of
@@ -517,7 +501,7 @@ impl Importer<'_> {
   /// leaves no earlier tip's facts current; and the local chain's head: the
   /// entry this import wrote, whose parents are the view's local heads, or
   /// those heads unchanged. No actor, no time, the command `import`, and the
-  /// current head as its parent. Its ID and its parents; `None` when it
+  /// current heads as its parents. Its ID and its parents; `None` when it
   /// would leave the current view as it is, so that an import that finds
   /// nothing new adds nothing (storage.md §4.2).
   fn operation(
@@ -528,10 +512,12 @@ impl Importer<'_> {
   ) -> GitResult<Option<(NativeId, Vec<NativeId>)>> {
     let names = names::from_snapshot(snapshot, |id| self.named_form(id))?;
     let shared: Vec<NativeId> = notes_entry.into_iter().collect();
-    let (parents, local) = match (&self.current, local_entry) {
-      (None, entry) => (Vec::new(), entry.into_iter().collect()),
-      (Some((head, _)), Some(entry)) => (vec![*head], vec![entry]),
-      (Some((head, view)), None) => (vec![*head], view.local.clone()),
+    // Every current head is a parent, whatever the local chain does.
+    let parents: Vec<NativeId> = self.current.as_ref().map_or_else(Vec::new, |(heads, _)| heads.clone());
+    let local = match (&self.current, local_entry) {
+      (_, Some(entry)) => vec![entry],
+      (None, None) => Vec::new(),
+      (Some((_, view)), None) => view.local.clone(),
     };
     let view = View { shared, local, names };
     if self.current.as_ref().is_some_and(|(_, current)| *current == view) {

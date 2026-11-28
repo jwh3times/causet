@@ -971,7 +971,7 @@ of the repository's current view, which import makes of the ref snapshot's
 `refs/heads/*`, `refs/tags/*` and `refs/remotes/*`, never cst's records or
 any other ref. With `--format` they
 print as `git branch --format` and `git tag --format` do, byte for byte;
-without it, cst's own listing, and with `--json` the `causet.names/v1`
+without it, cst's own listing, and with `--json` the `causet.names/v2`
 document ([listing names](docs/native-history/operations.md#23-listing-names)).
 `cst branch <name> <start-point>` creates a branch, with `-f` creates or
 moves it, `-d <name>...` deletes branches, and `--local` or `--no-local
@@ -987,8 +987,14 @@ remote-tracking names yet. `cst op log [-n <n>]` lists the operations, newest fi
 view it left; with `--json` they print the `causet.operations/v1` and
 `causet.operation/v1` documents
 ([reading the operation log](docs/native-history/operations.md#25-reading-the-operation-log)).
-Writers take no lock, so two that run at once leave two current operations,
-which every command then refuses, naming them, until merging them is built.
+Writers take no lock, so two that run at once leave two current operations:
+every command reads their merge, `cst op log` marks both `(current)`, `cst op
+show` needs one named, and the next write, a `cst branch` write or an import,
+follows both. A name the two moved apart is conflicted, listed as `main
+(conflicted: 0136ed38eb3a, absent)` and left out of `--format` and `cst
+for-each-ref` with a warning; a revision naming it is refused, naming its
+sides, until `cst branch -f` chooses a side or `cst branch -d` deletes it
+([merging concurrent operations](docs/native-history/operations.md#33-merging-concurrent-operations)).
 A native repository imported before the operation log existed has no current
 view: every command but `cst fsck` and `cst import --verify` refuses it, an
 import into it included, and the Git repository is imported again into a new

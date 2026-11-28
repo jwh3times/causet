@@ -16,7 +16,7 @@ use crate::native_inspection::{
   Field, Part, RefRow, Wild, finish, lossy, print_refs, ref_format, unknown_option, value, wildmatch,
 };
 use crate::native_log::wants_json;
-use crate::native_operations::{self, ActorOptions, print_json, set_name, short, target_json};
+use crate::native_operations::{self, ActorOptions, print_json, short};
 use crate::native_repository::bytes_of;
 use crate::native_revision::{Hint, Repository, SYMREF_MAXDEPTH, unsupported};
 use causet_engine::errors::{GitError, GitResult};
@@ -27,8 +27,9 @@ use std::ffi::OsString;
 use std::io::Write as _;
 use std::path::Path;
 
-/// The document `--json` prints for a listing.
-const SCHEMA: &str = "causet.names/v1";
+/// The document `--json` prints for a listing: v2 holds a conflicted name's
+/// sides, which v1's required target cannot (#424).
+const SCHEMA: &str = "causet.names/v2";
 
 const BRANCH_USAGE: &str = "Usage: cst branch [-r | -a] [--json | --format=<format>] [(-l | --list) [<pattern>...]], \
 cst branch [--local] [-f | --force] <name> <start-point>, cst branch (-d | -D | --delete) <name>..., \
@@ -293,18 +294,6 @@ fn parse_listing(
   Ok(Listing { kinds, patterns: positionals, output })
 }
 
-/// A conflicted name, which reads cannot show yet (#424).
-fn conflicted(name: &Name) -> GitError {
-  GitError::new(
-    "unsupported-feature",
-    format!(
-      "The {} {} is conflicted, and showing or choosing a side of a conflicted name is not implemented yet (#424).",
-      name.kind.word(),
-      lossy(&name.name)
-    ),
-  )
-}
-
 /// The name a symbolic name ends at and its object, following names as Git
 /// follows symbolic refs; `None` for one that ends at no name, or reads more
 /// than `SYMREF_MAXDEPTH` names.
@@ -336,13 +325,13 @@ fn list(command: Command, listing: Listing, root: &Path) -> GitResult<i32> {
   let names = &repository.view.names;
   let shown: Vec<&Name> =
     names.iter().filter(|name| listing.kinds.contains(&name.kind) && matches(&listing.patterns, name)).collect();
-  if let Some(name) = shown.iter().find(|name| name.resolved().is_none()) {
-    return Err(conflicted(name));
-  }
   let mut out = Vec::new();
   let result = match parts {
     Some(parts) => {
-      // Git lists only the refs that resolve, as `ref-filter` skips a broken one.
+      // Git lists only the refs that resolve, as `ref-filter` skips a broken
+      // one. A conflicted name names no one object, so it is left out too,
+      // and said so (operations.md §2.3).
+      warn_conflicted(&shown);
       let rows: Vec<RefRow> = shown
         .iter()
         .filter_map(|name| {
@@ -360,7 +349,7 @@ fn list(command: Command, listing: Listing, root: &Path) -> GitResult<i32> {
     None if matches!(listing.output, Output::Json) => {
       let mut entries = Vec::with_capacity(shown.len());
       for name in &shown {
-        entries.push(name_json(&repository, name)?);
+        entries.push(native_operations::view_name_json(&repository, name)?);
       }
       let mut document = JsonObject::new();
       document.set("schema", string(SCHEMA));
@@ -393,9 +382,20 @@ fn listed_format(command: Command, format: &[u8]) -> GitResult<Vec<Part>> {
   Ok(parts)
 }
 
+/// Says on stderr that each conflicted name of `shown` is left out of a
+/// `--format` listing, which prints one object a name.
+pub fn warn_conflicted(shown: &[&Name]) {
+  let mut err = std::io::stderr().lock();
+  for name in shown.iter().filter(|name| name.resolved().is_none()) {
+    let _ = writeln!(err, "warning: the {} {} is conflicted, so it is left out", name.kind.word(), lossy(&name.name));
+  }
+}
+
 /// cst's own listing: a name a line, a symbolic one followed by ` -> ` and
-/// the name it names, with that name's kind when it is another. Beside
-/// branches, a remote-tracking name is `remotes/<name>`, as Git shows one.
+/// the name it names, with that name's kind when it is another, and a
+/// conflicted one by its sides, as `main (conflicted: 0136ed38eb3a,
+/// absent)`. Beside branches, a remote-tracking name is `remotes/<name>`, as
+/// Git shows one.
 fn human(listing: &Listing, shown: &[&Name], out: &mut Vec<u8>) {
   let mixed = listing.kinds.len() > 1;
   for name in shown {
@@ -403,28 +403,22 @@ fn human(listing: &Listing, shown: &[&Name], out: &mut Vec<u8>) {
       out.extend_from_slice(b"remotes/");
     }
     out.extend_from_slice(&name.name);
-    if let Some(Target::Name(kind, target)) = name.resolved() {
-      out.extend_from_slice(b" -> ");
-      if *kind != name.kind {
-        out.extend_from_slice(kind.word().as_bytes());
-        out.push(b' ');
+    match &name.value {
+      NameValue::Resolved(Target::Name(kind, target)) => {
+        out.extend_from_slice(b" -> ");
+        if *kind != name.kind {
+          out.extend_from_slice(kind.word().as_bytes());
+          out.push(b' ');
+        }
+        out.extend_from_slice(target);
       }
-      out.extend_from_slice(target);
+      NameValue::Resolved(Target::Object(_)) => {}
+      NameValue::Conflicted { .. } => {
+        out.extend_from_slice(format!(" ({})", native_operations::conflicted_sides(name)).as_bytes());
+      }
     }
     out.push(b'\n');
   }
-}
-
-/// A resolved name as `causet.names/v1` holds it: its kind, name and local
-/// mark, and its target.
-fn name_json(repository: &Repository, name: &Name) -> GitResult<Value> {
-  let mut object = JsonObject::new();
-  object.set("kind", string(name.kind.word()));
-  set_name(&mut object, &name.name);
-  object.set("local", Value::Bool(name.local));
-  let target = name.resolved().ok_or_else(|| conflicted(name))?;
-  object.set("target", target_json(repository, target)?);
-  Ok(Value::Object(object))
 }
 
 /// Git's `check_refname_format` for `refs/heads/<name>`, and its
@@ -492,32 +486,11 @@ fn held<'a>(repository: &'a Repository, name: &[u8]) -> GitResult<&'a Name> {
     .ok_or_else(|| GitError::new("not-found", format!("No branch named '{}'.", lossy(name))))
 }
 
-/// The branches the snapshot's `HEAD` names, following its symbolic refs as
-/// `resolve_ref` does: the ones Git's `git branch -d` refuses to delete while
-/// they are checked out.
-fn head_branches(repository: &Repository) -> Vec<Vec<u8>> {
-  let mut branches = Vec::new();
-  let mut name = b"HEAD".to_vec();
-  for _ in 0..SYMREF_MAXDEPTH {
-    let Ok(at) = repository.refs.binary_search_by(|entry| entry.name.as_slice().cmp(&name)) else {
-      break;
-    };
-    let causet_store::objects::RefTarget::Symbolic(target) = &repository.refs[at].target else {
-      break;
-    };
-    if let Some(branch) = target.strip_prefix(b"refs/heads/") {
-      branches.push(branch.to_vec());
-    }
-    name = target.clone();
-  }
-  branches
-}
-
 /// What a branch held before a write, as human output shows it.
 fn was(name: &Name) -> String {
   match &name.value {
     NameValue::Resolved(target) => native_operations::shown_target(target),
-    NameValue::Conflicted { .. } => "conflicted".to_string(),
+    NameValue::Conflicted { .. } => native_operations::conflicted_sides(name),
   }
 }
 
@@ -550,6 +523,9 @@ fn write_branch(write: Write, args: &[OsString], root: &Path) -> GitResult<i32> 
             format!("A branch named '{}' already exists; move it with -f.", lossy(name)),
           ));
         }
+        Some(existing) if existing.resolved().is_none() => {
+          said.push(format!("Resolved branch {} ({}) to {}.", lossy(name), was(existing), short(&commit)));
+        }
         Some(existing) => {
           said.push(format!("Moved branch {} from {} to {}.", lossy(name), was(existing), short(&commit)));
         }
@@ -561,7 +537,7 @@ fn write_branch(write: Write, args: &[OsString], root: &Path) -> GitResult<i32> 
       view = view.with(Name { kind: Kind::Branch, name: name.clone(), local: mark, value: NameValue::Resolved(Target::Object(commit)) });
     }
     Change::Delete(names) => {
-      let checked_out = head_branches(&repository);
+      let checked_out = repository.head_branches();
       for name in names {
         let existing = held(&repository, name)?;
         if checked_out.iter().any(|branch| branch == name) {

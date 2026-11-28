@@ -11,6 +11,7 @@ pub mod date;
 pub mod fact;
 pub mod fact_log;
 pub mod local;
+pub mod merge;
 pub mod names;
 pub mod notes;
 pub mod op_log;

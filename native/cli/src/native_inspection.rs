@@ -1163,6 +1163,15 @@ pub fn for_each_ref(args: &[OsString], root: &Path) -> GitResult<i32> {
   let parts = ref_format(&format, "for-each-ref")?;
   let repository = Repository::open(root)?;
   let head = repository.resolve_ref(b"HEAD").map(|(name, _)| name);
+  // A conflicted name is no ref: it names no one object, so it is left out,
+  // and said so (operations.md §2.3).
+  let matching: Vec<&causet_history::names::Name> = repository
+    .view
+    .names
+    .iter()
+    .filter(|name| patterns.is_empty() || patterns.iter().any(|pattern| matches_ref(pattern, &name.kind.reference(&name.name))))
+    .collect();
+  crate::native_names::warn_conflicted(&matching);
   let mut listed: Vec<RefRow> = Vec::new();
   for entry in &repository.refs {
     if !entry.name.starts_with(b"refs/")
