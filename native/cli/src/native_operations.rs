@@ -131,11 +131,12 @@ pub fn now() -> Time {
   Time { seconds, offset: 0 }
 }
 
-/// Writes the operation that follows the repository's current one with
+/// Writes the operation that follows the repository's current heads with
 /// `view`, as `actor` ran `command`: one operation, whatever it changed.
-/// Its ID, and the operation.
+/// With several heads it names them all, and `view` is their merge with its
+/// change (§3.2). Its ID, and the operation.
 pub fn write(repository: &Repository, actor: ActionActor, command: Vec<Vec<u8>>, view: View) -> GitResult<(NativeId, Operation)> {
-  let operation = Operation { parents: vec![repository.operation], actor: Some(actor), time: Some(now()), command, view };
+  let operation = Operation { parents: repository.heads.clone(), actor: Some(actor), time: Some(now()), command, view };
   let id = op_log::write(&repository.store.root, &operation, &[]).map_err(store_error)?;
   Ok((id, operation))
 }
@@ -192,9 +193,20 @@ pub fn target_json(repository: &Repository, target: &Target) -> GitResult<Value>
   Ok(Value::Object(object))
 }
 
-/// A name as an operation's view holds it: its kind, name and local mark,
-/// and its target, or for a conflicted one its sides and bases.
-fn view_name_json(repository: &Repository, name: &Name) -> GitResult<Value> {
+/// A conflicted name's sides as human output shows them, an absent side
+/// being one that deleted it: `conflicted: 0136ed38eb3a, absent`.
+pub fn conflicted_sides(name: &Name) -> String {
+  let sides: Vec<String> = match &name.value {
+    NameValue::Conflicted { adds, .. } => adds.iter().map(|add| add.as_ref().map_or("absent".to_string(), shown_target)).collect(),
+    NameValue::Resolved(target) => vec![shown_target(target)],
+  };
+  format!("conflicted: {}", sides.join(", "))
+}
+
+/// A name as an operation's view and `causet.names/v2` hold it: its kind,
+/// name and local mark, and its target, or for a conflicted one its sides
+/// and bases.
+pub fn view_name_json(repository: &Repository, name: &Name) -> GitResult<Value> {
   let mut object = JsonObject::new();
   object.set("kind", string(name.kind.word()));
   set_name(&mut object, &name.name);
@@ -357,7 +369,7 @@ fn log(args: &[OsString], root: &Path) -> GitResult<i32> {
     }
   }
   let repository = Repository::open(root)?;
-  let listed = op_log::log(&repository.store, &[repository.operation], limit).map_err(store_error)?;
+  let listed = op_log::log(&repository.store, &repository.heads, limit).map_err(store_error)?;
   if json {
     let mut document = JsonObject::new();
     document.set("schema", string(OPERATIONS_SCHEMA));
@@ -373,16 +385,27 @@ fn log(args: &[OsString], root: &Path) -> GitResult<i32> {
     if index > 0 {
       out.push('\n');
     }
-    header(id, operation, *id == repository.operation, &mut out);
+    header(id, operation, repository.heads.contains(id), &mut out);
   }
   let _ = std::io::stdout().lock().write_all(out.as_bytes());
   Ok(0)
 }
 
-/// The operation a prefix of its ID names: the current one for none.
+/// The operation a prefix of its ID names: the current one for none, which
+/// several current heads leave none of: their merge is no operation.
 fn resolve(repository: &Repository, given: Option<&[u8]>) -> GitResult<NativeId> {
   let Some(given) = given else {
-    return Ok(repository.operation);
+    return match repository.heads.as_slice() {
+      [one] => Ok(*one),
+      heads => Err(GitError::new(
+        "ambiguous-match",
+        format!(
+          "This clone has {} current operations, {}, which two writers left and the next write merges (docs/native-history/operations.md §3.2); name one with cst op show <operation>.",
+          heads.len(),
+          heads.iter().map(short).collect::<Vec<_>>().join(" and ")
+        ),
+      )),
+    };
   };
   let prefix = lossy(given);
   if prefix.len() < 4 || prefix.len() > 64 || !prefix.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -433,7 +456,7 @@ fn show(args: &[OsString], root: &Path) -> GitResult<i32> {
     return Ok(0);
   }
   let mut out = String::new();
-  header(&id, &operation, id == repository.operation, &mut out);
+  header(&id, &operation, repository.heads.contains(&id), &mut out);
   if !operation.parents.is_empty() {
     let parents: Vec<String> = operation.parents.iter().map(NativeId::hex).collect();
     out.push_str(&format!("Parents: {}\n", parents.join(" ")));
@@ -444,10 +467,7 @@ fn show(args: &[OsString], root: &Path) -> GitResult<i32> {
     let local = if name.local { " (local)" } else { "" };
     let value = match &name.value {
       NameValue::Resolved(target) => shown_target(target),
-      NameValue::Conflicted { adds, .. } => {
-        let sides: Vec<String> = adds.iter().map(|add| add.as_ref().map_or("absent".to_string(), shown_target)).collect();
-        format!("conflicted: {}", sides.join(", "))
-      }
+      NameValue::Conflicted { .. } => conflicted_sides(name),
     };
     out.push_str(&format!("{} {}{local} -> {value}\n", name.kind.word(), lossy(&name.name)));
   }

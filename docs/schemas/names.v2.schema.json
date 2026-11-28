@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "causet.names/v2",
+  "title": "Native names",
+  "description": "What cst branch --json and cst tag --json print in a native repository (CLI output; native/cli/src/native_names.rs, ADR-0047 decisions 9, 10 and 12): the names listed, branches, tags and remote-tracking names (docs/native-history/operations.md §2), in order of kind, then of name in byte order. Every name a listing shows is listed, a symbolic one whose target names nothing and a conflicted one included. A name's bytes need not be UTF-8: name holds them decoded with replacement, and nameHex holds them, in lowercase hex, exactly when they are not UTF-8. v2 holds a conflicted name's sides and bases where v1 required a target (#424).",
+  "x-causet-scope": "cli-output",
+  "type": "object",
+  "required": ["schema", "names"],
+  "properties": {
+    "schema": { "enum": ["causet.names/v2", "vcs-lab.names/v2"] },
+    "names": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/name" }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "object",
+      "description": "A name, with its target when it is resolved, or the sides and bases of a conflicted one, which two operations moved apart and which names every side until someone chooses (operations.md §2.1, §3.3); exactly one of target and conflicted.",
+      "required": ["kind", "name", "local"],
+      "properties": {
+        "kind": { "$ref": "causet.names/v1#/$defs/kind" },
+        "name": { "type": "string", "minLength": 1, "description": "The name, without its kind's namespace, such as main or origin/main." },
+        "nameHex": { "type": "string", "pattern": "^([0-9a-f]{2})+$", "description": "The name as stored, present only when it is not UTF-8." },
+        "local": { "type": "boolean", "description": "Whether a branch is local, which N5 never sends unless asked; false for every other kind." },
+        "target": { "$ref": "causet.names/v1#/$defs/target" },
+        "conflicted": {
+          "type": "object",
+          "required": ["adds", "removes"],
+          "properties": {
+            "adds": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/side" },
+              "description": "The sides, at least two, in the order the merge gives them; null is a side that deleted the name."
+            },
+            "removes": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/side" },
+              "description": "The bases the sides moved from, one fewer than the adds; null is a base that held no such name."
+            }
+          }
+        }
+      }
+    },
+    "side": {
+      "type": ["object", "null"],
+      "description": "A target as causet.names/v1 holds one, or null for absent.",
+      "properties": {
+        "object": { "$ref": "causet.log/v1#/$defs/nativeId" },
+        "type": { "enum": ["commit", "tag", "tree", "blob"] },
+        "kind": { "$ref": "causet.names/v1#/$defs/kind" },
+        "name": { "type": "string", "minLength": 1 },
+        "nameHex": { "type": "string", "pattern": "^([0-9a-f]{2})+$" }
+      }
+    }
+  }
+}

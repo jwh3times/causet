@@ -123,16 +123,27 @@ full refs.
     `%(HEAD)`, which marks what `HEAD` names. A symbolic name is followed to
     the object it ends at, as Git follows a symbolic ref, and one that ends
     at no name is left out, as Git leaves out a broken ref.
-  - `--json` prints `causet.names/v1`, every name listed, a symbolic one
-    that ends at no name included.
+  - `--json` prints `causet.names/v2`, every name listed, a symbolic one
+    that ends at no name and a conflicted one included. v2 holds a
+    conflicted name's adds and removes where v1 required a target.
   - With neither, they print cst's own: a name a line, a symbolic one
     followed by ` -> ` and the name it names, with that name's kind when it
-    is another, as `to-tag -> tag v1`. Beside branches, a remote-tracking name is
-    `remotes/<name>`.
+    is another, as `to-tag -> tag v1`, and a conflicted one followed by its
+    adds, as `main (conflicted: 0136ed38eb3a, absent)`. Beside branches, a
+    remote-tracking name is `remotes/<name>`.
+- **A conflicted name** names no one object. `--format` and
+  `cst for-each-ref` leave it out, as Git leaves out a ref that resolves to
+  nothing, and say so on stderr:
+  `warning: the branch main is conflicted, so it is left out`. A revision
+  that names it, such as `main` or `main~1`, is refused
+  (`ambiguous-match`), naming its sides and how to choose one (§2.4),
+  with deleting it offered only when `HEAD` does not name it: nothing
+  guesses a side. As a ref would, it shadows the later rules a
+  short name is tried by.
 - **Refused:** `--json` with `--format`, and a name given to `-r` or `-a`
   without `-l`, as Git refuses it (`usage-conflicting-options`); `%(HEAD)`,
   because `HEAD` is no name, and every field `cst for-each-ref` does not
-  implement, such as `%(subject)`; a conflicted name, which #424 shows;
+  implement, such as `%(subject)`;
   writing a tag, which #426 builds, and copying or renaming a branch; and
   Git's other options, such as `-v`, `--sort` and `--contains`
   (`unsupported-feature`); every option Git does not have
@@ -158,6 +169,12 @@ exactly one operation (§3.2), whatever it changes:
   protects (§4.1).
 - **`--local <name>` and `--no-local <name>`** mark an existing branch local,
   or not.
+- **Choosing a side** of a conflicted branch (§3.3) is a write like any
+  other: `-f <name> <start-point>` resolves it to that commit, as
+  `Resolved branch main (conflicted: 0136ed38eb3a, absent) to <id>.`, and
+  `-d <name>` deletes it, as `Deleted branch main (was conflicted: …).`. A
+  start point that is a conflicted name is refused (`ambiguous-match`), as
+  every revision that names one is (§2.3).
 - **The actor** is declared, never inferred: `--actor <name>`, with
   `--kind human|agent` and `--for <name>`, or without `--actor` the agent
   `CAUSET_AGENT` names. A write with neither is refused
@@ -180,12 +197,15 @@ exactly one operation (§3.2), whatever it changes:
 ### 2.5 Reading the operation log
 
 `cst op log [-<n> | -n <n> | --max-count=<n>] [--json]` lists the
-operations the current one reaches through parents, newest first, each
-before every operation it follows. Each shows its ID, `(current)` on the
-current one, and its actor, time and command, where it has them.
+operations the current heads reach through parents, newest first, each
+before every operation it follows. Each shows its ID, `(current)` on each
+current head, and its actor, time and command, where it has them.
 `cst op show [<operation>] [--json]` shows one, the current one by default,
 or the one a prefix of at least 4 hex digits of its ID names, with its
-parents and its view: both chains' heads and every name. `--json` prints
+parents and its view: both chains' heads and every name. With several
+current heads there is no current operation, since their merge (§3.3) is
+no operation, so `cst op show` without one is refused (`ambiguous-match`),
+naming them. `--json` prints
 `causet.operations/v1` and `causet.operation/v1`. Both read the store alone.
 
 **Where Git cannot be matched:**
@@ -266,9 +286,8 @@ several, the current view is their merge (§3.3), which a reader computes
 without writing anything. The next operation has all of them as parents, and
 its view is that merge with its own change.
 
-Until that merge is built (#424), a command that finds several current heads
-is refused (`unsupported-feature`), naming them, and writes nothing; both
-operations stay held. A store with no `op-heads/`, which a build before the
+Every command reads that view, and every write, `cst branch`'s or import's,
+is that next operation. A store with no `op-heads/`, which a build before the
 operation log imported, has no current view: it is refused
 (`precondition-not-met`), and is imported again into a new directory, as no
 format compatibility is promised ([README](README.md)). Each writer writes
@@ -425,8 +444,11 @@ equals a full one in every object but its operation and its local chain's
 entry ([facts.md §5.3](facts.md#53-local-facts)), whose parents record the
 clone's own history, and leaves the view the full one leaves but for the
 local chain's heads, at which the same facts are current. Import into a
-store with several current heads, or none, is refused as every command is
-(§3.2).
+store with several current heads follows them all, from their merged
+view's local heads, as every write does (§3.2), unless it would leave
+their merged view as it is: then it writes no operation, as above, and the
+heads stay until the next write. Import into a store with none is refused,
+as every command is.
 
 An import into an existing store that stops after replacing `snapshot` and
 before adding its head leaves the new snapshot beside the old view: `HEAD`

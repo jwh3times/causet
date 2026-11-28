@@ -5,6 +5,11 @@
 
 use causet_history::action::{ActionActor, Time};
 use causet_history::actor::Kind as ActorKind;
+use causet_history::merge;
+use causet_history::op_log;
+use causet_store::id::{GitAlgorithm, Type};
+use causet_store::objects::Snapshot;
+use causet_store::store::{Store, StoreWriter};
 use causet_history::names::{Kind, Name, Target, Value as NameValue};
 use causet_history::operation::{Operation, View};
 use causet_model::json::{self, Value};
@@ -131,6 +136,70 @@ fn the_merged_view_holds_main_conflicted_and_round_trips() {
   assert_eq!(ada.view.resolved(Kind::Branch, b"main"), Some(&Target::Object(native(ADAS_COMMIT))));
   assert_eq!(text(member(&vector, "base")), IMPORT);
   assert!(matches!(member(&vector, "sides"), Value::Array(sides) if sides.len() == 2 && text(&sides[0]) == AGENT));
+}
+
+#[test]
+fn merging_adas_and_the_agents_operations_from_the_import_gives_the_contracts_merged_view() {
+  let decode = |name: &str| Operation::decode(&unhex(&text(member(&named("operation", name), "body")))).unwrap();
+  let (import, ada, agent) = (decode("imported"), decode("Ada moves main"), decode("an agent deletes main"));
+  // The sides in byte order of their IDs: the agent's, then Ada's (§3.3).
+  let mut reduced = Vec::new();
+  let view = merge::views(&import.view, &[&agent.view, &ada.view], |heads| {
+    reduced.push(heads.clone());
+    Ok::<_, ()>(heads)
+  })
+  .unwrap();
+  let expected = unhex(&text(member(&named("view", "the merged view of the two"), "body")));
+  assert_eq!(view.encode(), expected);
+  // Each chain's heads are the union of the sides', once each, which the
+  // caller then reduces to those no other head reaches.
+  assert_eq!(reduced, vec![import.view.shared.clone(), import.view.local.clone()]);
+}
+
+#[test]
+fn a_store_holding_the_contracts_operations_merges_adas_and_the_agents_from_their_base_into_its_merged_view() {
+  let root = std::env::temp_dir().join(format!("causet-operations-test-{}-merged", std::process::id()));
+  let _ = std::fs::remove_dir_all(&root);
+  let mut writer = StoreWriter::create(&root, GitAlgorithm::Sha1).unwrap();
+  for name in ["imported", "Ada moves main", "an agent deletes main"] {
+    writer.put_metadata(Type::Operation, &unhex(&text(member(&named("operation", name), "body")))).unwrap();
+  }
+  writer.finish(&Snapshot::new(GitAlgorithm::Sha1, Vec::new()).unwrap()).unwrap();
+  let store = Store::open(&root).unwrap();
+  // The store finds their base, the import's operation, itself.
+  let view = op_log::merged(&store, &[native(ADA), native(AGENT)]).unwrap();
+  assert_eq!(view.encode(), unhex(&text(member(&named("view", "the merged view of the two"), "body"))));
+  let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_name_one_side_moved_takes_the_move_and_two_moves_to_one_target_agree() {
+  let branch = |name: &str, target: &str, local: bool| Name {
+    kind: Kind::Branch,
+    name: name.as_bytes().to_vec(),
+    local,
+    value: NameValue::Resolved(Target::Object(native(target))),
+  };
+  let view = |names: Vec<Name>| View { shared: Vec::new(), local: Vec::new(), names };
+  let base = view(vec![branch("both", EXAMPLE_COMMIT, false), branch("gone", EXAMPLE_COMMIT, false), branch("one", EXAMPLE_COMMIT, false)]);
+  // One side moves `one` and marks `both` local; the other moves `both` where
+  // the first did not, deletes `gone`, and adds `new`, local.
+  let first = view(vec![branch("both", EXAMPLE_COMMIT, true), branch("gone", EXAMPLE_COMMIT, false), branch("one", ADAS_COMMIT, false)]);
+  let second = view(vec![branch("both", ADAS_COMMIT, false), branch("new", ADAS_COMMIT, true), branch("one", EXAMPLE_COMMIT, false)]);
+  let merged = merge::views(&base, &[&first, &second], Ok::<_, ()>).unwrap();
+  assert_eq!(
+    merged.names,
+    vec![branch("both", ADAS_COMMIT, true), branch("new", ADAS_COMMIT, true), branch("one", ADAS_COMMIT, false)]
+  );
+  // Both sides moving a name to one target is no conflict either.
+  let agreed = merge::views(&base, &[&first, &first.clone()], Ok::<_, ()>).unwrap();
+  assert_eq!(agreed.names, first.names);
+  // A branch the base marks local, which one side keeps local and the other
+  // unmarks, takes the side that differs from the base: not local.
+  let local = view(vec![branch("both", EXAMPLE_COMMIT, true)]);
+  let unmarked = view(vec![branch("both", EXAMPLE_COMMIT, false)]);
+  let merged = merge::views(&local, &[&local.clone(), &unmarked], Ok::<_, ()>).unwrap();
+  assert_eq!(merged.names, vec![branch("both", EXAMPLE_COMMIT, false)]);
 }
 
 /// The import operation's body with its four names replaced by `names`,

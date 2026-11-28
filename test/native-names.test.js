@@ -7,7 +7,7 @@
  * `git branch --format` and `git tag --format` print the original once Git's
  * IDs are translated to native ones (ADR-0046, decision 2), without running
  * Git; without it, cst's own human output, and with `--json` the
- * `causet.names/v1` document.
+ * `causet.names/v2` document.
  */
 
 import assert from "node:assert/strict";
@@ -169,7 +169,7 @@ test("cst branch and cst tag print cst's own listing: a name a line, a symbolic 
   assert.equal(listed("tag", "-l", "nothing"), "");
 });
 
-test("cst branch --json and cst tag --json print the causet.names/v1 document", () => {
+test("cst branch --json and cst tag --json print the causet.names/v2 document", () => {
   const history = makeRefs("sha1");
   const native = names(history.native, history.format);
   const id = (gitId) => native.get(gitId);
@@ -194,12 +194,12 @@ test("cst branch --json and cst tag --json print the causet.names/v1 document", 
     named("branch", "side", object(id(history.one), "commit")),
     named("branch", "to-tag", { kind: "tag", name: "v1" }),
   ];
-  assert.deepEqual(json("branch"), { schema: "causet.names/v1", names: branches });
-  assert.deepEqual(json("branch", "-r"), { schema: "causet.names/v1", names: remotes });
-  assert.deepEqual(json("branch", "-a"), { schema: "causet.names/v1", names: [...branches, ...remotes] });
-  assert.deepEqual(json("branch", "-l", "s*"), { schema: "causet.names/v1", names: [branches[4]] });
+  assert.deepEqual(json("branch"), { schema: "causet.names/v2", names: branches });
+  assert.deepEqual(json("branch", "-r"), { schema: "causet.names/v2", names: remotes });
+  assert.deepEqual(json("branch", "-a"), { schema: "causet.names/v2", names: [...branches, ...remotes] });
+  assert.deepEqual(json("branch", "-l", "s*"), { schema: "causet.names/v2", names: [branches[4]] });
   assert.deepEqual(json("tag"), {
-    schema: "causet.names/v1",
+    schema: "causet.names/v2",
     names: [
       named("tag", "chain", object(tagged("chain"), "tag")),
       named("tag", "tree-tag", object(tagged("tree-tag"), "tag")),

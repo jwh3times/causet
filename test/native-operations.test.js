@@ -4,8 +4,11 @@
  * repository's first operation, each `cst branch` write adds exactly one,
  * naming its actor and command, and `cst op log` and `cst op show` list and
  * show them. Every read takes the names and the fact log's heads from the
- * current view, the one operation head. Writers take no lock, so two that
- * ran at once leave two heads, which are refused until #424 merges them.
+ * current view. Writers take no lock, so two that ran at once leave two
+ * heads (#424, §3.3): the current view is their merge, a name they moved
+ * apart is conflicted until `cst branch` chooses, and the next operation,
+ * a write's or an import's, names both. This is the exit's
+ * concurrent-operations check (ADR-0047 decision 17).
  */
 
 import assert from "node:assert/strict";
@@ -57,7 +60,7 @@ function ok(answered, what) {
  * and a remote-tracking `origin/main` with a symbolic `origin/HEAD`, and its
  * native copy.
  */
-function makeHistory() {
+function makeHistory(format = "sha1") {
   const root = scratch();
   const repo = path.join(root, "source");
   fs.mkdirSync(repo);
@@ -69,7 +72,7 @@ function makeHistory() {
   const git = (...args) => run("git", args);
   const original = (...args) => run(cstCommand, [...cstPrefix(), ...args]);
   const write = (name, text) => fs.writeFileSync(path.join(repo, name), text);
-  git("init", "-q", "-b", "main");
+  git("init", "-q", "-b", "main", `--object-format=${format}`);
   git("config", "user.name", "C O Mitter");
   git("config", "user.email", "committer@example.com");
   write("a.txt", "base\n");
@@ -337,29 +340,182 @@ test("a write is refused before it writes anything, each refusal with a register
   assert.match(withoutOptIn.stderr, /CAUSET_EXPERIMENTAL=native/);
 });
 
-test("two writers that ran at once leave two heads, which are refused until #424 merges them, and both operations are kept", () => {
-  const history = makeHistory();
-  const heads = path.join(history.native, ".cst", "op-heads");
-  const [imported] = headFiles(history.native);
-  // The first writer adds its head and removes the import's; the second,
-  // which read the import's head as current before the first finished,
-  // does the same.
-  ok(cst(history.native, ["branch", ...ADA, "one", "main"]), "first writer");
-  const [first] = headFiles(history.native);
-  fs.rmSync(path.join(heads, first));
-  fs.writeFileSync(path.join(heads, imported), "");
-  ok(cst(history.native, ["branch", ...ADA, "two", "side"]), "second writer");
-  fs.writeFileSync(path.join(heads, first), "");
-  assert.equal(headFiles(history.native).length, 2);
-  for (const args of [["branch"], ["op", "log"], ["log", "main"], ["branch", ...ADA, "three", "main"]]) {
-    const answered = cst(history.native, args);
-    assert.equal(answered.status, 1, args.join(" "));
-    assert.match(answered.stderr, /has 2 operation heads, .* merging them is not implemented yet \(#424\)\. Both operations are kept\./, args.join(" "));
-    assert.equal(JSON.parse(cst(history.native, [...args, "--json"]).stdout).code, "unsupported-feature");
+/**
+ * Runs two `cst branch` writes as two writers that ran at once (§3.2): the
+ * second reads the heads the first started from, as it would have before
+ * the first finished. Each adds its head and removes its parents', so the
+ * first's head is put back afterwards. Their operations' IDs.
+ */
+function concurrently(native, first, second) {
+  const heads = path.join(native, ".cst", "op-heads");
+  const before = headFiles(native);
+  ok(cst(native, ["branch", ...ADA, ...first]), "the first writer");
+  const [one] = headFiles(native);
+  fs.rmSync(path.join(heads, one));
+  for (const head of before) {
+    fs.writeFileSync(path.join(heads, head), "");
   }
-  assert.equal(headFiles(history.native).length, 2, "the refused write added no head");
-  ok(cst(history.native, ["fsck"]), "fsck");
-});
+  ok(cst(native, ["branch", ...ADA, ...second]), "the second writer");
+  const [other] = headFiles(native);
+  fs.writeFileSync(path.join(heads, one), "");
+  return [one, other];
+}
+
+/**
+ * A refusal with its registered code, its message matching `pattern`. The
+ * code is read from `--json`, which `rev-parse` does not take: Git's prints
+ * an argument it does not know.
+ */
+function refusedWith(native, args, code, pattern) {
+  const answered = cst(native, args);
+  assert.equal(answered.status, 1, `${args.join(" ")} should be refused: ${answered.stdout}`);
+  assert.match(answered.stderr, pattern, args.join(" "));
+  if (args[0] !== "rev-parse") {
+    assert.equal(JSON.parse(cst(native, [...args, "--json"]).stdout).code, code, args.join(" "));
+  }
+}
+
+/**
+ * A native copy whose branch `topic`, made at `main`, two writers moved at
+ * once: one to `side`'s commit, the other deleted it, and `other` with it.
+ */
+function conflictedTopic(format) {
+  const history = makeHistory(format);
+  ok(cst(history.native, ["branch", ...ADA, "topic", "main"]), "topic");
+  ok(cst(history.native, ["branch", ...ADA, "other", "main"]), "other");
+  const [moved, deleted] = concurrently(history.native, ["--force", "topic", "side"], ["--delete", "topic", "other"]);
+  // The sides in byte order of their IDs (§3.3): a side's add is first when
+  // its operation's ID is.
+  const sides = [[moved, history.nativeOf("side")], [deleted, null]].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, side]) => side);
+  return { ...history, moved, deleted, sides };
+}
+
+for (const format of ["sha1", "sha256"]) {
+  test(`two writers that ran at once keep both operations, every read takes their merge, and the next write names both (${format})`, () => {
+    const history = makeHistory(format);
+    const [imported] = headFiles(history.native);
+    const both = concurrently(history.native, ["one", "main"], ["two", "side"]).sort();
+    assert.deepEqual(headFiles(history.native), both);
+    // The log walks from both heads, and marks each current.
+    const listed = opLog(history.native);
+    assert.deepEqual(listed.map((operation) => operation.id).sort(), [...both, imported].sort());
+    const log = ok(cst(history.native, ["op", "log"]), "op log");
+    for (const head of both) assert.match(log, new RegExp(`^operation ${head} \\(current\\)$`, "m"));
+    assert.match(log, new RegExp(`^operation ${imported}$`, "m"));
+    // The current view is their merge: each writer's branch, and the rest as
+    // the import left it.
+    const names = JSON.parse(ok(cst(history.native, ["branch", "--json"]), "branch")).names;
+    assert.deepEqual(names.map((name) => [name.name, name.target.object]),
+      [["main", history.nativeOf("main")], ["one", history.nativeOf("main")], ["side", history.nativeOf("side")], ["two", history.nativeOf("side")]]);
+    assert.equal(ok(cst(history.native, ["log", "--format=%H", "-1", "two"]), "log two").trim(), history.nativeOf("side"));
+    // Their merge is no operation, so op show names one.
+    refusedWith(history.native, ["op", "show"], "ambiguous-match", /This clone has 2 current operations, .* which two writers left and the next write merges/);
+    assert.equal(opShow(history.native, both[0]).id, both[0]);
+    // The next write follows both, from their merge.
+    ok(cst(history.native, ["branch", ...ADA, "three", "main"]), "the next write");
+    const [next] = headFiles(history.native);
+    const operation = opShow(history.native);
+    assert.equal(operation.id, next);
+    assert.deepEqual(operation.parents, both);
+    assert.deepEqual(operation.view.names.map((name) => name.name), ["main", "one", "side", "three", "two", "v1", "origin/HEAD", "origin/main"]);
+    ok(cst(history.native, ["fsck"]), "fsck");
+  });
+
+  test(`a name two writers moved apart becomes a conflicted name that reads show and refuse to guess, and one only one writer moved moves (${format})`, () => {
+    const history = conflictedTopic(format);
+    const short = (side) => (side === null ? "absent" : side.slice(0, 12));
+    assert.equal(headFiles(history.native).length, 2);
+    // `other`, which only the second writer deleted, is gone; `topic` names
+    // both sides, from the commit it was made at.
+    assert.equal(ok(cst(history.native, ["branch"]), "branch"),
+      `main\nside\ntopic (conflicted: ${history.sides.map(short).join(", ")})\n`);
+    const topic = JSON.parse(ok(cst(history.native, ["branch", "--json"]), "branch --json")).names.find((name) => name.name === "topic");
+    assert.deepEqual(topic, {
+      kind: "branch",
+      name: "topic",
+      local: false,
+      conflicted: {
+        adds: history.sides.map((side) => (side === null ? null : { object: side, type: "commit" })),
+        removes: [{ object: history.nativeOf("main"), type: "commit" }],
+      },
+    });
+    // A format prints one object a name, so a conflicted one is left out,
+    // and said so.
+    for (const args of [["branch", "--format=%(refname)"], ["for-each-ref", "--format=%(refname)", "refs/heads/"]]) {
+      const answered = cst(history.native, args);
+      assert.equal(answered.status, 0, `${args.join(" ")}: ${answered.stderr}`);
+      assert.equal(answered.stdout, "refs/heads/main\nrefs/heads/side\n", args.join(" "));
+      assert.equal(answered.stderr, "warning: the branch topic is conflicted, so it is left out\n", args.join(" "));
+    }
+    // With no pattern, every ref is listed but the conflicted name, said so.
+    const everything = cst(history.native, ["for-each-ref", "--format=%(refname)"]);
+    assert.equal(everything.status, 0, everything.stderr);
+    assert.match(everything.stdout, /^refs\/heads\/main\nrefs\/heads\/side\n/m);
+    assert.doesNotMatch(everything.stdout, /topic/);
+    assert.equal(everything.stderr, "warning: the branch topic is conflicted, so it is left out\n");
+    // A revision that names it is refused, naming the sides and how to choose.
+    const sides = history.sides.map((side) => (side === null ? "nothing \\(deleted\\)" : side.slice(0, 12)));
+    for (const args of [["log", "topic"], ["rev-parse", "topic"], ["branch", ...ADA, "new", "topic"]]) {
+      refusedWith(history.native, args, "ambiguous-match",
+        new RegExp(`The branch topic is conflicted: it names ${sides[0]} on one side and ${sides[1]} on the other\\. Choose a side with cst branch -f topic <commit>, or delete it with cst branch -d topic\\.`));
+    }
+    assert.equal(headFiles(history.native).length, 2, "no refused read or write added a head");
+    ok(cst(history.native, ["fsck"]), "fsck");
+  });
+
+  test(`cst branch resolves a conflicted name in one operation that follows both writers, by moving it or deleting it (${format})`, () => {
+    for (const resolve of [["--force", "topic", "main"], ["--delete", "topic"]]) {
+      const history = conflictedTopic(format);
+      const sides = history.sides.map((side) => (side === null ? "absent" : side.slice(0, 12))).join(", ");
+      const said = ok(cst(history.native, ["branch", ...ADA, ...resolve]), resolve.join(" "));
+      assert.match(said, resolve[0] === "--force"
+        ? new RegExp(`^Resolved branch topic \\(conflicted: ${sides}\\) to ${history.nativeOf("main").slice(0, 12)}\\.\nOperation [0-9a-f]{12}\\.\n$`)
+        : new RegExp(`^Deleted branch topic \\(was conflicted: ${sides}\\)\\.\nOperation [0-9a-f]{12}\\.\n$`));
+      const [head] = headFiles(history.native);
+      const operation = opShow(history.native);
+      assert.equal(operation.id, head);
+      assert.deepEqual(operation.parents, [history.moved, history.deleted].sort());
+      assert.deepEqual(operation.command, ["branch", ...ADA, ...resolve]);
+      const topic = operation.view.names.find((name) => name.name === "topic");
+      if (resolve[0] === "--force") {
+        assert.deepEqual(topic.target, { object: history.nativeOf("main"), type: "commit" });
+        assert.equal(ok(cst(history.native, ["rev-parse", "topic"]), "rev-parse").trim(), history.nativeOf("main"));
+      } else {
+        assert.equal(topic, undefined);
+      }
+      assert.equal(ok(cst(history.native, ["branch"]), "branch"), resolve[0] === "--force" ? "main\nside\ntopic\n" : "main\nside\n");
+      ok(cst(history.native, ["fsck"]), "fsck");
+    }
+  });
+
+  test(`a conflicted branch HEAD names is refused with only the choice that can be made: moving it (${format})`, () => {
+    const history = makeHistory(format);
+    // A third commit on a branch of the original, so that two writers can
+    // move main to two places.
+    const extra = history.git("commit-tree", history.git("rev-parse", "HEAD^{tree}"), "-p", "HEAD", "-m", "extra");
+    history.git("branch", "extra", extra);
+    ok(cst(history.root, ["import", "source", "native"]), "re-import");
+    concurrently(history.native, ["--force", "main", "side"], ["--force", "main", "extra"]);
+    const answered = cst(history.native, ["log", "main"]);
+    assert.equal(answered.status, 1);
+    assert.match(answered.stderr, /The branch main is conflicted: it names [0-9a-f]{12} on one side and [0-9a-f]{12} on the other\. Choose a side with cst branch -f main <commit>\.\n/);
+    assert.doesNotMatch(answered.stderr, /cst branch -d/, "HEAD names main, so deleting it is refused and not offered");
+    refusedWith(history.native, ["branch", ...ADA, "--delete", "main"], "no-match", /The branch 'main' is the one HEAD names, so it is not deleted/);
+    ok(cst(history.native, ["branch", ...ADA, "--force", "main", "extra"]), "choose a side");
+    assert.equal(ok(cst(history.native, ["rev-parse", "main"]), "rev-parse main"), ok(cst(history.native, ["rev-parse", "extra"]), "rev-parse extra"));
+  });
+
+  test(`an import into a clone with two current heads follows both, as every write does (${format})`, () => {
+    const history = conflictedTopic(format);
+    const both = headFiles(history.native);
+    ok(cst(history.root, ["import", "source", "native"]), "re-import");
+    const operation = opShow(history.native);
+    assert.deepEqual(headFiles(history.native), [operation.id]);
+    assert.deepEqual(operation.parents, both);
+    // Its names are the original's, which hold no topic.
+    assert.deepEqual(operation.view.names.map((name) => name.name), ["main", "side", "v1", "origin/HEAD", "origin/main"]);
+  });
+}
 
 test("a head left by a writer that stopped before removing its parent's is not current", () => {
   const history = makeHistory();

@@ -2,10 +2,13 @@
 //! operation heads, which are current, the view a reader reads, and how a
 //! writer adds an operation without a lock.
 //!
-//! Merging several current heads is #424's (§3.3). Until then a reader that
-//! finds more than one gets them as `Current::Several`, and refuses.
+//! With several current heads, the current view is their merge (§3.3), which
+//! a reader computes from their latest common ancestors and writes nowhere:
+//! the next operation has them all as parents.
 
-use crate::operation::Operation;
+use crate::fact_log;
+use crate::merge;
+use crate::operation::{Operation, View};
 use causet_store::StoreError;
 use causet_store::heads;
 use causet_store::id::{NativeId, Type};
@@ -21,9 +24,21 @@ pub enum Current {
   Missing,
   /// One current head, and its operation, whose view is the current view.
   One(NativeId, Operation),
-  /// Several current heads, in byte order: their merge is the current view
-  /// (§3.3, #424).
-  Several(Vec<NativeId>),
+  /// Several current heads, in byte order, and their merge, the current view
+  /// (§3.3).
+  Several { heads: Vec<NativeId>, view: View },
+}
+
+impl Current {
+  /// The current heads, which the next operation names as its parents, and
+  /// the current view; `None` without a heads directory.
+  pub fn into_view(self) -> Option<(Vec<NativeId>, View)> {
+    match self {
+      Current::Missing => None,
+      Current::One(id, operation) => Some((vec![id], operation.view)),
+      Current::Several { heads, view } => Some((heads, view)),
+    }
+  }
 }
 
 /// The clone's heads, as its files name them: every head, with the strays
@@ -67,11 +82,66 @@ pub fn current(store: &Store) -> Result<Current, StoreError> {
   }
   let mut current = current_heads(store, &heads)?;
   if current.len() > 1 {
-    return Ok(Current::Several(current));
+    let view = merged(store, &current)?;
+    return Ok(Current::Several { heads: current, view });
   }
   let id = current.pop().expect("one current head");
   let operation = Operation::read(store, &id)?;
   Ok(Current::One(id, operation))
+}
+
+/// Every operation `from` reaches through parents, `from` included.
+fn ancestors(store: &Store, from: impl IntoIterator<Item = NativeId>) -> Result<HashSet<NativeId>, StoreError> {
+  let mut reached = HashSet::new();
+  let mut stack: Vec<NativeId> = from.into_iter().collect();
+  while let Some(id) = stack.pop() {
+    if reached.insert(id) {
+      stack.extend(Operation::read(store, &id)?.parents);
+    }
+  }
+  Ok(reached)
+}
+
+/// The merge of the operations `sides` (§3.3): the view they leave
+/// together. One side's is its own view.
+pub fn merged(store: &Store, sides: &[NativeId]) -> Result<View, StoreError> {
+  let mut sides = sides.to_vec();
+  sides.sort();
+  sides.dedup();
+  let mut views = Vec::with_capacity(sides.len());
+  for side in &sides {
+    views.push(Operation::read(store, side)?.view);
+  }
+  if views.len() == 1 {
+    return Ok(views.pop().expect("one side"));
+  }
+  let base = base(store, &sides)?;
+  let sides: Vec<&View> = views.iter().collect();
+  merge::views(&base, &sides, |heads| fact_log::without_ancestors(store, &heads))
+}
+
+/// The view `sides` merge from (§3.3): that of their latest common
+/// ancestors, an operation counting as its own ancestor; the empty view with
+/// none, and their merge with several, which ends because each step merges
+/// older operations.
+fn base(store: &Store, sides: &[NativeId]) -> Result<View, StoreError> {
+  let mut sets = Vec::with_capacity(sides.len());
+  for side in sides {
+    sets.push(ancestors(store, [*side])?);
+  }
+  let (first, others) = sets.split_first().expect("several sides");
+  let common: Vec<NativeId> = first.iter().filter(|id| others.iter().all(|set| set.contains(id))).copied().collect();
+  // A common ancestor that another common ancestor reaches is not latest.
+  let mut parents = Vec::new();
+  for id in &common {
+    parents.extend(Operation::read(store, id)?.parents);
+  }
+  let older = ancestors(store, parents)?;
+  let latest: Vec<NativeId> = common.into_iter().filter(|id| !older.contains(id)).collect();
+  if latest.is_empty() {
+    return Ok(View::empty());
+  }
+  merged(store, &latest)
 }
 
 /// Writes `operation` as §3.2 says, with no lock: the operation, and these

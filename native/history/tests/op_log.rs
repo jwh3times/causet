@@ -106,9 +106,74 @@ fn two_writers_from_the_same_head_both_keep_theirs() {
   assert_eq!(head_files(&root), both);
   let store = Store::open(&root).unwrap();
   match op_log::current(&store).unwrap() {
-    Current::Several(heads) => assert_eq!(heads, both),
+    Current::Several { heads, view } => {
+      assert_eq!(heads, both);
+      // The current view is their merge (§3.3): each side's new branch, and
+      // `main`, which neither moved.
+      assert_eq!(view.names, vec![branch("main", tree), branch("one", tree), branch("two", tree)]);
+    }
     other => panic!("expected two current heads, got {other:?}"),
   }
+  let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn two_operations_with_no_common_ancestor_merge_from_the_empty_view() {
+  let root = scratch("unrelated");
+  let (tree, first) = imported(&root);
+  // A second import's operation with no parent, which shares no ancestor
+  // with the first: their base is the empty view (§3.3).
+  // The merge reads no target, so another object ID stands for one.
+  let elsewhere = NativeId::of(Type::Tree, b"elsewhere");
+  let other = Operation::import(Vec::new(), View { shared: Vec::new(), local: Vec::new(), names: vec![branch("main", elsewhere), branch("solo", tree)] });
+  let second = op_log::write(&root, &other, &[]).unwrap();
+  let store = Store::open(&root).unwrap();
+  let Current::Several { view, .. } = op_log::current(&store).unwrap() else { panic!("two current heads") };
+  // `main`, which each holds at another target, is conflicted from no base;
+  // `solo`, which one holds, is that one's.
+  let mut sides = [(first, tree), (second, elsewhere)];
+  sides.sort();
+  let main = view.name(Kind::Branch, b"main").unwrap();
+  assert_eq!(
+    main.value,
+    Value::Conflicted { adds: sides.iter().map(|(_, target)| Some(Target::Object(*target))).collect(), removes: vec![None] }
+  );
+  assert_eq!(view.name(Kind::Branch, b"solo"), Some(&branch("solo", tree)));
+  let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The operation with `parents`, a write after their merge, whose view is
+/// `view`.
+fn after(parents: &[NativeId], view: View, seconds: u64) -> Operation {
+  let mut parents = parents.to_vec();
+  parents.sort();
+  Operation { parents, actor: ada(), time: Some(Time { seconds, offset: 0 }), command: vec![b"branch".to_vec()], view }
+}
+
+#[test]
+fn two_merges_of_the_same_two_sides_merge_from_the_merge_of_both() {
+  let root = scratch("criss-cross");
+  let (tree, import) = imported(&root);
+  let store = Store::open(&root).unwrap();
+  // A adds `one` and B adds `two`, at once.
+  let a = op_log::write(&root, &moving(&store, import, "one", tree, 100), &[]).unwrap();
+  let b = op_log::write(&root, &moving(&store, import, "two", tree, 101), &[]).unwrap();
+  let store = Store::open(&root).unwrap();
+  let both = op_log::merged(&store, &[a, b]).unwrap();
+  // Then two writers each merge A and B at once: one deletes `two`, the
+  // other `one`. A and B are both their latest common ancestors.
+  let deletes_two = after(&[a, b], both.clone().without(Kind::Branch, b"two"), 102);
+  let deletes_one = after(&[a, b], both.without(Kind::Branch, b"one"), 103);
+  let first = op_log::write(&root, &deletes_two, &[]).unwrap();
+  let second = op_log::write(&root, &deletes_one, &[]).unwrap();
+  let store = Store::open(&root).unwrap();
+  let Current::Several { heads, view } = op_log::current(&store).unwrap() else { panic!("two current heads") };
+  let mut expected = vec![first, second];
+  expected.sort();
+  assert_eq!(heads, expected);
+  // Merged from A's and B's merge, each deletion is one side's alone. From
+  // the import, or from A or B alone, one of the two would stay.
+  assert_eq!(view.names, vec![branch("main", tree)]);
   let _ = std::fs::remove_dir_all(&root);
 }
 
