@@ -47,6 +47,9 @@ the approval in step 1, never widen it.
 - **"Merge when green" or "merge and complete the follow-ups"** covers every step below for the
   named PRs without asking between them, except where a step says to stop.
 - **No user, no merge.** Running as a subagent or non-interactively, stop before step 5 and report.
+- **The merge stays with the session the user spoke to.** Their word to merge is given to that
+  session, and a subagent has none, so a merge handed to one is refused. That session runs step 5
+  itself. It may hand a subagent the reading and the catch-up, never the merge.
 
 ## 2. Read the PR
 
