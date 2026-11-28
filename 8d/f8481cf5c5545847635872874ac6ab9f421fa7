@@ -1,0 +1,27 @@
+{
+  "schema": "causet.note/v1",
+  "records": [
+    {
+      "schema": "causet.landing/v1",
+      "type": "landing",
+      "id": "land_0mx0qs2m94fce7a62562f",
+      "mode": "compact",
+      "sourceRef": "feat/424-merge-concurrent-operations",
+      "sourceHead": "66a11a7a77144018ff3712ccc73f470ba5107728",
+      "sourceSubject": "docs: update docs and changelog fragment, and start the 0.34 line",
+      "targetBefore": "73e7dea90c187d31109fd50fd5183702c2c3f0d3",
+      "landingCommit": "8df8481cf5c5545847635872874ac6ab9f421fa7",
+      "base": "73e7dea90c187d31109fd50fd5183702c2c3f0d3",
+      "absorbedCommits": [
+        "c1aaf541205795e86a4392d484ecb8b034ad5f06",
+        "66a11a7a77144018ff3712ccc73f470ba5107728"
+      ],
+      "absorbedChanges": [
+        "ch_0mx0l9aoif6178e18d3a3",
+        "ch_0mx0n5bbk5130519fbb08"
+      ],
+      "resultTree": "a03c1c0b71fee747c4b8b40a5a09527661243eb9",
+      "createdAt": "2026-11-28T18:26:47.033Z"
+    }
+  ]
+}
