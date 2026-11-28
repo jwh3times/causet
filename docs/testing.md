@@ -410,8 +410,11 @@ CAUSET_GENERATED_HISTORIES=1000 node --test test/generated-histories.test.js
   - after the second stage, an import into the first stage's copy holds what
     a full import of the final history holds: the same ref snapshot, its own
     and the full import's alias rows, and its own and the full import's
-    objects, each stored once; then `cst fsck` and `cst import --verify` pass
-    on it.
+    objects, each stored once, but for its operation and its local chain's
+    entry, whose parents are the copy's own; the facts current in its local
+    chain must be the full import's
+    ([facts.md §5.3](native-history/facts.md#53-local-facts), #422); then `cst fsck`
+    and `cst import --verify` pass on it.
 
   The objects compared are those the history names: everything but content
   that no alias row names. That content is a chunk of a large file, and which

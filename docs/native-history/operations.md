@@ -421,8 +421,10 @@ Adding its head file is import's last step: for an existing store it follows
 the replacement of `snapshot`
 ([objects.md §10](../native-store/objects.md#10-the-cst-directory)), and for
 a new store it precedes the rename of `.cst-import/`. An incremental import
-equals a full one in every object but its operation, whose parents record the
-clone's own history, and leaves the view the full one leaves. Import into a
+equals a full one in every object but its operation and its local chain's
+entry ([facts.md §5.3](facts.md#53-local-facts)), whose parents record the
+clone's own history, and leaves the view the full one leaves but for the
+local chain's heads, at which the same facts are current. Import into a
 store with several current heads, or none, is refused as every command is
 (§3.2).
 

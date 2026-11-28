@@ -199,6 +199,55 @@ export function decodeNativeTag(body) {
   return { target, name, preserved, message: body.subarray(at) };
 }
 
+/** The scopes of a fact-log entry (facts.md §4.1). */
+export const SCOPES = { shared: 1, local: 2 };
+
+/**
+ * A fact-log entry's fields as facts.md §4.1 encodes them, decoded here
+ * independently of `cst`: its scope, and its parents, adds and retires as
+ * native IDs in hex. Its actor and time, which follow, are not read.
+ */
+export function decodeFactLogEntry(body) {
+  let at = 1;
+  const ids = () => {
+    let count;
+    [count, at] = varint(body, at);
+    const found = [];
+    for (let id = 0; id < count; id++, at += 33) found.push(body.subarray(at + 1, at + 33).toString("hex"));
+    return found;
+  };
+  const [parents, adds, retires] = [ids(), ids(), ids()];
+  return { scope: body[0], parents, adds, retires };
+}
+
+/**
+ * The facts current at a chain's heads (facts.md §4.1), as hex, given its
+ * entries by ID (`decodeFactLogEntry`): those some entry the heads reach
+ * adds, where no entry the heads reach that retires it has that add among
+ * its ancestors. An entry is its own ancestor.
+ */
+export function currentFacts(entries, heads) {
+  const ancestry = new Map();
+  const ancestors = (id) => {
+    if (ancestry.has(id)) return ancestry.get(id);
+    const entry = entries.get(id);
+    if (!entry) throw new Error(`the fact log names the entry ${id}, which the store does not hold`);
+    const found = new Set([id]);
+    for (const parent of entry.parents) for (const ancestor of ancestors(parent)) found.add(ancestor);
+    ancestry.set(id, found);
+    return found;
+  };
+  const reached = new Set(heads.flatMap((head) => [...ancestors(head)]));
+  const current = new Set();
+  for (const adding of reached) {
+    for (const fact of entries.get(adding).adds) {
+      const retired = [...reached].some((other) => entries.get(other).retires.includes(fact) && ancestors(other).has(adding));
+      if (!retired) current.add(fact);
+    }
+  }
+  return current;
+}
+
 /** Frame codecs (storage.md §4): stored, and zstd. */
 const STORED_FRAME = 0;
 const ZSTD_FRAME = 1;
