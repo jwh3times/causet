@@ -4,6 +4,7 @@ name: land
 description: Land a pull request the user has said to merge — catch it up with main, wait for its checks on the current head, work out why a green PR is blocked, merge it, then confirm its release tag, its deploys, the issues it closed and their board status. Use when the user says "merge it", "land #12", "merge when green" or "merge and complete the follow-ups". Never merges a PR the user's words did not name.
 metadata:
   settings: merging releases issue-tracker
+  helpers: end-session/board.mjs
 ---
 
 # Land
@@ -16,8 +17,8 @@ the issues it closed shut and Done on the board.
 
 Run shell snippets in bash (Git Bash on Windows). `.agents/skills/land/land.mjs` reads the PR, its
 checks, its release and its deploys, and prints one JSON object; it never writes. Board writes go
-through `.agents/skills/end-session/board.mjs`, so `end-session` is installed beside this skill,
-and a red check is read by `ci-triage` (step 4), installed beside it too.
+through `.agents/skills/land/board.mjs`, this skill's copy of the board script, and a red check is
+read by `ci-triage` (step 4), installed beside this skill.
 
 `land` never passes `--admin` or `--auto`, never changes a branch rule, never runs, re-runs or
 dispatches a deploy or a migration, and never merges without a user to answer it. A blocked merge
@@ -181,8 +182,8 @@ step the `Guide` says the user runs is given to them as exact commands, one per 
 - **The board.** With a `Board`, for each issue the merge closed:
 
   ```bash
-  node .agents/skills/end-session/board.mjs get --board "<Board>" --item <owner/name#N>
-  node .agents/skills/end-session/board.mjs set --board "<Board>" --item <owner/name#N> --set "Status=Done"
+  node .agents/skills/land/board.mjs get --board "<Board>" --item <owner/name#N>
+  node .agents/skills/land/board.mjs set --board "<Board>" --item <owner/name#N> --set "Status=Done"
   ```
 
   Read it after the close, and set it only when it is not already done: a board's "Item closed"

@@ -4,6 +4,7 @@ name: open-pr
 description: Take the current branch to an open pull request — evaluate its SemVer release impact, refresh the docs, write the branch's changelog entries for its release scheme, file its human follow-ups, run the fast checks, push, and open or update the PR. Use when a feature branch is ready for review, or when the user says "ship it", "open a PR", or "push this".
 metadata:
   settings: workspace issue-tracker human-follow-up releases open-pr dev-flow triage-labels agents-md guard
+  helpers: end-session/board.mjs
 ---
 
 # Open PR
