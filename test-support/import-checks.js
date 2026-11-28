@@ -9,7 +9,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { TYPES, aliases, containers, readContainer, readDelta, storeFiles } from "./native-store.js";
+import {
+  SCOPES, TYPES, aliases, containers, currentFacts, decodeFactLogEntry, heldBodies, readContainer, readDelta, storeFiles,
+} from "./native-store.js";
 
 const sorted = (items) => [...items].sort();
 
@@ -40,15 +42,18 @@ const STORED = 0;
  */
 export function storeObjects(store, format) {
   const rows = new Set(aliases(store, format).values());
+  const local = new Set(localChain(store).keys());
   const found = { named: new Map(), chunks: new Set(), deltas: new Map() };
   for (const file of containers(store)) {
     const { frames, objects } = readContainer(file);
     for (const object of objects) {
       const id = object.name.toString("hex");
       // An incremental import equals a full one in every object but its
-      // operation, whose parents record the clone's own history
-      // (docs/native-history/operations.md §4.2).
-      if (object.type === TYPES.operation) continue;
+      // operation and its local chain's entry, whose parents record the
+      // clone's own history (docs/native-history/operations.md §4.2,
+      // facts.md §5.3). `sameAsFull` compares the local chain's current
+      // facts instead.
+      if (object.type === TYPES.operation || local.has(id)) continue;
       assert.ok(!found.named.has(id) && !found.chunks.has(id), `${store} holds ${id} twice`);
       if (object.type !== TYPES.content || rows.has(id)) found.named.set(id, object.form);
       else found.chunks.add(id);
@@ -60,6 +65,31 @@ export function storeObjects(store, format) {
     }
   }
   return found;
+}
+
+/** A store's local-chain entries (facts.md §3.4), by ID (hex), decoded. */
+function localChain(store) {
+  return new Map([...heldBodies(store, TYPES.factLogEntry)]
+    .map(([id, body]) => [id, decodeFactLogEntry(body)])
+    .filter(([, entry]) => entry.scope === SCOPES.local));
+}
+
+/**
+ * A store's local-chain heads, as hex: the entries no other entry names.
+ * Each import's entry names the heads it found (facts.md §5.3), so a store
+ * only imports wrote has at most one, which its view names.
+ */
+export function localHeads(store) {
+  const entries = localChain(store);
+  const named = new Set([...entries.values()].flatMap((entry) => entry.parents));
+  const heads = [...entries.keys()].filter((id) => !named.has(id));
+  assert.ok(heads.length <= 1, `${store}'s local chain has ${heads.length} heads, and imports alone leave at most one`);
+  return heads;
+}
+
+/** The facts current at a store's local-chain heads (`localHeads`), as hex. */
+export function localFacts(store) {
+  return currentFacts(localChain(store), localHeads(store));
 }
 
 /** What an incremental import compares a store with later: its objects and alias rows. */
@@ -115,6 +145,10 @@ export function sameAsFull({ before, incremental, full, format }) {
   for (const [gitId, id] of [...before.aliases, ...fullRows]) {
     assert.equal(rows.get(gitId), id, `the incremental import's alias for ${gitId}`);
   }
+  // The local chain's entries differ, and what is current in it does not:
+  // always the original's local facts (facts.md §5.3).
+  assert.deepEqual(sorted(localFacts(incremental)), sorted(localFacts(full)),
+    "the facts current in the incremental import's local chain are not the full import's");
   // A version both store as a delta has the same record in both: its base
   // is fixed by history, the same path in the first parent of the commit
   // that introduced it (storage.md §5.1), and its data by the contract's

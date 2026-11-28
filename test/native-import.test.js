@@ -4,7 +4,10 @@
  * store, whatever Git repository holds it, and an import into a native
  * repository adds one container of what it does not hold, after which it
  * holds what a full import of the final history holds, its own earlier
- * objects and alias rows kept, with the same ref snapshot.
+ * objects and alias rows kept, with the same ref snapshot. The same holds for
+ * what N2 derives from cst's records (#422, ADR-0047 decisions 4 and 17):
+ * native commits and tags, facts and the fact log, but for the local chain's
+ * entry, whose parents are the store's own, as its operation's are.
  */
 
 import assert from "node:assert/strict";
@@ -17,10 +20,10 @@ import test, { after } from "node:test";
 import { testEnv } from "../test-support/git-environment.js";
 import { cstCommand, cstPrefix } from "../test-support/cst-command.js";
 import {
-  TYPES, aliases, changeFrame, containers, heldBodies, names, nativeCommits, nativeId, nativeTags, readContainer, storeFiles as files,
-  storeObjects as objects,
+  SCOPES, TYPES, addContainer, aliases, changeFrame, containers, currentFacts, decodeFactLogEntry, heldBodies, names, nativeCommits, nativeId, nativeTags, readContainer,
+  storeFiles as files, storeObjects as objects,
 } from "../test-support/native-store.js";
-import { sameAsFull, storeState } from "../test-support/import-checks.js";
+import { localFacts, localHeads, sameAsFull, sameStores, storeState } from "../test-support/import-checks.js";
 
 const created = [];
 
@@ -331,6 +334,196 @@ test("an import that finds nothing new adds no container, and one that finds onl
   const head = cst(native, ["rev-parse", "another"]).stdout.toString().trim();
   assert.equal(head, names(native, "sha1").get(two));
 });
+
+/** Runs a command in `cwd` as the Git-backed original's user does, without the native opt-in. */
+function originalIn(cwd) {
+  return (command, args, input) => {
+    const result = spawnSync(command, args, { cwd, env: testEnv({}), encoding: "utf8", input });
+    assert.equal(result.status, 0, `${command} ${args.join(" ")}: ${result.stderr}${result.stdout}`);
+    return result.stdout.trim();
+  };
+}
+
+/**
+ * A Git-backed repository whose records the Git-backed cst wrote, with what
+ * N2 imports from them (ADR-0047 decisions 4 and 8, facts.md §5): commits
+ * with declared actors, a compact landing, a declaration made after its
+ * commit, a removed note, an annotated tag, a commit only a record reaches,
+ * and, from a peer whose copies of two records differ, two disputed copies,
+ * one settled by a disposition. `later` then adds what a second import
+ * finds: new commits and records, a declaration on a commit imported
+ * already, a branch naming the commit only a record reached, a new tag, and
+ * the open dispute settled by replacing the local copy.
+ */
+function makeRecords(format = "sha1") {
+  const root = scratch();
+  const [peer, repo] = ["peer", "source"].map((name) => path.join(root, name));
+  fs.mkdirSync(peer);
+  const [inPeer, inRepo] = [peer, repo].map(originalIn);
+  inPeer("git", ["init", "-q", "-b", "main", `--object-format=${format}`]);
+  const git = (...args) => inRepo("git", args);
+  const original = (...args) => inRepo(cstCommand, [...cstPrefix(), ...args]);
+  const configure = (run) => {
+    run("git", ["config", "user.name", "C O Mitter"]);
+    run("git", ["config", "user.email", "committer@example.com"]);
+  };
+  const work = (directory, run, name, ...declared) => {
+    fs.writeFileSync(path.join(directory, name), `${name} ${format}\n`);
+    run("git", ["add", "-A"]);
+    run(cstCommand, [...cstPrefix(), "commit", "-m", `add ${name}`, ...declared]);
+  };
+  configure(inPeer);
+  inPeer(cstCommand, [...cstPrefix(), "init"]);
+  for (const name of ["a", "b"]) work(peer, inPeer, name, "--authored-by", "A U Thor <author@example.com>");
+  originalIn(root)("git", ["clone", "--no-local", "--quiet", peer, repo]);
+  configure(inRepo);
+  git("fetch", "-q", "origin", "refs/notes/causet:refs/notes/causet");
+  original("init");
+
+  // The peer's copies of both records now say something else.
+  const disputed = [];
+  for (const commit of [inPeer("git", ["rev-parse", "HEAD~1"]), inPeer("git", ["rev-parse", "HEAD"])]) {
+    const container = JSON.parse(inPeer("git", ["notes", "--ref=causet", "show", commit]));
+    container.records = container.records.map((record) => ({ ...record, createdAt: "2001-01-01T00:00:00.000Z" }));
+    disputed.push(container.records[0].id);
+    inPeer("git", ["notes", "--ref=causet", "add", "-f", "-F", "-", commit], `${JSON.stringify(container, null, 2)}\n`);
+  }
+  const envelope = path.join(root, "envelope");
+  inPeer(cstCommand, [...cstPrefix(), "metadata", "export", envelope]);
+  original("metadata", "import", envelope, "--apply", "--park-conflicts");
+  original("metadata", "dispose", disputed[0], "--keep-local", "--reason", "the peer altered our record");
+
+  git("switch", "-q", "-c", "feature");
+  work(repo, inRepo, "c", "--generated-by", "claude-opus-5-5");
+  git("switch", "-q", "main");
+  work(repo, inRepo, "d");
+  original("merge", "feature", "--compact", "-m", "land feature");
+  original("provenance", "declare", "HEAD~1", "--reviewed-by", "R E Viewer <reviewer@example.com>");
+  git("tag", "-a", "-m", "the first", "v1", "HEAD");
+  // A commit a record names and no ref reaches (facts.md §5.5).
+  git("switch", "-q", "-c", "gone");
+  work(repo, inRepo, "e", "--authored-by", "A U Thor <author@example.com>");
+  const gone = git("rev-parse", "HEAD");
+  git("switch", "-q", "main");
+  git("branch", "-D", "gone");
+  // A notes commit that drops a note: its entry retires the record's fact.
+  git("notes", "--ref=causet", "remove", git("rev-list", "--max-parents=0", "HEAD"));
+  // A commit with no record, for a declaration after the first import.
+  fs.writeFileSync(path.join(repo, "plain"), "plain\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "plain");
+  const plain = git("rev-parse", "HEAD");
+
+  const later = () => {
+    work(repo, inRepo, "f", "--generated-by", "claude-opus-5-5");
+    original("provenance", "declare", plain, "--authored-by", "A U Thor <author@example.com>");
+    git("branch", "back", gone);
+    git("tag", "-a", "-m", "the second", "v2", "HEAD");
+    original("metadata", "dispose", disputed[1], "--replace-local", "--reason", "the peer was right");
+  };
+  return { root, git, gone, plain, later };
+}
+
+for (const format of ["sha1", "sha256"]) {
+  test(`two fresh imports of a history with records write byte-identical native commits, tags, facts and fact logs (${format})`, () => {
+    const { root } = makeRecords(format);
+    imports(root, "source", "first");
+    imports(root, "source", "second");
+    const first = path.join(root, "first");
+    // What N2 derives is all there: both chains, and a native tag.
+    const scopes = [...heldBodies(first, TYPES.factLogEntry).values()].map((body) => decodeFactLogEntry(body).scope);
+    assert.equal(scopes.filter((scope) => scope === SCOPES.local).length, 1, "the local chain has its one entry");
+    assert.equal(Number(gitIn(path.join(root, "source"))(["rev-list", "--count", "refs/notes/causet"]).toString()),
+      scopes.filter((scope) => scope === SCOPES.shared).length, "the shared chain has an entry for each notes commit");
+    assert.ok(heldBodies(first, TYPES.fact).size > 0, "the store holds facts");
+    assert.ok(nativeTags(first).size > 0, "the store holds a native tag");
+    sameStores(first, path.join(root, "second"), "two fresh imports");
+  });
+
+  test(`an import after new commits and new records holds what a full import holds, and the facts current in its local chain are the full import's (${format})`, () => {
+    const { root, git, later } = makeRecords(format);
+    imports(root, "source", "native");
+    const native = path.join(root, "native");
+    const before = storeState(native, format);
+    const kinds = (store) => sorted([...localFacts(store)].map((id) => {
+      const body = heldBodies(store, TYPES.fact).get(id);
+      return body.includes(Buffer.from("causet.disposition/v1")) ? "disposition" : "parked";
+    }));
+    // The open dispute's parked copy and the settled one's disposition
+    // (facts.md §5.3); settling the open one retires its copy.
+    assert.deepEqual(kinds(native), ["disposition", "parked"]);
+    later();
+    imports(root, "source", "native");
+    imports(root, "source", "full");
+    const full = path.join(root, "full");
+    sameAsFull({ before, incremental: native, full, format });
+    assert.deepEqual(kinds(native), ["disposition", "disposition"]);
+    // The head the checks read the local chain from is the one each view
+    // names (facts.md §5.3).
+    for (const store of [native, full]) {
+      const shown = cst(store, ["op", "show", "--json"]);
+      assert.equal(shown.status, 0, shown.stderr.toString());
+      assert.deepEqual(JSON.parse(shown.stdout.toString()).view.local, localHeads(store), store);
+    }
+    // A store holding facts verifies, and rebuilds every Git object.
+    for (const check of [["fsck"], ["import", "--verify"]]) {
+      const result = cst(native, check);
+      assert.equal(result.status, 0, `${check.join(" ")}: ${result.stderr}`);
+    }
+    // The checks catch a local chain whose current facts differ, though
+    // every fact is held in both: here an entry that retires one.
+    const [head] = localHeads(native);
+    const [retired] = localFacts(native);
+    const id = (hex) => Buffer.concat([Buffer.from([0x01]), Buffer.from(hex, "hex")]);
+    addContainer(native, [{
+      type: TYPES.factLogEntry,
+      body: Buffer.concat([Buffer.from([SCOPES.local, 1]), id(head), Buffer.from([0, 1]), id(retired), Buffer.from([0, 0])]),
+    }]);
+    assert.throws(() => sameAsFull({ before, incremental: native, full, format }),
+      /the facts current in the incremental import's local chain are not the full import's/);
+
+    // An import that changes no local fact writes no local entry, and its
+    // view keeps the local head it found.
+    const settled = localHeads(full);
+    git("commit", "-q", "--allow-empty", "-m", "nothing local");
+    imports(root, "source", "full");
+    assert.deepEqual(localHeads(full), settled);
+    const shown = cst(full, ["op", "show", "--json"]);
+    assert.equal(shown.status, 0, shown.stderr.toString());
+    assert.deepEqual(JSON.parse(shown.stdout.toString()).view.local, settled);
+  });
+}
+
+for (const format of ["sha1", "sha256"]) {
+  test(`a declaration on the original after a first import changes no native commit's ID on the next, and a commit only a record reached keeps its ID once a branch names it (${format})`, () => {
+    // ADR-0047 decision 4: a native commit derives from its Git object alone.
+    const { root, gone, plain, later } = makeRecords(format);
+    imports(root, "source", "native");
+    const native = path.join(root, "native");
+    const commitsOf = (store) => new Map([...nativeCommits(store)].map(([id, commit]) => [commit.preserved, id]));
+    const before = commitsOf(native);
+    const gitNames = names(native, format);
+    assert.ok(before.has(aliases(native, format).get(gone)), "the first import gave the commit only a record reached a native commit");
+    const provenanceOf = (revision) => {
+      const shown = cst(native, ["provenance", revision, "--json"]);
+      assert.equal(shown.status, 0, shown.stderr.toString());
+      return JSON.parse(shown.stdout.toString()).entries;
+    };
+    assert.equal(provenanceOf(gitNames.get(plain)).length, 0);
+
+    later();
+    imports(root, "source", "native");
+    imports(root, "source", "full");
+    assert.equal(provenanceOf(gitNames.get(plain)).length, 1, "the next import took the declaration");
+    const [after, full] = [commitsOf(native), commitsOf(path.join(root, "full"))];
+    for (const [preserved, id] of before) {
+      assert.equal(after.get(preserved), id, `the native commit of ${preserved} after the next import`);
+      assert.equal(full.get(preserved), id, `the native commit of ${preserved} in a full import`);
+    }
+    assert.equal(names(path.join(root, "full"), format).get(gone), gitNames.get(gone),
+      "a full import that reaches it by a name gives the same native commit");
+  });
+}
 
 test("an import into a native repository is refused while another is adding to it, or for a history of another algorithm, and changes nothing", () => {
   const { root } = makeHistory();
@@ -691,6 +884,22 @@ test("a base is looked up by the first entry of its name, whatever that entry's 
   imports(root, "source", "native");
   const stored = forms(path.join(root, "native"));
   assert.equal(stored.get(nativeId(TYPES.content, second).toString("hex")).form, 1);
+});
+
+test("the import checks hold a fact current until an entry that has seen its add retires it", () => {
+  // facts.md §4.1, on chains written by hand: `a` and `b` each add the fact
+  // `f`, on forks of their own, and `r` retires it after `a`.
+  const entry = (parents, adds = [], retires = []) => ({ parents, adds, retires });
+  const entries = new Map([
+    ["a", entry([], ["f"])], ["b", entry([], ["f"])], ["r", entry(["a"], [], ["f"])], ["again", entry(["r"], ["f"])],
+    ["joined", entry(["r", "b"])],
+  ]);
+  const current = (...heads) => sorted(currentFacts(entries, heads));
+  assert.deepEqual(current("a"), ["f"]);
+  assert.deepEqual(current("r"), [], "a retire removes the add it has seen");
+  assert.deepEqual(current("again"), ["f"], "an add after the retire is current again");
+  assert.deepEqual(current("r", "b"), ["f"], "an add on a fork the retire has not seen survives the join");
+  assert.deepEqual(current("joined"), ["f"], "and so it does through an entry joining both");
 });
 
 test("the import checks compare each delta both imports store, and name the version whose base or bytes differ", () => {
